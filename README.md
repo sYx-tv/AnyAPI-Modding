@@ -4,7 +4,7 @@ An in-game mod framework for **Anymaker**, with a simple Windows mod manager.
 
 **Private development repository.** Source and downloads require the owner's GitHub access. The manager uses the installed, signed-in GitHub CLI for private downloads; no credentials are bundled in the EXE. No collaborators have been added.
 
-[**Download AnyAPI Manager**](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest/download/AnyAPI%20Manager.exe) · [All release downloads](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest)
+[**Download AnyAPI Manager**](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest/download/AnyAPI.Manager.exe) · [All release downloads](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest)
 
 ## Play with mods
 
@@ -43,3 +43,4 @@ Download checksums, file checksums, automatic backups and installation rollback 
 The native API and mods use C++ and Visual Studio's C++ tools. The manager uses C#, Windows Forms and .NET Framework. Source, headers, examples and tests are included; game textures, models and executable files are not included in the source tree.
 
 The manager checks pass **38/38**. The native revision 25 checks pass **27/27**; the current mods were also accepted in the author's host gameplay testing. Joining-client coverage is separate and should not be inferred from those results.
+
