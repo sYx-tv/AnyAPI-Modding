@@ -1,0 +1,19 @@
+{
+  "game_gcl_sha256": "01f889b4062c7a1bfa8b27506a27ecd559289eee7529768f8e88fc3aa3dd301c",
+  "record": 26049,
+  "signature": "() frontend_ui.update_client_ui (frontend_ui, const f64, settings, client, client.ui_data, client_scene)",
+  "code_size": 7120,
+  "body_sha256": "73721dd8d743e18715a7720edf8b0b9e2207eb1f539f7d3c83a10a8a88cdd6fc",
+  "frontend_state_offset": "0x828",
+  "reviewed_states": {
+    "gameplay": 1,
+    "inventory": 2,
+    "options": 11,
+    "pause": 13
+  },
+  "gameplay_compare_offset": "0x915",
+  "inventory_compare_offset": "0xa45",
+  "options_compare_offset": "0xc9b",
+  "pause_compare_offset": "0xc0d",
+  "new_hook": false
+}

@@ -1,0 +1,16 @@
+#include "anyapi_screen_layout_v1.h"
+namespace screen_layout {
+struct Offset {std::string id;int owner;int32_t state;double x,y;};static std::mutex mutex;static std::vector<Offset> offsets;static std::atomic<bool> ready{};static std::map<std::string,std::pair<double,double>> logged;using LayoutFn=void(*)(void*,void*);static LayoutFn original;
+static uint32_t available(){return ready;}
+static bool set(const char* id,int32_t state,double x,double y){if(platform::current_plugin<0||!services::identifier(id)||state<0||state>=128||!std::isfinite(x)||!std::isfinite(y)||std::abs(x)>.25||std::abs(y)>.25)return false;std::lock_guard lock(mutex);for(auto& value:offsets)if(value.owner==platform::current_plugin&&value.id==id&&value.state==state){value.x=x;value.y=y;return true;}if(offsets.size()>=32)return false;offsets.push_back({id,platform::current_plugin,state,x,y});return true;}
+static bool translate(void* screen,void* ui,double x,double y){__try{double viewport[2]{},origin[2]{};if(!safe_read_memory((uintptr_t)ui+0x90,viewport,sizeof(viewport))||!safe_read_memory((uintptr_t)screen+0x78,origin,sizeof(origin)))return false;for(int i=0;i<2;++i)if(!std::isfinite(viewport[i])||viewport[i]<1||viewport[i]>100000||!std::isfinite(origin[i]))return false;
+ // Fill-width root screens have origin zero. Signed offsets must cross zero.
+ ((double*)((uintptr_t)screen+0x78))[0]=origin[0]+std::clamp(x,-.25,.25)*viewport[0];
+ ((double*)((uintptr_t)screen+0x78))[1]=origin[1]+std::clamp(y,-.25,.25)*viewport[1];return true;
+ }__except(EXCEPTION_EXECUTE_HANDLER){log_line(ANY_LOG_WARN,"framework","SCREEN_LAYOUT translation_skipped_native_exception=1");return false;}}
+static void adjust(void* screen,void* ui){if(!ready||!screen||!ui||!g_p34_frontend)return;char id[96]{};int32_t state=-1;if(!p34_copy_string((uintptr_t)screen+8,id,sizeof(id))||!safe_read_memory(g_p34_frontend+0x828,&state,4))return;double x=0,y=0;{std::lock_guard lock(mutex);for(auto& v:offsets)if(v.state==state&&v.id==id&&anyapi_owner_active(v.owner)){x+=v.x;y+=v.y;}}if((x||y)&&translate(screen,ui,x,y)){std::lock_guard lock(mutex);auto found=logged.find(id);if(found==logged.end()||found->second!=std::pair<double,double>{x,y}){logged[id]={x,y};char message[256];std::snprintf(message,sizeof(message),"SCREEN_LAYOUT applied=1 screen=%s state=%d x_fraction=%.5f y_fraction=%.5f native_string=BOUNDED_BORROWED_OR_OWNED",id,state,x,y);log_line(ANY_LOG_INFO,"framework",message);}}}
+static void hook(void* screen,void* ui){original(screen,ui);adjust(screen,ui);}
+static DWORD WINAPI worker(void*){while(!ready){auto layouts=scan_exact(INV_SCREEN_LAYOUT,sizeof(INV_SCREEN_LAYOUT));auto renders=scan_exact(INV_SCREEN_RENDER,sizeof(INV_SCREEN_RENDER));auto hits=scan_exact(INV_SCREEN_HIT,sizeof(INV_SCREEN_HIT));if(layouts.size()==1&&renders.size()==1&&hits.size()==1&&install_detour("native_screen_layout",layouts[0],INV_SCREEN_LAYOUT,21,(uintptr_t)hook,(void**)&original)){ready=true;log_line(ANY_LOG_INFO,"framework","SCREEN_LAYOUT ready=1 generic_translation=1 native_scale_unchanged=1 shared_render_hit_origin=1");break;}Sleep(5000);}return 0;}
+static const AnyScreenLayoutV1 api{sizeof(AnyScreenLayoutV1),1,available,set};
+}
+static const AnyScreenLayoutV1* anyapi_screen_layout_service(){return &screen_layout::api;}

@@ -1,0 +1,20 @@
+# Generic native settings widgets — anyapi.menu v3
+
+Include anyapi_menu_v3.h and query anyapi.menu version 3 through AnyServicesV1. This immutable table includes a pointer to the unchanged v2 tab service plus toggle_row, number_row, choice_row and text_row. ABI 1 host structures and v1/v2 menu tables are unchanged. The caller owns registration, values, persistence and category policy. The optional AnyHelpers implementation is one consumer; AnyAPI does not add either of its tabs when the mod is absent.
+
+Widgets are valid only within an owned native tab draw callback. Pass a stable namespaced local widget ID and compact label; pointers refer to your mod's draft values. The host adds owner/tab prefixes. A return of 1 means the value changed this frame, not that it was committed. Widgets outside draw or with invalid data return 0. Native table containers are closed by the row helper. Layout uses the game's text-row height and option-column width, matching labels/fields in existing Settings.
+
+| Function | Purpose and limits |
+| --- | --- |
+| toggle_row(id,label,uint32_t*) | Native checkbox and check atlas icon; bool must be 0/1. Hover alone never toggles; native Enter activation is required. |
+| number_row(id,label,double*,min,max,step,integer) | Native f64 or s32 slider. Finite bounds/value, min < max, value in range, positive step <= range; range width <= 1e12. Integer bounds/step integral, ±1e9. Native event writes the draft; result is clamped and snapped relative to minimum. |
+| choice_row(id,label,choices,count,uint32_t*) | Native compact previous/value/next buttons, not the game's vector<string> selector. 1–64 non-null labels <=127 bytes, selected index < count. End arrows disable; center cycles. |
+| text_row(id,label,char*,capacity) | Native input-text field. Terminated valid UTF-8 buffer, capacity 2–257. A game-owned temporary string is constructed/destroyed via the verified owner's compiler-helper cells; bounded valid UTF-8 output is copied back. Excess-byte output is rejected; native character limit is set to capacity−1. |
+
+Native slider/text fields use native Enter/Back editing capture. Switching tabs or closing Settings explicitly releases the native captured field, in addition to the owning tab's Deactivate/Cancel lifecycle. Key-capture policy remains separate and mod-owned.
+
+Contracts: 31 complete native GCL function bodies, signatures, code lengths, dependency identities and hashes are in MENU_NATIVE_CONTRACTS.json / anyapi_menu_patterns.h. OPTIONS_BOOL/FLOAT/INT locate toggle, slider and capture/back/release helpers through their verified private cells. INPUT_TEXT and its text-results constructor are fully checked. String ctor/dtor are compiler intrinsics without GCL function bodies: the complete Controls owner, pinned executable/GCL build, dependency identity and executable cell target are checked; no standalone full-body claim is made for these intrinsics. Exact build mismatch prevents native integration. Four custom tabs coexist; selection remains host-owned and never adds unknown values to the game's four-value enum. No shared helper cell is modified.
+
+The settings_widgets check executes the exact game toggle and f64 slider bodies with controlled element/ref/vtable dependencies. It verifies 600 hover frames without activation, real activation, draft mutation only on slider events, edit capture/back/close release, exact text-results field order, string replacement/destruction, oversize/invalid UTF-8 rejection and balanced row layout. Text-input element internals and the s32 slider are contract-verified, not independently executed in this new fixture. Existing native Settings/update/Apply/Reset/scroll/multi-tab tests remain. Live gameplay acceptance is tracked separately.
+
+Run tools/verify_menu_contracts.py with this installed bin/game.gcl and the records JSON produced by tools/parse_gcl.py before changing native contracts. Check the capability catalog and deployment evidence for the current runtime profile.

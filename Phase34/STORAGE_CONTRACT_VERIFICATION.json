@@ -1,0 +1,25 @@
+{
+  "game_version": "0.1.21",
+  "steam_build": 25725299,
+  "native_bodies_verified": 51,
+  "dependency_pairs_verified": 18,
+  "game_gcl_sha256": "01f889b4062c7a1bfa8b27506a27ecd559289eee7529768f8e88fc3aa3dd301c",
+  "item_id_wire_offsets": {
+    "type": 0,
+    "floor_id": 4,
+    "vehicle_id": 8,
+    "actor_id": 12,
+    "component_id": 16,
+    "item_id": 20
+  },
+  "grid_size_offsets": [
+    4,
+    8
+  ],
+  "grid_display_origin_offsets": [
+    12,
+    16
+  ],
+  "inventory_item_size_offset": 368,
+  "gameplay_validation": "PENDING"
+}

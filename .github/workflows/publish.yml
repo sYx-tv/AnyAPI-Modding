@@ -1,0 +1,42 @@
+name: Publish verified AnyAPI packages
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag for the prepared packages
+        required: true
+        default: v0.25.0
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepare catalog and manager
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: ./manager/publish.ps1 -Repository $env:GITHUB_REPOSITORY -Tag $env:RELEASE_TAG
+      - name: Publish assets first
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $exe = (Resolve-Path 'manager/ready-to-upload/AnyAPI Manager.exe').Path
+          $results = Join-Path $env:RUNNER_TEMP 'AnyAPI-manager-tests.json'
+          Start-Process -FilePath $exe -ArgumentList @('--self-test', ('"'+$results+'"')) -WindowStyle Hidden -Wait
+          if (!(Get-Content -LiteralPath $results -Raw | ConvertFrom-Json).Success) { throw 'Manager checks failed. Nothing published.' }
+          $assets = Get-ChildItem manager/ready-to-upload -File | Where-Object { $_.Extension -in '.zip','.exe' } | ForEach-Object { $_.FullName }
+          gh release create $env:RELEASE_TAG @assets --title "AnyAPI $env:RELEASE_TAG" --notes "Verified API and optional mod downloads. Download AnyAPI Manager.exe to get started."
+          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed. Catalog not changed.' }
+      - name: Publish catalog
+        shell: pwsh
+        run: |
+          Copy-Item manager/ready-to-upload/catalog.json catalog.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add catalog.json manager/publishing/catalog.json
+          git commit -m 'Update verified AnyAPI catalog'
+          git push

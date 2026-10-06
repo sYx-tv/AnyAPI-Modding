@@ -1,0 +1,412 @@
+{
+  "schema_version": 1,
+  "updated": "2026-10-06",
+  "runtime_profile": "DLL plugins ABI 1; current native UI lifecycle; guarded native settings tabs/sections",
+  "base_api": {
+    "anyapi_mod_v1.h": {
+      "abi": 1,
+      "capabilities": [
+        "process-lifetime DLL discovery",
+        "owned callback input capture",
+        "copied player snapshots with UI visibility flags",
+        "optional pixel-canvas render and Windows input callbacks",
+        "labeled framework logging",
+        "Unicode scalar text input events, preserving ABI1 struct layouts"
+      ]
+    },
+    "anyapi_services_v1.h": {
+      "version": 1,
+      "export": "AnyAPI_GetServices",
+      "capabilities": [
+        "exact-version service query",
+        "mod-owned service publication",
+        "owned priority input filters",
+        "optional second-phase AnyAPI_ModReady export"
+      ],
+      "limits": {
+        "published_tables": 64,
+        "filters": 32
+      }
+    },
+    "anyapi_menu_v1.h": {
+      "version": 1,
+      "service": "anyapi.menu",
+      "locations": [
+        "settings.controls.after_flight_stick"
+      ],
+      "capabilities": [
+        "owner-namespaced native headings/tables/buttons",
+        "ordered independent mod sections",
+        "native option dimensions",
+        "Open/Apply/Reset/Cancel callbacks",
+        "aggregate dirty/default flags",
+        "native settings visibility query",
+        "unclosed-table recovery"
+      ],
+      "limits": {
+        "sections": 32,
+        "nested_tables": 8,
+        "columns": 8
+      },
+      "validation": "exact current-build contracts plus automated fixtures; gameplay acceptance tracked separately",
+      "button_activation": "hover/focus AND validated native enter event; disabled=false required",
+      "scrolling": "extensions share existing Controls scroll; 256-row pre-close regression"
+    },
+    "anyapi_menu_v2.h": {
+      "version": 2,
+      "service": "anyapi.menu",
+      "locations": [
+        "settings.top_level_tabs"
+      ],
+      "capabilities": [
+        "independent mod-owned native settings tabs",
+        "owner/tab-namespaced heading,label,key_row widgets",
+        "compact native two-column keyboard rows and trash clear icon",
+        "native header width fitting",
+        "independent native scroll offsets",
+        "selected-tab Apply/Reset with Open/Cancel/Deactivate lifecycle",
+        "capture owner context and callback fault fallback",
+        "host-owned custom selection without unknown native tab enums",
+        "equal fitted native tab widths with mandatory atlas icons and safe default/fallback"
+      ],
+      "limits": {
+        "custom_tabs": 4,
+        "title_bytes": 31,
+        "widget_id_bytes": 95,
+        "text_bytes": 512,
+        "key_text_bytes": 128
+      },
+      "validation": "complete current-build native contracts; exact native Settings update and tab body execution in fixture; live visual acceptance tracked separately"
+    },
+    "anyapi_menu_v3.h": {
+      "version": 3,
+      "service": "anyapi.menu",
+      "capabilities": [
+        "unchanged v2 tab service pointer",
+        "native bool toggle",
+        "native integer/decimal sliders",
+        "compact choices using native buttons",
+        "native UTF-8 text input with temporary game-string ownership",
+        "editing capture release on tab switch/close"
+      ],
+      "limits": {
+        "choice_count": 64,
+        "text_bytes": 256,
+        "numeric_range_width": 1000000000000.0,
+        "integer_bounds": [
+          -1000000000.0,
+          1000000000.0
+        ]
+      },
+      "validation": "31 full GCL body/dependency checks; exact toggle/float-slider/text-results fixtures; string compiler intrinsics resolved through guarded owner cells"
+    },
+    "anyapi_item_catalog_v1.h": {
+      "version": 1,
+      "service": "anyapi.item_catalog",
+      "capabilities": [
+        "copied authored English item metadata",
+        "complete original JSON per definition",
+        "catalog refreshed from current installed assets on launch",
+        "598 namespaced vehicle/building component definitions",
+        "component metadata flag"
+      ],
+      "limits": {
+        "definitions": 10000,
+        "asset_bytes": 33554432
+      },
+      "not_exposed": [
+        "owned inventory quantities",
+        "inventory mutations",
+        "native item thumbnails",
+        "crafting recipes"
+      ]
+    },
+    "anyapi_item_images_v1.h": {
+      "version": 1,
+      "service": "anyapi.item_images",
+      "capabilities": [
+        "copied cached 128x128 current mesh previews"
+      ]
+    },
+    "anyapi_inventory_actions_v1.h": {
+      "version": 1,
+      "service": "anyapi.inventory_actions",
+      "capabilities": [
+        "queued native Give-item event",
+        "bounded tickets",
+        "closed/stale/changed-scene cancellation",
+        "SENT is not server confirmation"
+      ]
+    },
+    "anyapi_screen_layout_v1.h": {
+      "version": 1,
+      "service": "anyapi.screen_layout",
+      "capabilities": [
+        "owned named-screen/state offsets",
+        "shared native drawing/hit origin",
+        "native scale unchanged"
+      ]
+    },
+    "anyapi_session_v1.h": {
+      "version": 1,
+      "service": "anyapi.session",
+      "capabilities": [
+        "copied recent normalized native mode",
+        "runtime descriptor names",
+        "unknown/stale returns false"
+      ]
+    },
+    "anyapi_inventory_actions_v2.h": {
+      "version": 2,
+      "service": "anyapi.inventory_actions",
+      "capabilities": [
+        "caller-owned allowed mode mask",
+        "queue and dispatch checks",
+        "component wrapper native events"
+      ],
+      "compatibility": "v1 remains queryable"
+    },
+    "anyapi_ui_state_v1.h": {
+      "version": 1,
+      "service": "anyapi.ui_state",
+      "capabilities": [
+        "current native UI state independent of simulation/player cache",
+        "gameplay/inventory/menu kinds",
+        "copied POD; no game pointer",
+        "unknown fails closed"
+      ],
+      "native_hook_added": false
+    },
+    "anyapi_inventory_ui_v1.h": {
+      "version": 1,
+      "service": "anyapi.inventory_ui",
+      "capabilities": [
+        "owned native external-storage sections",
+        "copied stored item/grid instances",
+        "variant-aware type and native merge checks",
+        "native quick-store, stack and location events",
+        "frame budget and native menu lifecycle"
+      ],
+      "native_contracts": "STORAGE_NATIVE_CONTRACTS.json"
+    },
+    "anyapi_inventory_ui_v2.h": {
+      "version": 2,
+      "service": "anyapi.inventory_ui",
+      "capabilities": [
+        "version 1 operation table retained",
+        "owned visibility predicate using copied item definition metadata",
+        "reserved native column rows without changing storage grid dimensions"
+      ],
+      "native_contracts": "STORAGE_NATIVE_CONTRACTS.json"
+    },
+    "anyapi_inventory_ui_v3.h": {
+      "version": 3,
+      "service": "anyapi.inventory_ui",
+      "capabilities": [
+        "v2 section API retained",
+        "compact two-cell symbol buttons",
+        "copied native hover tooltip at inventory screen boundary",
+        "native disabled and enter-event gating",
+        "center-aligned native tag symbols",
+        "translucent cursor-positioned native tooltips with window-edge clamping"
+      ],
+      "native_contracts": "STORAGE_NATIVE_CONTRACTS.json"
+    },
+    "anyapi_gpu_draw_v1.h": {
+      "version": 1,
+      "service": "anyapi.gpu_draw",
+      "capabilities": [
+        "owned presentation-frame GPU batches",
+        "resident revisioned BGRA textures",
+        "affine image transforms and clips",
+        "GPU primitives and cached DirectWrite text",
+        "device reset texture recovery",
+        "aggregate CPU timing logs"
+      ]
+    }
+  },
+  "optional_mods": {
+    "AnyMap.dll": {
+      "id": "anymap",
+      "optional_dependency": "anyhelpers.controls v1 (legacy alias fallback) and anyhelpers.settings v1",
+      "fallback_key": "M",
+      "capabilities": [
+        "calibrated atlas",
+        "Steam-name player markers and facing",
+        "zoom/pan",
+        "waypoints and connected-road routing",
+        "rotating square minimap",
+        "native-settings/inventory/focus suppression",
+        "rebindable atlas toggle when provider installed",
+        "eight registered settings with established fallback defaults",
+        "128 persistent local named markers",
+        "captured UTF-8 naming modal with rename/route/delete",
+        "cursor-anchored smooth 1\u20138x zoom",
+        "cached terrain and reused frame bitmap",
+        "all eight settings verified in actual DLL rendering"
+      ]
+    },
+    "AnyHelpers.dll": {
+      "id": "anyhelpers",
+      "service": "anyhelpers.controls",
+      "header": "mod_controls_v1.h",
+      "version": 1,
+      "capabilities": [
+        "named action registration",
+        "committed virtual-key query",
+        "UTF-8 key display names",
+        "native top-level MOD CONTROLS tab",
+        "keyboard rebind/cancel/unbind",
+        "staged Apply/Reset/close behavior",
+        "registered-mod action conflict rejection",
+        "atomic persistent bindings and dormant-mod retention",
+        "matching MOD SETTINGS tab",
+        "explicit per-mod setting registration",
+        "committed value copies and revision query",
+        "independent staged settings persistence"
+      ],
+      "limits": {
+        "actions": 256,
+        "saved_rows": 1024
+      },
+      "defaults": {
+        "anymap/toggle_map": "M"
+      },
+      "capture_reentry": "explicit active-capture guard plus host activation gating",
+      "requires": "anyapi.menu v3",
+      "services": [
+        "anyhelpers.controls v1",
+        "modcontrols.bindings v1 compatibility alias",
+        "anyhelpers.settings v1"
+      ],
+      "headers": [
+        "mod_controls_v1.h",
+        "anyhelpers_settings_v1.h"
+      ],
+      "settings_limits": {
+        "registered": 512,
+        "saved": 4096
+      },
+      "settings_types": [
+        "bool",
+        "integer",
+        "number",
+        "choice",
+        "text"
+      ]
+    }
+  },
+  "not_exposed_in_menu_v1": [
+    "main-menu entries",
+    "new top-level settings tabs",
+    "General/Graphics/Audio insertion slots",
+    "native sliders/checkboxes",
+    "vanilla binding enumeration/conflict queries",
+    "keyboard chords",
+    "mouse/gamepad rebinding",
+    "hot unload"
+  ],
+  "historical_legacy": "Legacy v16 source and historical audits are retained, but their native hooks/action registry are quarantined and not enabled by the current profile.",
+  "evidence": [
+    "MENU_NATIVE_CONTRACTS.json",
+    "MENU_BUILD_EVIDENCE.json",
+    "MENU_EXTENSION_API.md",
+    "MOD_CONTROLS.md",
+    "MENU_LOGGING.md",
+    "SETTINGS_TABS_API.md",
+    "ANYHELPERS.md",
+    "MENU_WIDGETS_API.md",
+    "MAP_POLISH.md",
+    "ITEM_CATALOG_API.md",
+    "INVENTORY_BROWSER.md",
+    "ITEM_IMAGES_API.md",
+    "INVENTORY_ACTIONS_API.md",
+    "SCREEN_LAYOUT_API.md",
+    "INVENTORY_ACTION_CONTRACTS.json",
+    "SESSION_API.md",
+    "INVENTORY_LAYOUT_LIVE_EVIDENCE.json"
+  ],
+  "not_exposed_in_menu_v2": [
+    "main-menu entries",
+    "General/Graphics/Audio insertion slots",
+    "native sliders/checkboxes",
+    "vanilla binding enumeration/conflict queries",
+    "keyboard chords",
+    "mouse/gamepad rebinding",
+    "hot unload"
+  ],
+  "not_exposed_in_menu_v3": [
+    "main-menu entries",
+    "General/Graphics/Audio insertion slots",
+    "vanilla binding enumeration/conflict queries",
+    "keyboard chords",
+    "mouse/gamepad rebinding",
+    "hot unload"
+  ],
+  "map_interface": {
+    "revision": 11,
+    "owner": "AnyMap.dll",
+    "api_additions": "none; existing generic settings/input/render services",
+    "settings_count": 15,
+    "marker_list": "scroll/select/route/edit",
+    "navigation": "full-map sidebar and route overlay",
+    "minimap": "corner/custom/drag placement, opacity, names, route visibility",
+    "documentation": "MAP_INTERFACE.md",
+    "acceptance": "USER_CONFIRMED: works perfect!"
+  },
+  "inventory_browser": {
+    "owner": "AnyInventory.dll",
+    "definitions_current_build": 970,
+    "settings_count": 5,
+    "integration": "in-process game backbuffer sidebar visible with native inventory; original inventory retained",
+    "features": [
+      "search",
+      "category filter",
+      "favorites",
+      "scrollable list",
+      "actual mesh previews",
+      "description",
+      "native Add request",
+      "resolution-scaled sidebar",
+      "native inventory offset",
+      "component catalog",
+      "mode-gated Add",
+      "search all categories fallback",
+      "signed zero-origin native offset"
+    ],
+    "live_acceptance": "REVISION14_USER_FOUND_CRATE_OVERLAP; BORROWED_STRING_CAUSE_CONFIRMED_LIVE; REVISION15_PENDING",
+    "revision": 15,
+    "inventory_items": 372,
+    "vehicle_components": 598,
+    "add_modes": [
+      "Sandbox",
+      "Creative"
+    ],
+    "native_layout_roots": [
+      "ui_aligner",
+      "portrait_aligner",
+      "ui_aligner_tooltip"
+    ]
+  },
+  "game_version": "0.1.21",
+  "steam_build_id": 25725299,
+  "inventory_revision14_services": {
+    "anyapi.session v1": "copied recent named native mode",
+    "anyapi.inventory_actions v2": "caller mode mask checked at queue and dispatch",
+    "anyapi.item_catalog v1": "970 records; component namespaced IDs and flag",
+    "anyapi.screen_layout v1": "signed translation including zero-origin roots"
+  },
+  "anystorage": {
+    "separate_dll": "AnyStorage.dll",
+    "native_toolbar": true,
+    "bulk_transfer": true,
+    "matching_transfer_both_directions": true,
+    "sort": [
+      "alphabetical",
+      "quantity"
+    ],
+    "settings": 6,
+    "anyinventory_optional": true,
+    "live_acceptance": "PENDING"
+  }
+}

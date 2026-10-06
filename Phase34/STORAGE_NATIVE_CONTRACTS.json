@@ -1,0 +1,974 @@
+{
+  "game_gcl_sha256": "01f889b4062c7a1bfa8b27506a27ecd559289eee7529768f8e88fc3aa3dd301c",
+  "functions": {
+    "COLUMN": {
+      "index": 26297,
+      "signature": "() frontend_ui_inventory._update_ui_inspect_column (frontend_ui_inventory, frontend_ui, client, frontend_ui_inventory.inventory_data, const s32, const bool, const vector<frontend_ui_container_descriptor>, const e_inventory_ui_column, frontend_ui_item_descriptor, const s32, const frontend_ui_inventory.column_movement, inventory_item_util.item_id, color8, s32, vector<client.ui_data.control_hint>)",
+      "code_size": 9592,
+      "sha256": "12e19415d7aa3a8b016f28cbfbc25920cb22025c4d228e3b80b1deb9d11e17bf",
+      "dependencies": {
+        "0x2578": "(ptr<frontend_ui_container_descriptor>) operator_aa (const vector<frontend_ui_container_descriptor>, const s32)",
+        "0x2580": "() ctor (vector<frontend_ui_container_grid_descriptor>)",
+        "0x2588": "() frontend_ui_inventory._get_container_grids (const frontend_ui_inventory, const frontend_ui_container_descriptor, vector<frontend_ui_container_grid_descriptor>)",
+        "0x2590": "() ctor (vec2_s32, const vec2_s32)",
+        "0x2598": "() ctor (vec2_s32, const s32, const s32)",
+        "0x25a0": "(bool) frontend_ui_inventory._has_compatible_grid (frontend_ui_inventory, const frontend_ui_container_descriptor, const vector<frontend_ui_container_grid_descriptor>, const frontend_ui_item_descriptor, const s32)",
+        "0x25a8": "() ctor (color8)",
+        "0x25b0": "(color8) frontend_ui_inventory._get_hover_color (const frontend_ui_inventory, const frontend_ui_item_descriptor, const bool)",
+        "0x25b8": "() $string_ctor (string)",
+        "0x25c0": "() $string_assign_s32 (string, const s32)",
+        "0x25c8": "() $string_ctor_cstr (string, const uptr)",
+        "0x25d0": "() $string_add (string, const string, const string)",
+        "0x25d8": "() $string_dtor (string)",
+        "0x25e0": "client_ui.G_UI_FILL_IN_CELLS",
+        "0x25e8": "() ctor (vec2_s32)",
+        "0x25f0": "(bool) client_ui.begin_container_layout_align_hoverable (client_ui, const string, const vec2_s32, const client_ui.e_horizontal_align, const client_ui.e_vertical_align, const client_ui.e_layout_mode, const vec2_s32, const s32, const bool, const color8)",
+        "0x25f8": "() dtor (vec2_s32)",
+        "0x2600": "(ptr<client.ui_data.control_hint>) vector<client.ui_data.control_hint>.push_back (vector<client.ui_data.control_hint>)",
+        "0x2608": "() dtor (client.ui_data.control_hint)",
+        "0x2610": "() ctor (client.ui_data.control_hint, const e_localization_string, const input.e_action_digital)",
+        "0x2618": "(bool) client_ui.is_input_right (client_ui)",
+        "0x2620": "e_inventory_ui_column",
+        "0x2628": "(s32) math.min (const s32, const s32)",
+        "0x2630": "(bool) client_ui.is_input_left (client_ui)",
+        "0x2638": "(s32) math.max (const s32, const s32)",
+        "0x2640": "(bool) client_ui.is_input_up (client_ui)",
+        "0x2648": "(bool) client_ui.is_input_down (client_ui)",
+        "0x2650": "(s32) vector<frontend_ui_container_descriptor>.size (const vector<frontend_ui_container_descriptor>)",
+        "0x2658": "(bool) client_ui.is_input_enter (client_ui)",
+        "0x2660": "() frontend_ui_inventory._set_minor_inventory_cursor (const frontend_ui_inventory, const frontend_ui_container_descriptor, const vector<frontend_ui_container_grid_descriptor>, const vec2_s32, vec2_s32)",
+        "0x2668": "(bool) client_ui.is_input_back (client_ui)",
+        "0x2670": "() client.ui_data.inventory.reset_dragged_item (client.ui_data.inventory)",
+        "0x2678": "() frontend_ui_inventory._update_ui_inspect_container (frontend_ui_inventory, frontend_ui, client, frontend_ui_inventory.inventory_data, const client_scene, const s32, const frontend_ui_container_descriptor, frontend_ui_item_descriptor, const bool, const s32, inventory_item_util.item_id, color8, vector<client.ui_data.control_hint>)",
+        "0x2680": "() client_ui.end_container (client_ui)",
+        "0x2688": "() dtor (color8)",
+        "0x2690": "() dtor (vector<frontend_ui_container_grid_descriptor>)"
+      }
+    },
+    "CONTAINER": {
+      "index": 26298,
+      "signature": "() frontend_ui_inventory._update_ui_inspect_container (frontend_ui_inventory, frontend_ui, client, frontend_ui_inventory.inventory_data, const client_scene, const s32, const frontend_ui_container_descriptor, frontend_ui_item_descriptor, const bool, const s32, inventory_item_util.item_id, color8, vector<client.ui_data.control_hint>)",
+      "code_size": 25592,
+      "sha256": "527fdb2d181dcfaab4175b641fb7d9c21bc7e17443964f43cc3be7d10594e2c3",
+      "dependencies": {
+        "0x63f8": "() $string_ctor (string)",
+        "0x6400": "() $string_assign_s32 (string, const s32)",
+        "0x6408": "() $string_ctor_cstr (string, const uptr)",
+        "0x6410": "() $string_add (string, const string, const string)",
+        "0x6418": "() $string_dtor (string)",
+        "0x6420": "client_ui.G_UI_FILL_IN_CELLS",
+        "0x6428": "client_ui.G_UI_ICON_ITEM_SIZE",
+        "0x6430": "() ctor (vec2_s32, const s32, const s32)",
+        "0x6438": "(bool) client_ui.ui_container_title (client_ui, const string, const string, const ptr<application.graphics.asset_atlas.region>, const vec2_s32)",
+        "0x6440": "() dtor (vec2_s32)",
+        "0x6448": "() client_ui.begin_container_positioned_grid (client_ui, const string, const vec2_s32, const vec2_s32)",
+        "0x6450": "() ctor (vector<frontend_ui_container_grid_descriptor>)",
+        "0x6458": "() frontend_ui_inventory._get_container_grids (const frontend_ui_inventory, const frontend_ui_container_descriptor, vector<frontend_ui_container_grid_descriptor>)",
+        "0x6460": "() ctor (vector<frontend_ui_stored_item_descriptor>)",
+        "0x6468": "() frontend_ui_inventory._get_container_stored_items (const frontend_ui_inventory, const frontend_ui_container_descriptor, vector<frontend_ui_stored_item_descriptor>)",
+        "0x6470": "() ctor (vec2_s32, const vec2_s32)",
+        "0x6478": "(uptr) vector<frontend_ui_container_grid_descriptor>.begin (const vector<frontend_ui_container_grid_descriptor>)",
+        "0x6480": "(uptr) vector<frontend_ui_container_grid_descriptor>.end (const vector<frontend_ui_container_grid_descriptor>)",
+        "0x6488": "(ptr<frontend_ui_container_grid_descriptor>) vector<frontend_ui_container_grid_descriptor>.value (const vector<frontend_ui_container_grid_descriptor>, const uptr)",
+        "0x6490": "(uptr) vector<frontend_ui_stored_item_descriptor>.begin (const vector<frontend_ui_stored_item_descriptor>)",
+        "0x6498": "(uptr) vector<frontend_ui_stored_item_descriptor>.end (const vector<frontend_ui_stored_item_descriptor>)",
+        "0x64a0": "(ptr<frontend_ui_stored_item_descriptor>) vector<frontend_ui_stored_item_descriptor>.value (const vector<frontend_ui_stored_item_descriptor>, const uptr)",
+        "0x64a8": "(ptr<application.graphics.asset_atlas.region>) frontend_ui_inventory.get_item_icon (const client_ui, const inventory_definition)",
+        "0x64b0": "() ctor (vec2_s32)",
+        "0x64b8": "(vec2_s32) operator_add (const vec2_s32, const vec2_s32)",
+        "0x64c0": "(vec2_s32) item_util.get_rotated_size (const vec2_s32, const s32)",
+        "0x64c8": "() copy (vec2_s32, const vec2_s32)",
+        "0x64d0": "(vec2_s32) operator_sub (const vec2_s32, const vec2_s32)",
+        "0x64d8": "(bool) frontend_ui_inventory.is_in_bounds (const vec2_s32, const vec2_s32, const vec2_s32, const vec2_s32)",
+        "0x64e0": "(uptr) vector<frontend_ui_stored_item_descriptor>.next (const vector<frontend_ui_stored_item_descriptor>, const uptr)",
+        "0x64e8": "(uptr) vector<frontend_ui_stored_item_descriptor>.erase (vector<frontend_ui_stored_item_descriptor>, const uptr)",
+        "0x64f0": "(bool) frontend_ui_inventory._is_compatible_item_grid (const frontend_ui_inventory, const frontend_ui_container_grid_descriptor, const inventory_definition, const s32)",
+        "0x64f8": "client_ui.G_UI_COLOR_ELEMENT_BACKGROUND_LIGHT",
+        "0x6500": "() ctor (color8, const color8)",
+        "0x6508": "G_UI_COLOR_ELEMENT_BACKGROUND",
+        "0x6510": "(bool) client_ui.begin_container_positioned_grid_rendered (client_ui, const string, const vec2_s32, const vec2_s32, const bool, const bool, const bool, const bool, const color8, const color8)",
+        "0x6518": "() ctor (vec2, const f64, const f64)",
+        "0x6520": "client_ui.G_UI_CELL_SIZE",
+        "0x6528": "() ctor (vec2)",
+        "0x6530": "(vec2) operator_mul (const vec2, const f64)",
+        "0x6538": "() dtor (vec2)",
+        "0x6540": "(vec2) client_ui.get_screen_origin (client_ui, const string)",
+        "0x6548": "(vec2) client_ui.screen_to_grid_space (client_ui, const vec2, const vec2)",
+        "0x6550": "(f64) math.ceil (const f64)",
+        "0x6558": "(vec2_s32) operator_mul (const vec2_s32, const s32)",
+        "0x6560": "(bool) frontend_ui_inventory._is_valid_drag_container_drop_location (const frontend_ui_inventory, const frontend_ui_container_descriptor, const vector<frontend_ui_container_grid_descriptor>, const vector<frontend_ui_stored_item_descriptor>, const vec2_s32, const vec2_s32, const vec2_s32, frontend_ui_item_descriptor, const s32, ptr<frontend_ui_stored_item_descriptor>)",
+        "0x6568": "client_ui.G_UI_COLOR_VALID_STACK",
+        "0x6570": "() copy (color8, const color8)",
+        "0x6578": "client_ui.G_UI_COLOR_VALID",
+        "0x6580": "(ptr<client.ui_data.control_hint>) vector<client.ui_data.control_hint>.push_back (vector<client.ui_data.control_hint>)",
+        "0x6588": "() dtor (client.ui_data.control_hint)",
+        "0x6590": "() ctor (client.ui_data.control_hint, const e_localization_string, const input.e_action_digital)",
+        "0x6598": "(bool) client_ui.is_input_left (client_ui)",
+        "0x65a0": "() frontend_ui_inventory._move_container_cursor_left_grid (frontend_ui_inventory, const frontend_ui_container_descriptor, const frontend_ui_container_grid_descriptor, const vector<frontend_ui_container_grid_descriptor>, vec2_s32)",
+        "0x65a8": "(bool) client_ui.is_input_right (client_ui)",
+        "0x65b0": "() frontend_ui_inventory._move_container_cursor_right_grid (frontend_ui_inventory, const frontend_ui_container_descriptor, const frontend_ui_container_grid_descriptor, const vector<frontend_ui_container_grid_descriptor>, vec2_s32)",
+        "0x65b8": "(bool) client_ui.is_input_up (client_ui)",
+        "0x65c0": "() frontend_ui_inventory._move_container_cursor_up_grid (frontend_ui_inventory, const frontend_ui_container_descriptor, const frontend_ui_container_grid_descriptor, const vector<frontend_ui_container_grid_descriptor>, vec2_s32)",
+        "0x65c8": "(bool) client_ui.is_input_down (client_ui)",
+        "0x65d0": "() frontend_ui_inventory._move_container_cursor_down_grid (frontend_ui_inventory, const frontend_ui_container_descriptor, const frontend_ui_container_grid_descriptor, const vector<frontend_ui_container_grid_descriptor>, vec2_s32)",
+        "0x65d8": "(bool) client_ui.is_input_back (client_ui)",
+        "0x65e0": "(bool) client_ui.is_input_enter (client_ui)",
+        "0x65e8": "() frontend_ui_inventory._release_item_into_container_grid (frontend_ui_inventory, client, client.ui_data, client_scene.actor, const client_scene, const frontend_ui_container_descriptor, const frontend_ui_container_grid_descriptor, vector<frontend_ui_container_grid_descriptor>, vector<frontend_ui_stored_item_descriptor>, const vec2_s32, const vec2_s32, const vec2_s32, frontend_ui_item_descriptor)",
+        "0x65f0": "(bool) client_ui.is_input_enter_end (client_ui)",
+        "0x65f8": "() ctor (frontend_ui_item_icon)",
+        "0x6600": "(frontend_ui_item_icon) client_scene.item_world.get_ui_icon (const client_scene.item_world, frontend_ui_inventory_atlas, const vec2_s32, const s32, const client_scene, const f64)",
+        "0x6608": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)",
+        "0x6610": "(bool) client_ui.positioned_item (client_ui, const string, const vec2_s32, const vec2_s32, const ptr<application.graphics.asset_atlas.region>, const frontend_ui_item_icon, const bool, const bool, const bool)",
+        "0x6618": "(bool) client_scene.inventory.can_store_item (client_scene.inventory, const client_scene.item_world)",
+        "0x6620": "(bool) frontend_ui_inventory._can_store_item_outside (frontend_ui_inventory, const client_scene.item_world, const vector<frontend_ui_container_descriptor>)",
+        "0x6628": "(bool) client_scene.item_world.can_merge_item (const client_scene.item_world, const client_scene.item_world)",
+        "0x6630": "() frontend_ui_inventory._move_container_cursor_left (frontend_ui_inventory, const frontend_ui_container_descriptor, const vector<frontend_ui_container_grid_descriptor>, const s32, vec2_s32)",
+        "0x6638": "() frontend_ui_inventory._move_container_cursor_right (frontend_ui_inventory, const frontend_ui_container_descriptor, const vector<frontend_ui_container_grid_descriptor>, const s32, vec2_s32)",
+        "0x6640": "() frontend_ui_inventory._move_container_cursor_up (frontend_ui_inventory, const frontend_ui_container_descriptor, const vector<frontend_ui_container_grid_descriptor>, const s32, vec2_s32)",
+        "0x6648": "() frontend_ui_inventory._move_container_cursor_down (frontend_ui_inventory, const frontend_ui_container_descriptor, const vector<frontend_ui_container_grid_descriptor>, const s32, vec2_s32)",
+        "0x6650": "(bool) client_ui.is_input_delete (client_ui)",
+        "0x6658": "() ctor (vec3)",
+        "0x6660": "() client_scene.actor.drop_item (client_scene.actor, client, const s32, const bool, const vec3)",
+        "0x6668": "() dtor (vec3)",
+        "0x6670": "g_audio_manager",
+        "0x6678": "() audio_manager.play (audio_manager, const e_audio_effect, const e_audio_group)",
+        "0x6680": "() frontend_ui_inventory._release_item_into_stored_item (frontend_ui_inventory, client, client.ui_data, client_scene.actor, const client_scene, const frontend_ui_container_descriptor, frontend_ui_item_descriptor, const frontend_ui_stored_item_descriptor)",
+        "0x6688": "() ctor (inventory_item_util.item_id)",
+        "0x6690": "() client_peer.data.push_event_inventory_quick_store_item (client_peer.data, const inventory_item_util.item_id)",
+        "0x6698": "() dtor (inventory_item_util.item_id)",
+        "0x66a0": "() frontend_ui_inventory._quick_store_item_outside (frontend_ui_inventory, frontend_ui, client, frontend_ui_inventory.inventory_data, const inventory_item_util.item_id)",
+        "0x66a8": "() dtor (frontend_ui_item_icon)",
+        "0x66b0": "() client_ui.end_container (client_ui)",
+        "0x66b8": "() dtor (color8)",
+        "0x66c0": "(uptr) vector<frontend_ui_container_grid_descriptor>.next (const vector<frontend_ui_container_grid_descriptor>, const uptr)",
+        "0x66c8": "(uptr) vector<frontend_ui_container_grid_descriptor>.erase (vector<frontend_ui_container_grid_descriptor>, const uptr)",
+        "0x66d0": "(ptr<frontend_ui_container_grid_descriptor>) frontend_ui_inventory._find_container_grid_at_position (const frontend_ui_inventory, const vector<frontend_ui_container_grid_descriptor>, const vec2_s32)",
+        "0x66d8": "(bool) operator_ne (const vec2_s32, const vec2_s32)",
+        "0x66e0": "() ctor (color8)",
+        "0x66e8": "(color8) frontend_ui_inventory._get_hover_color_stackable (const frontend_ui_inventory, const frontend_ui_item_descriptor, const bool, const bool)",
+        "0x66f0": "(bool) client_ui.positioned_cursor (client_ui, const string, const vec2_s32, const vec2_s32, const f64, const color8)",
+        "0x66f8": "(bool) frontend_ui_inventory._is_item_at_container_position (frontend_ui_inventory, const frontend_ui_container_descriptor, const vector<frontend_ui_container_grid_descriptor>, const vector<frontend_ui_stored_item_descriptor>, const vec2_s32)",
+        "0x6700": "G_UI_COLOR_ELEMENT_BACKGROUND_ACTION",
+        "0x6708": "() dtor (vector<frontend_ui_stored_item_descriptor>)",
+        "0x6710": "() dtor (vector<frontend_ui_container_grid_descriptor>)"
+      }
+    },
+    "TITLE": {
+      "index": 16155,
+      "signature": "(bool) client_ui.ui_container_title (client_ui, const string, const string, const ptr<application.graphics.asset_atlas.region>, const vec2_s32)",
+      "code_size": 264,
+      "sha256": "bc3a2bffe888183641bbd4f6e8a5d5b80d0e9a4b4fd0d633829d53514f054d49",
+      "dependencies": {
+        "0x108": "(ref<frontend_ui_inventory.ui_container_title>) client_ui._push_element<frontend_ui_inventory.ui_container_title> (client_ui, const string)",
+        "0x110": "() $string_copy (string, const string)",
+        "0x118": "() copy (vec2_s32, const vec2_s32)",
+        "0x120": "() $ref_dtor (uptr)"
+      }
+    },
+    "COMPONENT_CTOR": {
+      "index": 22077,
+      "signature": "() ctor (vehicle_component_definition)",
+      "code_size": 2960,
+      "sha256": "b096c5c00b492dff39abdbd70a138a429b7e1057c7e93d73ef282060a25bfd54",
+      "dependencies": {
+        "0xb90": "() $string_ctor_cstr (string, const uptr)",
+        "0xb98": "() ctor (vector<vehicle_component_definition.zone>)",
+        "0xba0": "() ctor (vector<vehicle_component_definition.interaction_zone>)",
+        "0xba8": "() ctor (vector<vehicle_component_definition.surface>)",
+        "0xbb0": "() ctor (vector<vehicle_component_definition.logic_node>)",
+        "0xbb8": "() ctor (vehicle_component_definition.mesh_composite)",
+        "0xbc0": "() ctor (vector<vehicle_component_definition.mesh_dynamic>)",
+        "0xbc8": "() ctor (vec3_s32, const s32, const s32, const s32)",
+        "0xbd0": "() ctor (vec3)",
+        "0xbd8": "() ctor (vec3_s32)",
+        "0xbe0": "() ctor (vector<s32>)",
+        "0xbe8": "() ctor (vector<vehicle_component_definition.inspection_geometry>)",
+        "0xbf0": "() ctor (bitset)",
+        "0xbf8": "() ctor (vector<vehicle_component_definition.vehicle_data_descriptor>)",
+        "0xc00": "() ctor (vec4)",
+        "0xc08": "() ctor (vector<mat33_s32>)",
+        "0xc10": "() vector<mat33_s32>._reserve (vector<mat33_s32>, const s32)",
+        "0xc18": "(ptr<mat33_s32>) operator_aa (const vector<mat33_s32>, const s32)",
+        "0xc20": "() ctor (mat33_s32)",
+        "0xc28": "() ctor (vec3, const f64, const f64, const f64)",
+        "0xc30": "math.pi",
+        "0xc38": "() ctor (vehicle_element_definition.rotor)",
+        "0xc40": "() ctor (array<vehicle_component_definition.mesh>)",
+        "0xc48": "() ctor (vec2_s32)"
+      }
+    },
+    "DROP_ACTOR": {
+      "index": 4905,
+      "signature": "(mat34) client_scene.actor.get_transform_drop_item_local (const client_scene.actor, const s32)",
+      "code_size": 240,
+      "sha256": "898612fb79fc602a66e3a1e8faf6bfb0c098c49a065b7dec76c42ca5916e87ae",
+      "dependencies": {
+        "0xf0": "() ctor (mat33)",
+        "0xf8": "() ctor (vec3, const f64, const f64, const f64)",
+        "0x100": "() dtor (mat34)",
+        "0x108": "() ctor (mat34, const mat33, const vec3)",
+        "0x110": "() dtor (vec3)",
+        "0x118": "() dtor (mat33)"
+      }
+    },
+    "DROP_CHARACTER": {
+      "index": 5196,
+      "signature": "(mat34) client_scene.actor_character.get_transform_drop_item_local (const client_scene.actor_character, const s32)",
+      "code_size": 3224,
+      "sha256": "dc1362107c14126ef3bcfde2e8818401762ea1febbdbda29eddf9d7683778150",
+      "dependencies": {
+        "0xc98": "(s32) client_scene.actor_character.hand_controller.get_current_handheld_item_id (const client_scene.actor_character.hand_controller)",
+        "0xca0": "(ptr<client_scene.item_world>) client_scene.inventory.get_item_world_by_item_id (client_scene.inventory, const s32)",
+        "0xca8": "() ctor (mat34)",
+        "0xcb0": "(mat34) client_scene.actor.get_render_transform (const client_scene.actor)",
+        "0xcb8": "(bool) client_scene.actor.is_first_person (const client_scene.actor)",
+        "0xcc0": "(vec3) operator_add (const vec3, const vec3)",
+        "0xcc8": "(mat34) item_floor_util.get_render_transform_local (const inventory_definition)",
+        "0xcd0": "(mat34) mat34.inverse_transpose (const mat34)",
+        "0xcd8": "(mat34) operator_mul (const mat34, const mat34)",
+        "0xce0": "() dtor (mat34)",
+        "0xce8": "() ctor (client_scene.actor_character.util.deferred_transform)",
+        "0xcf0": "(client_scene.actor_character.util.deferred_transform) client_scene.actor_character.util.get_item_body_transform_deferred (const client_scene.actor_character, const client_scene.inventory, const ptr<client_scene.item_world>)",
+        "0xcf8": "() ctor (vec3)",
+        "0xd00": "() ctor (vector<mat34>)",
+        "0xd08": "() client_scene.actor_character._build_primary_mesh_render_transforms_local (const client_scene.actor_character, const bool, vector<mat34>, vec3, mat34, mat34, mat34)",
+        "0xd10": "() client_scene.actor._apply_ragdoll_primary_mesh_render_transforms_local (const client_scene.actor, const mat34, vector<mat34>)",
+        "0xd18": "(mat34) client_scene.actor_character.util.deferred_transform.build_model_transform (const client_scene.actor_character.util.deferred_transform, const client_scene.actor_character, const mat34, const vector<mat34>)",
+        "0xd20": "() dtor (vector<mat34>)",
+        "0xd28": "() dtor (vec3)",
+        "0xd30": "() dtor (client_scene.actor_character.util.deferred_transform)",
+        "0xd38": "(mat34) client_scene.actor.get_transform_drop_item_local (const client_scene.actor, const s32)"
+      }
+    },
+    "GRIDS": {
+      "index": 26266,
+      "signature": "() frontend_ui_inventory._get_container_grids (const frontend_ui_inventory, const frontend_ui_container_descriptor, vector<frontend_ui_container_grid_descriptor>)",
+      "code_size": 664,
+      "sha256": "968541ff7aeb990ce76481d7166c62ce46d33a79572f1e4ec1b9166c1de147dd",
+      "dependencies": {
+        "0x298": "(uptr) vector<ref<inventory_definition.inventory_data.grid>>.begin (const vector<ref<inventory_definition.inventory_data.grid>>)",
+        "0x2a0": "(uptr) vector<ref<inventory_definition.inventory_data.grid>>.end (const vector<ref<inventory_definition.inventory_data.grid>>)",
+        "0x2a8": "(s32) vector<ref<inventory_definition.inventory_data.grid>>.key (const vector<ref<inventory_definition.inventory_data.grid>>, const uptr)",
+        "0x2b0": "(ptr<ref<inventory_definition.inventory_data.grid>>) vector<ref<inventory_definition.inventory_data.grid>>.value (const vector<ref<inventory_definition.inventory_data.grid>>, const uptr)",
+        "0x2b8": "(ptr<frontend_ui_container_grid_descriptor>) vector<frontend_ui_container_grid_descriptor>.push_back (vector<frontend_ui_container_grid_descriptor>)",
+        "0x2c0": "() copy (vec2_s32, const vec2_s32)",
+        "0x2c8": "() $string_copy (string, const string)",
+        "0x2d0": "(uptr) vector<ref<inventory_definition.inventory_data.grid>>.next (const vector<ref<inventory_definition.inventory_data.grid>>, const uptr)",
+        "0x2d8": "() client_scene.vehicle_component.get_inventory_grid_data (const client_scene.vehicle_component, vector<frontend_ui_container_grid_descriptor>)",
+        "0x2e0": "() client_scene.actor.get_inventory_grid_data (const client_scene.actor, const frontend_ui_container_descriptor, vector<frontend_ui_container_grid_descriptor>)"
+      }
+    },
+    "ITEMS": {
+      "index": 26267,
+      "signature": "() frontend_ui_inventory._get_container_stored_items (const frontend_ui_inventory, const frontend_ui_container_descriptor, vector<frontend_ui_stored_item_descriptor>)",
+      "code_size": 760,
+      "sha256": "3f1dc1717a3a1cf78c5bc5c18d405cc8c0a23879d5a9628b3c5c0ce6f9c348e6",
+      "dependencies": {
+        "0x2f8": "(ptr<client_scene.item_world_grid_container>) client_scene.item_world.get_children (const client_scene.item_world)",
+        "0x300": "(uptr) replication.slave.container_vector_ref<client_scene.item_world_grid>.begin (const replication.slave.container_vector_ref<client_scene.item_world_grid>)",
+        "0x308": "(uptr) replication.slave.container_vector_ref<client_scene.item_world_grid>.end (const replication.slave.container_vector_ref<client_scene.item_world_grid>)",
+        "0x310": "(ptr<client_scene.item_world_grid>) replication.slave.container_vector_ref<client_scene.item_world_grid>.value (const replication.slave.container_vector_ref<client_scene.item_world_grid>, const uptr)",
+        "0x318": "(ptr<frontend_ui_stored_item_descriptor>) vector<frontend_ui_stored_item_descriptor>.push_back (vector<frontend_ui_stored_item_descriptor>)",
+        "0x320": "(ptr<client_scene.item_world>) replication.slave.container_ref_virtual<client_scene.item_world>.get (replication.slave.container_ref_virtual<client_scene.item_world>)",
+        "0x328": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)",
+        "0x330": "(ptr<const vec2_s32>) replication.slave.property_type_simple<vec2_s32>.get (const replication.slave.property_type_simple<vec2_s32>)",
+        "0x338": "() copy (vec2_s32, const vec2_s32)",
+        "0x340": "(uptr) replication.slave.container_vector_ref<client_scene.item_world_grid>.next (const replication.slave.container_vector_ref<client_scene.item_world_grid>, const uptr)",
+        "0x348": "() client_scene.vehicle_component.get_stored_item_data (const client_scene.vehicle_component, vector<frontend_ui_stored_item_descriptor>)",
+        "0x350": "() client_scene.actor.get_stored_item_data (const client_scene.actor, vector<frontend_ui_stored_item_descriptor>)"
+      }
+    },
+    "COMPATIBLE": {
+      "index": 26273,
+      "signature": "(bool) frontend_ui_inventory._is_compatible_item_grid (const frontend_ui_inventory, const frontend_ui_container_grid_descriptor, const inventory_definition, const s32)",
+      "code_size": 1200,
+      "sha256": "5838f051ae048341ce42997a88a80551a230e651645152478553b2c6c3eec610",
+      "dependencies": {
+        "0x4b0": "(bool) bitset.get (const bitset, const s32)",
+        "0x4b8": "() $string_ctor_cstr (string, const uptr)",
+        "0x4c0": "() $string_comparison_equal (bool, const string, const string)",
+        "0x4c8": "() $string_dtor (string)",
+        "0x4d0": "(uptr) vector<string>.begin (const vector<string>)",
+        "0x4d8": "(uptr) vector<string>.end (const vector<string>)",
+        "0x4e0": "(ptr<string>) vector<string>.value (const vector<string>, const uptr)",
+        "0x4e8": "(uptr) vector<string>.next (const vector<string>, const uptr)",
+        "0x4f0": "() ctor (vec2_s32)",
+        "0x4f8": "(vec2_s32) item_util.get_rotated_size (const vec2_s32, const s32)",
+        "0x500": "() dtor (vec2_s32)"
+      }
+    },
+    "RELEASE_GRID": {
+      "index": 26287,
+      "signature": "() frontend_ui_inventory._release_item_into_container_grid (frontend_ui_inventory, client, client.ui_data, client_scene.actor, const client_scene, const frontend_ui_container_descriptor, const frontend_ui_container_grid_descriptor, vector<frontend_ui_container_grid_descriptor>, vector<frontend_ui_stored_item_descriptor>, const vec2_s32, const vec2_s32, const vec2_s32, frontend_ui_item_descriptor)",
+      "code_size": 3016,
+      "sha256": "278f7aba12e64c6950329d9fa39ef08790fd5999a5164e520451cc74c06a0489",
+      "dependencies": {
+        "0xbc8": "(bool) frontend_ui_inventory._is_valid_drag_container_drop_location (const frontend_ui_inventory, const frontend_ui_container_descriptor, const vector<frontend_ui_container_grid_descriptor>, const vector<frontend_ui_stored_item_descriptor>, const vec2_s32, const vec2_s32, const vec2_s32, frontend_ui_item_descriptor, const s32, ptr<frontend_ui_stored_item_descriptor>)",
+        "0xbd0": "(bool) client_scene.item_world.can_merge_item (const client_scene.item_world, const client_scene.item_world)",
+        "0xbd8": "() frontend_ui_inventory._check_tutorial_item_moved_from_component_to_inventory (const frontend_ui_inventory, client, const ptr<const client_scene.item_world>)",
+        "0xbe0": "() ctor (inventory_item_util.item_id)",
+        "0xbe8": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)",
+        "0xbf0": "() client_peer.data.push_event_inventory_stack_item (client_peer.data, const inventory_item_util.item_id, const inventory_item_util.item_id)",
+        "0xbf8": "(s32) client_scene.item_world.get_stack_capacity (const client_scene.item_world)",
+        "0xc00": "(s32) client_scene.item_world.get_stack_count (const client_scene.item_world)",
+        "0xc08": "() client.ui_data.inventory.reset_dragged_item (client.ui_data.inventory)",
+        "0xc10": "g_audio_manager",
+        "0xc18": "() audio_manager.play (audio_manager, const e_audio_effect, const e_audio_group)",
+        "0xc20": "() dtor (inventory_item_util.item_id)",
+        "0xc28": "() ctor (vec2_s32)",
+        "0xc30": "(vec2_s32) operator_add (const vec2_s32, const vec2_s32)",
+        "0xc38": "(vec2_s32) operator_sub (const vec2_s32, const vec2_s32)",
+        "0xc40": "(bool) frontend_ui_inventory._is_drag_src_and_dst_same (frontend_ui_inventory, const frontend_ui_item_descriptor, const frontend_ui_container_descriptor, const frontend_ui_container_grid_descriptor, const vec2_s32)",
+        "0xc48": "() dtor (vec2_s32)",
+        "0xc50": "() ctor (inventory_item_util.item_location)",
+        "0xc58": "() frontend_ui_inventory.deactivate_active_drag_item (const frontend_ui_inventory, const client_scene, const inventory_item_util.item_id, const inventory_item_util.item_location)",
+        "0xc60": "() ctor (mat34)",
+        "0xc68": "(mat34) client_scene.actor.get_transform_drop_item_local (const client_scene.actor, const s32)",
+        "0xc70": "() ctor (vec3)",
+        "0xc78": "() client_peer.data.push_event_inventory_set_item_location (client_peer.data, const inventory_item_util.item_id, const inventory_item_util.item_location, const mat34, const vec3)",
+        "0xc80": "() dtor (vec3)",
+        "0xc88": "() dtor (mat34)",
+        "0xc90": "() dtor (inventory_item_util.item_location)"
+      }
+    },
+    "RELEASE_STACK": {
+      "index": 26291,
+      "signature": "() frontend_ui_inventory._release_item_into_stored_item (frontend_ui_inventory, client, client.ui_data, client_scene.actor, const client_scene, const frontend_ui_container_descriptor, frontend_ui_item_descriptor, const frontend_ui_stored_item_descriptor)",
+      "code_size": 944,
+      "sha256": "5ede3a60aa54e1209b5932543f373d9d0b0924122c8ff42fed2d3b1847af6349",
+      "dependencies": {
+        "0x3b0": "(bool) client_scene.item_world.can_merge_item (const client_scene.item_world, const client_scene.item_world)",
+        "0x3b8": "() frontend_ui_inventory._check_tutorial_item_moved_from_component_to_inventory (const frontend_ui_inventory, client, const ptr<const client_scene.item_world>)",
+        "0x3c0": "() ctor (inventory_item_util.item_id)",
+        "0x3c8": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)",
+        "0x3d0": "() client_peer.data.push_event_inventory_stack_item (client_peer.data, const inventory_item_util.item_id, const inventory_item_util.item_id)",
+        "0x3d8": "(s32) client_scene.item_world.get_stack_capacity (const client_scene.item_world)",
+        "0x3e0": "(s32) client_scene.item_world.get_stack_count (const client_scene.item_world)",
+        "0x3e8": "() client.ui_data.inventory.reset_dragged_item (client.ui_data.inventory)",
+        "0x3f0": "g_audio_manager",
+        "0x3f8": "() audio_manager.play (audio_manager, const e_audio_effect, const e_audio_group)",
+        "0x400": "() dtor (inventory_item_util.item_id)"
+      }
+    },
+    "QUICK_IN": {
+      "index": 4500,
+      "signature": "() client_peer.data.push_event_inventory_quick_store_item (client_peer.data, const inventory_item_util.item_id)",
+      "code_size": 192,
+      "sha256": "30105f195121d73794b5874a61f05cfc36d2af09f648be9d6ca29951afdda7a6",
+      "dependencies": {
+        "0xc0": "() $virtual_dtor ()",
+        "0xc8": "() $ref_ctor_alloc (uptr, const s32, const uptr)",
+        "0xd0": "() ctor (client_peer.data.event.inventory_quick_store_item, const inventory_item_util.item_id)",
+        "0xd8": "() replication.master.object_events.push_event (replication.master.object_events, ref<replication.master.event>)",
+        "0xe0": "() $ref_dtor (uptr)"
+      }
+    },
+    "QUICK_OUT": {
+      "index": 4501,
+      "signature": "() client_peer.data.push_event_inventory_quick_store_item_outside (client_peer.data, const inventory_item_util.item_id, const vector<inventory_item_util.item_id>)",
+      "code_size": 224,
+      "sha256": "912dced355208372b69128043a8c8d2514debd6ac114186479bfc64f72a13e96",
+      "dependencies": {
+        "0xe0": "() $virtual_dtor ()",
+        "0xe8": "() $ref_ctor_alloc (uptr, const s32, const uptr)",
+        "0xf0": "() ctor (client_peer.data.event.inventory_quick_store_item_outside, const inventory_item_util.item_id, const vector<inventory_item_util.item_id>)",
+        "0xf8": "() replication.master.object_events.push_event (replication.master.object_events, ref<replication.master.event>)",
+        "0x100": "() $ref_dtor (uptr)"
+      }
+    },
+    "MOVE": {
+      "index": 4502,
+      "signature": "() client_peer.data.push_event_inventory_set_item_location (client_peer.data, const inventory_item_util.item_id, const inventory_item_util.item_location, const mat34, const vec3)",
+      "code_size": 264,
+      "sha256": "c0db8bdc3838081863ac1b87b5763300e51f1bb90cba4f99b34058b4dc25580f",
+      "dependencies": {
+        "0x108": "() $virtual_dtor ()",
+        "0x110": "() $ref_ctor_alloc (uptr, const s32, const uptr)",
+        "0x118": "() ctor (client_peer.data.event.inventory_set_item_location, const inventory_item_util.item_id, const inventory_item_util.item_location, const mat34, const vec3)",
+        "0x120": "() replication.master.object_events.push_event (replication.master.object_events, ref<replication.master.event>)",
+        "0x128": "() $ref_dtor (uptr)"
+      }
+    },
+    "STACK": {
+      "index": 4503,
+      "signature": "() client_peer.data.push_event_inventory_stack_item (client_peer.data, const inventory_item_util.item_id, const inventory_item_util.item_id)",
+      "code_size": 224,
+      "sha256": "eca1942a16c863cff8421ef30e7f4e272a8cad0876356ba1253575c3caa132f4",
+      "dependencies": {
+        "0xe0": "() $virtual_dtor ()",
+        "0xe8": "() $ref_ctor_alloc (uptr, const s32, const uptr)",
+        "0xf0": "() ctor (client_peer.data.event.inventory_stack_item, const inventory_item_util.item_id, const inventory_item_util.item_id)",
+        "0xf8": "() replication.master.object_events.push_event (replication.master.object_events, ref<replication.master.event>)",
+        "0x100": "() $ref_dtor (uptr)"
+      }
+    },
+    "GRID_CTOR": {
+      "index": 4827,
+      "signature": "() ctor (vector<frontend_ui_container_grid_descriptor>)",
+      "code_size": 128,
+      "sha256": "bd099fe953ed5ac395db0c2a2b395bd6722bd6dd67d45635f2a6f5d00a0e4dff",
+      "dependencies": {
+        "0x80": "frontend_ui_container_grid_descriptor"
+      }
+    },
+    "ITEM_CTOR": {
+      "index": 4879,
+      "signature": "() ctor (vector<frontend_ui_stored_item_descriptor>)",
+      "code_size": 128,
+      "sha256": "bd099fe953ed5ac395db0c2a2b395bd6722bd6dd67d45635f2a6f5d00a0e4dff",
+      "dependencies": {
+        "0x80": "frontend_ui_stored_item_descriptor"
+      }
+    },
+    "QUANTITY_6474": {
+      "index": 6474,
+      "signature": "(s32) client_scene.item_world.ammo_box.get_stack_count (const client_scene.item_world.ammo_box)",
+      "code_size": 112,
+      "sha256": "72be0825dd9d8ca3aa603c494efa72a95c61dd866c475a9d1d461080b55f7fa4",
+      "dependencies": {
+        "0x70": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)"
+      }
+    },
+    "QUANTITY_6817": {
+      "index": 6817,
+      "signature": "(s32) client_scene.item_world.get_stack_count (const client_scene.item_world)",
+      "code_size": 36,
+      "sha256": "a17280e7009090c2a5af6d6af3d8d4c0db525442d90d829fd076052aa6b8882c",
+      "dependencies": {}
+    },
+    "QUANTITY_8394": {
+      "index": 8394,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_building_component.get_stack_count (const client_scene.item_world.vehicle_editor_add_building_component)",
+      "code_size": 112,
+      "sha256": "6abebd9188abac11cc93bdc40050958e4fb7855f35507e3aab5dfff1c1a5bc8f",
+      "dependencies": {
+        "0x70": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)"
+      }
+    },
+    "QUANTITY_8471": {
+      "index": 8471,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_component.get_stack_count (const client_scene.item_world.vehicle_editor_add_component)",
+      "code_size": 112,
+      "sha256": "6abebd9188abac11cc93bdc40050958e4fb7855f35507e3aab5dfff1c1a5bc8f",
+      "dependencies": {
+        "0x70": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)"
+      }
+    },
+    "QUANTITY_8520": {
+      "index": 8520,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_edge.get_stack_count (const client_scene.item_world.vehicle_editor_add_edge)",
+      "code_size": 112,
+      "sha256": "72be0825dd9d8ca3aa603c494efa72a95c61dd866c475a9d1d461080b55f7fa4",
+      "dependencies": {
+        "0x70": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)"
+      }
+    },
+    "QUANTITY_8554": {
+      "index": 8554,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_edge_2.get_stack_count (const client_scene.item_world.vehicle_editor_add_edge_2)",
+      "code_size": 112,
+      "sha256": "72be0825dd9d8ca3aa603c494efa72a95c61dd866c475a9d1d461080b55f7fa4",
+      "dependencies": {
+        "0x70": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)"
+      }
+    },
+    "QUANTITY_8592": {
+      "index": 8592,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_plate.get_stack_count (const client_scene.item_world.vehicle_editor_add_plate)",
+      "code_size": 112,
+      "sha256": "72be0825dd9d8ca3aa603c494efa72a95c61dd866c475a9d1d461080b55f7fa4",
+      "dependencies": {
+        "0x70": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)"
+      }
+    },
+    "CAPACITY_6473": {
+      "index": 6473,
+      "signature": "(s32) client_scene.item_world.ammo_box.get_stack_capacity (const client_scene.item_world.ammo_box)",
+      "code_size": 35,
+      "sha256": "4cb5967831306a88e7f0069e3488e10f8c79dad316d9dcc38d33bff3454bb524",
+      "dependencies": {}
+    },
+    "CAPACITY_6816": {
+      "index": 6816,
+      "signature": "(s32) client_scene.item_world.get_stack_capacity (const client_scene.item_world)",
+      "code_size": 36,
+      "sha256": "a17280e7009090c2a5af6d6af3d8d4c0db525442d90d829fd076052aa6b8882c",
+      "dependencies": {}
+    },
+    "CAPACITY_8393": {
+      "index": 8393,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_building_component.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_building_component)",
+      "code_size": 68,
+      "sha256": "839f659adeb1e474512106530ceef3b736caac94b9fb885fd6ababe1c259c3a2",
+      "dependencies": {}
+    },
+    "CAPACITY_8470": {
+      "index": 8470,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_component.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_component)",
+      "code_size": 68,
+      "sha256": "839f659adeb1e474512106530ceef3b736caac94b9fb885fd6ababe1c259c3a2",
+      "dependencies": {}
+    },
+    "CAPACITY_8519": {
+      "index": 8519,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_edge.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_edge)",
+      "code_size": 40,
+      "sha256": "7c1c3e5c4ef9a5c7676047dc7922d219d9e4c2ded6d36ecdf17f4ba2de559400",
+      "dependencies": {
+        "0x28": "server_scene.item_world.vehicle_editor_add_edge.g_stack_capacity"
+      }
+    },
+    "CAPACITY_8553": {
+      "index": 8553,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_edge_2.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_edge_2)",
+      "code_size": 40,
+      "sha256": "7c1c3e5c4ef9a5c7676047dc7922d219d9e4c2ded6d36ecdf17f4ba2de559400",
+      "dependencies": {
+        "0x28": "server_scene.item_world.vehicle_editor_add_edge_2.g_stack_capacity"
+      }
+    },
+    "CAPACITY_8591": {
+      "index": 8591,
+      "signature": "(s32) client_scene.item_world.vehicle_editor_add_plate.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_plate)",
+      "code_size": 40,
+      "sha256": "7c1c3e5c4ef9a5c7676047dc7922d219d9e4c2ded6d36ecdf17f4ba2de559400",
+      "dependencies": {
+        "0x28": "server_scene.item_world.vehicle_editor_add_plate.g_stack_capacity"
+      }
+    },
+    "MERGE_6472": {
+      "index": 6472,
+      "signature": "(bool) client_scene.item_world.ammo_box.can_merge_item (const client_scene.item_world.ammo_box, const client_scene.item_world)",
+      "code_size": 384,
+      "sha256": "e4714b9f476b83956e192337667358749f455e6d138bb006658afc84aeb0cb49",
+      "dependencies": {
+        "0x180": "client_scene.item_world.ammo_box",
+        "0x188": "",
+        "0x190": "(s32) client_scene.item_world.ammo_box.get_stack_capacity (const client_scene.item_world.ammo_box)",
+        "0x198": "(s32) client_scene.item_world.ammo_box.get_stack_count (const client_scene.item_world.ammo_box)"
+      }
+    },
+    "MERGE_6566": {
+      "index": 6566,
+      "signature": "(bool) client_scene.item_world.can_merge_item (const client_scene.item_world, const client_scene.item_world)",
+      "code_size": 41,
+      "sha256": "2776f511c8dff8c19f73ca2d0a77b9fd99e0a5d3d4097d8937f7b7da7d031a19",
+      "dependencies": {}
+    },
+    "MERGE_8383": {
+      "index": 8383,
+      "signature": "(bool) client_scene.item_world.vehicle_editor_add_building_component.can_merge_item (const client_scene.item_world.vehicle_editor_add_building_component, const client_scene.item_world)",
+      "code_size": 440,
+      "sha256": "27a50dcf480069506ca5f479edbcd9e4faf2cfd73a3e9b2102efa13994f88403",
+      "dependencies": {
+        "0x1b8": "client_scene.item_world.vehicle_editor_add_building_component",
+        "0x1c0": "",
+        "0x1c8": "(bool) client_scene.item_world.vehicle_editor_add_building_component._get_is_valid_variant (const client_scene.item_world.vehicle_editor_add_building_component, const vehicle_component_definition)",
+        "0x1d0": "(s32) client_scene.item_world.vehicle_editor_add_building_component.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_building_component)",
+        "0x1d8": "(s32) client_scene.item_world.vehicle_editor_add_building_component.get_stack_count (const client_scene.item_world.vehicle_editor_add_building_component)"
+      }
+    },
+    "MERGE_8461": {
+      "index": 8461,
+      "signature": "(bool) client_scene.item_world.vehicle_editor_add_component.can_merge_item (const client_scene.item_world.vehicle_editor_add_component, const client_scene.item_world)",
+      "code_size": 384,
+      "sha256": "95534f3a2ad5356a02a0329fbfc010b7bb4f8dc668288a87b0f86e0f9a49f597",
+      "dependencies": {
+        "0x180": "client_scene.item_world.vehicle_editor_add_component",
+        "0x188": "",
+        "0x190": "(s32) client_scene.item_world.vehicle_editor_add_component.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_component)",
+        "0x198": "(s32) client_scene.item_world.vehicle_editor_add_component.get_stack_count (const client_scene.item_world.vehicle_editor_add_component)"
+      }
+    },
+    "MERGE_8514": {
+      "index": 8514,
+      "signature": "(bool) client_scene.item_world.vehicle_editor_add_edge.can_merge_item (const client_scene.item_world.vehicle_editor_add_edge, const client_scene.item_world)",
+      "code_size": 320,
+      "sha256": "c31c383e6db61007026e98245601586faecb7ca3dc2d299f6afb7a4a9b07b26e",
+      "dependencies": {
+        "0x140": "client_scene.item_world.vehicle_editor_add_edge",
+        "0x148": "",
+        "0x150": "(s32) client_scene.item_world.vehicle_editor_add_edge.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_edge)",
+        "0x158": "(s32) client_scene.item_world.vehicle_editor_add_edge.get_stack_count (const client_scene.item_world.vehicle_editor_add_edge)"
+      }
+    },
+    "MERGE_8548": {
+      "index": 8548,
+      "signature": "(bool) client_scene.item_world.vehicle_editor_add_edge_2.can_merge_item (const client_scene.item_world.vehicle_editor_add_edge_2, const client_scene.item_world)",
+      "code_size": 320,
+      "sha256": "c31c383e6db61007026e98245601586faecb7ca3dc2d299f6afb7a4a9b07b26e",
+      "dependencies": {
+        "0x140": "client_scene.item_world.vehicle_editor_add_edge_2",
+        "0x148": "",
+        "0x150": "(s32) client_scene.item_world.vehicle_editor_add_edge_2.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_edge_2)",
+        "0x158": "(s32) client_scene.item_world.vehicle_editor_add_edge_2.get_stack_count (const client_scene.item_world.vehicle_editor_add_edge_2)"
+      }
+    },
+    "MERGE_8584": {
+      "index": 8584,
+      "signature": "(bool) client_scene.item_world.vehicle_editor_add_plate.can_merge_item (const client_scene.item_world.vehicle_editor_add_plate, const client_scene.item_world)",
+      "code_size": 344,
+      "sha256": "71d7198c3d03a54f78ed1a216b564543a68a3e9acf83eefcd6323d9d2029973b",
+      "dependencies": {
+        "0x158": "client_scene.item_world.vehicle_editor_add_plate",
+        "0x160": "",
+        "0x168": "(s32) client_scene.item_world.vehicle_editor_add_plate.get_stack_capacity (const client_scene.item_world.vehicle_editor_add_plate)",
+        "0x170": "(s32) client_scene.item_world.vehicle_editor_add_plate.get_stack_count (const client_scene.item_world.vehicle_editor_add_plate)"
+      }
+    },
+    "LAYOUT_OWNER": {
+      "index": 26366,
+      "signature": "() frontend_ui_inventory.update_ui (frontend_ui_inventory, frontend_ui, client, client.ui_data, client_scene.peer, client_scene.actor, client_scene.inventory, client_scene.inventory_hotbar, client_scene, color8, frontend_ui_item_descriptor, vector<client.ui_data.control_hint>)",
+      "code_size": 52000,
+      "sha256": "50a7591a492c97521978b090bc2d1fec5879209b2dc55f3754a8f2c6a1f63ecf",
+      "dependencies": {
+        "0xcb20": "(s32) client_scene.inventory_hotbar.get_selected_item_id (const client_scene.inventory_hotbar, const ptr<client_scene.inventory>, const bool)",
+        "0xcb28": "() dtor (frontend_ui_item_descriptor)",
+        "0xcb30": "() ctor (frontend_ui_item_descriptor)",
+        "0xcb38": "() ctor (frontend_ui_inventory.inventory_data)",
+        "0xcb40": "(ptr<const client_scene.item_world>) replication.slave.container_ref_virtual<client_scene.item_world>.get_const (const replication.slave.container_ref_virtual<client_scene.item_world>)",
+        "0xcb48": "(s32) vector<ref<inventory_definition.inventory_data.grid>>.size (const vector<ref<inventory_definition.inventory_data.grid>>)",
+        "0xcb50": "(ptr<frontend_ui_container_descriptor>) vector<frontend_ui_container_descriptor>.push_back (vector<frontend_ui_container_descriptor>)",
+        "0xcb58": "() frontend_ui_container_descriptor.set_inventory_item (frontend_ui_container_descriptor, const client_ui, const ptr<const client_scene.item_world>, const inventory_item_util.e_item_location_type, const s32)",
+        "0xcb60": "(ptr<const s32>) replication.slave.property_type_simple<s32>.get (const replication.slave.property_type_simple<s32>)",
+        "0xcb68": "() dtor (vec2_s32)",
+        "0xcb70": "() ctor (vec2_s32)",
+        "0xcb78": "(ptr<client_scene.item_world_grid_container>) client_scene.item_world.get_children (const client_scene.item_world)",
+        "0xcb80": "(uptr) replication.slave.container_vector_ref<client_scene.item_world_grid>.begin (const replication.slave.container_vector_ref<client_scene.item_world_grid>)",
+        "0xcb88": "(uptr) replication.slave.container_vector_ref<client_scene.item_world_grid>.end (const replication.slave.container_vector_ref<client_scene.item_world_grid>)",
+        "0xcb90": "(ptr<client_scene.item_world_grid>) replication.slave.container_vector_ref<client_scene.item_world_grid>.value (const replication.slave.container_vector_ref<client_scene.item_world_grid>, const uptr)",
+        "0xcb98": "(ptr<ref<inventory_definition.inventory_data.grid>>) operator_aa (const vector<ref<inventory_definition.inventory_data.grid>>, const s32)",
+        "0xcba0": "() $ref_ctor_copy (uptr, const uptr)",
+        "0xcba8": "(ptr<const vec2_s32>) replication.slave.property_type_simple<vec2_s32>.get (const replication.slave.property_type_simple<vec2_s32>)",
+        "0xcbb0": "() frontend_ui_inventory._extract_inventory_item_and_children_recursive (const frontend_ui_inventory, frontend_ui, client.ui_data, client_scene.actor, const ptr<const client_scene.item_world>, const ptr<const client_scene.item_world>, const inventory_item_util.e_item_location_type, const s32, const vec2_s32, const s32, const s32, vector<frontend_ui_container_descriptor>, bool, frontend_ui_item_descriptor)",
+        "0xcbb8": "() $ref_dtor (uptr)",
+        "0xcbc0": "(uptr) replication.slave.container_vector_ref<client_scene.item_world_grid>.next (const replication.slave.container_vector_ref<client_scene.item_world_grid>, const uptr)",
+        "0xcbc8": "(uptr) array<client_scene.item_world_ref>.begin (const array<client_scene.item_world_ref>)",
+        "0xcbd0": "(uptr) array<client_scene.item_world_ref>.end (const array<client_scene.item_world_ref>)",
+        "0xcbd8": "(s32) array<client_scene.item_world_ref>.key (const array<client_scene.item_world_ref>, const uptr)",
+        "0xcbe0": "(ptr<client_scene.item_world_ref>) array<client_scene.item_world_ref>.value (const array<client_scene.item_world_ref>, const uptr)",
+        "0xcbe8": "(uptr) array<client_scene.item_world_ref>.next (const array<client_scene.item_world_ref>, const uptr)",
+        "0xcbf0": "frontend_ui_inventory.G_INSPECTION_RANGE",
+        "0xcbf8": "(uptr) replication.slave.container_vector_ref<client_scene.item_floor>.begin (const replication.slave.container_vector_ref<client_scene.item_floor>)",
+        "0xcc00": "(uptr) replication.slave.container_vector_ref<client_scene.item_floor>.end (const replication.slave.container_vector_ref<client_scene.item_floor>)",
+        "0xcc08": "(ptr<client_scene.item_floor>) replication.slave.container_vector_ref<client_scene.item_floor>.value (const replication.slave.container_vector_ref<client_scene.item_floor>, const uptr)",
+        "0xcc10": "() ctor (mat34)",
+        "0xcc18": "(mat34) client_scene.actor.get_transform (const client_scene.actor)",
+        "0xcc20": "(f64) vec3.get_distance_sq (const vec3, const vec3)",
+        "0xcc28": "() dtor (mat34)",
+        "0xcc30": "() frontend_ui_inventory._extract_floor_item_and_children_recursive (const frontend_ui_inventory, frontend_ui, client.ui_data, const s32, const ptr<const client_scene.item_world>, const ptr<const client_scene.item_world>, const s32, const vec2_s32, vector<frontend_ui_container_descriptor>, bool, frontend_ui_item_descriptor)",
+        "0xcc38": "(uptr) replication.slave.container_vector_ref<client_scene.item_floor>.next (const replication.slave.container_vector_ref<client_scene.item_floor>, const uptr)",
+        "0xcc40": "(ptr<client_scene.vehicle>) client_scene.vehicle.container.get_vehicle_by_id (const client_scene.vehicle.container, const s32)",
+        "0xcc48": "(ptr<const client_scene.vehicle_component>) client_scene.vehicle.get_component_by_id_const (const client_scene.vehicle, const s32)",
+        "0xcc50": "() ctor (vector<inventory_item_util.item_id>)",
+        "0xcc58": "() client_scene.vehicle_component.on_inspect (const client_scene.vehicle_component, vector<inventory_item_util.item_id>)",
+        "0xcc60": "(s32) vector<inventory_item_util.item_id>.size (const vector<inventory_item_util.item_id>)",
+        "0xcc68": "(uptr) vector<inventory_item_util.item_id>.begin (const vector<inventory_item_util.item_id>)",
+        "0xcc70": "(uptr) vector<inventory_item_util.item_id>.end (const vector<inventory_item_util.item_id>)",
+        "0xcc78": "(ptr<inventory_item_util.item_id>) vector<inventory_item_util.item_id>.value (const vector<inventory_item_util.item_id>, const uptr)",
+        "0xcc80": "(ptr<const client_scene.item_world>) client_scene.vehicle_component.get_contained_item_world_by_id_const (const client_scene.vehicle_component, const s32)",
+        "0xcc88": "() frontend_ui_inventory._extract_vehicle_component_item_and_children_recursive (const frontend_ui_inventory, frontend_ui, client.ui_data, const client_scene.vehicle, const client_scene.vehicle_component, const ptr<const client_scene.item_world>, const ptr<const client_scene.item_world>, const s32, const vec2_s32, vector<frontend_ui_container_descriptor>, bool, frontend_ui_item_descriptor)",
+        "0xcc90": "() frontend_ui_container_descriptor.set_vehicle_component (frontend_ui_container_descriptor, const client_ui, const ptr<const client_scene.vehicle_component>)",
+        "0xcc98": "() ctor (vector<frontend_ui_stored_item_descriptor>)",
+        "0xcca0": "() client_scene.vehicle_component.get_stored_item_data (const client_scene.vehicle_component, vector<frontend_ui_stored_item_descriptor>)",
+        "0xcca8": "(uptr) vector<frontend_ui_stored_item_descriptor>.begin (const vector<frontend_ui_stored_item_descriptor>)",
+        "0xccb0": "(uptr) vector<frontend_ui_stored_item_descriptor>.end (const vector<frontend_ui_stored_item_descriptor>)",
+        "0xccb8": "(ptr<frontend_ui_stored_item_descriptor>) vector<frontend_ui_stored_item_descriptor>.value (const vector<frontend_ui_stored_item_descriptor>, const uptr)",
+        "0xccc0": "(uptr) vector<frontend_ui_stored_item_descriptor>.next (const vector<frontend_ui_stored_item_descriptor>, const uptr)",
+        "0xccc8": "(uptr) vector<frontend_ui_stored_item_descriptor>.erase (vector<frontend_ui_stored_item_descriptor>, const uptr)",
+        "0xccd0": "() dtor (vector<frontend_ui_stored_item_descriptor>)",
+        "0xccd8": "(uptr) vector<inventory_item_util.item_id>.next (const vector<inventory_item_util.item_id>, const uptr)",
+        "0xcce0": "(uptr) vector<inventory_item_util.item_id>.erase (vector<inventory_item_util.item_id>, const uptr)",
+        "0xcce8": "() dtor (vector<inventory_item_util.item_id>)",
+        "0xccf0": "(ptr<client_scene.actor>) client_scene.actor.container.get_actor_by_id (const client_scene.actor.container, const s32)",
+        "0xccf8": "() client_scene.actor.on_inspect (const client_scene.actor, vector<inventory_item_util.item_id>)",
+        "0xcd00": "e_wearable_slot",
+        "0xcd08": "client_ui.G_UI_ICON_ITEM_SIZE",
+        "0xcd10": "() frontend_ui_container_descriptor.set_actor (frontend_ui_container_descriptor, const client_ui, const ptr<const client_scene.actor>, const s32)",
+        "0xcd18": "() client_scene.actor.get_stored_item_data (const client_scene.actor, vector<frontend_ui_stored_item_descriptor>)",
+        "0xcd20": "() client.ui_data.inventory.reset_dragged_item (client.ui_data.inventory)",
+        "0xcd28": "(ptr<client.ui_data.control_hint>) vector<client.ui_data.control_hint>.push_back (vector<client.ui_data.control_hint>)",
+        "0xcd30": "() dtor (client.ui_data.control_hint)",
+        "0xcd38": "() ctor (client.ui_data.control_hint, const e_localization_string, const input.e_action_digital)",
+        "0xcd40": "(vec2_s32) vec2_s32.rotate (const vec2_s32, const s32)",
+        "0xcd48": "(s32) math.abs (const s32)",
+        "0xcd50": "() ctor (vec2_s32, const s32, const s32)",
+        "0xcd58": "() ctor (vec3)",
+        "0xcd60": "() client_scene.actor.drop_item (client_scene.actor, client, const s32, const bool, const vec3)",
+        "0xcd68": "() dtor (vec3)",
+        "0xcd70": "(s32) vector<frontend_ui_container_descriptor>.size (const vector<frontend_ui_container_descriptor>)",
+        "0xcd78": "(ptr<frontend_ui_container_descriptor>) operator_aa (const vector<frontend_ui_container_descriptor>, const s32)",
+        "0xcd80": "() inventory_item_util.item_id.reset (inventory_item_util.item_id)",
+        "0xcd88": "() ctor (inventory_item_util.item_id)",
+        "0xcd90": "() $string_ctor_cstr (string, const uptr)",
+        "0xcd98": "client_ui.G_UI_FILL_IN_CELLS",
+        "0xcda0": "() client_ui.begin_screen (client_ui, const string, const vec2_s32, const client_ui.e_horizontal_align, const client_ui.e_vertical_align, const client_ui.e_horizontal_align, const client_ui.e_vertical_align, const client_ui.e_layout_mode, const bool)",
+        "0xcda8": "() $string_dtor (string)",
+        "0xcdb0": "client_ui.G_UI_SCREEN_WIDTH_IN_CELLS",
+        "0xcdb8": "client_ui.G_UI_SCREEN_HEIGHT_IN_CELLS",
+        "0xcdc0": "client_ui.G_UI_SCREEN_PADDING_X",
+        "0xcdc8": "client_ui.G_UI_SCREEN_PADDING_Y",
+        "0xcdd0": "client_ui.G_UI_CONTENT_SPACING",
+        "0xcdd8": "() client_ui.begin_container_layout_align (client_ui, const string, const vec2_s32, const client_ui.e_horizontal_align, const client_ui.e_vertical_align, const client_ui.e_layout_mode, const vec2_s32, const s32)",
+        "0xcde0": "() ctor (color8)",
+        "0xcde8": "(color8) frontend_ui_inventory._get_hover_color (const frontend_ui_inventory, const frontend_ui_item_descriptor, const bool)",
+        "0xcdf0": "(bool) client_ui.begin_container_layout_align_hoverable (client_ui, const string, const vec2_s32, const client_ui.e_horizontal_align, const client_ui.e_vertical_align, const client_ui.e_layout_mode, const vec2_s32, const s32, const bool, const color8)",
+        "0xcdf8": "(bool) client_ui.is_input_down (client_ui)",
+        "0xce00": "(bool) client_ui.is_input_enter (client_ui)",
+        "0xce08": "(bool) client_ui.is_input_back (client_ui)",
+        "0xce10": "() frontend_ui_inventory._update_ui_clothing_slot (frontend_ui_inventory, frontend_ui, client, client.ui_data, frontend_ui_inventory.inventory_data, client_scene, const e_wearable_slot, const ptr<application.graphics.asset_atlas.region>, const bool, frontend_ui_item_descriptor, const s32, inventory_item_util.item_id, color8, vector<client.ui_data.control_hint>)",
+        "0xce18": "() frontend_ui_inventory._update_ui_hand_slot (frontend_ui_inventory, frontend_ui, client, client.ui_data, frontend_ui_inventory.inventory_data, client_scene, const bool, frontend_ui_item_descriptor, const s32, inventory_item_util.item_id, color8, vector<client.ui_data.control_hint>)",
+        "0xce20": "() client_ui.end_container (client_ui)",
+        "0xce28": "client_ui.G_UI_TEXT_BOX_HEIGHT",
+        "0xce30": "client_scene.actor_character",
+        "0xce38": "",
+        "0xce40": "() frontend_ui_inventory._update_clothing_stats (frontend_ui_inventory, frontend_ui, client.ui_data, client_scene.actor_character, client_scene.inventory, client_scene)",
+        "0xce48": "() client_ui.spacer (client_ui, const string, const vec2_s32)",
+        "0xce50": "() frontend_ui_inventory._update_player_vitals (frontend_ui_inventory, frontend_ui, client.ui_data, client_scene.actor_character)",
+        "0xce58": "() dtor (color8)",
+        "0xce60": "client_ui.G_UI_SCREEN_BODY_HEIGHT",
+        "0xce68": "frontend_ui.INVENTORY_CONTAINER_GRID_WIDTH",
+        "0xce70": "() client_ui.begin_container_scroll (client_ui, const string, const vec2_s32, const s32, const bool, s32)",
+        "0xce78": "(uptr) vector<frontend_ui_container_descriptor>.begin (const vector<frontend_ui_container_descriptor>)",
+        "0xce80": "(uptr) vector<frontend_ui_container_descriptor>.end (const vector<frontend_ui_container_descriptor>)",
+        "0xce88": "(s32) vector<frontend_ui_container_descriptor>.key (const vector<frontend_ui_container_descriptor>, const uptr)",
+        "0xce90": "(ptr<frontend_ui_container_descriptor>) vector<frontend_ui_container_descriptor>.value (const vector<frontend_ui_container_descriptor>, const uptr)",
+        "0xce98": "() ctor (frontend_ui_inventory.column_movement)",
+        "0xcea0": "() frontend_ui_inventory._update_ui_inspect_column (frontend_ui_inventory, frontend_ui, client, frontend_ui_inventory.inventory_data, const s32, const bool, const vector<frontend_ui_container_descriptor>, const e_inventory_ui_column, frontend_ui_item_descriptor, const s32, const frontend_ui_inventory.column_movement, inventory_item_util.item_id, color8, s32, vector<client.ui_data.control_hint>)",
+        "0xcea8": "() dtor (frontend_ui_inventory.column_movement)",
+        "0xceb0": "(uptr) vector<frontend_ui_container_descriptor>.next (const vector<frontend_ui_container_descriptor>, const uptr)",
+        "0xceb8": "(uptr) vector<frontend_ui_container_descriptor>.erase (vector<frontend_ui_container_descriptor>, const uptr)",
+        "0xcec0": "frontend_ui.INVENTORY_FLOOR_GRID_WIDTH",
+        "0xcec8": "client_ui.G_UI_BUTTON_WIDTH",
+        "0xced0": "g_localization",
+        "0xced8": "() $string_ctor (string)",
+        "0xcee0": "(string) localization.get_localization (const localization, const e_localization_string)",
+        "0xcee8": "(bool) client_ui.button (client_ui, const string, const string, const vec2_s32, const ptr<application.graphics.asset_atlas.region>, const bool, const bool)",
+        "0xcef0": "() frontend_ui.close_ui_inventory (frontend_ui, client.ui_data)",
+        "0xcef8": "() frontend_ui.build_ui_back_prompt (frontend_ui)",
+        "0xcf00": "() ctor (color8, const s32, const s32, const s32, const s32)",
+        "0xcf08": "client_ui.G_UI_COLOR_VALID",
+        "0xcf10": "() copy (color8, const color8)",
+        "0xcf18": "client_ui.G_UI_COLOR_INVALID",
+        "0xcf20": "G_UI_COLOR_ELEMENT_BACKGROUND_ACTION",
+        "0xcf28": "() client_ui.begin_container_background (client_ui, const string, const bool, const color8, const bool)",
+        "0xcf30": "(s32) client_scene.inventory_hotbar.get_slot_count (const client_scene.inventory_hotbar)",
+        "0xcf38": "(s32) client_scene.inventory_hotbar.get_passive_slot_count (const client_scene.inventory_hotbar)",
+        "0xcf40": "(bool) client_ui.is_input_up (client_ui)",
+        "0xcf48": "(s32) client_scene.inventory_hotbar.get_slot_item_id (const client_scene.inventory_hotbar, const ptr<client_scene.inventory>, const s32)",
+        "0xcf50": "(ptr<client_scene.item_world>) client_scene.inventory.get_item_world_by_item_id (client_scene.inventory, const s32)",
+        "0xcf58": "(s32) client_scene.inventory_hotbar.get_selected_slot_index (const client_scene.inventory_hotbar, const bool)",
+        "0xcf60": "() ctor (color8, const color8)",
+        "0xcf68": "(bool) client_scene.item_world.render_hotbar_label_inventory (const client_scene.item_world, const s32, const frontend_ui, const client_scene, const bool, const bool, const color8, const bool, const bool, const bool)",
+        "0xcf70": "() $string_assign_s32 (string, const s32)",
+        "0xcf78": "() $string_add (string, const string, const string)",
+        "0xcf80": "() ctor (frontend_ui_item_icon)",
+        "0xcf88": "G_UI_COLOR_ERROR",
+        "0xcf90": "(bool) client_ui.inventory_hotbar_item (client_ui, const string, const ptr<application.graphics.asset_atlas.region>, const frontend_ui_item_icon, const color8, const bool, const bool, const color8, const bool, const bool, const bool)",
+        "0xcf98": "() dtor (frontend_ui_item_icon)",
+        "0xcfa0": "client_ui.G_UI_COLOR_TEXT",
+        "0xcfa8": "(ptr<client_scene.inventory>) client_scene.actor.get_inventory (const client_scene.actor)",
+        "0xcfb0": "(inventory_item_util.e_item_location_type) client_scene.inventory.get_item_source_by_item_id (const client_scene.inventory, const s32)",
+        "0xcfb8": "g_audio_manager",
+        "0xcfc0": "() audio_manager.play (audio_manager, const e_audio_effect, const e_audio_group)",
+        "0xcfc8": "() frontend_ui_inventory._release_item_into_hotbar_slot (frontend_ui_inventory, client, client.ui_data, frontend_ui_item_descriptor, const bool, const s32)",
+        "0xcfd0": "(bool) client_ui.is_input_enter_end (client_ui)",
+        "0xcfd8": "(bool) client_ui.is_input_left (client_ui)",
+        "0xcfe0": "(bool) client_ui.is_input_right (client_ui)",
+        "0xcfe8": "(bool) client_ui.is_input_delete (client_ui)",
+        "0xcff0": "() client_peer.data.push_event_hotbar_clear_selected_slot (client_peer.data, const s32)",
+        "0xcff8": "client_ui.G_UI_COLOR_ELEMENT_BACKGROUND_DARK",
+        "0xd000": "() client_ui.icon (client_ui, const string, const ptr<application.graphics.asset_atlas.region>, const vec2_s32, const color8)",
+        "0xd008": "(s32) client_scene.inventory_hotbar.get_passive_slot_item_id (const client_scene.inventory_hotbar, const s32)",
+        "0xd010": "(bool) client_scene.item_world.can_passive_interact (const client_scene.item_world)",
+        "0xd018": "() frontend_ui_inventory._release_item_into_hotbar_passive_slot (frontend_ui_inventory, client, client.ui_data, frontend_ui_item_descriptor, const bool, const s32)",
+        "0xd020": "() client_peer.data.push_event_hotbar_clear_selected_passive_slot (client_peer.data, const s32)",
+        "0xd028": "() client_ui.end_screen (client_ui)",
+        "0xd030": "() frontend_ui_inventory._update_ui_item_tooltip (frontend_ui_inventory, frontend_ui, client, const client_peer.inspection_request, client_scene.peer, client_scene.inventory, const client_scene, const inventory_item_util.item_id)",
+        "0xd038": "() dtor (inventory_item_util.item_id)",
+        "0xd040": "() dtor (frontend_ui_inventory.inventory_data)"
+      }
+    },
+    "TIP_SCREEN": {
+      "index": 15979,
+      "signature": "() client_ui.begin_screen (client_ui, const string, const vec2_s32, const client_ui.e_horizontal_align, const client_ui.e_vertical_align, const client_ui.e_horizontal_align, const client_ui.e_vertical_align, const client_ui.e_layout_mode, const bool)",
+      "code_size": 424,
+      "sha256": "e02e99940b02dc132f768fdcedb1059bb13f86bfb05e7479cc4f7644dc01bfde",
+      "dependencies": {
+        "0x1a8": "(ref<client_ui_element.screen>) client_ui._push_element<client_ui_element.screen> (client_ui, const string)",
+        "0x1b0": "() copy (vec2_s32, const vec2_s32)",
+        "0x1b8": "() client_ui._push_container (client_ui, const ref<client_ui_element_container>)",
+        "0x1c0": "() $ref_dtor (uptr)"
+      }
+    },
+    "TIP_END": {
+      "index": 15998,
+      "signature": "() client_ui.end_screen (client_ui)",
+      "code_size": 32,
+      "sha256": "f06e0d562a1adc36133a05a3ae2e58b4ae38a1a353b6acb196916250a889e0ac",
+      "dependencies": {
+        "0x20": "() client_ui._pop_container (client_ui)"
+      }
+    },
+    "TIP_ENTRY": {
+      "index": 16154,
+      "signature": "() client_ui.tooltip_entry (client_ui, const string, const ptr<application.graphics.asset_atlas.region>, const string, const string, const color8)",
+      "code_size": 3168,
+      "sha256": "7d1599f1bc83c5a1187f5deb63c7f0a08bd31056eb2d8e26924a22356d22d8e3",
+      "dependencies": {
+        "0xc60": "() $string_ctor_cstr (string, const uptr)",
+        "0xc68": "() $string_comparison_not_equal (bool, const string, const string)",
+        "0xc70": "() $string_dtor (string)",
+        "0xc78": "client_ui.G_UI_TOOLTIP_WIDTH",
+        "0xc80": "client_ui.G_UI_TEXT_BOX_HEIGHT",
+        "0xc88": "() ctor (vec2_s32, const s32, const s32)",
+        "0xc90": "() client_ui.begin_container_layout_align (client_ui, const string, const vec2_s32, const client_ui.e_horizontal_align, const client_ui.e_vertical_align, const client_ui.e_layout_mode, const vec2_s32, const s32)",
+        "0xc98": "() dtor (vec2_s32)",
+        "0xca0": "() client_ui.begin_container_background (client_ui, const string, const bool, const color8)",
+        "0xca8": "client_ui.G_UI_FILL_IN_CELLS",
+        "0xcb0": "client_ui.G_UI_TOOLTIP_ICON_WIDTH",
+        "0xcb8": "() client_ui.icon (client_ui, const string, const ptr<application.graphics.asset_atlas.region>, const vec2_s32)",
+        "0xcc0": "() client_ui.end_container (client_ui)",
+        "0xcc8": "client_ui.G_UI_TOOLTIP_LABEL_WIDTH",
+        "0xcd0": "client_ui.G_UI_TOOLTIP_VALUE_WIDTH",
+        "0xcd8": "() client_ui.label (client_ui, const string, const string, const bool)",
+        "0xce0": "() client_ui.text (client_ui, const string, const string, const client_ui.e_horizontal_align)"
+      }
+    },
+    "COMPACT_TAG": {
+      "index": 16145,
+      "signature": "(bool) client_ui.tag_button (client_ui, const string, const string, const vec2_s32, const color8, const bool)",
+      "code_size": 696,
+      "sha256": "48d9234c6008eef99bbd497d41c1ef372443dd20032c8a009c94c3f587a4405a",
+      "dependencies": {
+        "0x2b8": "(ref<client_ui_element.tag_button>) client_ui._push_element<client_ui_element.tag_button> (client_ui, const string)",
+        "0x2c0": "() copy (vec2_s32, const vec2_s32)",
+        "0x2c8": "() $string_copy (string, const string)",
+        "0x2d0": "() copy (color8, const color8)",
+        "0x2d8": "client_ui_element",
+        "0x2e0": "",
+        "0x2e8": "() $ref_copy (uptr, const uptr)",
+        "0x2f0": "() $ref_dtor (uptr)",
+        "0x2f8": "() client_ui._set_hovered_element (client_ui, ref<client_ui_element>, const bool)"
+      }
+    },
+    "COMPACT_TAG_LAYOUT": {
+      "index": 16420,
+      "signature": "() client_ui_element.tag_button.layout (client_ui_element.tag_button, client_ui, const vec2_s32, const vec2_s32)",
+      "code_size": 280,
+      "sha256": "36a972b35df83e8443040507645f4cc44414732b6fb3bbc3d77c846abc2d5a45",
+      "dependencies": {
+        "0x118": "() copy (vec2_s32, const vec2_s32)",
+        "0x120": "client_ui.G_UI_FILL_IN_CELLS",
+        "0x128": "() ctor (vec2_s32, const s32, const s32)",
+        "0x130": "() client_ui.create_text (client_ui, const vec2_s32, const e_align, const string, application.graphics.text)",
+        "0x138": "() dtor (vec2_s32)"
+      }
+    },
+    "COMPACT_TAG_RENDER": {
+      "index": 16423,
+      "signature": "() client_ui_element.tag_button.render (client_ui_element.tag_button, client_ui)",
+      "code_size": 288,
+      "sha256": "2d82d1fbc57ed2a5f1107778ed5580b1779fa998a8a0b66f703ca8691a71d2ae",
+      "dependencies": {
+        "0x120": "G_UI_COLOR_ELEMENT_BACKGROUND_ACTION",
+        "0x128": "() client_ui.render_rectangle_rounded_padded (client_ui, const vec2_s32, const vec2_s32, const f64, const color8)",
+        "0x130": "() client_ui.render_push_clip (client_ui, const vec2_s32, const vec2_s32)",
+        "0x138": "client_ui.G_UI_COLOR_TEXT",
+        "0x140": "() client_ui.render_text (client_ui, const vec2_s32, const application.graphics.text, const color8)",
+        "0x148": "() client_ui.render_pop_clip (client_ui)"
+      }
+    },
+    "TIP_POSITION": {
+      "index": 15973,
+      "signature": "() client_ui.begin_container_positioned_grid (client_ui, const string, const vec2_s32, const vec2_s32)",
+      "code_size": 256,
+      "sha256": "c42b2bfa36599b66811415fa10e4e0f09a361d9df4fd8ca2fbb09e25c173fb5d",
+      "dependencies": {
+        "0x100": "(ref<frontend_ui_inventory.ui_container_positioned_grid>) client_ui._push_element<frontend_ui_inventory.ui_container_positioned_grid> (client_ui, const string)",
+        "0x108": "() copy (vec2_s32, const vec2_s32)",
+        "0x110": "() client_ui._push_container (client_ui, const ref<client_ui_element_container>)",
+        "0x118": "() $ref_dtor (uptr)"
+      }
+    },
+    "TIP_BACKGROUND": {
+      "index": 15965,
+      "signature": "() client_ui.begin_container_background (client_ui, const string, const bool, const color8)",
+      "code_size": 80,
+      "sha256": "6ad05002493053993323a29858862e0d0cb3654e3f97cc4985db6a17ec846400",
+      "dependencies": {
+        "0x50": "() client_ui.begin_container_background (client_ui, const string, const bool, const color8, const bool)"
+      }
+    },
+    "TIP_TEXT": {
+      "index": 16150,
+      "signature": "() client_ui.text (client_ui, const string, const string, const vec2_s32, const client_ui.e_horizontal_align, const color8)",
+      "code_size": 240,
+      "sha256": "8bc59bf6b26fa1281b22d6757cef0f4adc856c949e757c68185876d9cf11f806",
+      "dependencies": {
+        "0xf0": "(ref<client_ui_element.text>) client_ui._push_element<client_ui_element.text> (client_ui, const string)",
+        "0xf8": "() copy (vec2_s32, const vec2_s32)",
+        "0x100": "() $string_copy (string, const string)",
+        "0x108": "() copy (color8, const color8)",
+        "0x110": "() $ref_dtor (uptr)"
+      }
+    },
+    "TIP_TEXT_PUSH": {
+      "index": 55019,
+      "signature": "(ref<client_ui_element.text>) client_ui._push_element<client_ui_element.text> (client_ui, const string)",
+      "code_size": 1312,
+      "sha256": "a89a2c731d346ff8163957a6174ae0d73c83c881fad454d09e1cc11cb363c816",
+      "dependencies": {
+        "0x520": "(s32) vector<ref<client_ui_element_container>>.size (const vector<ref<client_ui_element_container>>)",
+        "0x528": "(ptr<ref<client_ui_element_container>>) vector<ref<client_ui_element_container>>.back (const vector<ref<client_ui_element_container>>)",
+        "0x530": "(ref<client_ui_element>) client_ui_element_container.find_element (client_ui_element_container, const string, s32)",
+        "0x538": "client_ui_element.text",
+        "0x540": "",
+        "0x548": "() $ref_copy (uptr, const uptr)",
+        "0x550": "() $ref_dtor (uptr)",
+        "0x558": "() $virtual_dtor ()",
+        "0x560": "() $ref_ctor_alloc (uptr, const s32, const uptr)",
+        "0x568": "() ctor (client_ui_element.text)",
+        "0x570": "(ptr<ref<client_ui_element>>) vector<ref<client_ui_element>>.insert (vector<ref<client_ui_element>>, const s32)",
+        "0x578": "() $string_copy (string, const string)"
+      }
+    },
+    "TIP_TEXT_ALIGN": {
+      "index": 16147,
+      "signature": "() client_ui.text (client_ui, const string, const string, const client_ui.e_horizontal_align)",
+      "code_size": 72,
+      "sha256": "ea4e3a960fc0ec09311b9df600f5deda70ee414bbc228b678d7cbabcc321c8cc",
+      "dependencies": {
+        "0x48": "client_ui.G_UI_COLOR_TEXT",
+        "0x50": "() client_ui.text (client_ui, const string, const string, const client_ui.e_horizontal_align, const color8)"
+      }
+    },
+    "TIP_TEXT_COLOR": {
+      "index": 16148,
+      "signature": "() client_ui.text (client_ui, const string, const string, const client_ui.e_horizontal_align, const color8)",
+      "code_size": 216,
+      "sha256": "80e21e0a4d92d0fa6741bf1ed56b9a3a751ecd1a5129185c4c5ef2e03b5f585c",
+      "dependencies": {
+        "0xd8": "client_ui.G_UI_FILL_IN_CELLS",
+        "0xe0": "client_ui.G_UI_TEXT_BOX_HEIGHT",
+        "0xe8": "() ctor (vec2_s32, const s32, const s32)",
+        "0xf0": "() client_ui.text (client_ui, const string, const string, const vec2_s32, const client_ui.e_horizontal_align, const color8)",
+        "0xf8": "() dtor (vec2_s32)"
+      }
+    }
+  },
+  "layouts": {
+    "native_vector_size": 40,
+    "container_descriptor_size": 88,
+    "stored_descriptor_size": 32,
+    "grid_descriptor_size": 48,
+    "native_item_id_size": 24,
+    "native_item_location_size": 44,
+    "native_vector_offsets": {
+      "flags": 8,
+      "count": 12,
+      "capacity": 16,
+      "stride": 20
+    }
+  }
+}

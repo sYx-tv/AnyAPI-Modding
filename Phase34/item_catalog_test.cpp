@@ -1,0 +1,7 @@
+#include "anyapi_item_catalog.h"
+#include <cassert>
+#include <iostream>
+int wmain(int argc,wchar_t** argv){auto parse=[](const char* s){return assetjson::Parser(s).parse();};assert(parse("{\"x\":\"\\ud83d\\ude00\"}").get("x").text=="\xf0\x9f\x98\x80");for(auto bad:{"{\"x\":1,\"x\":2}","[01]","[1.]","[1e]","\"\\ud800\"","[true,]","{} trailing"}){bool rejected=false;try{parse(bad);}catch(...){rejected=true;}assert(rejected);}
+ if(argc==2){auto entries=itemcatalog::load(argv[1]);assert(entries.size()==970);bool hi_vis=false,stack=false;unsigned known_stack=0;for(auto& e:entries){assert(e.metadata.id[0]&&e.metadata.name[0]);auto raw=assetjson::Parser(e.json).parse();assert(raw.get("id").text==((e.metadata.valid_fields&ANY_ITEM_VEHICLE_COMPONENT)?e.metadata.id+10:e.metadata.id));assert(!itemcatalog::mesh_paths(e).empty());if(e.metadata.valid_fields&ANY_ITEM_DEFAULT_STACK)++known_stack;if(!strcmp(e.metadata.id,"hi_vis_overalls")){hi_vis=true;assert(!strcmp(e.metadata.name,"Overalls"));assert(e.metadata.width==3&&e.metadata.height==2);}if(!strcmp(e.metadata.id,"vehicle_editor_add_edge")){stack=true;assert((e.metadata.valid_fields&ANY_ITEM_DEFAULT_STACK)&&e.metadata.default_stack==50);}}assert(hi_vis&&stack&&known_stack==6);std::cout<<"PASS: 970 current item/component definitions, localized variants, exact full JSON, six explicit default-stack values (not maximum stack sizes)\n";}
+}
+

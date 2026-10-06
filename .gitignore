@@ -1,0 +1,15 @@
+/build/
+**/build/
+**/build-linux/
+**/__pycache__/
+*.pyc
+/manager/output/
+/manager/ready-to-upload/
+/manager/publish-test/
+/manager/*.exe
+/manager/*.exe.config
+/release/
+/game.exe
+/game.gcl
+/local-game/
+/local_paths.json
