@@ -13,6 +13,8 @@ static void log_line(AnymakerLogLevel,const char*,const char* msg){std::cout<<ms
 static std::string utf8(const std::filesystem::path& p){return p.filename().string();}
 static bool p34_copy_snapshot(AnySessionPlayersV1*,uint32_t*);
 #include "anyapi_platform.inc"
+static const AnyBuildV1* anyapi_build_service(){return nullptr;}
+#include "anyapi_client_tasks.inc"
 static const AnyMenuV1* anyapi_menu_service(){return nullptr;}
 static const AnyMenuV2* anyapi_menu_service_v2(){return nullptr;}
 static const AnyMenuV3* anyapi_menu_service_v3(){return nullptr;}

@@ -1,5 +1,6 @@
 #include "anyapi_players_v1.h"
 static void inventory_actions_tick(void*,void*,void*);
+static void anyapi_client_tasks_tick(uint64_t);
 #include "native_player_patterns.h"
 #include "anyapi_player_heading.h"
 // Only this producer is activated. It forwards the real native call exactly once.
@@ -158,6 +159,7 @@ static void p34_player_hook(void* actor,void* client,void* scene,
                 p.position[0],p.position[1],p.position[2],p.yaw_radians);log_line(ANY_LOG_INFO,"framework",msg);}
         g_p34_last_count=sample.count;}
     ReleaseSRWLockExclusive(&g_p34_publish_lock);
+    if (ok) anyapi_client_tasks_tick(sample.world_epoch);
 }
 // Resolve generic player contracts, create the copied-data channel and install the player observer.
 static DWORD WINAPI p34_players_worker(void*) {

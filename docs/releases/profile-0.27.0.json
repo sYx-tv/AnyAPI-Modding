@@ -1,0 +1,859 @@
+{
+  "gcl_sha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1",
+  "runtime_acceptance": "pending",
+  "patterns": [
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_GIVE_OWNER",
+      "size": 53192,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() client_scene.update_ui_settings (client_scene, client, frontend_ui)",
+      "instruction_end": 50945,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 16
+    },
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_GIVE_EVENT",
+      "size": 264,
+      "matches": 10,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_LOOKUP",
+      "size": 344,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_SCREEN_LAYOUT",
+      "size": 1952,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() client_ui_element.screen.screen_layout (client_ui_element.screen, client_ui)",
+      "instruction_end": 1914,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 1
+    },
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_SCREEN_RENDER",
+      "size": 320,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_SCREEN_HIT",
+      "size": 832,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_MODE_NAMES",
+      "size": 14160,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui._update_ui_new_game (frontend_ui, const f64, settings, main_menu.ui_data)",
+      "instruction_end": 13394,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 29
+    },
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_MODE_SAMPLE",
+      "size": 4296,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_MODE_GET",
+      "size": 30,
+      "matches": 40,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_inventory_patterns.h",
+      "pattern": "INV_COMPONENT_LOOKUP",
+      "size": 344,
+      "matches": 8,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_BUILDER",
+      "size": 34248,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui._build_ui_options_controls (frontend_ui, settings, ui_data.options)",
+      "instruction_end": 33034,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 23
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_EQUAL",
+      "size": 1168,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "(bool) settings.controls.is_equal (settings.controls, const settings.controls)",
+      "instruction_end": 1148,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 4
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_HEADING",
+      "size": 64,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_TABLE",
+      "size": 240,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_BUTTON",
+      "size": 176,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_END",
+      "size": 32,
+      "matches": 1715,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_APPLY",
+      "size": 368,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_RESET",
+      "size": 80,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_FOOTER",
+      "size": 1512,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui._build_ui_options_footer_common (frontend_ui, ui_data.options, const bool, const string)",
+      "instruction_end": 1443,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 1
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_CLOSE",
+      "size": 96,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_UPDATE",
+      "size": 3832,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui._update_ui_options (frontend_ui, const f64, settings, ui_data.options)",
+      "instruction_end": 3697,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 12
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_ENTER",
+      "size": 112,
+      "matches": 9,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_TAB",
+      "size": 152,
+      "matches": 7,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_LABEL",
+      "size": 224,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_SCROLL",
+      "size": 352,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_DIGITAL",
+      "size": 9088,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui._update_ui_control_bind_digital (frontend_ui, const input.binding_action_digital, const s32, const s32, const bool, const bool, const s32, ui_data.options, bool)",
+      "instruction_end": 8934,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 2
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_LAYOUT",
+      "size": 176,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_GENERAL",
+      "size": 13032,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui._build_ui_options_general (frontend_ui, settings, ui_data.options)",
+      "instruction_end": 12572,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 13
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_GRAPHICS",
+      "size": 18032,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui._build_ui_options_graphics (frontend_ui, settings, ui_data.options)",
+      "instruction_end": 17591,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 14
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_AUDIO",
+      "size": 12176,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui._build_ui_options_audio (frontend_ui, settings, ui_data.options)",
+      "instruction_end": 11820,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 13
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_OPTIONS_BOOL",
+      "size": 1344,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_OPTIONS_FLOAT",
+      "size": 1496,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_OPTIONS_INT",
+      "size": 1392,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_TOGGLE",
+      "size": 704,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_SLIDER_FLOAT",
+      "size": 1176,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_SLIDER_INT",
+      "size": 1120,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_INPUT_TEXT",
+      "size": 1240,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_CAPTURE",
+      "size": 296,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_RELEASE",
+      "size": 128,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_BACK",
+      "size": 112,
+      "matches": 9,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_TEXT_RESULTS",
+      "size": 57,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_menu_patterns.h",
+      "pattern": "MENU_TAB_RENDER",
+      "size": 800,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_COLUMN",
+      "size": 9592,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui_inventory._update_ui_inspect_column (frontend_ui_inventory, frontend_ui, client, frontend_ui_inventory.inventory_data, const s32, const bool, const vector<frontend_ui_container_descriptor>, const e_inventory_ui_column, frontend_ui_item_descriptor, const s32, const frontend_ui_inventory.column_movement, inventory_item_util.item_id, color8, s32, vector<client.ui_data.control_hint>)",
+      "instruction_end": 9495,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 2
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_CONTAINER",
+      "size": 25592,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui_inventory._update_ui_inspect_container (frontend_ui_inventory, frontend_ui, client, frontend_ui_inventory.inventory_data, const client_scene, const s32, const frontend_ui_container_descriptor, frontend_ui_item_descriptor, const bool, const s32, inventory_item_util.item_id, color8, vector<client.ui_data.control_hint>)",
+      "instruction_end": 25416,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 10
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TITLE",
+      "size": 264,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_COMPONENT_CTOR",
+      "size": 2960,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() ctor (vehicle_component_definition)",
+      "instruction_end": 2778,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 4
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_DROP_ACTOR",
+      "size": 240,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_DROP_CHARACTER",
+      "size": 3224,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_GRIDS",
+      "size": 664,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_ITEMS",
+      "size": 760,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_COMPATIBLE",
+      "size": 1200,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_RELEASE_GRID",
+      "size": 3016,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_RELEASE_STACK",
+      "size": 944,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_QUICK_IN",
+      "size": 192,
+      "matches": 6,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_QUICK_OUT",
+      "size": 224,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_MOVE",
+      "size": 264,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_STACK",
+      "size": 224,
+      "matches": 4,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_GRID_CTOR",
+      "size": 128,
+      "matches": 806,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_ITEM_CTOR",
+      "size": 128,
+      "matches": 806,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_QUANTITY_6474",
+      "size": 112,
+      "matches": 5,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_QUANTITY_6817",
+      "size": 36,
+      "matches": 94,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_QUANTITY_8394",
+      "size": 112,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_QUANTITY_8471",
+      "size": 112,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_QUANTITY_8520",
+      "size": 112,
+      "matches": 5,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_QUANTITY_8554",
+      "size": 112,
+      "matches": 5,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_QUANTITY_8592",
+      "size": 112,
+      "matches": 5,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_CAPACITY_6473",
+      "size": 35,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_CAPACITY_6816",
+      "size": 36,
+      "matches": 94,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_CAPACITY_8393",
+      "size": 68,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_CAPACITY_8470",
+      "size": 68,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_CAPACITY_8519",
+      "size": 40,
+      "matches": 6,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_CAPACITY_8553",
+      "size": 40,
+      "matches": 6,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_CAPACITY_8591",
+      "size": 40,
+      "matches": 6,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_MERGE_6472",
+      "size": 384,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_MERGE_6566",
+      "size": 41,
+      "matches": 22,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_MERGE_8383",
+      "size": 440,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_MERGE_8461",
+      "size": 384,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_MERGE_8514",
+      "size": 320,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_MERGE_8548",
+      "size": 320,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_MERGE_8584",
+      "size": 344,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_LAYOUT_OWNER",
+      "size": 52000,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() frontend_ui_inventory.update_ui (frontend_ui_inventory, frontend_ui, client, client.ui_data, client_scene.peer, client_scene.actor, client_scene.inventory, client_scene.inventory_hotbar, client_scene, color8, frontend_ui_item_descriptor, vector<client.ui_data.control_hint>)",
+      "instruction_end": 51478,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 5
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TIP_SCREEN",
+      "size": 424,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TIP_END",
+      "size": 32,
+      "matches": 1715,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TIP_ENTRY",
+      "size": 3168,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "() client_ui.tooltip_entry (client_ui, const string, const ptr<application.graphics.asset_atlas.region>, const string, const string, const color8)",
+      "instruction_end": 3057,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 33
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_COMPACT_TAG",
+      "size": 696,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_COMPACT_TAG_LAYOUT",
+      "size": 280,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_COMPACT_TAG_RENDER",
+      "size": 288,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TIP_POSITION",
+      "size": 256,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TIP_BACKGROUND",
+      "size": 80,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TIP_TEXT",
+      "size": 240,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TIP_TEXT_PUSH",
+      "size": 1312,
+      "matches": 9,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TIP_TEXT_ALIGN",
+      "size": 72,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "anyapi_storage_patterns.h",
+      "pattern": "ST_TIP_TEXT_COLOR",
+      "size": 216,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "legacy_transform_patterns.h",
+      "pattern": "P29_CLIENT_COMPONENT_WORLD",
+      "size": 792,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "legacy_transform_patterns.h",
+      "pattern": "P29_CLIENT_COMPONENT_GRID",
+      "size": 192,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "legacy_transform_patterns.h",
+      "pattern": "P29_SERVER_COMPONENT_WORLD",
+      "size": 336,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "legacy_transform_patterns.h",
+      "pattern": "P29_SERVER_COMPONENT_GRID",
+      "size": 208,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_PEER_TICK",
+      "size": 888,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_ACTOR_BY_ID",
+      "size": 288,
+      "matches": 6,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_BASE_TRANSFORM",
+      "size": 48,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_CHARACTER_TRANSFORM",
+      "size": 136,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_ORIENTATION",
+      "size": 48,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_ORIENTATION_OWNER",
+      "size": 544,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_AUTHORITY_OWNER",
+      "size": 3136,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_PEER_BY_ID",
+      "size": 360,
+      "matches": 2,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_PROP_S32_GET",
+      "size": 30,
+      "matches": 40,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_UPDATE_OWNER",
+      "size": 1504,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_UI_CHANGE_STATE",
+      "size": 320,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_CAMERA_MATH",
+      "size": 4424,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_CAMERA_RAY",
+      "size": 264,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_VIEW_OWNER",
+      "size": 1032,
+      "matches": 1,
+      "status": "unchanged"
+    },
+    {
+      "file": "native_player_patterns.h",
+      "pattern": "P34_CHARACTER_VIEW",
+      "size": 14872,
+      "matches": 0,
+      "status": "refreshed",
+      "signature": "(mat34) client_scene.actor_character.get_view_transform (const client_scene.actor_character)",
+      "instruction_end": 14573,
+      "dependency_set_unchanged": true,
+      "changed_bytes": 1
+    }
+  ],
+  "matches_description": "Occurrences before replacements; runtime dependency owners disambiguate shared bodies."
+}

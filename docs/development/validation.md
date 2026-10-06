@@ -2,10 +2,15 @@
 
 ## Current source
 
-The checked-in native profile targets Windows x64, Anymaker 0.1.21 / Steam build
-25725299. The [build manifest](../../native/BUILD_MANIFEST.json) records executable
-and game-data hashes. The functional suite contains 30 automated checks covering
+The 0.27.0 candidate targets Windows x64, Anymaker 0.1.23 / Steam build
+25755694. The [build manifest](../../native/BUILD_MANIFEST.json) records executable
+and game-data hashes. The functional suite contains 32 automated checks covering
 native contracts, menus, inventories, storage, map rendering and graphics.
+
+The profile audit reviewed 112 patterns and refreshed 17. The new build identity
+and client task services have automated coverage; the client task example also
+compiles in the native build. In-game acceptance of the 0.1.23 candidate remains
+pending. Earlier user confirmations below refer to earlier game profiles.
 
 The existing four mods were confirmed working by the author in host gameplay.
 The initial AnyGraphics effects were also confirmed working. The new compact

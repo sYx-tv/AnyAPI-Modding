@@ -248,6 +248,35 @@
         "no native AA replacement, TAA, SMAA or DLSS"
       ],
       "validation": "candidate revision 26; automated graphics tests; live gameplay pending"
+    },
+    "anyapi_build_v1.h": {
+      "version": 1,
+      "service": "anyapi.build",
+      "capabilities": [
+        "copied supported profile and actual file hashes",
+        "exact build guard status"
+      ],
+      "validation": "automated service ABI checks; runtime acceptance pending"
+    },
+    "anyapi_client_tasks_v1.h": {
+      "version": 1,
+      "service": "anyapi.client_tasks",
+      "capabilities": [
+        "owned bounded client tick callbacks",
+        "world epoch filtering",
+        "pending ticket cancellation"
+      ],
+      "limits": {
+        "pending": 128,
+        "per_sample": 32
+      },
+      "limitations": [
+        "client only",
+        "nonblocking callbacks",
+        "no hot unload",
+        "discarded jobs have no callback"
+      ],
+      "validation": "queue, initialization ownership, epochs and service fixtures"
     }
   },
   "optional_mods": {
@@ -413,8 +442,8 @@
       "ui_aligner_tooltip"
     ]
   },
-  "game_version": "0.1.21",
-  "steam_build_id": 25725299,
+  "game_version": "0.1.23",
+  "steam_build_id": 25755694,
   "inventory_revision14_services": {
     "anyapi.session v1": "copied recent named native mode",
     "anyapi.inventory_actions v2": "caller mode mask checked at queue and dispatch",
@@ -443,5 +472,6 @@
     "compact_rows": 4,
     "custom_rows": 11,
     "advanced_visibility": "anyhelpers.settings v2"
-  }
+  },
+  "current_profile_acceptance": "CANDIDATE_AUTOMATED_TESTS_PASSED_GAMEPLAY_PENDING"
 }

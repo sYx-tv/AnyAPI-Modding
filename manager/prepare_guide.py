@@ -57,6 +57,8 @@ Native storage rows, copied grids/items and replicated transfers: anyapi.invento
 Shared inventory root translation: anyapi.screen_layout v1.
 Fast in-process drawing: anyapi.gpu_draw v1; the plugin canvas is a fallback drawing path.
 GPU shader effects: anyapi.post_process v1 (API 0.26.0 or newer).
+Supported game profile and actual file fingerprint status: anyapi.build v1 (API 0.27.0 or newer).
+Bounded mod-owned work on the native client tick: anyapi.client_tasks v1 (API 0.27.0 or newer).
 Cooperating mod settings and keybinds: anyhelpers.settings v1/v2 and anyhelpers.controls v1.
 
 The Services section includes capabilities, limits, versioned headers and available contract notes. Headers contain the exact signatures; examples show how to use them.
@@ -104,7 +106,7 @@ for name in ('anyapi_platform.inc','anyapi_menu.inc','anyapi_settings_tabs.inc',
     callbacks=sorted(callbacks)
     hook_sections.append(name+':\n'+ ('\n'.join('- '+h for h in callbacks) or '- Validated native dependency reads/events; see this implementation and its contracts.'))
 add('Current integration points','Hooks','# Native integration in the active profile\n\nImplementation callbacks below back the current public services. These are framework internals, not permission for a DLL mod to patch the game directly. Use the versioned service tables, ownership rules and native callback context.\n\n'+ '\n\n'.join(hook_sections)+'\n\nGraphics uses presentation callbacks, input uses the owned platform input path, and native settings/storage extensions use guarded native callbacks/dependencies. The individual contract notes describe the validated bodies and offsets.','Implementation reference')
-add('Capability snapshot','Contracts','# Current capability manifest\n\nRaw manifest snapshot from the revision 25 source; historical per-revision acceptance fields are retained verbatim. Current acceptance is described in the compatibility page.\n\n'+json.dumps(caps,indent=2,ensure_ascii=False),'Source metadata')
+add('Capability snapshot','Contracts','# Current capability manifest\n\nSnapshot from the source used to generate this guide. Historical acceptance fields are retained verbatim. Current acceptance is described in the compatibility page.\n\n'+json.dumps(caps,indent=2,ensure_ascii=False),'Source metadata')
 local_docs="""# Local mods and Import DLL
 
 An AnyAPI mod is a Windows x64 DLL exporting AnyAPI_ModInit. Use the starter project and current public headers. A generic DLL cannot be used as an AnyAPI mod.

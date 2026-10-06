@@ -29,3 +29,8 @@ tables remain supported. The published stable manager still bundles API 0.25.0.
 Native contract snapshots remain beside implementation files in `native/`.
 They identify reviewed game bodies and layouts; they do not grant compatibility
 with another game build or advertise disabled legacy hooks as active APIs.
+
+## Framework foundations
+
+- [Build information](build-info.md)
+- [Client task scheduling](client-tasks.md)

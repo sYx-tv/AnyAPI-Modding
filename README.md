@@ -36,14 +36,14 @@ textures and the generated road cache are excluded. A compatible Anymaker
 installation is needed to build and test game-dependent features.
 
 The published manager and mod catalog currently distribute **AnyAPI 0.25.0** and
-four optional mods. The source includes **AnyAPI 0.26.0** and **AnyGraphics / AnyHelpers
+four optional mods. The source includes **AnyAPI 0.27.0 candidate** and **AnyGraphics / AnyHelpers
 0.26.1**. These graphics changes are available in source but have not yet replaced
 the stable download catalog. The initial graphics effects were confirmed working;
-the new compact preset menu still awaits in-game acceptance.
+the new compact preset menu and 0.1.23 compatibility still await in-game acceptance.
 
 ## Compatibility
 
-The current native profile targets **Anymaker 0.1.21**, Steam build **25725299**,
+The current native profile targets **Anymaker 0.1.23**, Steam build **25755694**,
 on **Windows x64**. Exact executable and game-data fingerprints are recorded in
 [the build manifest](native/BUILD_MANIFEST.json). API ABI/service version numbers
 are compatibility contracts and remain part of SDK names.

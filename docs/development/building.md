@@ -6,7 +6,7 @@
 - Visual Studio with **Desktop development with C++**, the Windows SDK and CMake.
 - Python 3 for local road-cache generation.
 
-The checked-in native profile targets Anymaker 0.1.21 / Steam build 25725299.
+The 0.27.0 candidate native profile targets Anymaker 0.1.23 / Steam build 25755694.
 Run these commands from the repository root in a developer PowerShell. Adjust
 the game folder to match your installation.
 

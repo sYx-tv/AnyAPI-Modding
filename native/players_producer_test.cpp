@@ -121,5 +121,29 @@ int main(){
     assert(forwards==1&&g_p34_faulted&&channel.sequence==2&&channel.snapshot.count==0);
     p34_player_hook(nullptr,client.data(),scene.data(),nullptr,nullptr,nullptr);assert(forwards==2&&channel.sequence==2);
     put(scene.data(),0x158,uintptr_t(1));sample={};assert(!p34_native_sample(client.data(),scene.data(),&sample));
-    VirtualFree(body,0,MEM_RELEASE);puts("PASS: exact native lookup, Unicode names, 64-player cap, missing actors, bad names, stalled iterator, original forwarding, invalid owners");
+    platform::plugin_count=0; platform::plugins[0].faulted=false;
+    platform::current_plugin=0;
+    const auto* tasks=anyapi_client_tasks_service(); auto token=tasks->register_owner();
+    assert(token==1); // ModInit precedes publication of its plugin slot.
+    int initialized=0;
+    assert(tasks->post(token,0,+[](const AnyClientTaskFrameV1*,void* user){++*(int*)user;},&initialized));
+    platform::plugin_count=1;
+    platform::current_plugin=-1; assert(token==1);
+    int completed=0;
+    auto work=+[](const AnyClientTaskFrameV1* frame,void* user) {
+        assert(frame->world_epoch==42 && platform::current_plugin==0);
+        ++*(int*)user;
+    };
+    assert(tasks->post(token,41,work,&completed)); // stale world is discarded
+    auto cancelled=tasks->post(token,42,work,&completed); assert(tasks->cancel(token,cancelled));
+    assert(tasks->post(token,42,work,&completed)); assert(tasks->post(token,0,work,&completed));
+    anyapi_client_tasks_tick(42); assert(initialized==1 && completed==2 && platform::current_plugin==-1);
+    platform::plugins[0].faulted=true; assert(!tasks->post(token,0,work,&completed));
+    platform::plugin_count=0;
+    AnyBuildInfoV1 info; assert(!anyapi_build_service()->copy(&info));
+    info.version=2; assert(!anyapi_build_service()->copy(&info));
+    assert(services::query("anyapi.build",1)==anyapi_build_service());
+    assert(services::query("anyapi.client_tasks",1)==tasks);
+    assert(!services::query("anyapi.client_tasks",2));
+    VirtualFree(body,0,MEM_RELEASE);puts("PASS: native lookup, forwarding, bounded owned client tasks and build service ABI");
 }

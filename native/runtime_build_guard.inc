@@ -1,3 +1,14 @@
+#include "anyapi_build_v1.h"
+namespace build_runtime {
+static std::mutex mutex;
+static AnyBuildInfoV1 info;
+static bool copy(AnyBuildInfoV1* out) {
+    if (!out || out->struct_size != sizeof(*out) || out->version != 1) return false;
+    std::lock_guard lock(mutex); *out = info; return info.status != ANY_BUILD_UNCHECKED;
+}
+static const AnyBuildV1 api{sizeof(AnyBuildV1), 1, copy};
+}
+static const AnyBuildV1* anyapi_build_service() { return &build_runtime::api; }
 static std::string p27_file_sha256(const std::filesystem::path& path) {
     BCRYPT_ALG_HANDLE algorithm=nullptr;BCRYPT_HASH_HANDLE hash=nullptr;
     DWORD bytes=0,object_size=0;std::string result;
@@ -22,5 +33,13 @@ static std::string p27_file_sha256(const std::filesystem::path& path) {
 static bool p27_build_matches() {
     auto exe=p27_file_sha256(g_game_dir/"game.exe");auto gcl=p27_file_sha256(g_game_dir/"bin"/"game.gcl");
     bool ok=exe==P27_EXPECTED_EXE_SHA256 && gcl==P27_EXPECTED_GCL_SHA256;
+    {
+        std::lock_guard lock(build_runtime::mutex);
+        auto& info = build_runtime::info;
+        info.status = ok ? ANY_BUILD_MATCH : ANY_BUILD_MISMATCH;
+        strcpy_s(info.api_version, "0.27.0"); strcpy_s(info.game_version, "0.1.23");
+        strcpy_s(info.steam_build, "25755694");
+        strcpy_s(info.executable_sha256, exe.c_str()); strcpy_s(info.game_data_sha256, gcl.c_str());
+    }
     log_line(ok?ANY_LOG_INFO:ANY_LOG_ERROR,"framework",("PHASE27_BUILD_GUARD status="+std::string(ok?"MATCH":"MISMATCH_HOOKS_DISABLED")+" exe_sha256="+exe+" gcl_sha256="+gcl).c_str());return ok;
 }

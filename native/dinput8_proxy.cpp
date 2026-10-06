@@ -5250,6 +5250,7 @@ static DWORD WINAPI framework_runtime_thread(void*) {
 #include "anyapi_inventory_actions.inc"
 #include "anyapi_screen_layout.inc"
 #include "anyapi_inventory_ui.inc"
+#include "anyapi_client_tasks.inc"
 static DWORD WINAPI loader_thread(void*) {
     g_game_dir=module_dir();g_game_dir_utf8=utf8(g_game_dir);
     if(!p27_build_matches())return 0;
