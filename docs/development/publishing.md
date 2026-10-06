@@ -33,3 +33,20 @@ Rebuild the manager separately if its bundled API and offline guide should chang
 verified resources. They do not download Steam builds or repair hooks automatically.
 The currently prepared resources are the stable 0.25.0 packages; replacing them
 with a new profile requires matching fingerprints, evidence, hashes and guide data.
+
+## Publish a manager update
+
+1. Increase `manager/AssemblyInfo.cs`, build the manager and run its fixture checks.
+2. Upload the verified EXE as `AnyAPI.Manager.exe` to a versioned release such as
+   `manager-v1.3.0`. Use the same version in the assembly and release feed.
+3. Verify the public download's SHA-256 and size against the built EXE.
+4. Update root `manager-update.json` only after the release asset is available.
+   Its fields are `Schema` (1), `Version`, `Url`, `Sha256` and `Size` in bytes.
+   The URL must be an HTTPS release download in this repository with the exact
+   asset name `AnyAPI.Manager.exe`.
+5. Commit and push the feed and matching source/documentation. Verify the raw
+   public feed and mark the manager release latest for the direct download link.
+
+Settings reads this separate feed on demand. Publishing a manager update does not
+require changing `catalog.json` or replacing users' API/mod installations. Keep
+the bundled API package and guide consistent when rebuilding the EXE.

@@ -1,8 +1,8 @@
 # AnyAPI Manager
 
-A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.2.0 includes AnyAPI revision 25, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
+A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.3.0 includes AnyAPI revision 25, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
 
-The 1.2.1 source candidate recognizes newer installed API/mod receipts even when
+The manager recognizes newer installed API/mod receipts even when
 the online catalog is older. Its bundled payload remains the published 0.25.0
 profile. See [candidate notes](../docs/releases/manager-1.2.1.md). Local 0.27.0
 compatibility packages can be applied with `install_candidate.ps1`; this developer
@@ -29,6 +29,23 @@ When a game update leaves active mods unverified, updating the API asks whether 
 Build: Windows with .NET Framework 4.7.2 or newer, `powershell -File manager/build.ps1`. No downloaded NuGet packages or standalone .NET installation is required on modern Windows. The source targets x64 and uses C#, Windows Forms and the Windows .NET Framework compiler.
 
 Validation: run the EXE with `--self-test <absolute output.json>`; run `--capture <absolute preview.png>` to render its own interface for review. These tests use disposable fixture folders, never the installed game. See CATALOG_FORMAT.md and GITHUB_SETUP.md for publishing.
+
+## Manager updates
+
+In Settings, choose **Check for updates** under Manager. If a newer manager is
+available, the button changes to **Update & restart**. This downloads the official
+EXE, checks its size, SHA-256, x64 executable format and assembly version, then
+closes and replaces the manager and opens the new version. A separate helper waits
+for the current process to exit; it never terminates it forcibly.
+
+The old EXE is kept beside the manager as a `.bak` file. Replacement or restart
+failure restores it. Mods, API DLLs, preferences and saved game data are untouched.
+Windows asks for administrator approval only when the manager's own folder needs
+it. An offline check leaves the current EXE in place. Older managers without this
+button need a one-time download of version 1.3.0 or newer.
+
+Manager releases use root `manager-update.json`, separately from the mod/API
+catalog. See [Publishing](../docs/development/publishing.md) for release steps.
 
 ## Local mods
 

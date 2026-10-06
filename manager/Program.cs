@@ -6,6 +6,7 @@ namespace AnyApiManager {
  static class Program {
   [DllImport("user32.dll")]static extern bool SetProcessDPIAware();
   [STAThread]static int Main(string[] args){
+   if(args.Length==2&&args[0]=="--update-manager")return ManagerUpdates.RunHelper(args[1]);
    if(args.Length==2&&args[0]=="--apply"){
     ApplyResult result;try{result=Engine.Apply(Json.Read<ApplyRequest>(File.ReadAllText(args[1])));}catch(Exception e){result=new ApplyResult{Success=false,Message=e.Message};}
     File.WriteAllText(args[1]+".result",Json.Write(result));return result.Success?0:1;

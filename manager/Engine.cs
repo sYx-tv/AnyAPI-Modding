@@ -16,7 +16,7 @@ namespace AnyApiManager {
  public static partial class Engine {
   public static readonly string Data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"AnyAPI Manager");
   static readonly HttpClient Http=CreateHttp();
-  static HttpClient CreateHttp(){ServicePointManager.SecurityProtocol=(SecurityProtocolType)0;var h=new HttpClient{Timeout=TimeSpan.FromMinutes(3)};h.DefaultRequestHeaders.UserAgent.ParseAdd("AnyAPI-Manager/1.2.0");h.DefaultRequestHeaders.CacheControl=new System.Net.Http.Headers.CacheControlHeaderValue{NoCache=true};return h;}
+  static HttpClient CreateHttp(){ServicePointManager.SecurityProtocol=(SecurityProtocolType)0;var h=new HttpClient{Timeout=TimeSpan.FromMinutes(3)};h.DefaultRequestHeaders.UserAgent.ParseAdd("AnyAPI-Manager/"+ManagerUpdates.DisplayVersion);h.DefaultRequestHeaders.CacheControl=new System.Net.Http.Headers.CacheControlHeaderValue{NoCache=true};return h;}
   public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream(name))using(var r=new StreamReader(s))return r.ReadToEnd();}
   public static Catalog Bundled(){var c=Json.Read<Catalog>(Resource("catalog.json"));Rules.Validate(c);return c;}
   public static string RepositoryUrl(string value){

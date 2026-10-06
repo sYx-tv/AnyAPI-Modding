@@ -16,6 +16,7 @@ namespace AnyApiManager {
   readonly TextBox gamePath=new TextBox(),search=new TextBox();readonly CheckBox installedOnly=new CheckBox();
   readonly Button apiInstall=new ModernButton(),modInstall=new ModernButton(),toggle=new ModernButton(),remove=new ModernButton();
   readonly Button importMod=new ModernButton();
+  readonly Button managerUpdate=new ModernButton();readonly Label managerUpdateNote=new Label();ManagerRelease managerRelease;
   readonly DataGridView grid=new DataGridView();readonly ToolTip tips=new ToolTip();string exeHash="",gclHash="";bool busy;Package selectedApi;
   [DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern IntPtr SendMessage(IntPtr h,int msg,IntPtr w,string l);
   public MainWindow(bool preview=false){
@@ -25,7 +26,7 @@ namespace AnyApiManager {
    sidebar.Controls.Add(Label("AnyAPI",30,24,26,155,44,true));sidebar.Controls.Add(Label("MANAGER",12,26,72,150,24,false,Muted));
    var pages=new[]{apiPage,modsPage,developerPage,settingsPage};var titles=new[]{"Overview","Mods","Develop","Settings"};var glyphs=new[]{"\u25c8","\u25a6","{ }","\u2699"};
    for(int i=0;i<pages.Length;i++){var page=pages[i];var nav=(ModernButton)Button(titles[i],16,140+i*54,164,44,()=>ShowPage(page));nav.AlignLeft=true;nav.Glyph=glyphs[i];sidebar.Controls.Add(nav);navigation.Add(page,nav);}
-   var version=Label("VERSION 1.2.0",12,24,ClientSize.Height-44,150,22,false,Muted);version.Anchor=AnchorStyles.Left|AnchorStyles.Bottom;sidebar.Controls.Add(version);
+   var version=Label("VERSION "+ManagerUpdates.DisplayVersion,12,24,ClientSize.Height-44,150,22,false,Muted);version.Anchor=AnchorStyles.Left|AnchorStyles.Bottom;sidebar.Controls.Add(version);
    content.Dock=DockStyle.None;content.Bounds=new Rectangle(196,0,ClientSize.Width-196,ClientSize.Height-44);content.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;content.Padding=new Padding(32);Controls.Add(content);content.BringToFront();
    status.Dock=DockStyle.Bottom;status.Height=44;status.Padding=new Padding(24,12,20,6);status.ForeColor=Muted;status.BackColor=Bg;status.AutoEllipsis=true;Controls.Add(status);status.BringToFront();
    foreach(var page in new[]{apiPage,modsPage,settingsPage,developerPage}){page.Dock=DockStyle.Fill;page.BackColor=Bg;content.Controls.Add(page);}
@@ -75,8 +76,19 @@ namespace AnyApiManager {
    settingsPage.Controls.Add(Button("Save folder",0,190,145,38,async()=>await SaveSetup()));settingsPage.Controls.Add(Label("Mod library",20,0,288,500,30,true));
    settingsPage.Controls.Add(Label("The official library is built in. No GitHub account or setup needed.",15,0,330,777,32,false,Muted));
    settingsPage.Controls.Add(Button("Refresh library",0,382,160,40,async()=>await Run(async()=>await Connect())));settingsPage.Controls.Add(Button("View on GitHub",174,382,160,40,()=>System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(bundled.Repository){UseShellExecute=true})));
-   settingsPage.Controls.Add(Button("Open backups",0,522,150,38,()=>{string path=Rules.Target(preferences.GamePath,"AnyAPI and Modding/.manager/backups");if(Directory.Exists(path))System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path){UseShellExecute=true});else SetStatus("No manager backups yet.");}));
+   settingsPage.Controls.Add(Label("Manager",20,0,456,500,30,true));
+   managerUpdateNote.Text="Version "+ManagerUpdates.DisplayVersion;managerUpdateNote.Bounds=new Rectangle(0,495,777,32);managerUpdateNote.ForeColor=Muted;settingsPage.Controls.Add(managerUpdateNote);
+   Style(managerUpdate,"Check for updates",0,540,192,40,true);managerUpdate.Click+=async(s,e)=>{if(!busy)await UpdateManager();};settingsPage.Controls.Add(managerUpdate);
+   tips.SetToolTip(managerUpdate,"Updates the manager EXE. Your mods and settings stay in place.");
+   settingsPage.Controls.Add(Button("Open backups",0,612,150,38,()=>{string path=Rules.Target(preferences.GamePath,"AnyAPI and Modding/.manager/backups");if(Directory.Exists(path))System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path){UseShellExecute=true});else SetStatus("No manager backups yet.");}));
   }
+  async Task UpdateManager(){bool restart=false;await Run(async()=>{
+   if(managerRelease==null){SetStatus("Checking for a manager update...");var release=await ManagerUpdates.Check();
+    if(ManagerUpdates.IsNewer(release,ManagerUpdates.CurrentVersion)){managerRelease=release;managerUpdate.Text="Update & restart";managerUpdateNote.Text="Version "+ManagerUpdates.DisplayVersion+" · "+release.Version+" available";SetStatus("Manager update ready. Choose Update & restart to install it.");}
+    else{managerUpdateNote.Text="Version "+ManagerUpdates.DisplayVersion+" · Up to date";SetStatus("Your manager is up to date.");}return;
+   }
+   SetStatus("Downloading and verifying the manager update...");string request=await ManagerUpdates.Stage(managerRelease);ManagerUpdates.StartHelper(request);restart=true;
+  });if(restart)Application.Exit();}
   async Task SaveSetup(){await Run(async()=>{preferences.GamePath=gamePath.Text.Trim();await Scan();Engine.SavePreferences(preferences);SetStatus("Game folder saved.");});}
   async Task Scan(){
    if(string.IsNullOrWhiteSpace(preferences.GamePath)){exeHash=gclHash="";RefreshState();SetStatus("Choose your Anymaker folder in Settings.");return;}
@@ -119,7 +131,7 @@ namespace AnyApiManager {
    Directory.CreateDirectory(Engine.Data);string staged=Path.Combine(Engine.Data,Guid.NewGuid().ToString("N")+".dll");try{File.Copy(source,staged);var result=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Package=p,Catalog=catalog,Action="import-local",ZipPath=staged,ReplaceUnknown=replace});if(!result.Success)throw new IOException(result.Message);SetStatus(result.Message);await Scan();}finally{if(File.Exists(staged))File.Delete(staged);}
   });}}
   async Task Change(Package p,string action){await Run(async()=>{var r=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Package=p,Catalog=catalog,Action=p.Local?action+"-local":action});if(!r.Success)throw new IOException(r.Message);SetStatus(r.Message);RefreshState();});}
-  async Task Run(Func<Task> task){if(busy)return;busy=true;UseWaitCursor=true;importMod.Enabled=playModded.Enabled=playVanilla.Enabled=apiInstall.Enabled=modInstall.Enabled=toggle.Enabled=remove.Enabled=false;try{await task();}catch(Exception e){SetStatus(e is System.Net.Http.HttpRequestException?"Couldn't reach the mod library. Check your connection and try again.":e.Message);}finally{busy=false;UseWaitCursor=false;importMod.Enabled=exeHash!="";RefreshState();}}
+  async Task Run(Func<Task> task){if(busy)return;busy=true;UseWaitCursor=true;managerUpdate.Enabled=importMod.Enabled=playModded.Enabled=playVanilla.Enabled=apiInstall.Enabled=modInstall.Enabled=toggle.Enabled=remove.Enabled=false;try{await task();}catch(Exception e){SetStatus(e is System.Net.Http.HttpRequestException?"Couldn't reach GitHub. Check your connection and try again.":e.Message);}finally{busy=false;UseWaitCursor=false;managerUpdate.Enabled=true;importMod.Enabled=exeHash!="";RefreshState();}}
   void SetStatus(string text){status.Text=text;tips.SetToolTip(status,text);}
   void PopulatePreview(){exeHash=bundled.Api[0].GameBuilds[0].ExeSha256;gclHash=bundled.Api[0].GameBuilds[0].GclSha256;apiVersion.Text="Revision 25";apiNote.Text="Up to date";gameNote.Text="Anymaker 0.1.21   Â·   Verified build";apiInstall.Text="Reinstall API";launchNote.Text="Your enabled mods load automatically through Steam.";summary.Text="4 mods available Â· install the ones you want";developer.InstalledRevision(25);Rows();SetStatus("Ready");}
   public void CapturePreview(string file){File.WriteAllText(file+".layout", "status="+status.Bounds+" visible="+status.Visible+" text="+status.Text+" content="+content.Bounds+" scale="+CurrentAutoScaleDimensions);var pages=new[]{apiPage,modsPage,developerPage,settingsPage};var names=new[]{"","-Mods","-Develop","-Settings"};for(int i=0;i<pages.Length;++i){ShowPage(pages[i]);Refresh();using(var image=new Bitmap(Width,Height)){DrawToBitmap(image,new Rectangle(0,0,Width,Height));image.Save(Path.Combine(Path.GetDirectoryName(file),Path.GetFileNameWithoutExtension(file)+names[i]+".png"),System.Drawing.Imaging.ImageFormat.Png);}}}

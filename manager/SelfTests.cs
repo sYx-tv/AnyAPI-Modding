@@ -96,6 +96,7 @@ namespace AnyApiManager {
     var demanding=Json.Read<Package>(Json.Write(localMod));demanding.MinimumApi=999;localRequest.Package=demanding;localRequest.Action="import-local";Check(!Engine.Apply(localRequest,null,true).Success,"Declared local minimum API enforced");
     Reject(()=>{var traversal=Json.Read<Package>(Json.Write(localMod));traversal.FileHashes=new Dictionary<string,string>{{"AnyAPI and Modding/mods/../evil.dll",new string('a',64)}};Engine.ValidateLocal(traversal);},"Local import rejects path traversal");
     Check(Directory.GetDirectories(Rules.Target(root,"AnyAPI and Modding/.manager/backups")).Length>=5,"Every mutation retains backups");
+    ManagerUpdateTests.Run(root,Check,Reject);
     File.WriteAllText(output,Json.Write(new{Success=true,Passed=passed.Count,Checks=passed}));return 0;
    }catch(Exception e){File.WriteAllText(output,Json.Write(new{Success=false,Error=e.ToString(),Passed=passed}));return 1;}
    finally{if(Directory.Exists(root))Directory.Delete(root,true);}
