@@ -1,18 +1,16 @@
 # AnyAPI Manager
 
-A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.3.0 includes AnyAPI revision 25, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
+A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.3.1 includes AnyAPI revision 27, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
 
-The manager recognizes newer installed API/mod receipts even when
-the online catalog is older. Its bundled payload remains the published 0.25.0
-profile. See [candidate notes](../docs/releases/manager-1.2.1.md). Local 0.27.0
-compatibility packages can be applied with `install_candidate.ps1`; this developer
-installer validates checksums, backs up the batch and restores it on failure.
+The manager recognizes newer compatible installed API/mod receipts even when
+its cached catalog is older. The bundled API and offline guide match 0.27.0.
+Settings includes an independent manager EXE update check.
 
 Open **AnyAPI Manager.exe**. The Steam game folder is normally detected automatically. Install/update the API, then choose mods in Mods. The official mod library is built in; Settings selects another game folder if needed. Close the game before changing DLLs or switching launch modes.
 
 **Play with mods** restores the verified API loader and launches through Steam. **Play without mods** moves only that loader into the manager's backup area, leaving mod DLLs, individual enable/disable choices and saved data alone. The mode persists: normal Steam launches also run without AnyAPI until you choose Play with mods. The manager can be closed while playing. If Steam cannot open, the manager attempts to restore the preceding mode. Other third-party loaders are outside this manager's scope.
 
-**Develop** has searchable services, exact headers, native integration callbacks, contract notes, and examples. Export starter SDK gives a CMake C++ DLL project, the public/reference headers and examples. Historical legacy hooks are clearly marked disabled; they are not advertised as working services. Settings and keybinds require explicit registration with optional AnyHelpers services. The bundled offline documentation describes API 0.25.0; newer installations display a version notice. Current source documentation is under [docs](../docs/README.md).
+**Develop** has searchable services, exact headers, native integration callbacks, contract notes, and examples. Export starter SDK gives a CMake C++ DLL project, the public/reference headers and examples. Historical legacy hooks are clearly marked disabled; they are not advertised as working services. Settings and keybinds require explicit registration with optional AnyHelpers services. The bundled offline documentation describes API 0.27.0; newer installations display a version notice. Current source documentation is under [docs](../docs/README.md).
 
 This project is public at **sYx-tv/AnyAPI-Modding**. Browsing and downloads use ordinary HTTPS. No GitHub account, GitHub CLI or repository address entry is required. Saved repository preferences from older versions are overridden by the bundled catalog address; the saved game folder is retained. Downloads never invoke the private GitHub CLI fallback. No credentials are bundled.
 

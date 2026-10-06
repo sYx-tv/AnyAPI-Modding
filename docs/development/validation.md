@@ -1,38 +1,37 @@
 # Compatibility and validation
 
-## Current source
+## Current release
 
-The 0.27.0 candidate targets Windows x64, Anymaker 0.1.23 / Steam build
-25755694. The [build manifest](../../native/BUILD_MANIFEST.json) records executable
-and game-data hashes. The functional suite contains 32 automated checks covering
-native contracts, menus, inventories, storage, map rendering and graphics.
+AnyAPI and all five mods are released as 0.27.0 for Windows x64, Anymaker
+0.1.23 / Steam build 25755694. The build manifest records exact executable and
+game-data hashes. The complete native suite passes 32 checks covering contracts,
+menus, inventories, storage, map rendering and graphics shader output.
 
-The profile audit reviewed 112 patterns and refreshed 17. The new build identity
-and client task services have automated coverage; the client task example also
-compiles in the native build. In-game acceptance of the 0.1.23 candidate remains
-pending. Earlier user confirmations below refer to earlier game profiles.
+Local gameplay acceptance was confirmed by the author on October 6, 2026 for
+all five mods and the manager. Runtime logs confirmed the build guard matched,
+all five plugins initialized, storage moves were confirmed, map routes were
+selected and graphics settings were applied. Joining-client and dedicated-server
+acceptance require separate coverage; local host success does not establish them.
 
-The existing four mods were confirmed working by the author in host gameplay.
-The initial AnyGraphics effects were also confirmed working. The new compact
-presets/settings interface awaits its next in-game check. Joining-client behavior
-and server acceptance require separate coverage; host success does not establish them.
-
-Graphics tests verify actual shader output, Apply/Cancel, preset parameters,
-compact/advanced row counts and restoration of saved custom settings. They do
-not establish visual preference or GPU/FPS cost on a player's hardware.
+The profile audit reviewed 112 patterns and refreshed 17. New build identity and
+client task services have automated coverage; the client task example compiles.
+Gameplay confirmation does not imply every API service was individually exercised.
+Graphics tests check shader output and settings behavior; they do not establish
+GPU/FPS cost across different hardware.
 
 ## Published resources
 
-The stable catalog provides API 0.25.0 and four optional mods. Manager 1.2.0 bundles
-that API profile and its offline guide. Its published evidence records 73 manager
-checks plus seven anonymous download checks. Those results describe that release,
-not future source changes.
+The stable catalog provides API 0.27.0 and five independent mod downloads.
+Manager 1.3.1 bundles the API-only archive and matching offline guide, with 25
+headers and 100 guide articles. The manager fixture suite passes 93 checks,
+including installation rollback, local mod discovery, launch modes and verified
+EXE self-updates. Public download checks compare each archive and DLL checksum.
 
 ## Rechecking a build
 
-Use the build/test commands in [Building](building.md). Inspect failures before
-packaging. Do not change a game fingerprint without reviewing the corresponding
-native bodies, dependencies and layouts. Validate joining-client/server operations
-separately, and measure graphics cost in a fixed scene with effects enabled/disabled.
+Use the commands in [Building](building.md). Inspect failures before packaging.
+Do not change a game fingerprint without reviewing the corresponding native
+bodies, dependencies and layouts. Validate joining-client/server operations
+separately and measure graphics cost in a fixed scene with effects on and off.
 
-Historical test and release records are retained under [releases](../releases/).
+Historical records are retained under [releases](../releases/).

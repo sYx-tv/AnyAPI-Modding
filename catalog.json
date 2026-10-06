@@ -1,24 +1,25 @@
 {
   "Schema": 1,
+  "Repository": "https://github.com/sYx-tv/AnyAPI-Modding",
   "Api": [
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.25.0",
-      "Revision": 25,
+      "Version": "0.27.0",
+      "Revision": 27,
       "MinimumApi": 0,
-      "Description": "The in-game framework. Mods are downloaded separately.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.25.0/AnyAPI-0.25.0.zip",
-      "Sha256": "ff24b96a91c015e6d4b9d5a5982d0cdd5326b97d127ebbdd2b657e7783d2628f",
+      "Description": "Current-build in-game mod framework.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyAPI-0.27.0.zip",
+      "Sha256": "c093b2d6e5c762062c1c805edc9912351d80cced4ab7b291d81659806fb11015",
       "FileHashes": {
-        "dinput8.dll": "ddab81c585e37c89242ef651ad95a18ec5717bf251e81ffc8e0d20bed8a20700"
+        "dinput8.dll": "8a139a2deed865892285e6d8ca98d1ab291139e3a79d38cc8ab572657db5050a"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.21",
-          "SteamBuild": 25725299,
-          "ExeSha256": "7ef94f22ab40e6d3fc24166c2f58dcb038768ffceb9c49f092bc78a1eaabae67",
-          "GclSha256": "01f889b4062c7a1bfa8b27506a27ecd559289eee7529768f8e88fc3aa3dd301c"
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
         }
       ]
     }
@@ -27,87 +28,107 @@
     {
       "Id": "anyhelpers",
       "Name": "AnyHelpers",
-      "Version": "0.25.0",
-      "Revision": 25,
-      "MinimumApi": 25,
-      "Description": "Mod Controls and Mod Settings, built into the game settings.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.25.0/AnyHelpers-0.25.0.zip",
-      "Sha256": "027352cb5c2426aaf6722da2d09fb2030c0f23b587fef254696d8b5186feb53f",
+      "Version": "0.27.0",
+      "Revision": 27,
+      "MinimumApi": 27,
+      "Description": "Native Mod Controls and Mod Settings.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyHelpers-0.27.0.zip",
+      "Sha256": "153247649bbd208f055c081fec23b161e0c64c58416e8a507c9149f128f7da76",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyHelpers.dll": "3dd8fe9596960828316b9c3eb99422225d4c96f084004c841072735921c5874a"
+        "AnyAPI and Modding/mods/AnyHelpers.dll": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.21",
-          "SteamBuild": 25725299,
-          "ExeSha256": "7ef94f22ab40e6d3fc24166c2f58dcb038768ffceb9c49f092bc78a1eaabae67",
-          "GclSha256": "01f889b4062c7a1bfa8b27506a27ecd559289eee7529768f8e88fc3aa3dd301c"
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
         }
       ]
     },
     {
       "Id": "anyinventory",
       "Name": "AnyInventory",
-      "Version": "0.25.0",
-      "Revision": 25,
-      "MinimumApi": 25,
-      "Description": "Search the full item catalog with previews, filters and favorites.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.25.0/AnyInventory-0.25.0.zip",
-      "Sha256": "ce8f1e71c1bb13517de1d6ca2f23f7d1c5a435f85e148f8fc7c16930a4fc89e0",
+      "Version": "0.27.0",
+      "Revision": 27,
+      "MinimumApi": 27,
+      "Description": "Item search, previews, favorites and mode-limited Add.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyInventory-0.27.0.zip",
+      "Sha256": "2732620a2af2ce5012d98199fdadbd324e4deacb4fe7615b9e57fa9b44714703",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyInventory.dll": "0310692a84b1ba389d51b385f6dc4c2074709b7de88ee8d452c9590094df5912"
+        "AnyAPI and Modding/mods/AnyInventory.dll": "1159c43e98158b7071308a3a63199ea00ff15971f0b5029926bb39f0622ff04e"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.21",
-          "SteamBuild": 25725299,
-          "ExeSha256": "7ef94f22ab40e6d3fc24166c2f58dcb038768ffceb9c49f092bc78a1eaabae67",
-          "GclSha256": "01f889b4062c7a1bfa8b27506a27ecd559289eee7529768f8e88fc3aa3dd301c"
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
         }
       ]
     },
     {
       "Id": "anystorage",
       "Name": "AnyStorage",
-      "Version": "0.25.0",
-      "Revision": 25,
-      "MinimumApi": 25,
-      "Description": "Quick deposit, withdraw, matching stacks and storage sorting.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.25.0/AnyStorage-0.25.0.zip",
-      "Sha256": "dc4d2534ff7519d4da327b21769e97a1505407a1b328428ecfbc9d0e570f8bba",
+      "Version": "0.27.0",
+      "Revision": 27,
+      "MinimumApi": 27,
+      "Description": "Storage transfers, matching stacks and sorting.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyStorage-0.27.0.zip",
+      "Sha256": "3c73b47301e863150281c6f11b13d66f41508ce181df5ec4cb439fac461fa786",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyStorage.dll": "cb5bd8fbabc1cb39ecde3b1bcaf7c021bff6cb2f5f6ab69404ebe85ba0ce181a"
+        "AnyAPI and Modding/mods/AnyStorage.dll": "45729fd482095c56df1396dd1e6cc096e4775a0f9b6081e8b2319500162c094f"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.21",
-          "SteamBuild": 25725299,
-          "ExeSha256": "7ef94f22ab40e6d3fc24166c2f58dcb038768ffceb9c49f092bc78a1eaabae67",
-          "GclSha256": "01f889b4062c7a1bfa8b27506a27ecd559289eee7529768f8e88fc3aa3dd301c"
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
         }
       ]
     },
     {
       "Id": "anymap",
       "Name": "AnyMap",
-      "Version": "0.25.0",
-      "Revision": 25,
-      "MinimumApi": 25,
-      "Description": "World map, smooth minimap, named markers and road guidance.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.25.0/AnyMap-0.25.0.zip",
-      "Sha256": "fc9f406a9b28cbae959a9eaa9cd9b2f0afa5c3c0167a06b39f6a92b938763757",
+      "Version": "0.27.0",
+      "Revision": 27,
+      "MinimumApi": 27,
+      "Description": "World map, smooth minimap, markers and road guidance.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyMap-0.27.0.zip",
+      "Sha256": "834b5bde316ca5b721650573de1152180e28dd8097bf5d4ce23bb24f5a82a10e",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyMap.dll": "585e5112dc764f9e73bc50628fe564250f08a38d7bc287ecef2123e74de91472"
+        "AnyAPI and Modding/mods/AnyMap.dll": "faf0174ae46cc055a8e170d8e2064055b0890b01722d1a89cc74535368b4ec0a"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.21",
-          "SteamBuild": 25725299,
-          "ExeSha256": "7ef94f22ab40e6d3fc24166c2f58dcb038768ffceb9c49f092bc78a1eaabae67",
-          "GclSha256": "01f889b4062c7a1bfa8b27506a27ecd559289eee7529768f8e88fc3aa3dd301c"
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        }
+      ]
+    },
+    {
+      "Id": "anygraphics",
+      "Name": "AnyGraphics",
+      "Version": "0.27.0",
+      "Revision": 27,
+      "MinimumApi": 27,
+      "Description": "Graphics presets, bloom, sharpening and color controls.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyGraphics-0.27.0.zip",
+      "Sha256": "4b74888100d39f5a8be2ff91004ed9d8f8d0e4ec150fdd54642d8423ae929040",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "8c48793dbdca962624fcc975cd2dc3ce1f02ab916f15dcd8e43a5489e7423181"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
         }
       ]
     }
-  ],
-  "Repository": "https://github.com/sYx-tv/AnyAPI-Modding"
+  ]
 }

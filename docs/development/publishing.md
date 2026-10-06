@@ -31,7 +31,7 @@ Rebuild the manager separately if its bundled API and offline guide should chang
 
 `manager/publish.ps1` and the manually triggered GitHub workflow publish prepared,
 verified resources. They do not download Steam builds or repair hooks automatically.
-The currently prepared resources are the stable 0.25.0 packages; replacing them
+The currently prepared resources are the stable 0.27.0 packages; replacing them
 with a new profile requires matching fingerprints, evidence, hashes and guide data.
 
 ## Publish a manager update

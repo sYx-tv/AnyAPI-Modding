@@ -6,7 +6,7 @@
 - Visual Studio with **Desktop development with C++**, the Windows SDK and CMake.
 - Python 3 for local road-cache generation.
 
-The 0.27.0 candidate native profile targets Anymaker 0.1.23 / Steam build 25755694.
+The 0.27.0 native profile targets Anymaker 0.1.23 / Steam build 25755694.
 Run these commands from the repository root in a developer PowerShell. Adjust
 the game folder to match your installation.
 
@@ -42,6 +42,6 @@ powershell -File manager/build.ps1
 ```
 
 The manager uses the Windows .NET Framework C# compiler and checked-in release
-resources. This builds the published manager profile with bundled API 0.25.0;
-it does not automatically publish the newer native source or replace its payload.
+resources. This builds the published manager profile with bundled API 0.27.0;
+publishing native or manager updates still requires release validation.
 See [Manager source](../../manager/README.md) and [Publishing](publishing.md).

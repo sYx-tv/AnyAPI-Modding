@@ -467,11 +467,11 @@
     "settings": 42,
     "provider": "AnyHelpers",
     "mechanism": "in-process GPU post-processing",
-    "acceptance": "INITIAL_EFFECTS_USER_CONFIRMED_NEW_MENU_PENDING",
+    "acceptance": "USER_CONFIRMED_CURRENT_BUILD_PRESETS_AND_SETTINGS",
     "presets": 5,
     "compact_rows": 4,
     "custom_rows": 11,
     "advanced_visibility": "anyhelpers.settings v2"
   },
-  "current_profile_acceptance": "CANDIDATE_AUTOMATED_TESTS_PASSED_GAMEPLAY_PENDING"
+  "current_profile_acceptance": "AUTOMATED_TESTS_PASSED_USER_CONFIRMED_LOCAL_HOST_GAMEPLAY"
 }

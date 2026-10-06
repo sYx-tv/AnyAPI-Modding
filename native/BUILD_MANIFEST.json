@@ -30,16 +30,16 @@
   "graphics_gpu_performance": "NOT_YET_MEASURED_IN_GAME",
   "graphics_version": "0.27.0",
   "helpers_sha256": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c",
-  "graphics_settings_acceptance": "PENDING_USER_TEST",
+  "graphics_settings_acceptance": "USER_CONFIRMED",
   "api_version": "0.27.0",
-  "status": "CANDIDATE",
+  "status": "RELEASE",
   "new_services": [
     "anyapi.build v1",
     "anyapi.client_tasks v1"
   ],
   "native_patterns_audited": 112,
   "native_patterns_refreshed": 17,
-  "current_profile_gameplay_acceptance": "PENDING",
+  "current_profile_gameplay_acceptance": "USER_CONFIRMED_LOCAL_HOST_GAMEPLAY",
   "previous_profile_acceptance": "Existing acceptance fields refer to earlier game profiles.",
   "mod_versions": {
     "AnyHelpers": "0.27.0",
@@ -47,5 +47,6 @@
     "AnyInventory": "0.27.0",
     "AnyStorage": "0.27.0",
     "AnyGraphics": "0.27.0"
-  }
+  },
+  "acceptance_date": "2026-10-06"
 }
