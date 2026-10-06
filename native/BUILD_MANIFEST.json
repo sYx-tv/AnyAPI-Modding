@@ -1,0 +1,35 @@
+{
+  "revision": 26,
+  "date": "2026-10-06",
+  "game_version": "0.1.21",
+  "steam_build_id": 25725299,
+  "architecture": "Windows x64",
+  "game_identity_sha256": {
+    "game.exe": "7ef94f22ab40e6d3fc24166c2f58dcb038768ffceb9c49f092bc78a1eaabae67",
+    "bin/game.gcl": "01f889b4062c7a1bfa8b27506a27ecd559289eee7529768f8e88fc3aa3dd301c"
+  },
+  "tests_passed": 30,
+  "mods": [
+    "AnyHelpers",
+    "AnyMap",
+    "AnyInventory",
+    "AnyStorage",
+    "AnyGraphics"
+  ],
+  "new_service": "anyapi.post_process v1",
+  "native_bodies_reviewed": 51,
+  "previous_revision_16_acceptance": "USER_CONFIRMED",
+  "new_mod_gameplay_acceptance": "USER_CONFIRMED_GPU_MAP_AND_MODS",
+  "new_mod_mechanism": "native storage widgets and native replicated inventory events",
+  "storage_fix": "corrected bottom-origin cursor tooltip coordinates and native content alignment; exclusions and top-first placement retained",
+  "storage_gameplay_acceptance": "USER_CONFIRMED_TOOLTIPS_AND_TOOLBAR",
+  "map_renderer": "resident GPU terrain, cached text, every-present minimap, 30ms presentation smoothing",
+  "host_sha256": "346e6cc792420e5a90f6104da903658242ce8fa9353bc26283abe378625cafcd",
+  "map_sha256": "585e5112dc764f9e73bc50628fe564250f08a38d7bc287ecef2123e74de91472",
+  "graphics_sha256": "1f32658e05fac05080323be450626aaf4064b9270992ac4e6e23d306ff300734",
+  "graphics_gameplay_acceptance": "USER_CONFIRMED_INITIAL_EFFECTS",
+  "graphics_gpu_performance": "NOT_YET_MEASURED_IN_GAME",
+  "graphics_version": "0.26.1",
+  "helpers_sha256": "20d5853d55c84dd3951a974e33551e190279761aaebb59375c72bae23ed8de91",
+  "graphics_settings_acceptance": "PENDING_USER_TEST"
+}

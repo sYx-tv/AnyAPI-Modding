@@ -3,8 +3,8 @@ from pathlib import Path
 import json,re,hashlib,zipfile,argparse
 
 base=Path(__file__).resolve().parent.parent
-parser=argparse.ArgumentParser();parser.add_argument('--source',default=str(base/'Phase34' if (base/'Phase34').exists() else base/'github_public/Phase34'));args=parser.parse_args()
-source=Path(args.source);out=Path(__file__).resolve().parent/'developer';out.mkdir(exist_ok=True)
+parser=argparse.ArgumentParser();parser.add_argument('--source',default=str(base/'native' if (base/'native').exists() else base/'github_public/native'));parser.add_argument("--output",type=Path);args=parser.parse_args()
+source=Path(args.source);sdk_headers=source.parent/'sdk/include';contracts=source.parent/'docs';out=args.output or Path(__file__).resolve().parent/'developer';out.mkdir(parents=True,exist_ok=True)
 caps=json.loads((source/'CURRENT_CAPABILITIES.json').read_text(encoding='utf-8-sig'))
 manifest=json.loads((source/'BUILD_MANIFEST.json').read_text(encoding='utf-8-sig'))
 articles=[]
@@ -56,7 +56,8 @@ Queued native Give requests with mode masks: anyapi.inventory_actions v1/v2.
 Native storage rows, copied grids/items and replicated transfers: anyapi.inventory_ui v1/v2/v3.
 Shared inventory root translation: anyapi.screen_layout v1.
 Fast in-process drawing: anyapi.gpu_draw v1; the plugin canvas is a fallback drawing path.
-Cooperating mod settings and keybinds: anyhelpers.settings v1 and anyhelpers.controls v1.
+GPU shader effects: anyapi.post_process v1 (API 0.26.0 or newer).
+Cooperating mod settings and keybinds: anyhelpers.settings v1/v2 and anyhelpers.controls v1.
 
 The Services section includes capabilities, limits, versioned headers and available contract notes. Headers contain the exact signatures; examples show how to use them.
 
@@ -64,7 +65,7 @@ Legacy v16 native hook and action registries are retained as reference but quara
 ''')
 add('Compatibility and validation','Start here',f'''# Know what is supported
 
-This guide describes API revision {manifest['revision']}, Anymaker {manifest['game_version']}, Steam build {manifest['steam_build_id']}, Windows x64.
+This guide describes AnyAPI 0.{manifest['revision']}.0, Anymaker {manifest['game_version']}, Steam build {manifest['steam_build_id']}, Windows x64.
 
 Current services come from the DLL plugin runtime, not the old v16 hook worker. Native contract checks, automated fixtures and author host gameplay acceptance are separate evidence. Joining-client coverage should not be inferred from host tests.
 
@@ -77,26 +78,26 @@ Game GCL SHA-256: {manifest['game_identity_sha256']['bin/game.gcl']}
 
 The guide is versioned with the bundled API. If a newer API is installed, use matching documentation/source before adopting changed signatures.
 ''')
-headers=sorted(p for p in source.glob('*.h') if re.match(r'(anyapi_.*_v\d+|anyhelpers_settings_v1|mod_controls_v1|anymaker_mod_api|anymaker_mod_extension)\.h$',p.name))
+headers=sorted(p for p in sdk_headers.glob('*.h') if re.match(r'(anyapi_.*_v\d+|anyhelpers_settings_v\d+|mod_controls_v1|anymaker_mod_api|anymaker_mod_extension)\.h$',p.name))
 for name,info in caps['base_api'].items():
     body=f'# {name}\n\n'+json.dumps(info,indent=2,ensure_ascii=False)
     add(info.get('service',name)+' · v'+str(info.get('version',info.get('abi',1)))+' · '+name,'Services',body,'Current service')
 for name in ('mod_controls_v1.h','anyhelpers_settings_v1.h'):
-    add('AnyHelpers · '+('controls v1' if name.startswith('mod_controls') else 'settings v1'),'Services','# '+name+'\n\nRequires AnyHelpers.dll. Explicit registration; optional dependency with fallback defaults.\n\n'+(source/name).read_text(encoding='utf-8-sig'),'Mod-provided service')
+    add('AnyHelpers · '+('controls v1' if name.startswith('mod_controls') else 'settings v1'),'Services','# '+name+'\n\nRequires AnyHelpers.dll. Explicit registration; optional dependency with fallback defaults.\n\n'+(sdk_headers/name).read_text(encoding='utf-8-sig'),'Mod-provided service')
 for p in headers:
     legacy=p.name.startswith('anymaker_')
     prefix='Legacy v16 reference. Native hook/action registry is disabled in this profile.\n\n' if legacy else 'Exact public declarations for the revision shown in this guide.\n\n'
     add(p.name,'Legacy' if legacy else 'Headers','# '+p.name+'\n\n'+prefix+'```cpp\n'+p.read_text(encoding='utf-8-sig')+'\n```','Disabled reference' if legacy else 'Public header')
-for p in sorted(source.glob('*.md')):
+for p in sorted((p for p in contracts.rglob('*.md') if 'releases' not in p.parts)):
     add(p.stem.replace('_',' ').title(),'Contracts',p.read_text(encoding='utf-8-sig'),'Contract notes')
 for p in sorted(source.glob('*.json')):
     if p.name in ('CURRENT_CAPABILITIES.json','BUILD_MANIFEST.json'):continue
     add(p.stem.replace('_',' ').title(),'Contracts','# '+p.name+'\n\nExact native contract/reference snapshot from this API revision.\n\n'+p.read_text(encoding='utf-8-sig'),'Native contract data')
 for p in sorted((source/'examples').glob('*.cpp')):add(p.stem.replace('_',' ').title(),'Examples','# '+p.name+'\n\n```cpp\n'+p.read_text(encoding='utf-8-sig')+'\n```','Example')
-legacy_hooks=re.findall(r'^\{"([^"\n]+)"', (source/'phase27_hook_specs.h').read_text(),re.M)
+legacy_hooks=re.findall(r'^\{"([^"\n]+)"', (source/'legacy_hook_specs.h').read_text(),re.M)
 add('Legacy hook registry · disabled','Legacy','# Historical native hooks\n\nThese '+str(len(legacy_hooks))+' hook specifications remain in source for audits. The current loader explicitly logs v16_legacy_hooks=DISABLED; this registry is not the active mod API.\n\n'+'\n'.join('- '+h+' — quarantined / not installed by this profile' for h in legacy_hooks),'Disabled reference')
 hook_sections=[]
-for name in ('anyapi_platform.inc','anyapi_menu.inc','anyapi_settings_tabs.inc','anyapi_screen_layout.inc','anyapi_inventory_ui.inc','anyapi_inventory_actions.inc','phase34_players.inc'):
+for name in ('anyapi_platform.inc','anyapi_menu.inc','anyapi_settings_tabs.inc','anyapi_screen_layout.inc','anyapi_inventory_ui.inc','anyapi_inventory_actions.inc','native_players.inc'):
     text=(source/name).read_text(encoding='utf-8-sig')
     callbacks=set(re.findall(r'\b([A-Za-z_]\w*(?:_hook|_detour))\s*\(',text))
     if name=='anyapi_platform.inc':callbacks.update(('present','present1','resize','resize1','execute','create','create_hwnd','wndproc'))
@@ -145,7 +146,7 @@ sdk=out/'starter-sdk.zip'
 with zipfile.ZipFile(sdk,'w',zipfile.ZIP_DEFLATED) as z:
     for p in headers:z.write(p,'include/'+p.name)
     for p in sorted((source/'examples').glob('*.cpp')):z.write(p,'examples/'+p.name)
-    for p in sorted(source.glob('*.md')):z.write(p,'docs/'+p.name)
+    for p in sorted((p for p in contracts.rglob('*.md') if 'releases' not in p.parts)):z.write(p,'docs/'+p.relative_to(contracts).as_posix())
     z.writestr('src/mod.cpp',starter);z.writestr('CMakeLists.txt',cmake);z.writestr('README.md',articles[0]['Body']);z.writestr('docs/LOCAL_MODS.md',local_docs);z.writestr('ExampleMod.anymod.json',json.dumps({'Name':'Example Mod','Version':'1.0.0','Description':'My own Anymaker mod.','MinimumApi':manifest['revision']},indent=2))
 guide={'Revision':manifest['revision'],'GameVersion':manifest['game_version'],'SteamBuild':manifest['steam_build_id'],'Articles':articles,'HeaderCount':len(headers),'LegacyHookCount':len(legacy_hooks),'SourceHashes':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in headers}}
 (out/'guide.json').write_text(json.dumps(guide,ensure_ascii=False,indent=2),encoding='utf-8')

@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-06",
+  "native_tests": {
+    "passed": 30,
+    "failed": 0
+  },
+  "manager_tests": {
+    "passed": 73,
+    "failed": 0
+  },
+  "documentation_local_links_checked": 89,
+  "sdk_public_headers": 23,
+  "starter_mod_build": "passed",
+  "stable_download_catalog": "unchanged; AnyAPI 0.25.0",
+  "graphics_compact_menu_gameplay_acceptance": "pending",
+  "notes": "Disposable graphics test settings use Windows temporary storage to avoid intermittent saves within the OneDrive-synced build directory."
+}

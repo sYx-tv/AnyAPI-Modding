@@ -1,52 +1,66 @@
-# AnyAPI
+# AnyAPI for Anymaker
 
-An in-game mod framework for **Anymaker**, with a simple Windows mod manager.
+AnyAPI loads C++ DLL mods inside Anymaker. AnyAPI Manager installs the framework,
+browses the mod library, manages local mods and launches the game with or without mods.
 
-**Public mod library.** Source and downloads are available without a GitHub account. Manager 1.2.0 includes the library address automatically; players do not enter repository URLs or install GitHub CLI.
+[Download the manager](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest/download/AnyAPI.Manager.exe) · [Documentation](docs/README.md) · [Developer SDK](sdk/README.md) · [Build from source](docs/development/building.md)
 
-[**Download AnyAPI Manager**](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest/download/AnyAPI.Manager.exe) · [All release downloads](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest)
-
-## Play with mods
+## For players
 
 1. Download and open **AnyAPI Manager.exe**.
-2. Close Anymaker and select **Install API**. The Steam folder is normally detected automatically.
-3. Open **Mods**, select the ones you want and click **Install**.
-4. Choose **Play with mods** on Overview to launch through Steam.
+2. Close Anymaker, select its Steam folder, then choose **Install API**.
+3. Open **Mods**, install the mods you want, then choose **Play with mods**.
 
-The manager bundles AnyAPI, offline documentation and a source-only starter SDK. Optional mods download separately. The manager does not need to stay open while playing. Updates, toggles and removals take effect on the next launch. Saved settings and markers are kept.
+The manager includes the API; optional mods download separately. It does not need
+to remain open during gameplay. **Play without mods** pauses the API loader and
+retains installed mods and saved settings. Local AnyAPI DLLs can be imported or
+discovered from the game's mods folder.
 
-**Play without mods** pauses AnyAPI without changing your mod selections. Normal Steam launches stay in this mode until you choose **Play with mods** again.
+## Included projects
 
-**Local mods** appear beside library mods. Use Import DLL or put an AnyAPI DLL in the mods folder and select Refresh. Enable, disable and remove work for handmade mods too. Optional companion metadata declares a name, version and minimum API revision. Local compatibility remains unverified; updates are manual. The manager does not provide custom load-order or dependency resolution.
+| Project | Purpose | Source |
+| --- | --- | --- |
+| AnyAPI | DLL loading, versioned services and native integration | [native](native/) |
+| AnyAPI Manager | Installation, updates, mod discovery and launch modes | [manager](manager/) |
+| AnyHelpers | Native Mod Controls and Mod Settings | [Guide](docs/mods/helpers.md) |
+| AnyInventory | Item search, previews, favorites and mode-limited Add | [Guide](docs/mods/inventory.md) |
+| AnyStorage | Storage transfers, matching stacks and sorting | [Guide](docs/mods/storage.md) |
+| AnyMap | World map, rotating minimap, markers and road guidance | [Guide](docs/mods/map.md) |
+| AnyGraphics | Graphics presets, bloom, sharpening and color controls | [Guide](docs/mods/graphics.md) |
 
-**Develop** contains searchable services, headers, integration hooks, contracts and examples. Export a starter SDK to build your own C++ DLL. Disabled historical hooks are clearly separated from current services.
+## Source and downloads
 
-## Available mods
+This repository contains the API and all project sources listed above,
+public SDK headers, examples, tests and documentation. Game executables, models,
+textures and the generated road cache are excluded. A compatible Anymaker
+installation is needed to build and test game-dependent features.
 
-| Mod | What it adds |
-| --- | --- |
-| **AnyHelpers** | Native Mod Controls and Mod Settings tabs for registered mod options and keybinds. |
-| **AnyInventory** | Native inventory item browser with images, search, categories and favorites. Add is limited to Sandbox and Creative. |
-| **AnyStorage** | Deposit, withdraw, transfer matching items and sort eligible storage inventories. |
-| **AnyMap** | World map, smooth minimap, named markers and road guidance. |
+The published manager and mod catalog currently distribute **AnyAPI 0.25.0** and
+four optional mods. The source includes **AnyAPI 0.26.0** and **AnyGraphics / AnyHelpers
+0.26.1**. These graphics changes are available in source but have not yet replaced
+the stable download catalog. The initial graphics effects were confirmed working;
+the new compact preset menu still awaits in-game acceptance.
 
 ## Compatibility
 
-Current release: **API revision 25**, verified for **Anymaker 0.1.21 / Steam build 25725299** on Windows x64. The installed executable and game-data hashes must match a verified release.
+The current native profile targets **Anymaker 0.1.21**, Steam build **25725299**,
+on **Windows x64**. Exact executable and game-data fingerprints are recorded in
+[the build manifest](native/BUILD_MANIFEST.json). API ABI/service version numbers
+are compatibility contracts and remain part of SDK names.
 
-After a game update, use **Check for updates**. New native hooks must be reviewed and tested before a compatible API release can be published. The manager does not claim compatibility merely because a version number changed.
+After a game update, use **Check for updates**. Native integration must be reviewed
+and validated before a matching API build is published. Changing a version or hash
+alone does not establish compatibility.
 
-Download checksums, file checksums, automatic backups and installation rollback are built into the manager. It asks before replacing an unmanaged DLL or temporarily disabling unverified mods during an API update.
+## For developers
 
-## Develop or publish
+- [Build the API and mods](docs/development/building.md)
+- [Start a DLL mod](docs/development/first-mod.md)
+- [API service reference](docs/api/README.md)
+- [Register settings and controls](docs/mods/helpers.md)
+- [Publish a mod](docs/development/publishing.md)
+- [Validation and release status](docs/development/validation.md)
 
-- [Build the current API and mods](SOURCE_BUILD.md)
-- [API and mod documentation](Phase34/MODS_AND_API.md)
-- [Manager source and build instructions](manager/README.md)
-- [Catalog format](manager/CATALOG_FORMAT.md)
-- [Publishing instructions](manager/GITHUB_SETUP.md)
-
-The native API and mods use C++ and Visual Studio's C++ tools. The manager uses C#, Windows Forms and .NET Framework. Source, headers, examples and tests are included; game textures, models and executable files are not included in the source tree.
-
-Manager 1.2.0 checks pass **73/73**, plus **7/7** anonymous HTTPS catalog/package download checks. The exported starter builds as an x64 DLL with the expected entry point. Launch switching was tested against disposable game fixtures; Steam gameplay was not launched during this manager refresh. The native revision 25 checks pass **27/27**; the current mods were also accepted in the author's host gameplay testing. Joining-client coverage is separate and should not be inferred from those results.
-
+Mods implement behavior; AnyAPI exposes reusable mechanisms. AnyHelpers is an
+optional provider of settings and keybind registries. Mods must explicitly register
+their editable options and use the returned values in their implementation.

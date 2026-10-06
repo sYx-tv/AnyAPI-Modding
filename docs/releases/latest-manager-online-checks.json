@@ -1,0 +1,15 @@
+{
+    "Checks":  [
+                   "Standalone manager defaults to the published repository",
+                   "Anonymous HTTPS catalog fetch and schema validation (no GitHub CLI fallback in Engine)",
+                   "AnyAPI: live download, ZIP checksum, DLL checksum, path and x64 validation",
+                   "AnyHelpers: live download, ZIP checksum, DLL checksum, path and x64 validation",
+                   "AnyInventory: live download, ZIP checksum, DLL checksum, path and x64 validation",
+                   "AnyStorage: live download, ZIP checksum, DLL checksum, path and x64 validation",
+                   "AnyMap: live download, ZIP checksum, DLL checksum, path and x64 validation"
+               ],
+    "GameFilesChanged":  false,
+    "Repository":  "https://github.com/sYx-tv/AnyAPI-Modding",
+    "Success":  true,
+    "Passed":  7
+}
