@@ -13,7 +13,7 @@ AnyAPI Manager
 1. Extract this ZIP and open AnyAPI Manager.exe.
 2. Your Anymaker Steam folder should appear automatically. Otherwise choose it in Settings.
 3. Close the game and click Install API (or Reinstall API).
-4. The project repository is preconfigured. Private downloads use your installed, signed-in GitHub CLI.
+4. The public mod library is built in. No GitHub account, GitHub CLI or repository address is needed.
 5. Open Mods, choose a mod and click Install. Choose Play with mods on Overview.
 6. Play without mods pauses AnyAPI. Normal Steam launches stay in this mode until you choose Play with mods again.
 7. Develop has searchable API documentation and an Export starter SDK button for making your own DLL mods.
@@ -22,7 +22,7 @@ This EXE includes only AnyAPI, not the optional mods. No terminal is needed.
 The app does not need to stay open while playing. It backs up changed files and keeps mod settings.
 API updates require a release verified for your installed game build.
 
-The current repository is private: https://github.com/sYx-tv/AnyAPI-Modding. Only authorized accounts can download its mods or source. No token or credentials are included in the EXE.
+The public mod library is https://github.com/sYx-tv/AnyAPI-Modding. Friends can download the manager and mods without signing in. No token or credentials are included in the EXE.
 '@
 $quick | Set-Content -LiteralPath (Join-Path $release 'MANAGER_START_HERE.txt') -Encoding UTF8
 function New-Archive($path,$files){
@@ -32,7 +32,7 @@ function New-Archive($path,$files){
  $check=[System.IO.Compression.ZipFile]::OpenRead($path)
  try{if($check.Entries.Count -ne $files.Count){throw 'Archive file count mismatch.'};foreach($entry in $check.Entries){$input=$entry.Open();$hash=[System.Security.Cryptography.SHA256]::Create();try{$actual=([BitConverter]::ToString($hash.ComputeHash($input))).Replace('-','').ToLowerInvariant();if($actual -ne (Get-FileHash -LiteralPath $files[$entry.FullName] -Algorithm SHA256).Hash.ToLowerInvariant()){throw ('Archive mismatch: '+$entry.FullName)}}finally{$hash.Dispose();$input.Dispose()}}}finally{$check.Dispose()}
 }
-$download=Join-Path $release 'AnyAPI-Manager-1.1.0.zip'
+$download=Join-Path $release 'AnyAPI-Manager-1.1.1.zip'
 New-Archive $download @{'AnyAPI Manager.exe'=$exe;'START_HERE.txt'=(Join-Path $release 'MANAGER_START_HERE.txt')}
 $files=@{}
 foreach($file in Get-ChildItem -LiteralPath $PSScriptRoot -File | Where-Object {$_.Extension -in '.cs','.ps1','.md','.manifest','.ico','.py'}){$files['manager/'+$file.Name]=$file.FullName}
@@ -53,7 +53,7 @@ $stream=$assembly.GetManifestResourceStream('api.zip');$zip=New-Object System.IO
 try{if($zip.Entries.Count -ne 1 -or $zip.Entries[0].FullName -ne 'dinput8.dll'){throw 'Manager includes an unexpected payload.'}}finally{$zip.Dispose();$stream.Dispose()}
 $onlinePath=Join-Path $PSScriptRoot 'output\ONLINE_CHECKS.json'
 $online=if(Test-Path -LiteralPath $onlinePath){Get-Content -LiteralPath $onlinePath -Raw | ConvertFrom-Json}else{$null}
-$evidence=@{manager_version='1.1.0';api_revision=25;game_version='0.1.21';steam_build=25725299;tests_passed=$tests.Passed;checks=$tests.Checks;embedded_mod_dlls=0;embedded_resources=$resources;repository=$catalog.Repository;repository_configured=([bool]$catalog.Repository);repository_visibility='PRIVATE';live_github_validation=$online;ui_pages_reviewed=@('Overview','Mods','Develop','Settings');starter_sdk_compiled='MSVC x64 Release; AnyAPI_ModInit export verified';actual_game_launch_tested=$false;package_sha256=$packages;artifacts_sha256=@{}}
+$evidence=@{manager_version='1.1.1';api_revision=25;game_version='0.1.21';steam_build=25725299;tests_passed=$tests.Passed;checks=$tests.Checks;embedded_mod_dlls=0;embedded_resources=$resources;repository=$catalog.Repository;repository_configured=([bool]$catalog.Repository);repository_visibility='PUBLIC';anonymous_downloads=$true;live_github_validation=$online;ui_pages_reviewed=@('Overview','Mods','Develop','Settings');starter_sdk_compiled='MSVC x64 Release; AnyAPI_ModInit export verified';actual_game_launch_tested=$false;package_sha256=$packages;artifacts_sha256=@{}}
 foreach($file in @((Join-Path $release 'AnyAPI Manager.exe'),$download,$kit)){$evidence.artifacts_sha256[[System.IO.Path]::GetFileName($file)]=(Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()}
 $evidence | ConvertTo-Json -Depth 12 | Set-Content (Join-Path $release 'MANAGER_DELIVERY_EVIDENCE.json') -Encoding UTF8
 Write-Output 'Verified manager download: EXE + instructions, zero optional mods.'

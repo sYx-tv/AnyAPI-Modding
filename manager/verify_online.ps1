@@ -13,7 +13,7 @@ $embedded=[AnyApiManager.Engine]::Bundled()
 if($embedded.Repository -ne ('https://github.com/'+$Repository)){throw 'Manager default repository does not match.'}
 $checks+='Standalone manager defaults to the published repository'
 if($catalog.Mods.Count -lt 4 -or $catalog.Api.Count -lt 1){throw 'Published catalog is incomplete.'}
-$checks+='Live catalog fetch and schema validation (private GitHub CLI access supported)'
+$checks+='Anonymous HTTPS catalog fetch and schema validation (no GitHub CLI fallback in Engine)'
 $folder=Join-Path (Split-Path ([System.IO.Path]::GetFullPath($Output)) -Parent) ('online-check-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $folder | Out-Null
 try{

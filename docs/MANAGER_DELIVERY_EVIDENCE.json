@@ -1,5 +1,14 @@
 {
-  "manager_version": "1.1.0",
+  "artifacts_sha256": {
+    "AnyAPI Manager.exe": "5325640eaee7cc51e5cd5778f27c0eeaa829412227ae7e981234d807786b8722",
+    "AnyAPI-Manager-1.1.1.zip": "a0575490616097a09d59ff0603cfc8b25abd26f9e90303ce4f92b1710f4119e8",
+    "AnyAPI-GitHub-Publishing-Kit.zip": "bd6d7e414ec563f84e95fb9ff5d33c54ed4d1235cc315c8a519435de3da0b114"
+  },
+  "steam_build": 25725299,
+  "anonymous_downloads": true,
+  "starter_sdk_compiled": "MSVC x64 Release; AnyAPI_ModInit export verified",
+  "game_version": "0.1.21",
+  "actual_game_launch_tested": false,
   "embedded_resources": [
     "brand.ico",
     "api.zip",
@@ -7,44 +16,25 @@
     "guide.json",
     "starter-sdk.zip"
   ],
-  "artifacts_sha256": {
-    "AnyAPI Manager.exe": "dbdef673e3f3fc34bd045ca9c148854972468f159b1d65dbb944fc38ad54ec44",
-    "AnyAPI-Manager-1.1.0.zip": "8b8725c285a9b3c21740091749122741e8292e8ec81e8b6f1c86e141f5aed5fa",
-    "AnyAPI-GitHub-Publishing-Kit.zip": "d9ffd91e6e6ce965e913a089ae15c272cf55064307f9753dce1e72107afe651b"
-  },
-  "steam_build": 25725299,
-  "repository_visibility": "PRIVATE",
-  "starter_sdk_compiled": "MSVC x64 Release; AnyAPI_ModInit export verified",
-  "repository": "https://github.com/sYx-tv/AnyAPI-Modding",
   "package_sha256": {
-    "AnyAPI": "ff24b96a91c015e6d4b9d5a5982d0cdd5326b97d127ebbdd2b657e7783d2628f",
+    "AnyHelpers": "027352cb5c2426aaf6722da2d09fb2030c0f23b587fef254696d8b5186feb53f",
     "AnyInventory": "ce8f1e71c1bb13517de1d6ca2f23f7d1c5a435f85e148f8fc7c16930a4fc89e0",
     "AnyStorage": "dc4d2534ff7519d4da327b21769e97a1505407a1b328428ecfbc9d0e570f8bba",
-    "AnyHelpers": "027352cb5c2426aaf6722da2d09fb2030c0f23b587fef254696d8b5186feb53f",
+    "AnyAPI": "ff24b96a91c015e6d4b9d5a5982d0cdd5326b97d127ebbdd2b657e7783d2628f",
     "AnyMap": "fc9f406a9b28cbae959a9eaa9cd9b2f0afa5c3c0167a06b39f6a92b938763757"
   },
-  "repository_configured": true,
-  "game_version": "0.1.21",
-  "tests_passed": 52,
-  "live_github_validation": {
-    "Checks": [
-      "Standalone manager defaults to the published repository",
-      "Live catalog fetch and schema validation (private GitHub CLI access supported)",
-      "AnyAPI: live download, ZIP checksum, DLL checksum, path and x64 validation",
-      "AnyHelpers: live download, ZIP checksum, DLL checksum, path and x64 validation",
-      "AnyInventory: live download, ZIP checksum, DLL checksum, path and x64 validation",
-      "AnyStorage: live download, ZIP checksum, DLL checksum, path and x64 validation",
-      "AnyMap: live download, ZIP checksum, DLL checksum, path and x64 validation"
-    ],
-    "GameFilesChanged": false,
-    "Repository": "https://github.com/sYx-tv/AnyAPI-Modding",
-    "Success": true,
-    "Passed": 7
-  },
-  "actual_game_launch_tested": false,
-  "embedded_mod_dlls": 0,
+  "manager_version": "1.1.1",
+  "tests_passed": 54,
+  "ui_pages_reviewed": [
+    "Overview",
+    "Mods",
+    "Develop",
+    "Settings"
+  ],
   "checks": [
     "Four browsable mods; API resource contains no mods",
+    "Built-in catalog overrides stale repository preferences while preserving game folder",
+    "Fresh installations require no repository entry",
     "Offline guide matches bundled API and includes full public headers",
     "Guide distinguishes disabled hooks and explicit settings registration",
     "Exported SDK contains starter and every public header",
@@ -97,11 +87,24 @@
     "User settings and markers survive every action",
     "Every mutation retains backups"
   ],
+  "live_github_validation": {
+    "Checks": [
+      "Standalone manager defaults to the published repository",
+      "Anonymous HTTPS catalog fetch and schema validation (no GitHub CLI fallback in Engine)",
+      "AnyAPI: live download, ZIP checksum, DLL checksum, path and x64 validation",
+      "AnyHelpers: live download, ZIP checksum, DLL checksum, path and x64 validation",
+      "AnyInventory: live download, ZIP checksum, DLL checksum, path and x64 validation",
+      "AnyStorage: live download, ZIP checksum, DLL checksum, path and x64 validation",
+      "AnyMap: live download, ZIP checksum, DLL checksum, path and x64 validation"
+    ],
+    "GameFilesChanged": false,
+    "Repository": "https://github.com/sYx-tv/AnyAPI-Modding",
+    "Success": true,
+    "Passed": 7
+  },
   "api_revision": 25,
-  "ui_pages_reviewed": [
-    "Overview",
-    "Mods",
-    "Develop",
-    "Settings"
-  ]
+  "embedded_mod_dlls": 0,
+  "repository": "https://github.com/sYx-tv/AnyAPI-Modding",
+  "repository_visibility": "PUBLIC",
+  "repository_configured": true
 }

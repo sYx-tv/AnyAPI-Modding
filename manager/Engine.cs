@@ -16,7 +16,7 @@ namespace AnyApiManager {
  public static class Engine {
   public static readonly string Data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"AnyAPI Manager");
   static readonly HttpClient Http=CreateHttp();
-  static HttpClient CreateHttp(){ServicePointManager.SecurityProtocol=(SecurityProtocolType)0;var h=new HttpClient{Timeout=TimeSpan.FromMinutes(3)};h.DefaultRequestHeaders.UserAgent.ParseAdd("AnyAPI-Manager/1.0");return h;}
+  static HttpClient CreateHttp(){ServicePointManager.SecurityProtocol=(SecurityProtocolType)0;var h=new HttpClient{Timeout=TimeSpan.FromMinutes(3)};h.DefaultRequestHeaders.UserAgent.ParseAdd("AnyAPI-Manager/1.1.1");h.DefaultRequestHeaders.CacheControl=new System.Net.Http.Headers.CacheControlHeaderValue{NoCache=true};return h;}
   public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream(name))using(var r=new StreamReader(s))return r.ReadToEnd();}
   public static Catalog Bundled(){var c=Json.Read<Catalog>(Resource("catalog.json"));Rules.Validate(c);return c;}
   public static string RepositoryUrl(string value){
@@ -35,8 +35,7 @@ namespace AnyApiManager {
    Uri u;if(!Uri.TryCreate(url,UriKind.Absolute,out u)||u.Scheme!="https")throw new InvalidDataException("Downloads require HTTPS.");
    using(var response=await (transport??Http).GetAsync(u,HttpCompletionOption.ResponseHeadersRead)){
     if(response.StatusCode==HttpStatusCode.NotFound){
-     if(transport==null){var authenticated=await PrivateGitHub.Download(url,limit);if(authenticated!=null)return authenticated;}
-     throw new IOException(url.EndsWith("/catalog.json",StringComparison.OrdinalIgnoreCase)?"Catalog is not published yet. Upload catalog.json to the repository's main branch.":"The release download is missing. Check for updates and try again.");
+     throw new IOException(url.EndsWith("/catalog.json",StringComparison.OrdinalIgnoreCase)?"The mod library is temporarily unavailable. Check for updates again shortly.":"The release download is missing. Check for updates and try again.");
     }
     response.EnsureSuccessStatusCode();if(response.RequestMessage.RequestUri.Scheme!="https")throw new InvalidDataException("Download redirected away from HTTPS.");
     if(response.Content.Headers.ContentLength>limit)throw new InvalidDataException("Download exceeds the package limit.");
@@ -49,11 +48,12 @@ namespace AnyApiManager {
    Directory.CreateDirectory(Data);string path=Path.Combine(Data,Guid.NewGuid().ToString("N")+".zip");
    try{
     if(embedded){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream("api.zip"))using(var o=File.Create(path))s.CopyTo(o);}
-    else{if(string.IsNullOrEmpty(p.Url))throw new InvalidOperationException("Connect your published repository to download this mod.");File.WriteAllBytes(path,await DownloadBytes(p.Url,67108864));}
+    else{if(string.IsNullOrEmpty(p.Url))throw new InvalidOperationException("This mod has no published download yet. Check for updates later.");File.WriteAllBytes(path,await DownloadBytes(p.Url,67108864));}
     if(!string.Equals(Rules.Hash(path),p.Sha256,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Download checksum did not match the release. No game files were changed.");return path;
    }catch{if(File.Exists(path))File.Delete(path);throw;}
   }
-  public static Preferences LoadPreferences(){try{return Json.Read<Preferences>(File.ReadAllText(Path.Combine(Data,"settings.json")));}catch{return new Preferences();}}
+  public static Preferences UseBundledCatalog(Preferences p){if(p==null)p=new Preferences();p.Repository=Bundled().Repository;return p;}
+  public static Preferences LoadPreferences(){Preferences p;try{p=Json.Read<Preferences>(File.ReadAllText(Path.Combine(Data,"settings.json")));}catch{p=new Preferences();}return UseBundledCatalog(p);}
   public static Catalog Cached(string repository){try{var cache=Json.Read<CatalogCache>(File.ReadAllText(Path.Combine(Data,"catalog-cache.json")));if(RepositoryUrl(cache.Repository)!=RepositoryUrl(repository))return null;Rules.Validate(cache.Catalog);return cache.Catalog;}catch{return null;}}
   public static void Cache(string repository,Catalog catalog){Directory.CreateDirectory(Data);File.WriteAllText(Path.Combine(Data,"catalog-cache.json"),Json.Write(new CatalogCache{Repository=repository,Catalog=catalog}));}
   public static void SavePreferences(Preferences p){Directory.CreateDirectory(Data);File.WriteAllText(Path.Combine(Data,"settings.json"),Json.Write(p));}

@@ -13,7 +13,7 @@ namespace AnyApiManager {
   readonly Preferences preferences=Engine.LoadPreferences();Catalog catalog=Engine.Bundled();readonly Catalog bundled=Engine.Bundled();
   readonly Panel content=new Panel(),apiPage=new Panel(),modsPage=new Panel(),settingsPage=new Panel(),developerPage=new Panel();readonly DeveloperPanel developer;readonly System.Collections.Generic.Dictionary<Panel,ModernButton> navigation=new System.Collections.Generic.Dictionary<Panel,ModernButton>();readonly Button playModded=new ModernButton(),playVanilla=new ModernButton();readonly Label launchNote=new Label(),summary=new Label();bool previewMode;readonly Label status=new Label();
   readonly Label apiVersion=new Label(),apiNote=new Label(),gameNote=new Label(),modTitle=new Label(),modDescription=new Label(),modNote=new Label();
-  readonly TextBox gamePath=new TextBox(),repository=new TextBox(),search=new TextBox();readonly CheckBox installedOnly=new CheckBox();
+  readonly TextBox gamePath=new TextBox(),search=new TextBox();readonly CheckBox installedOnly=new CheckBox();
   readonly Button apiInstall=new ModernButton(),modInstall=new ModernButton(),toggle=new ModernButton(),remove=new ModernButton();
   readonly DataGridView grid=new DataGridView();readonly ToolTip tips=new ToolTip();string exeHash="",gclHash="";bool busy;Package selectedApi;
   [DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern IntPtr SendMessage(IntPtr h,int msg,IntPtr w,string l);
@@ -24,12 +24,12 @@ namespace AnyApiManager {
    sidebar.Controls.Add(Label("AnyAPI",30,24,26,155,44,true));sidebar.Controls.Add(Label("MANAGER",12,26,72,150,24,false,Muted));
    var pages=new[]{apiPage,modsPage,developerPage,settingsPage};var titles=new[]{"Overview","Mods","Develop","Settings"};var glyphs=new[]{"◈","▦","{ }","⚙"};
    for(int i=0;i<pages.Length;i++){var page=pages[i];var nav=(ModernButton)Button(titles[i],16,140+i*54,164,44,()=>ShowPage(page));nav.AlignLeft=true;nav.Glyph=glyphs[i];sidebar.Controls.Add(nav);navigation.Add(page,nav);}
-   var version=Label("VERSION 1.1",12,24,ClientSize.Height-44,150,22,false,Muted);version.Anchor=AnchorStyles.Left|AnchorStyles.Bottom;sidebar.Controls.Add(version);
+   var version=Label("VERSION 1.1.1",12,24,ClientSize.Height-44,150,22,false,Muted);version.Anchor=AnchorStyles.Left|AnchorStyles.Bottom;sidebar.Controls.Add(version);
    content.Dock=DockStyle.None;content.Bounds=new Rectangle(196,0,ClientSize.Width-196,ClientSize.Height-44);content.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;content.Padding=new Padding(32);Controls.Add(content);content.BringToFront();
    status.Dock=DockStyle.Bottom;status.Height=44;status.Padding=new Padding(24,12,20,6);status.ForeColor=Muted;status.BackColor=Bg;status.AutoEllipsis=true;Controls.Add(status);status.BringToFront();
    foreach(var page in new[]{apiPage,modsPage,settingsPage,developerPage}){page.Dock=DockStyle.Fill;page.BackColor=Bg;content.Controls.Add(page);}
    developer=new DeveloperPanel(SetStatus);developerPage.Controls.Add(developer);BuildApi();BuildMods();BuildSettings();ShowPage(apiPage);
-   if(string.IsNullOrEmpty(preferences.GamePath))preferences.GamePath=Engine.DetectGame();if(string.IsNullOrEmpty(preferences.Repository))preferences.Repository=bundled.Repository;gamePath.Text=preferences.GamePath;repository.Text=preferences.Repository;
+   if(string.IsNullOrEmpty(preferences.GamePath))preferences.GamePath=Engine.DetectGame();preferences.Repository=bundled.Repository;gamePath.Text=preferences.GamePath;
    if(!string.IsNullOrWhiteSpace(preferences.Repository))catalog=Engine.Cached(preferences.Repository)??catalog;
    Load+=async (s,e)=>{if(preview){PopulatePreview();return;}await Run(async()=>{await Scan();if(!string.IsNullOrWhiteSpace(preferences.Repository))await Connect();});};
   }
@@ -69,8 +69,9 @@ namespace AnyApiManager {
   void BuildSettings(){
    settingsPage.Controls.Add(Label("Settings",24,0,0,600,48,true));settingsPage.Controls.Add(Label("Game folder",12,0,99,400,30,true));TextStyle(gamePath,0,139,650);settingsPage.Controls.Add(gamePath);
    settingsPage.Controls.Add(Button("Browse",667,135,110,38,async()=>{using(var dialog=new FolderBrowserDialog{Description="Select Anymaker (the folder containing game.exe)",SelectedPath=gamePath.Text})if(dialog.ShowDialog(this)==DialogResult.OK){gamePath.Text=dialog.SelectedPath;await SaveSetup();}}));
-   settingsPage.Controls.Add(Button("Save folder",0,190,145,38,async()=>await SaveSetup()));settingsPage.Controls.Add(Label("GitHub repository",12,0,288,500,30,true));TextStyle(repository,0,330,777);repository.HandleCreated+=(s,e)=>SendMessage(repository.Handle,0x1501,new IntPtr(1),"https://github.com/your-name/AnyAPI");settingsPage.Controls.Add(repository);
-   settingsPage.Controls.Add(Button("Connect",0,382,145,40,async()=>await Run(async()=>{Engine.RepositoryUrl(repository.Text);preferences.Repository=repository.Text.Trim();Engine.SavePreferences(preferences);await Connect();})));settingsPage.Controls.Add(Label("Private repositories use your GitHub CLI sign-in.",10,0,438,760,30,false,Muted));
+   settingsPage.Controls.Add(Button("Save folder",0,190,145,38,async()=>await SaveSetup()));settingsPage.Controls.Add(Label("Mod library",20,0,288,500,30,true));
+   settingsPage.Controls.Add(Label("The official library is built in. No GitHub account or setup needed.",15,0,330,777,32,false,Muted));
+   settingsPage.Controls.Add(Button("Refresh library",0,382,160,40,async()=>await Run(async()=>await Connect())));settingsPage.Controls.Add(Button("View on GitHub",174,382,160,40,()=>System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(bundled.Repository){UseShellExecute=true})));
    settingsPage.Controls.Add(Button("Open backups",0,522,150,38,()=>{string path=Rules.Target(preferences.GamePath,"AnyAPI and Modding/.manager/backups");if(Directory.Exists(path))System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path){UseShellExecute=true});else SetStatus("No manager backups yet.");}));
   }
   async Task SaveSetup(){await Run(async()=>{preferences.GamePath=gamePath.Text.Trim();await Scan();Engine.SavePreferences(preferences);SetStatus("Game folder saved.");});}
@@ -109,7 +110,7 @@ namespace AnyApiManager {
    try{var result=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Package=p,Catalog=catalog,Action="install",ZipPath=zip,ReplaceUnknown=replace,DisableIncompatible=disable});if(!result.Success)throw new IOException(result.Message);SetStatus(result.Message);await Scan();}finally{File.Delete(zip);}
   });}
   async Task Change(Package p,string action){await Run(async()=>{var r=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Package=p,Catalog=catalog,Action=action});if(!r.Success)throw new IOException(r.Message);SetStatus(r.Message);RefreshState();});}
-  async Task Run(Func<Task> task){if(busy)return;busy=true;UseWaitCursor=true;playModded.Enabled=playVanilla.Enabled=apiInstall.Enabled=modInstall.Enabled=toggle.Enabled=remove.Enabled=false;try{await task();}catch(Exception e){SetStatus(e is System.Net.Http.HttpRequestException?"Couldn't reach the catalog. Check the repository URL and your connection.":e.Message);}finally{busy=false;UseWaitCursor=false;RefreshState();}}
+  async Task Run(Func<Task> task){if(busy)return;busy=true;UseWaitCursor=true;playModded.Enabled=playVanilla.Enabled=apiInstall.Enabled=modInstall.Enabled=toggle.Enabled=remove.Enabled=false;try{await task();}catch(Exception e){SetStatus(e is System.Net.Http.HttpRequestException?"Couldn't reach the mod library. Check your connection and try again.":e.Message);}finally{busy=false;UseWaitCursor=false;RefreshState();}}
   void SetStatus(string text){status.Text=text;tips.SetToolTip(status,text);}
   void PopulatePreview(){exeHash=bundled.Api[0].GameBuilds[0].ExeSha256;gclHash=bundled.Api[0].GameBuilds[0].GclSha256;apiVersion.Text="Revision 25";apiNote.Text="Up to date";gameNote.Text="Anymaker 0.1.21   ·   Verified build";apiInstall.Text="Reinstall API";launchNote.Text="Your enabled mods load automatically through Steam.";summary.Text="4 mods available · install the ones you want";developer.InstalledRevision(25);Rows();SetStatus("Ready");}
   public void CapturePreview(string file){File.WriteAllText(file+".layout", "status="+status.Bounds+" visible="+status.Visible+" text="+status.Text+" content="+content.Bounds+" scale="+CurrentAutoScaleDimensions);var pages=new[]{apiPage,modsPage,developerPage,settingsPage};var names=new[]{"","-Mods","-Develop","-Settings"};for(int i=0;i<pages.Length;++i){ShowPage(pages[i]);Refresh();using(var image=new Bitmap(Width,Height)){DrawToBitmap(image,new Rectangle(0,0,Width,Height));image.Save(Path.Combine(Path.GetDirectoryName(file),Path.GetFileNameWithoutExtension(file)+names[i]+".png"),System.Drawing.Imaging.ImageFormat.Png);}}}
