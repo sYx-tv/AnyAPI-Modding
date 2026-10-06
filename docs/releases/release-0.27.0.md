@@ -30,3 +30,21 @@ The local candidate includes the API loader, separately packaged optional mods,
 matching SDK headers, an offline guide, file checksums and the test result record.
 It is not installed automatically. Manager receipts and the stable download feed
 still describe their published versions.
+
+## Mod compatibility update
+
+AnyHelpers, AnyInventory, AnyStorage, AnyMap and AnyGraphics are rebuilt as 0.27.0
+compatibility candidates. Existing features and saved settings are retained.
+Each DLL now includes readable Windows product/version information. Separate
+manager-compatible packages declare the current game fingerprints and API 27
+requirement; the stable online catalog remains unchanged during validation.
+
+The candidate installer uses the manager's checksum-checked transactions, migrates
+imported copies of these same mods to package identities, and backs up the loader,
+mod files and receipts together. A failed batch restores that snapshot. The
+installer is rehearsed on a copy before use against the real game directory.
+
+The local installation was upgraded and all six DLLs matched their package
+checksums. All 3,540 previously existing non-DLL framework files were preserved.
+A forced mid-batch downgrade rejection restored the copied installation's original
+DLLs and receipts. These installation checks do not replace in-game validation.

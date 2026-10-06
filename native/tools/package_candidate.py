@@ -31,6 +31,8 @@ manifest.update(revision=27, api_version='0.27.0', status='CANDIDATE',
 manifest.pop('new_service', None)
 for name, key in [('AnyMap', 'map_sha256'), ('AnyGraphics', 'graphics_sha256'), ('AnyHelpers', 'helpers_sha256')]:
     manifest[key] = digest(build / 'Release' / (name + '.dll'))
+manifest['mod_versions'] = {name: '0.27.0' for name in manifest['mods']}
+manifest['graphics_version'] = '0.27.0'
 manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
 caps_path = root / 'native' / 'CURRENT_CAPABILITIES.json'
 caps = json.loads(caps_path.read_text(encoding='utf-8-sig'))
@@ -78,7 +80,8 @@ for filename, entries in [
         for binary, destination in entries:
             archive.write(build / 'Release' / binary, destination)
         archive.writestr('CANDIDATE.md', readme)
-files = sorted(p for p in out.rglob('*') if p.is_file() and p.name != 'checksums.json')
+files = sorted(p for p in out.rglob('*') if p.is_file() and p.name != 'checksums.json'
+    and 'install-backups' not in p.parts)
 (out / 'checksums.json').write_text(json.dumps({p.relative_to(out).as_posix(): digest(p)
     for p in files}, indent=2) + '\n', encoding='utf-8')
 print('Candidate package:', out)

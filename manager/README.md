@@ -2,6 +2,12 @@
 
 A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.2.0 includes AnyAPI revision 25, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
 
+The 1.2.1 source candidate recognizes newer installed API/mod receipts even when
+the online catalog is older. Its bundled payload remains the published 0.25.0
+profile. See [candidate notes](../docs/releases/manager-1.2.1.md). Local 0.27.0
+compatibility packages can be applied with `install_candidate.ps1`; this developer
+installer validates checksums, backs up the batch and restores it on failure.
+
 Open **AnyAPI Manager.exe**. The Steam game folder is normally detected automatically. Install/update the API, then choose mods in Mods. The official mod library is built in; Settings selects another game folder if needed. Close the game before changing DLLs or switching launch modes.
 
 **Play with mods** restores the verified API loader and launches through Steam. **Play without mods** moves only that loader into the manager's backup area, leaving mod DLLs, individual enable/disable choices and saved data alone. The mode persists: normal Steam launches also run without AnyAPI until you choose Play with mods. The manager can be closed while playing. If Steam cannot open, the manager attempts to restore the preceding mode. Other third-party loaders are outside this manager's scope.

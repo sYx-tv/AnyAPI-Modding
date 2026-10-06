@@ -1,0 +1,29 @@
+#include <windows.h>
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 0,27,0,0
+ PRODUCTVERSION 0,27,0,0
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+ FILEFLAGS VS_FF_PRERELEASE
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_DLL
+ FILESUBTYPE 0
+BEGIN
+ BLOCK "StringFileInfo"
+ BEGIN
+  BLOCK "040904B0"
+  BEGIN
+   VALUE "CompanyName", "AnyAPI Modding\0"
+   VALUE "FileDescription", "@ANYAPI_PRODUCT_NAME@ for Anymaker\0"
+   VALUE "FileVersion", "0.27.0\0"
+   VALUE "InternalName", "@ANYAPI_PRODUCT_NAME@\0"
+   VALUE "OriginalFilename", "@ANYAPI_BINARY_NAME@\0"
+   VALUE "ProductName", "@ANYAPI_PRODUCT_NAME@\0"
+   VALUE "ProductVersion", "0.27.0\0"
+   VALUE "Comments", "Anymaker 0.1.23 compatibility candidate\0"
+  END
+ END
+ BLOCK "VarFileInfo"
+ BEGIN
+  VALUE "Translation", 0x0409, 1200
+ END
+END

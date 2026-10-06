@@ -30,7 +30,7 @@ namespace AnyApiManager {
    var all=new List<Package>(catalog.Mods);var state=ReadInstalled(game);string folder=Rules.Target(game,ModFolder.TrimEnd('/'));if(!Directory.Exists(folder))return all;
    foreach(string file in Directory.GetFiles(folder).Where(f=>f.EndsWith(".dll",StringComparison.OrdinalIgnoreCase)||f.EndsWith(".dll.disabled",StringComparison.OrdinalIgnoreCase))){
     var p=DescribeLocal(game,file,state);string path=Rules.OnlyFile(p),hash=p.FileHashes[path];Package official=state.Packages.Values.Where(r=>r.Package!=null&&!r.Package.Local).Select(r=>r.Package).Concat(catalog.Mods).FirstOrDefault(m=>m.FileHashes.ContainsKey(path)&&m.FileHashes[path]==hash);
-    if(official!=null){if(!all.Any(m=>m.Id==official.Id))all.Add(official);}else all.Add(p);
+    if(official!=null){var listed=all.FirstOrDefault(m=>m.Id==official.Id);Version actualVersion,listedVersion;if(listed==null)all.Add(official);else if(Version.TryParse(official.Version,out actualVersion)&&Version.TryParse(listed.Version,out listedVersion)&&actualVersion>listedVersion){all.Remove(listed);all.Add(official);}}else all.Add(p);
    }return all.OrderBy(p=>p.Name,StringComparer.OrdinalIgnoreCase).ToList();
   }
   public static string LocalProblem(string game,Package p,Catalog c){try{ValidateLocal(p);string file=Rules.Target(game,Rules.OnlyFile(p));if(!File.Exists(file))file+=".disabled";ValidateModDll(ReadLocalBytes(file));if(ApiRevision(game,c)<p.MinimumApi)return "Requires API revision "+p.MinimumApi;return null;}catch(Exception e){return e.Message;}}

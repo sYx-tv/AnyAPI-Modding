@@ -80,6 +80,9 @@ namespace AnyApiManager {
   public static int ApiRevision(string game,Catalog c){
    var known=InstalledApi(game,c);return known==null?0:known.Revision;
   }
+  public static Package MatchingInstalledApi(string game,Catalog c,string exe,string gcl){
+   var known=InstalledApi(game,c);return known!=null&&Rules.Matches(known,exe,gcl)?known:null;
+  }
   public static string Status(string game,Package p){
    string target=Rules.Target(game,Rules.OnlyFile(p));
    if(File.Exists(target))return Rules.Hash(target)==p.FileHashes[Rules.OnlyFile(p)]?"Installed":"Update / different build";
