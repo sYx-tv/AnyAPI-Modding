@@ -60,7 +60,7 @@ namespace AnyApiManager {
    settingsPage.Controls.Add(Label("Settings",24,0,0,600,48,true));settingsPage.Controls.Add(Label("Game folder",12,0,99,400,30,true));TextStyle(gamePath,0,139,650);settingsPage.Controls.Add(gamePath);
    settingsPage.Controls.Add(Button("Browse",667,135,110,38,async()=>{using(var dialog=new FolderBrowserDialog{Description="Select Anymaker (the folder containing game.exe)",SelectedPath=gamePath.Text})if(dialog.ShowDialog(this)==DialogResult.OK){gamePath.Text=dialog.SelectedPath;await SaveSetup();}}));
    settingsPage.Controls.Add(Button("Save folder",0,190,145,38,async()=>await SaveSetup()));settingsPage.Controls.Add(Label("GitHub repository",12,0,288,500,30,true));TextStyle(repository,0,330,777);repository.HandleCreated+=(s,e)=>SendMessage(repository.Handle,0x1501,new IntPtr(1),"https://github.com/your-name/AnyAPI");settingsPage.Controls.Add(repository);
-   settingsPage.Controls.Add(Button("Connect",0,382,145,40,async()=>await Run(async()=>{Engine.RepositoryUrl(repository.Text);preferences.Repository=repository.Text.Trim();Engine.SavePreferences(preferences);await Connect();})));settingsPage.Controls.Add(Label("Public repository with a published catalog.",10,0,438,760,30,false,Muted));
+   settingsPage.Controls.Add(Button("Connect",0,382,145,40,async()=>await Run(async()=>{Engine.RepositoryUrl(repository.Text);preferences.Repository=repository.Text.Trim();Engine.SavePreferences(preferences);await Connect();})));settingsPage.Controls.Add(Label("Private repositories use your GitHub CLI sign-in.",10,0,438,760,30,false,Muted));
    settingsPage.Controls.Add(Button("Open backups",0,522,150,38,()=>{string path=Rules.Target(preferences.GamePath,"AnyAPI and Modding/.manager/backups");if(Directory.Exists(path))System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path){UseShellExecute=true});else SetStatus("No manager backups yet.");}));
   }
   async Task SaveSetup(){await Run(async()=>{preferences.GamePath=gamePath.Text.Trim();await Scan();Engine.SavePreferences(preferences);SetStatus("Game folder saved.");});}
@@ -105,3 +105,4 @@ namespace AnyApiManager {
   public void CapturePreview(string file){File.WriteAllText(file+".layout", "status="+status.Bounds+" visible="+status.Visible+" text="+status.Text+" content="+content.Bounds+" scale="+CurrentAutoScaleDimensions);var pages=new[]{modsPage,apiPage,settingsPage};var names=new[]{"","-API","-Settings"};for(int i=0;i<pages.Length;++i){ShowPage(pages[i]);Refresh();using(var image=new Bitmap(Width,Height)){DrawToBitmap(image,new Rectangle(0,0,Width,Height));image.Save(Path.Combine(Path.GetDirectoryName(file),Path.GetFileNameWithoutExtension(file)+names[i]+".png"),System.Drawing.Imaging.ImageFormat.Png);}}}
  }
 }
+

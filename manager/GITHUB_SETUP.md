@@ -1,6 +1,8 @@
 # Publish without learning Git
 
-Create a public GitHub repository named **AnyAPI**. A public repository lets friends download without a GitHub account or access token. Use the default branch name **main**.
+The current repository is **https://github.com/sYx-tv/AnyAPI-Modding**, private by the owner's request. Its source, catalog and releases are accessible only to authorized GitHub accounts. No collaborators are added by this setup. Keep the default branch name **main**.
+
+The manager supports private repositories through the user's installed, signed-in GitHub CLI. Friends cannot download this private release unless given repository access. A future public repository would allow downloads without login; changing visibility requires the owner's explicit approval.
 
 Send the repository URL to Codex. The publishing script fills in all download URLs and rebuilds the EXE so friends do not need to enter your repository address.
 

@@ -11,6 +11,8 @@ Download **AnyAPI Manager.exe**, close Anymaker, install the API, then choose mo
 
 The manager validates game fingerprints and package/file checksums, keeps backups, restores failed operations, and preserves saved mod settings. Close the game before changing DLLs. New game builds need a verified compatible release.
 
-Manager checks: **33/33**. Native revision 25 checks: **27/27**. The author accepted the current mods in host gameplay testing.
+Manager checks: **38/38**. Native revision 25 checks: **27/27**. The author accepted the current mods in host gameplay testing.
+
+This repository and its release are private. Online manager downloads use the owner's installed, signed-in GitHub CLI. No login token is included in the manager.
 
 Separate API/mod ZIPs are available for manual installation: extract into the Anymaker folder containing game.exe. The manager EXE remains a standalone download.

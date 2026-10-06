@@ -22,7 +22,7 @@ namespace AnyApiManager {
   public static string RepositoryUrl(string value){
    value=value.Trim().TrimEnd('/');Uri u;
    if(Uri.TryCreate(value,UriKind.Absolute,out u)){
-    if(u.Scheme!="https"||u.Host!="github.com"||!string.IsNullOrEmpty(u.UserInfo)||u.Query!=""||u.Fragment!="")throw new ArgumentException("Enter a public GitHub repository URL or owner/repository.");value=u.AbsolutePath.Trim('/');
+    if(u.Scheme!="https"||u.Host!="github.com"||!string.IsNullOrEmpty(u.UserInfo)||u.Query!=""||u.Fragment!="")throw new ArgumentException("Enter a GitHub repository URL or owner/repository.");value=u.AbsolutePath.Trim('/');
    }
    if(!Regex.IsMatch(value,@"^[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+$"))throw new ArgumentException("Use github.com/your-name/AnyAPI or your-name/AnyAPI.");
    if(value.EndsWith(".git",StringComparison.OrdinalIgnoreCase))value=value.Substring(0,value.Length-4);
@@ -34,7 +34,10 @@ namespace AnyApiManager {
   public static async Task<byte[]> DownloadBytes(string url,int limit,HttpClient transport=null){
    Uri u;if(!Uri.TryCreate(url,UriKind.Absolute,out u)||u.Scheme!="https")throw new InvalidDataException("Downloads require HTTPS.");
    using(var response=await (transport??Http).GetAsync(u,HttpCompletionOption.ResponseHeadersRead)){
-    if(response.StatusCode==HttpStatusCode.NotFound)throw new IOException(url.EndsWith("/catalog.json",StringComparison.OrdinalIgnoreCase)?"Catalog is not published yet. Upload catalog.json to the repository's main branch.":"The release download is missing. Check for updates and try again.");
+    if(response.StatusCode==HttpStatusCode.NotFound){
+     if(transport==null){var authenticated=await PrivateGitHub.Download(url,limit);if(authenticated!=null)return authenticated;}
+     throw new IOException(url.EndsWith("/catalog.json",StringComparison.OrdinalIgnoreCase)?"Catalog is not published yet. Upload catalog.json to the repository's main branch.":"The release download is missing. Check for updates and try again.");
+    }
     response.EnsureSuccessStatusCode();if(response.RequestMessage.RequestUri.Scheme!="https")throw new InvalidDataException("Download redirected away from HTTPS.");
     if(response.Content.Headers.ContentLength>limit)throw new InvalidDataException("Download exceeds the package limit.");
     using(var input=await response.Content.ReadAsStreamAsync())using(var output=new MemoryStream()){

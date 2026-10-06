@@ -20,6 +20,11 @@ namespace AnyApiManager {
     var catalog=Engine.Bundled();Rules.Validate(catalog);Check(catalog.Mods.Count==4,"Four browsable mods; API resource contains no mods");
     Check(Engine.RepositoryUrl("https://github.com/example/AnyAPI")=="https://raw.githubusercontent.com/example/AnyAPI/main/catalog.json","GitHub repository normalization");
     Reject(()=>Engine.RepositoryUrl("http://github.com/example/AnyAPI"),"HTTP repository rejected");Reject(()=>Engine.RepositoryUrl("https://evil.example/example/AnyAPI"),"Non-GitHub repository rejected");
+    Check(PrivateGitHub.Endpoint("https://raw.githubusercontent.com/owner/repo/main/catalog.json")=="repos/owner/repo/contents/catalog.json?ref=main","Private catalog resolves to fixed GitHub API host");
+    Check(PrivateGitHub.Endpoint("https://github.com/owner/repo/releases/download/v1.0/AnyMap-1.0.zip")=="repos/owner/repo/releases/tags/v1.0","Private release resolves to exact tag and asset");
+    Check(PrivateGitHub.Endpoint("https://evil.example/owner/repo/main/catalog.json")==null,"Private sign-in never used for another host");
+    Check(PrivateGitHub.Endpoint("https://github.com/owner/repo/releases/download/v1.0/AnyMap.zip?redirect=evil")==null,"Private download rejects query injection");
+    Check(PrivateGitHub.Endpoint("http://raw.githubusercontent.com/owner/repo/main/catalog.json")==null,"Private sign-in requires HTTPS");
     using(var client=new HttpClient(new DownloadFixture())){Check(Encoding.UTF8.GetString(Engine.DownloadBytes("https://example.test/file",16,client).GetAwaiter().GetResult())=="catalog","HTTPS download stream consumed");Reject(()=>Engine.DownloadBytes("https://example.test/file",4,client).GetAwaiter().GetResult(),"Oversized download rejected");}
     using(var client=new HttpClient(new DownloadFixture{Error=true}))Reject(()=>Engine.DownloadBytes("https://example.test/file",16,client).GetAwaiter().GetResult(),"Missing release asset surfaces a clean failure");
     using(var client=new HttpClient(new DownloadFixture{Redirect=true}))Reject(()=>Engine.DownloadBytes("https://example.test/file",16,client).GetAwaiter().GetResult(),"Insecure redirected download rejected");

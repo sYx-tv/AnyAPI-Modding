@@ -2,7 +2,9 @@
 
 A small Windows app with three pages: API, Mods, and Settings. The EXE contains AnyAPI and catalog metadata. It contains **no mod DLLs**. Mods are independent, optional GitHub downloads.
 
-Open **AnyAPI Manager.exe**. The Steam game folder is normally detected automatically. Install/update the API, then choose mods in Mods. Settings connects a public GitHub repository and selects another game folder if needed. Launch game opens Anymaker through Steam. Close the game before changing DLLs.
+Open **AnyAPI Manager.exe**. The Steam game folder is normally detected automatically. Install/update the API, then choose mods in Mods. Settings connects a GitHub repository and selects another game folder if needed. Launch game opens Anymaker through Steam. Close the game before changing DLLs.
+
+This project is currently private at **sYx-tv/AnyAPI-Modding**. Private catalog and release downloads use the owner's installed, signed-in GitHub CLI. The manager never reads or bundles a token, and starts the CLI without a console window. Public repositories continue to download without a GitHub login.
 
 The manager verifies the installed `game.exe` and `bin/game.gcl` against each release. If Steam changes the build, the app continues to work and checks the repository for a matching API release. It cannot automatically repair native hooks: the developer must review the new build, test the API and publish a verified update.
 
