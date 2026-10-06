@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -13,10 +13,10 @@ using System.Threading.Tasks;
 using Microsoft.Win32;
 
 namespace AnyApiManager {
- public static class Engine {
+ public static partial class Engine {
   public static readonly string Data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"AnyAPI Manager");
   static readonly HttpClient Http=CreateHttp();
-  static HttpClient CreateHttp(){ServicePointManager.SecurityProtocol=(SecurityProtocolType)0;var h=new HttpClient{Timeout=TimeSpan.FromMinutes(3)};h.DefaultRequestHeaders.UserAgent.ParseAdd("AnyAPI-Manager/1.1.1");h.DefaultRequestHeaders.CacheControl=new System.Net.Http.Headers.CacheControlHeaderValue{NoCache=true};return h;}
+  static HttpClient CreateHttp(){ServicePointManager.SecurityProtocol=(SecurityProtocolType)0;var h=new HttpClient{Timeout=TimeSpan.FromMinutes(3)};h.DefaultRequestHeaders.UserAgent.ParseAdd("AnyAPI-Manager/1.2.0");h.DefaultRequestHeaders.CacheControl=new System.Net.Http.Headers.CacheControlHeaderValue{NoCache=true};return h;}
   public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream(name))using(var r=new StreamReader(s))return r.ReadToEnd();}
   public static Catalog Bundled(){var c=Json.Read<Catalog>(Resource("catalog.json"));Rules.Validate(c);return c;}
   public static string RepositoryUrl(string value){
@@ -91,7 +91,8 @@ namespace AnyApiManager {
    foreach(var file in Directory.GetFiles(folder,"*.dll").Where(f=>Path.GetExtension(f).Equals(".dll",StringComparison.OrdinalIgnoreCase))){
     string relative="AnyAPI and Modding/mods/"+Path.GetFileName(file);Rules.Target(game,relative);string hash=Rules.Hash(file);
     Package known=state.Packages.Values.Where(r=>r.Package!=null).Select(r=>r.Package).Concat(catalog.Mods).Concat(Bundled().Mods).FirstOrDefault(p=>p.FileHashes.ContainsKey(relative)&&p.FileHashes[relative]==hash);
-    if(known==null||!Rules.Matches(known,exe,gcl)||known.MinimumApi>api)found.Add(relative,known);
+    if(known==null||known.Local){var local=DescribeLocal(game,file,state);if(LocalProblem(game,local,catalog)!=null)found.Add(relative,local);}
+    else if(!Rules.Matches(known,exe,gcl)||known.MinimumApi>api)found.Add(relative,known);
    }return found;
   }
   // Extract only explicitly declared DLLs, rejecting extra entries and traversal.
@@ -117,12 +118,14 @@ namespace AnyApiManager {
   }
   static ApplyResult ApplyCore(ApplyRequest r,Action<int> failAfter,bool test){
    try{
-    Rules.Validate(r.Package,r.Package.Id=="anyapi");Rules.Validate(r.Catalog);
-    if(!new[]{"install","disable","enable","remove","prepare-modded","prepare-vanilla"}.Contains(r.Action))throw new InvalidDataException("Unknown manager action.");
+    Rules.Validate(r.Catalog);
+    if(!new[]{"install","disable","enable","remove","prepare-modded","prepare-vanilla","import-local","disable-local","enable-local","remove-local"}.Contains(r.Action))throw new InvalidDataException("Unknown manager action.");
     string game=Path.GetFullPath(r.GamePath);Rules.Target(game,"game.exe");Rules.Target(game,"bin/game.gcl");
     if(!File.Exists(Path.Combine(game,"game.exe"))||!File.Exists(Path.Combine(game,"bin/game.gcl")))throw new IOException("Choose the Anymaker folder containing game.exe.");
     if(!test&&Running())throw new IOException("Close Anymaker before changing DLLs.");
     if(r.Action.StartsWith("prepare-",StringComparison.Ordinal))return PrepareLaunch(r,game,failAfter,test);
+    if(r.Action.EndsWith("-local",StringComparison.Ordinal))return ApplyLocal(r,game,failAfter,test);
+    Rules.Validate(r.Package,r.Package!=null&&r.Package.Id=="anyapi");
     var p=r.Package;string relative=Rules.OnlyFile(p),target=Rules.Target(game,relative),disabled=Rules.Target(game,relative+".disabled");
     var installed=ReadInstalled(game);Receipt previous;installed.Packages.TryGetValue(p.Id,out previous);
     var changes=new Dictionary<string,byte[]>();

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -15,6 +15,7 @@ namespace AnyApiManager {
   static void Reject(Action action,string name){bool rejected=false;try{action();}catch{rejected=true;}Check(rejected,name);}
   static Package Clone(Package p){return Json.Read<Package>(Json.Write(p));}
   sealed class DownloadFixture:HttpMessageHandler {public bool Error,Redirect;protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancel){return Task.FromResult(new HttpResponseMessage(Error?HttpStatusCode.NotFound:HttpStatusCode.OK){Content=new StringContent("catalog"),RequestMessage=Redirect?new HttpRequestMessage(HttpMethod.Get,"http://insecure.example/file"):request});}}
+  static byte[] ModFixture(){byte[] b=new byte[1024];b[0]=(byte)'M';b[1]=(byte)'Z';Action<int,uint> put=(i,v)=>Array.Copy(BitConverter.GetBytes(v),0,b,i,4);put(60,64);put(64,0x4550);b[68]=0x64;b[69]=0x86;b[70]=1;b[84]=240;b[87]=0x20;b[88]=0x0b;b[89]=2;put(200,0x1000);put(204,40);put(340,0x1000);put(344,512);put(348,512);put(536,1);put(544,0x1040);put(576,0x1060);Array.Copy(Encoding.ASCII.GetBytes("AnyAPI_ModInit"),0,b,608,14);return b;}
   public static int Run(string output){string root=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(output)),"manager-test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
    try{
     var catalog=Engine.Bundled();Rules.Validate(catalog);Check(catalog.Mods.Count==4,"Four browsable mods; API resource contains no mods");
@@ -56,7 +57,7 @@ namespace AnyApiManager {
     mod.MinimumApi=999;Check(!Engine.Apply(request,null,true).Success,"Minimum API revision enforced");mod.MinimumApi=25;
     Check(Engine.Apply(request,null,true).Success,"Mod installs independently of API");request.Action="disable";Check(Engine.Apply(request,null,true).Success&&!File.Exists(Rules.Target(root,relative))&&File.Exists(Rules.Target(root,relative+".disabled")),"Disable removes DLL from loader discovery");
     request.Action="enable";Check(Engine.Apply(request,null,true).Success&&File.Exists(Rules.Target(root,relative)),"Enable restores DLL");
-    var launch=new ApplyRequest{GamePath=root,Action="prepare-vanilla",Package=api,Catalog=local};
+    var launch=new ApplyRequest{GamePath=root,Action="prepare-vanilla",Catalog=local};
     Check(Engine.Apply(launch,null,true).Success&&Engine.ApiPaused(root)&&!File.Exists(Rules.Target(root,"dinput8.dll")),"Vanilla launch removes AnyAPI from the game's loader path");
     Check(File.Exists(Rules.Target(root,relative))&&File.ReadAllText(settings)=="user markers"&&Engine.ApiRevision(root,local)==25,"Vanilla preserves mod selection, settings and installed API identity");
     Check(Engine.Apply(launch,null,true).Success,"Repeated vanilla preparation is idempotent");
@@ -71,6 +72,26 @@ namespace AnyApiManager {
     request.Package=mod;request.Action="enable";Check(!Engine.Apply(request,null,true).Success,"Incompatible disabled mod cannot be enabled");
     mod=Clone(mod);mod.GameBuilds=newer.GameBuilds;mod.Version="0.26.0";mod.Revision=26;request.Package=mod;request.Action="install";request.ZipPath=modZip;Check(Engine.Apply(request,null,true).Success&&!File.Exists(Rules.Target(root,relative+".disabled")),"Compatible mod update restores its enabled state");
     request.Action="remove";Check(Engine.Apply(request,null,true).Success&&!File.Exists(Rules.Target(root,relative)),"Remove deletes only managed DLL");Check(File.ReadAllText(settings)=="user markers","User settings and markers survive every action");
+    // Synthetic PE fixture is inspected only; it is never loaded or executed.
+    byte[] handmade=ModFixture();Engine.ValidateModDll(handmade);Check(true,"Local x64 AnyAPI export recognized without executing DLL");
+    var wrongArchitecture=(byte[])handmade.Clone();wrongArchitecture[68]=0x4c;Reject(()=>Engine.ValidateModDll(wrongArchitecture),"32-bit local mod rejected");
+    Reject(()=>Engine.ValidateModDll(dllBytes),"A generic host DLL without AnyAPI_ModInit cannot be imported as a mod");
+    var corrupt=(byte[])handmade.Clone();Array.Copy(BitConverter.GetBytes(uint.MaxValue),0,corrupt,64+24+112,4);Reject(()=>Engine.ValidateModDll(corrupt),"Malformed local export RVA rejected");
+    string homemade=Path.Combine(root,"Handmade.dll");File.WriteAllBytes(homemade,handmade);File.WriteAllText(Path.ChangeExtension(homemade,".anymod.json"),Json.Write(new LocalMetadata{Name="My handmade mod",Version="1.0.0",Description="Personal mod",MinimumApi=26}));
+    var localMod=Engine.ImportDetails(homemade);Check(localMod.Name=="My handmade mod"&&localMod.MinimumApi==26,"Optional companion metadata read for local mod");Reject(()=>Rules.Validate(localMod,false),"Local metadata cannot bypass public catalog verification");
+    var localRequest=new ApplyRequest{GamePath=root,Catalog=local,Package=localMod,Action="import-local",ZipPath=homemade};
+    Check(Engine.Apply(localRequest,null,true).Success,"Local DLL imports without catalog registration");string handmadeTarget=Rules.Target(root,Rules.OnlyFile(localMod));
+    Check(Engine.Discover(root,local).Any(p=>p.Local&&p.Name=="My handmade mod"),"Imported local mod appears in installed discovery");
+    launch.Package=null;launch.Catalog=local;launch.Action="prepare-modded";Check(Engine.Apply(launch,null,true).Success,"Actual launch request without package accepts valid local mods");
+    Check(!Engine.Apply(localRequest,null,true).Success,"Local import cannot silently overwrite an existing mod");
+    localRequest.Action="disable-local";Check(Engine.Apply(localRequest,null,true).Success&&!File.Exists(handmadeTarget)&&File.Exists(handmadeTarget+".disabled"),"Local disable removes DLL from loader discovery");
+    Check(Engine.Discover(root,local).Count(p=>p.Id==localMod.Id)==1,"Disabled local mod stays visible exactly once");
+    localRequest.Action="enable-local";Check(!Engine.Apply(localRequest,i=>{if(i==2)throw new IOException("Local transaction fault");},true).Success&&File.Exists(handmadeTarget+".disabled")&&!File.Exists(handmadeTarget),"Local enable failure rolls back files and receipt");
+    Check(Engine.Apply(localRequest,null,true).Success,"Local enable restores DLL");
+    string manualTarget=Rules.Target(root,"AnyAPI and Modding/mods/Manual.dll");File.WriteAllBytes(manualTarget,handmade);Check(Engine.Discover(root,local).Any(p=>p.Local&&p.Name=="Manual"),"Manually dropped unregistered DLL discovered");Check(Engine.Incompatible(root,local).Count==0,"Unverified valid local mod is not mislabeled incompatible");File.Delete(manualTarget);
+    localRequest.Action="remove-local";Check(Engine.Apply(localRequest,null,true).Success&&!File.Exists(handmadeTarget)&&File.ReadAllText(settings)=="user markers","Local removal keeps saved mod data");
+    var demanding=Json.Read<Package>(Json.Write(localMod));demanding.MinimumApi=999;localRequest.Package=demanding;localRequest.Action="import-local";Check(!Engine.Apply(localRequest,null,true).Success,"Declared local minimum API enforced");
+    Reject(()=>{var traversal=Json.Read<Package>(Json.Write(localMod));traversal.FileHashes=new Dictionary<string,string>{{"AnyAPI and Modding/mods/../evil.dll",new string('a',64)}};Engine.ValidateLocal(traversal);},"Local import rejects path traversal");
     Check(Directory.GetDirectories(Rules.Target(root,"AnyAPI and Modding/.manager/backups")).Length>=5,"Every mutation retains backups");
     File.WriteAllText(output,Json.Write(new{Success=true,Passed=passed.Count,Checks=passed}));return 0;
    }catch(Exception e){File.WriteAllText(output,Json.Write(new{Success=false,Error=e.ToString(),Passed=passed}));return 1;}
@@ -78,3 +99,4 @@ namespace AnyApiManager {
   }
  }
 }
+

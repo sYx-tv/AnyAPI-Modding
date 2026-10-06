@@ -104,6 +104,25 @@ for name in ('anyapi_platform.inc','anyapi_menu.inc','anyapi_settings_tabs.inc',
     hook_sections.append(name+':\n'+ ('\n'.join('- '+h for h in callbacks) or '- Validated native dependency reads/events; see this implementation and its contracts.'))
 add('Current integration points','Hooks','# Native integration in the active profile\n\nImplementation callbacks below back the current public services. These are framework internals, not permission for a DLL mod to patch the game directly. Use the versioned service tables, ownership rules and native callback context.\n\n'+ '\n\n'.join(hook_sections)+'\n\nGraphics uses presentation callbacks, input uses the owned platform input path, and native settings/storage extensions use guarded native callbacks/dependencies. The individual contract notes describe the validated bodies and offsets.','Implementation reference')
 add('Capability snapshot','Contracts','# Current capability manifest\n\nRaw manifest snapshot from the revision 25 source; historical per-revision acceptance fields are retained verbatim. Current acceptance is described in the compatibility page.\n\n'+json.dumps(caps,indent=2,ensure_ascii=False),'Source metadata')
+local_docs="""# Local mods and Import DLL
+
+An AnyAPI mod is a Windows x64 DLL exporting AnyAPI_ModInit. Use the starter project and current public headers. A generic DLL cannot be used as an AnyAPI mod.
+
+In Mods, choose Import DLL, or place your DLL in AnyAPI and Modding/mods and select Refresh. The manager discovers local DLLs and disabled DLLs without a GitHub listing. Close the game before changing files. Local mods can be enabled, disabled and removed; their saved settings remain. Disabled files end in .dll.disabled. The native loader discovers lowercase .dll filenames, so import normalizes the extension.
+
+Optional companion metadata: put ExampleMod.anymod.json beside ExampleMod.dll before importing. The manager stores imported details in its receipt. A manually placed companion file is also read while the DLL is enabled. Use this format:
+
+```json
+{"Name":"Example Mod","Version":"1.0.0","Description":"My own Anymaker mod.","MinimumApi":25}
+```
+
+MinimumApi is enforced. Omit the file if you only need discovery by DLL filename. Import inspects the PE export table without executing the DLL. This verifies its format, not its behavior, ABI implementation or safety.
+
+Local mods show game compatibility as unverified. They may launch with a compatible AnyAPI, but the manager cannot prove they work on every game build. Test them in game. Local mods receive no automatic downloads or updates. Replace a local DLL through Import DLL; replacement keeps a backup. Publish a verified release and add it to catalog.json to provide library downloads and updates. The manager refreshes the catalog; no app code change is needed.
+
+This manager controls DLL files, not mod dependency resolution or custom load order. The current native loader sorts DLL filenames. Settings and keybinds still require explicit registration with AnyHelpers; local discovery does not invent editable options.
+"""
+add('Local mod import and discovery','Start here',local_docs)
 starter='''#include "anyapi_mod_v1.h"
 static const AnyModHostV1* host;
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* incoming, AnyModCallbacksV1* callbacks) {
@@ -127,7 +146,7 @@ with zipfile.ZipFile(sdk,'w',zipfile.ZIP_DEFLATED) as z:
     for p in headers:z.write(p,'include/'+p.name)
     for p in sorted((source/'examples').glob('*.cpp')):z.write(p,'examples/'+p.name)
     for p in sorted(source.glob('*.md')):z.write(p,'docs/'+p.name)
-    z.writestr('src/mod.cpp',starter);z.writestr('CMakeLists.txt',cmake);z.writestr('README.md',articles[0]['Body'])
+    z.writestr('src/mod.cpp',starter);z.writestr('CMakeLists.txt',cmake);z.writestr('README.md',articles[0]['Body']);z.writestr('docs/LOCAL_MODS.md',local_docs);z.writestr('ExampleMod.anymod.json',json.dumps({'Name':'Example Mod','Version':'1.0.0','Description':'My own Anymaker mod.','MinimumApi':manifest['revision']},indent=2))
 guide={'Revision':manifest['revision'],'GameVersion':manifest['game_version'],'SteamBuild':manifest['steam_build_id'],'Articles':articles,'HeaderCount':len(headers),'LegacyHookCount':len(legacy_hooks),'SourceHashes':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in headers}}
 (out/'guide.json').write_text(json.dumps(guide,ensure_ascii=False,indent=2),encoding='utf-8')
 print(f'Built {len(articles)} guide articles, {len(headers)} headers, {len(legacy_hooks)} disabled legacy hook references and a source-only starter SDK.')

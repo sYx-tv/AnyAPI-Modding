@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
@@ -10,6 +10,7 @@ namespace AnyApiManager {
  public sealed class Package {
   public string Id,Name,Version,Description,Url,Sha256;
   public int Revision,MinimumApi;
+  public bool Local;
   public Dictionary<string,string> FileHashes=new Dictionary<string,string>();
   public List<GameBuild> GameBuilds=new List<GameBuild>();
  }
@@ -30,7 +31,7 @@ namespace AnyApiManager {
   public static bool Digest(string s){return s!=null&&Regex.IsMatch(s,"^[a-fA-F0-9]{64}$");}
   public static void Validate(Package p,bool api){
    Version version;
-   if(p==null||p.Id==null||!Regex.IsMatch(p.Id,"^[a-z][a-z0-9-]{0,47}$")||api!=(p.Id=="anyapi")||string.IsNullOrWhiteSpace(p.Name)||p.Name.Length>100||!System.Version.TryParse(p.Version,out version)||p.Revision<1||p.MinimumApi<0||!Digest(p.Sha256)||p.FileHashes==null||p.FileHashes.Count!=1||p.GameBuilds==null||p.GameBuilds.Count==0||p.GameBuilds.Count>32)throw new InvalidDataException("Invalid package metadata.");
+   if(p==null||p.Local||p.Id==null||!Regex.IsMatch(p.Id,"^[a-z][a-z0-9-]{0,47}$")||api!=(p.Id=="anyapi")||string.IsNullOrWhiteSpace(p.Name)||p.Name.Length>100||!System.Version.TryParse(p.Version,out version)||p.Revision<1||p.MinimumApi<0||!Digest(p.Sha256)||p.FileHashes==null||p.FileHashes.Count!=1||p.GameBuilds==null||p.GameBuilds.Count==0||p.GameBuilds.Count>32)throw new InvalidDataException("Invalid package metadata.");
    if(p.Description==null||p.Description.Length>1000)throw new InvalidDataException("Invalid package description.");
    p.Sha256=p.Sha256.ToLowerInvariant();
    if(!string.IsNullOrEmpty(p.Url)){Uri u;if(!Uri.TryCreate(p.Url,UriKind.Absolute,out u)||u.Scheme!="https"||!string.IsNullOrEmpty(u.UserInfo))throw new InvalidDataException("Downloads must use HTTPS.");}

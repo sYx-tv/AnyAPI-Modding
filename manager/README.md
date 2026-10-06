@@ -1,6 +1,6 @@
 # AnyAPI Manager
 
-A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.1.1 includes AnyAPI revision 25, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
+A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.2.0 includes AnyAPI revision 25, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
 
 Open **AnyAPI Manager.exe**. The Steam game folder is normally detected automatically. Install/update the API, then choose mods in Mods. The official mod library is built in; Settings selects another game folder if needed. Close the game before changing DLLs or switching launch modes.
 
@@ -23,3 +23,9 @@ When a game update leaves active mods unverified, updating the API asks whether 
 Build: Windows with .NET Framework 4.7.2 or newer, `powershell -File manager/build.ps1`. No downloaded NuGet packages or standalone .NET installation is required on modern Windows. The source targets x64 and uses C#, Windows Forms and the Windows .NET Framework compiler.
 
 Validation: run the EXE with `--self-test <absolute output.json>`; run `--capture <absolute preview.png>` to render its own interface for review. These tests use disposable fixture folders, never the installed game. See CATALOG_FORMAT.md and GITHUB_SETUP.md for publishing.
+
+## Local mods
+
+Mods shows Library and Local sources. Import DLL accepts an x64 AnyAPI mod, and Refresh discovers DLLs placed directly in the mods folder. Local mods support enable, disable and removal, with backups and saved settings preserved. Optional `ExampleMod.anymod.json` declares Name, Version, Description and MinimumApi; see the offline guide and starter SDK. Compatibility is shown as unverified, and local mods are not automatically downloaded or updated. The manager inspects DLL exports without executing them. This is a format check, not proof the mod is safe or game-compatible.
+
+The loader sorts DLL filenames; this manager does not promise dependency resolution or user-defined load order. The launch controls now also handle requests without a package, as the real UI sends them.
