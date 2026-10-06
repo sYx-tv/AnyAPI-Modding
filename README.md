@@ -11,9 +11,13 @@ An in-game mod framework for **Anymaker**, with a simple Windows mod manager.
 1. Download and open **AnyAPI Manager.exe**.
 2. Close Anymaker and select **Install API**. The Steam folder is normally detected automatically.
 3. Open **Mods**, select the ones you want and click **Install**.
-4. Launch Anymaker normally through Steam.
+4. Choose **Play with mods** on Overview to launch through Steam.
 
-The manager contains only AnyAPI. Mods download separately, and the manager does not need to stay open while playing. Updates, toggles and removals take effect on the next launch. Saved mod settings and markers are kept.
+The manager bundles AnyAPI, offline documentation and a source-only starter SDK. Optional mods download separately. The manager does not need to stay open while playing. Updates, toggles and removals take effect on the next launch. Saved settings and markers are kept.
+
+**Play without mods** pauses AnyAPI without changing your mod selections. Normal Steam launches stay in this mode until you choose **Play with mods** again.
+
+**Develop** contains searchable services, headers, integration hooks, contracts and examples. Export a starter SDK to build your own C++ DLL. Disabled historical hooks are clearly separated from current services.
 
 ## Available mods
 
@@ -42,5 +46,5 @@ Download checksums, file checksums, automatic backups and installation rollback 
 
 The native API and mods use C++ and Visual Studio's C++ tools. The manager uses C#, Windows Forms and .NET Framework. Source, headers, examples and tests are included; game textures, models and executable files are not included in the source tree.
 
-The manager checks pass **38/38**. The native revision 25 checks pass **27/27**; the current mods were also accepted in the author's host gameplay testing. Joining-client coverage is separate and should not be inferred from those results.
+Manager 1.1 checks pass **52/52**, plus **7/7** live catalog/package download checks. The exported starter builds as an x64 DLL with the expected entry point. Launch switching was tested against disposable game fixtures; Steam gameplay was not launched during this manager refresh. The native revision 25 checks pass **27/27**; the current mods were also accepted in the author's host gameplay testing. Joining-client coverage is separate and should not be inferred from those results.
 

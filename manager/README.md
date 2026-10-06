@@ -1,8 +1,12 @@
 # AnyAPI Manager
 
-A small Windows app with three pages: API, Mods, and Settings. The EXE contains AnyAPI and catalog metadata. It contains **no mod DLLs**. Mods are independent, optional GitHub downloads.
+A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.1 includes AnyAPI revision 25, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
 
-Open **AnyAPI Manager.exe**. The Steam game folder is normally detected automatically. Install/update the API, then choose mods in Mods. Settings connects a GitHub repository and selects another game folder if needed. Launch game opens Anymaker through Steam. Close the game before changing DLLs.
+Open **AnyAPI Manager.exe**. The Steam game folder is normally detected automatically. Install/update the API, then choose mods in Mods. Settings connects a GitHub repository and selects another game folder if needed. Close the game before changing DLLs or switching launch modes.
+
+**Play with mods** restores the verified API loader and launches through Steam. **Play without mods** moves only that loader into the manager's backup area, leaving mod DLLs, individual enable/disable choices and saved data alone. The mode persists: normal Steam launches also run without AnyAPI until you choose Play with mods. The manager can be closed while playing. If Steam cannot open, the manager attempts to restore the preceding mode. Other third-party loaders are outside this manager's scope.
+
+**Develop** has searchable services, exact headers, native integration callbacks, contract notes, and examples. Export starter SDK gives a CMake C++ DLL project, all 21 public/reference headers and examples. Historical legacy hooks are clearly marked disabled; they are not advertised as working services. Settings and keybinds require explicit registration with optional AnyHelpers services. The documentation belongs to revision 25; newer API installations display a version notice.
 
 This project is currently private at **sYx-tv/AnyAPI-Modding**. Private catalog and release downloads use the owner's installed, signed-in GitHub CLI. The manager never reads or bundles a token, and starts the CLI without a console window. Public repositories continue to download without a GitHub login.
 
@@ -14,7 +18,7 @@ Disable/enable takes effect on the next game launch. Remove deletes the mod DLL 
 
 The last connected catalog is saved locally so the browser remains available while offline. New downloads and online update checks still require a connection.
 
-When a game update leaves active mods unverified, updating the API asks whether to temporarily disable those DLLs. Their data is preserved. Install matching mod releases to enable them again. The Launch game button also checks enabled mods before opening Steam.
+When a game update leaves active mods unverified, updating the API asks whether to temporarily disable those DLLs. Their data is preserved. Install matching mod releases to enable them again. Play with mods checks game compatibility, minimum API revisions and enabled mod DLLs before opening Steam. Play without mods remains available after a game update.
 
 Build: Windows with .NET Framework 4.7.2 or newer, `powershell -File manager/build.ps1`. No downloaded NuGet packages or standalone .NET installation is required on modern Windows. The source targets x64 and uses C#, Windows Forms and the Windows .NET Framework compiler.
 

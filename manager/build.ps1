@@ -23,6 +23,8 @@ $compilerArgs += '/win32icon:'+$iconPath
 $compilerArgs += '/resource:'+$iconPath+',brand.ico'
 $compilerArgs += '/resource:'+(Join-Path $PSScriptRoot 'publishing\assets\AnyAPI-0.25.0.zip')+',api.zip'
 $compilerArgs += '/resource:'+(Join-Path $PSScriptRoot 'publishing\catalog.json')+',catalog.json'
+$compilerArgs += '/resource:'+(Join-Path $PSScriptRoot 'developer\guide.json')+',guide.json'
+$compilerArgs += '/resource:'+(Join-Path $PSScriptRoot 'developer\starter-sdk.zip')+',starter-sdk.zip'
 $compilerArgs += $refs | ForEach-Object {'/reference:'+$_}
 $compilerArgs += Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.cs' | ForEach-Object {$_.FullName}
 & $compiler @compilerArgs

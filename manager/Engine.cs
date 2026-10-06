@@ -70,11 +70,15 @@ namespace AnyApiManager {
   public static bool Running(){foreach(var p in Process.GetProcessesByName("game"))using(p){return true;}return false;}
   public static string StateFile(string game){return Rules.Target(game,"AnyAPI and Modding/.manager/installed.json");}
   public static Installed ReadInstalled(string game){string path=StateFile(game);return File.Exists(path)?Json.Read<Installed>(File.ReadAllText(path)):new Installed();}
+  public static string PausedApi(string game){return Rules.Target(game,"AnyAPI and Modding/.manager/paused-dinput8.dll");}
+  public static bool ApiPaused(string game){return File.Exists(PausedApi(game))&&!File.Exists(Rules.Target(game,"dinput8.dll"));}
+  public static Package InstalledApi(string game,Catalog c){
+   string path=Rules.Target(game,"dinput8.dll");if(!File.Exists(path))path=PausedApi(game);if(!File.Exists(path))return null;string hash=Rules.Hash(path);
+   var state=ReadInstalled(game);Receipt receipt;if(state.Packages.TryGetValue("anyapi",out receipt)&&receipt.Package!=null&&receipt.Package.FileHashes.ContainsKey("dinput8.dll")&&hash==receipt.Package.FileHashes["dinput8.dll"])return receipt.Package;
+   return c.Api.Concat(Bundled().Api).FirstOrDefault(p=>hash==p.FileHashes["dinput8.dll"]);
+  }
   public static int ApiRevision(string game,Catalog c){
-   string path=Rules.Target(game,"dinput8.dll");if(!File.Exists(path))return 0;string hash=Rules.Hash(path);
-   var state=ReadInstalled(game);Receipt receipt;
-   if(state.Packages.TryGetValue("anyapi",out receipt)&&receipt.Package!=null&&receipt.Package.FileHashes.ContainsKey("dinput8.dll")&&hash==receipt.Package.FileHashes["dinput8.dll"])return receipt.Package.Revision;
-   foreach(var p in c.Api.Concat(Bundled().Api))if(hash==p.FileHashes["dinput8.dll"])return p.Revision;return 0;
+   var known=InstalledApi(game,c);return known==null?0:known.Revision;
   }
   public static string Status(string game,Package p){
    string target=Rules.Target(game,Rules.OnlyFile(p));
@@ -83,11 +87,11 @@ namespace AnyApiManager {
   }
   public static Dictionary<string,Package> Incompatible(string game,Catalog catalog){
    var found=new Dictionary<string,Package>();string folder=Rules.Target(game,"AnyAPI and Modding/mods");if(!Directory.Exists(folder))return found;
-   string exe=Rules.Hash(Rules.Target(game,"game.exe")),gcl=Rules.Hash(Rules.Target(game,"bin/game.gcl"));var state=ReadInstalled(game);
+   string exe=Rules.Hash(Rules.Target(game,"game.exe")),gcl=Rules.Hash(Rules.Target(game,"bin/game.gcl"));var state=ReadInstalled(game);int api=ApiRevision(game,catalog);
    foreach(var file in Directory.GetFiles(folder,"*.dll").Where(f=>Path.GetExtension(f).Equals(".dll",StringComparison.OrdinalIgnoreCase))){
     string relative="AnyAPI and Modding/mods/"+Path.GetFileName(file);Rules.Target(game,relative);string hash=Rules.Hash(file);
     Package known=state.Packages.Values.Where(r=>r.Package!=null).Select(r=>r.Package).Concat(catalog.Mods).Concat(Bundled().Mods).FirstOrDefault(p=>p.FileHashes.ContainsKey(relative)&&p.FileHashes[relative]==hash);
-    if(known==null||!Rules.Matches(known,exe,gcl))found.Add(relative,known);
+    if(known==null||!Rules.Matches(known,exe,gcl)||known.MinimumApi>api)found.Add(relative,known);
    }return found;
   }
   // Extract only explicitly declared DLLs, rejecting extra entries and traversal.
@@ -114,10 +118,11 @@ namespace AnyApiManager {
   static ApplyResult ApplyCore(ApplyRequest r,Action<int> failAfter,bool test){
    try{
     Rules.Validate(r.Package,r.Package.Id=="anyapi");Rules.Validate(r.Catalog);
-    if(!new[]{"install","disable","enable","remove"}.Contains(r.Action))throw new InvalidDataException("Unknown manager action.");
+    if(!new[]{"install","disable","enable","remove","prepare-modded","prepare-vanilla"}.Contains(r.Action))throw new InvalidDataException("Unknown manager action.");
     string game=Path.GetFullPath(r.GamePath);Rules.Target(game,"game.exe");Rules.Target(game,"bin/game.gcl");
     if(!File.Exists(Path.Combine(game,"game.exe"))||!File.Exists(Path.Combine(game,"bin/game.gcl")))throw new IOException("Choose the Anymaker folder containing game.exe.");
     if(!test&&Running())throw new IOException("Close Anymaker before changing DLLs.");
+    if(r.Action.StartsWith("prepare-",StringComparison.Ordinal))return PrepareLaunch(r,game,failAfter,test);
     var p=r.Package;string relative=Rules.OnlyFile(p),target=Rules.Target(game,relative),disabled=Rules.Target(game,relative+".disabled");
     var installed=ReadInstalled(game);Receipt previous;installed.Packages.TryGetValue(p.Id,out previous);
     var changes=new Dictionary<string,byte[]>();
@@ -133,6 +138,9 @@ namespace AnyApiManager {
       if(previous==null||Rules.Hash(disabled)!=previous.Package.FileHashes[relative])throw new IOException("An unmanaged disabled DLL exists. Enable it or resolve it first.");changes.Add(disabled,null);
      }
      installed.Packages[p.Id]=new Receipt{Package=p,Disabled=false};
+     if(p.Id=="anyapi"&&File.Exists(PausedApi(game))){
+      var known=InstalledApi(game,r.Catalog);if(known==null||Rules.Hash(PausedApi(game))!=known.FileHashes["dinput8.dll"])throw new IOException("The paused API changed outside the manager. Resolve it before installing.");changes.Add(PausedApi(game),null);
+     }
      if(p.Id=="anyapi")foreach(var incompatible in Incompatible(game,r.Catalog)){
       if(!r.DisableIncompatible)throw new IOException("Some installed mods are not verified for this game build. Approve temporarily disabling them before updating the API.");
       string active=Rules.Target(game,incompatible.Key),off=Rules.Target(game,incompatible.Key+".disabled");if(File.Exists(off))throw new IOException("A disabled copy already exists: "+Path.GetFileName(off));changes.Add(off,File.ReadAllBytes(active));changes.Add(active,null);
@@ -152,6 +160,25 @@ namespace AnyApiManager {
     if(!test&&Running())throw new IOException("Anymaker started during preparation. Close it and try again.");
     Commit(game,changes,failAfter);return new ApplyResult{Success=true,Message=p.Name+": "+(r.Action=="install"?"installed":r.Action=="remove"?"removed (settings kept)":r.Action=="enable"?"enabled":"disabled")+". Ready for the next game launch."};
    }catch(Exception e){return new ApplyResult{Success=false,Message=e.Message};}
+  }
+  static ApplyResult PrepareLaunch(ApplyRequest r,string game,Action<int> fault,bool test){
+   string active=Rules.Target(game,"dinput8.dll"),paused=PausedApi(game);bool modded=r.Action=="prepare-modded";
+   if(File.Exists(active)&&File.Exists(paused))throw new IOException("Both active and paused API files exist. Resolve the conflict before launching.");
+   if(!File.Exists(active)&&!File.Exists(paused)){
+    if(modded)throw new IOException("Install AnyAPI before playing with mods.");return new ApplyResult{Success=true,Message="Ready to play without mods."};
+   }
+   var known=InstalledApi(game,r.Catalog);if(known==null)throw new IOException("This dinput8.dll is not a verified AnyAPI file. It was left unchanged.");
+   if(modded){
+    if(!Rules.Matches(known,Rules.Hash(Rules.Target(game,"game.exe")),Rules.Hash(Rules.Target(game,"bin/game.gcl"))))throw new IOException("Update AnyAPI for this game build before playing with mods.");
+    if(Incompatible(game,r.Catalog).Count>0)throw new IOException("Update or disable incompatible mods before playing with mods.");
+   }
+   bool moving=modded?File.Exists(paused):File.Exists(active);
+   if(moving){
+    var changes=new Dictionary<string,byte[]>();string source=modded?paused:active,dest=modded?active:paused;changes.Add(dest,File.ReadAllBytes(source));changes.Add(source,null);
+    var installed=ReadInstalled(game);installed.Packages["anyapi"]=new Receipt{Package=known,Disabled=!modded};changes.Add(StateFile(game),Encoding.UTF8.GetBytes(Json.Write(installed)));
+    if(!test&&Running())throw new IOException("Anymaker started during preparation. Close it and try again.");Commit(game,changes,fault);
+   }
+   return new ApplyResult{Success=true,Message=modded?"Ready to play with mods.":"AnyAPI paused. Play with mods will restore it."};
   }
   // Back up every changed file and restore the entire transaction on failure.
   static void Commit(string game,Dictionary<string,byte[]> changes,Action<int> fault){
