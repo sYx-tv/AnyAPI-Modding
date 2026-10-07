@@ -7,6 +7,7 @@
 #include <vector>
 #include "anyapi_services_v1.h"
 #include "anyapi_equipment_v2.h"
+#include "anyapi_hud_hint_provider_v1.h"
 #include "anyapi_gpu_draw_v1.h"
 #include "anyhelpers_settings_v1.h"
 #include "mod_controls_v1.h"
@@ -33,6 +34,7 @@ int wmain(int argc,wchar_t** argv){assert(argc==3);auto fixture=LoadLibraryW(arg
  auto ui=(void(*)(int32_t))GetProcAddress(fixture,"FixtureUiState");auto filter=(uint32_t(*)(const AnyInputV1*))GetProcAddress(fixture,"FixtureInput");ui(1);
  auto mod=LoadLibraryW(argv[2]);assert(mod);AnyModHostV1 host;host.log=log;host.capture_input=capture;AnyModCallbacksV1 cb;assert(((AnyModInitV1)GetProcAddress(mod,"AnyAPI_ModInit"))(&host,&cb));((void(*)())GetProcAddress(mod,"AnyAPI_ModReady"))();assert(renderer&&cb.render);
  snapshot.context=1;snapshot.count=8;for(int i=0;i<8;++i){snapshot.tools[i].item_id=i+100;strcpy_s(snapshot.tools[i].name,"Test tool");}
+ auto hints=(const AnyHudHintProviderV1*)services->query("hud.hints.anyquickwheel",1);assert(hints&&hints->copy);AnyHudHintV1 hint;assert(hints->copy(&hint)&&hint.key=='Q'&&!strcmp(hint.label,"Tool wheel (hold)"));binding='R';assert(hints->copy(&hint)&&hint.key=='R');binding=0;assert(!hints->copy(&hint));binding='Q';ui(2);assert(!hints->copy(&hint));ui(1);
  AnyFrameV1 f;f.width=1920;f.height=1080;f.focused=1;AnyCanvasV1 canvas;
  auto render=[&](){f.tick=GetTickCount64();polygons=0;texts.clear();cb.render(&f,&canvas,nullptr);renderer(&f,nullptr);assert(!canvas.pixels);};
  auto input=[&](uint32_t kind,uint32_t key=0,int x=0,int y=0,int wheel=0,uint32_t button=0){AnyInputV1 e;e.kind=kind;e.key=key;e.x=x;e.y=y;e.wheel=wheel;e.button=button;return filter(&e);};
@@ -51,5 +53,6 @@ int wmain(int argc,wchar_t** argv){assert(argc==3);auto fixture=LoadLibraryW(arg
  // The wheel resizes live as carried tools change, with no primary-hand/part slice.
  snapshot.count=2;input(ANY_KEY_DOWN,'R');render();assert(polygons==2);snapshot.count=3;render();assert(polygons==3);snapshot.count=1;render();assert(polygons==1);input(ANY_KEY_DOWN,VK_ESCAPE);input(ANY_KEY_UP,'R');snapshot.count=0;assert(!input(ANY_KEY_DOWN,'R'));render();assert(!polygons&&!captured);
  values[ids.at("enabled")]=0;++revision;render();assert(!input(ANY_KEY_DOWN,'R')&&!captured);
+ assert(!hints->copy(&hint));
  std::cout<<"Wheel rendering, selection, cancellation, menu/focus, keybinds and paging passed.\n";
 }

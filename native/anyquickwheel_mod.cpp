@@ -2,6 +2,7 @@
 #include <windows.h>
 #include "anyapi_services_v1.h"
 #include "anyapi_equipment_v2.h"
+#include "anyapi_hud_hint_provider_v1.h"
 #include "anyapi_gpu_draw_v1.h"
 #include "anyapi_ui_state_v1.h"
 #include "anyapi_item_catalog_v1.h"
@@ -29,6 +30,11 @@ static bool gameplay(){AnyUiSnapshotV1 s;return ui&&ui->copy(&s)&&s.kind==ANY_UI
 static std::wstring wide(const char* s){int n=MultiByteToWideChar(CP_UTF8,0,s,-1,nullptr,0);if(n<=1)return L"Item";std::wstring out(n,L'\0');MultiByteToWideChar(CP_UTF8,0,s,-1,out.data(),n);out.pop_back();return out;}
 static void refresh(){if(!settings)return;auto r=settings->revision();if(r==revision)return;revision=r;
  double lo[]={0,75,40,25,0},hi[]={1,150,100,90,1};for(int i=0;i<5;++i){AnySettingValueV1 v;if(settings->get(tokens[i],&v)&&std::isfinite(v.number))values[i]=std::clamp(v.number,lo[i],hi[i]);}}
+static bool copy_hint(AnyHudHintV1* out){if(!out||out->struct_size!=sizeof(*out)||out->version!=1)return false;std::lock_guard lock(mutex);refresh();
+ AnyEquipmentToolsSnapshotV2 tools;if(!values[0]||!gameplay()||!equipment_api||!equipment_api->copy(&tools)||!tools.count)return false;
+ auto binding=controls&&action?controls->key(action):'Q';if(!binding)return false;*out={};out->key=binding;strcpy_s(out->label,"Tool wheel (hold)");return true;
+}
+static const AnyHudHintProviderV1 hint_provider{sizeof(AnyHudHintProviderV1),1,copy_hint};
 static void close(){opened=false;selected=-1;if(host.capture_input)host.capture_input(0);}
 static void confirm(){if(selected>=0&&selected<int(slots.size())){const auto& s=slots[selected];ticket=equipment_api->equip(context,s.item_id);if(!ticket)message_until=GetTickCount64()+2200;}close();}
 static void choose(){selected=wheel::sector(mouse_x-cx,mouse_y-cy,values[3]*scale,outer*1.12, visible_count());if(selected>=0)selected+=int(page*12);}
@@ -98,5 +104,6 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){auto s=AnyAPI_Services()
  if(catalog&&catalog->struct_size==sizeof(*catalog)&&catalog->version==1&&catalog->count&&catalog->copy){for(uint32_t i=0;i<catalog->count();++i){AnyItemDefinitionV1 d;if(catalog->copy(i,&d))icons.emplace(d.id,Icon{i,0,d.name,false});}}else catalog=nullptr;
  if(images&&(images->struct_size!=sizeof(*images)||images->version!=1||!images->copy))images=nullptr;
  if(!gpu->register_renderer(draw,nullptr)||!s->input_filter||!s->input_filter(filter,nullptr,20)){gpu=nullptr;return;}
+ if(s->publish)s->publish("hud.hints.anyquickwheel",1,&hint_provider);
  if(host.log)host.log(0,"anyquickwheel","Ready: hold Q; hover a tool and release to equip. Automatically discovered carried construction tools.");
 }

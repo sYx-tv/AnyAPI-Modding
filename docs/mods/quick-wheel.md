@@ -2,6 +2,8 @@
 
 Hold **Q** during gameplay, point at a construction tool, then release **Q** to equip. Left-click also confirms. Release in the centre, right-click or press Escape to cancel.
 
+The bottom-left control panel shows your current key beside **Tool wheel (hold)** when construction tools are available. Rebinding the action updates its native keyboard icon. The hint follows the game’s control-hint visibility setting.
+
 ## Automatic inventory wheel
 
 AnyQuickWheel 1.1 finds construction tools in your carried inventory, including backpack contents. Each available tool definition gets one slice; duplicate copies share a slice. Two tools give two halves, three give three slices, and picking up or dropping tools updates the open wheel. Edge Tool and Edge Tool 3×3 are separate choices. More than twelve choices use mouse-wheel pages.
@@ -26,4 +28,4 @@ Menus, inventory and focus loss close the wheel and release input. The wheel use
 
 ## Compatibility and validation
 
-Requires the updated AnyAPI **0.31.0 local candidate**, including `anyapi.equipment` v2, for reviewed Anymaker 0.1.23. The earlier hotbar-only wheel was confirmed in a live world. This inventory-tool update is a local test candidate; live-world acceptance is pending.
+Requires the updated AnyAPI **0.31.0 local candidate**, including `anyapi.equipment` v2, for reviewed Anymaker 0.1.23. The inventory-driven wheel and equipping were confirmed in a live world. The native control-hint addition is awaiting live visual confirmation.

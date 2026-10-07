@@ -4,7 +4,7 @@ import json, hashlib, shutil, zipfile
 import xml.etree.ElementTree as ET
 root=Path(__file__).resolve().parents[2]
 tests=ET.parse(root/'build/wheel-tests.xml').getroot()
-if int(tests.get('tests',0))<46 or int(tests.get('failures',0)) or int(tests.get('errors',0)):
+if int(tests.get('tests',0))<47 or int(tests.get('failures',0)) or int(tests.get('errors',0)):
  raise SystemExit('All native checks must pass before packaging.')
 out=root/'release/AnyQuickWheel-1.1.0-Candidate';packages=out/'manager-packages';packages.mkdir(parents=True,exist_ok=True)
 catalog=json.loads((root/'catalog.json').read_text(encoding='utf-8-sig'))

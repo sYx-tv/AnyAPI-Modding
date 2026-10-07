@@ -5246,6 +5246,7 @@ static DWORD WINAPI framework_runtime_thread(void*) {
 #include "anyapi_ui_state.inc"
 #include "anyapi_platform.inc"
 #include "anyapi_menu.inc"
+#include "anyapi_hud_hints.inc"
 #include "anyapi_session.inc"
 #include "anyapi_inventory_actions.inc"
 #include "anyapi_screen_layout.inc"
@@ -5262,6 +5263,7 @@ static DWORD WINAPI loader_thread(void*) {
     log_line(ANY_LOG_INFO,"framework","DLL_PLUGIN_PROFILE current_build=MATCH generic_players=1 v16_legacy_hooks=DISABLED map_specific_startup=0");
     platform::load();platform::ready();
     if(platform::plugin_count.load()&&!platform::start())log_line(ANY_LOG_ERROR,"framework","PLUGIN_PLATFORM graphics_hooks=FAILED");
+    HANDLE hud_worker=CreateThread(nullptr,0,hud_hints::worker,nullptr,0,nullptr);if(hud_worker)CloseHandle(hud_worker);
     HANDLE equipment_worker=CreateThread(nullptr,0,equipment_runtime::worker,nullptr,0,nullptr);if(equipment_worker)CloseHandle(equipment_worker);
     HANDLE time_worker=CreateThread(nullptr,0,world_time_runtime::worker,nullptr,0,nullptr);if(time_worker)CloseHandle(time_worker);
     HANDLE scene_worker=CreateThread(nullptr,0,scene_controls::worker,nullptr,0,nullptr);if(scene_worker)CloseHandle(scene_worker);
