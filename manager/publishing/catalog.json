@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.27.0",
-      "Revision": 27,
+      "Version": "0.31.0",
+      "Revision": 31,
       "MinimumApi": 0,
-      "Description": "Current-build in-game mod framework.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyAPI-0.27.0.zip",
-      "Sha256": "c093b2d6e5c762062c1c805edc9912351d80cced4ab7b291d81659806fb11015",
+      "Description": "Native mod framework with copied equipment and queued native hotbar selection.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.31.0/AnyAPI-0.31.0.zip",
+      "Sha256": "c49d95d89d137899e70a1faa6f5897cb625f99829bc324f74205b1022d199a33",
       "FileHashes": {
-        "dinput8.dll": "8a139a2deed865892285e6d8ca98d1ab291139e3a79d38cc8ab572657db5050a"
+        "dinput8.dll": "18c8e37e0e273e3e0a32c21a9b15622314907f812b509b7d7611a2b218181cab"
       },
       "GameBuilds": [
         {
@@ -112,14 +112,14 @@
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "0.27.0",
-      "Revision": 27,
-      "MinimumApi": 27,
-      "Description": "Graphics presets, bloom, sharpening and color controls.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyGraphics-0.27.0.zip",
-      "Sha256": "4b74888100d39f5a8be2ff91004ed9d8f8d0e4ec150fdd54642d8423ae929040",
+      "Version": "0.29.0",
+      "Revision": 29,
+      "MinimumApi": 29,
+      "Description": "HDR volumetric fog, sun shafts and local-light beams before bloom and HUD.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.29.0/AnyGraphics-0.29.0.zip",
+      "Sha256": "8eab85e8e1d56745759c3d6c57fea81ab10bc417d46d90ea624b966168995c9d",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "8c48793dbdca962624fcc975cd2dc3ce1f02ab916f15dcd8e43a5489e7423181"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "ef57af5842ad2af12e9e40bd4c7c34a02da0521d32ed662558eea824803caf53"
       },
       "GameBuilds": [
         {
@@ -129,6 +129,48 @@
           "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
         }
       ]
+    },
+    {
+      "Id": "anyclock",
+      "Name": "AnyClock",
+      "Version": "1.0.0",
+      "Revision": 1,
+      "MinimumApi": 30,
+      "Description": "Press a configurable key for a temporary native game-time HUD.",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/AnyClock.dll": "ec683dccc998d2158b46897f7a8523b5082c5873b213c0a48f7c24cf8101304e"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        }
+      ],
+      "Sha256": "8cc9f8d2642ded76e71ce704700673219ba3efd798b384e4024164d20c5e3fa8",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.30.0/AnyClock-1.0.0.zip"
+    },
+    {
+      "Id": "anyquickwheel",
+      "Name": "AnyQuickWheel",
+      "Version": "1.1.0",
+      "Revision": 2,
+      "MinimumApi": 31,
+      "Description": "Automatically discover carried construction tools; hold, point and release to equip.",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/AnyQuickWheel.dll": "fa161e4a7a6000b177d5b466d0057eaf00e570f60bcb04acb94eeccdcf512ec2"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        }
+      ],
+      "Sha256": "e10ec56dcbc9158a1318cdbed2ce8856cdc593287088344ce3cda2ed462fff3b",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.31.0/AnyQuickWheel-1.1.0.zip"
     }
   ]
 }

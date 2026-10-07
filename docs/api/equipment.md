@@ -1,6 +1,6 @@
 # Equipment and hotbar selection
 
-Query `anyapi.equipment`, version **1**, during `AnyAPI_ModReady`. Header: [anyapi_equipment_v1.h](../../sdk/include/anyapi_equipment_v1.h). Added in the AnyAPI 0.31.0 local candidate.
+Query `anyapi.equipment`, version **1**, during `AnyAPI_ModReady`. Header: [anyapi_equipment_v1.h](../../sdk/include/anyapi_equipment_v1.h). Added in AnyAPI 0.31.0.
 
 The snapshot contains copied local-player hotbar entries, their native slot/item IDs, authored definition IDs and names. Slot **-1** is the native primary-hand / empty-hands selection; slots 0 and above retain their native indices. Empty ordinary slots are omitted. The capacity is 33, including the primary hand. The snapshot has a context token, selected native slot and monotonic sampling timestamp. A copy older than 500 milliseconds is unavailable.
 
@@ -17,7 +17,7 @@ The profile matches the exact Anymaker 0.1.23 executable/game-data hashes alread
 - Item lookup: reviewed `client_scene.inventory.get_item_world_by_item_id` body. Definition pointer at item + 0x28; bounded UTF-8 strings at definition + 0 and + 0x10.
 - Selection calls `set_selected_slot_authority` with the game's native pointer/reference ABI. The provider does not patch replicated properties, forge events or simulate keypress cycling.
 
-Actual native body and class/table checks run before calling through these contracts. Invalid actors or unavailable contracts do not expose usable equipment. The public service exposes no borrowed pointers. Live-world acceptance remains pending for this candidate.
+Actual native body and class/table checks run before calling through these contracts. Invalid actors or unavailable contracts do not expose usable equipment. The public service exposes no borrowed pointers. The author confirmed native equipment selection in a loaded world.
 
 ## Inventory tools, version 2
 
@@ -38,4 +38,4 @@ Reviewed anchors are in `native/equipment_tools_contract.h`:
 - Native vector layout: pointer +0, flags +8, count +12, capacity +16, stride +20, constructor/destructor +24/+32. The pointer vector has stride 8 and native lifetime cleanup, including exception paths.
 - Native `inventory_item_util.item_id` is six s32 fields: type, floor, vehicle, actor, component, item. The local client peer event object is client +0x90.
 
-Reference arguments are passed by address. Hidden return pointers are the first parameter for returned IDs/pointers. Execution and snapshots are local-player-only. Live validation of the inventory-tools update remains pending.
+Reference arguments are passed by address. Hidden return pointers are the first parameter for returned IDs/pointers. Execution and snapshots are local-player-only. The author confirmed inventory-driven tool selection and equipping in a loaded world.

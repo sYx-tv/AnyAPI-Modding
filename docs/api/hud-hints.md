@@ -1,6 +1,8 @@
 # Native control hints
 
-The AnyAPI 0.31.0 local candidate accepts optional hint providers published as `hud.hints.<mod_id>`, version **1**. The ABI is declared in [anyapi_hud_hint_provider_v1.h](../../sdk/include/anyapi_hud_hint_provider_v1.h).
+**Experimental:** the wheel’s hint did not appear in the author’s live test. Automated widget/provider checks pass, but this feature should not be relied on for essential instructions.
+
+AnyAPI 0.31.0 includes experimental support for optional hint providers published as `hud.hints.<mod_id>`, version **1**. The ABI is declared in [anyapi_hud_hint_provider_v1.h](../../sdk/include/anyapi_hud_hint_provider_v1.h).
 
 Publish a process-lifetime `AnyHudHintProviderV1` during `AnyAPI_ModReady`. Its `copy` callback fills one `AnyHudHintV1` with a Windows virtual key and a short UTF-8 label, then returns true. Return false to hide the row, including when the mod is disabled, the action is unbound or the gameplay context is inappropriate. Callbacks run during native UI building; use thread-safe copied state and avoid engine calls.
 

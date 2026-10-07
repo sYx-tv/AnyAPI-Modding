@@ -24,3 +24,5 @@ shafts and local-light scattering before the HUD. See [Scene lighting](../docs/s
 for the public policy contract, tested behavior and limitations.
 
 AnyAPI 0.30.0 adds `anyapi.world_time` v1 for copied native day/night time. See [World time](../docs/api/world-time.md). The native clock readout was confirmed in a loaded world.
+
+AnyAPI 0.31.0 adds `anyapi.equipment` v1/v2 for copied hotbar and carried construction-tool snapshots, with queued native hotbar assignment/selection. See [Equipment](../docs/api/equipment.md). The inventory wheel and equipping were confirmed in a loaded world.

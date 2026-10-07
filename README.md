@@ -27,6 +27,7 @@ discovered from the game's mods folder.
 | AnyStorage | Storage transfers, matching stacks and sorting | [Guide](docs/mods/storage.md) |
 | AnyMap | World map, rotating minimap, markers and road guidance | [Guide](docs/mods/map.md) |
 | AnyGraphics | Native graphics, scene AA and volumetric lighting | [Guide](docs/mods/graphics.md) |
+| AnyQuickWheel | Automatic inventory construction-tool wheel | [Guide](docs/mods/quick-wheel.md) |
 | AnyClock | Configurable temporary game-time HUD | [Guide](docs/mods/clock.md) |
 
 ## Source and downloads
@@ -36,12 +37,12 @@ public SDK headers, examples, tests and documentation. Game executables, models,
 textures and the generated road cache are excluded. A compatible Anymaker
 installation is needed to build and test game-dependent features.
 
-The current release includes **AnyAPI 0.30.0** and **AnyClock 1.0.0**.
+The current release includes **AnyAPI 0.31.0** and **AnyQuickWheel 1.1.0**.
 AnyGraphics remains at **0.29.0**. AnyHelpers,
 AnyInventory, AnyStorage and AnyMap remain at **0.27.0**. **Manager 1.3.1**
 bundles API 0.27.0 and downloads the newer API through its update check;
-optional mods download individually. The native suite passes 42 checks.
-See [release notes](docs/releases/release-0.30.0.md).
+optional mods download individually. The native suite passes 47 checks.
+See [release notes](docs/releases/release-0.31.0.md).
 
 ## Compatibility
 

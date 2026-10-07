@@ -34,7 +34,7 @@
   "helpers_sha256": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c",
   "graphics_settings_acceptance": "USER_CONFIRMED_NATIVE_GRAPHICS_MENU",
   "api_version": "0.31.0",
-  "status": "LOCAL_CANDIDATE_GAMEPLAY_PENDING",
+  "status": "RELEASED_USER_ACCEPTED",
   "new_services": [
     "anyapi.scene_controls v1/v2",
     "anyapi.scene_antialiasing v1",
@@ -61,5 +61,5 @@
   "wheel_sha256": "fa161e4a7a6000b177d5b466d0057eaf00e570f60bcb04acb94eeccdcf512ec2",
   "wheel_gameplay_acceptance": "USER_CONFIRMED: inventory tool wheel and native equipping work in a world",
   "wheel_hotbar_gameplay_acceptance": "USER_CONFIRMED: original hotbar wheel works in a world",
-  "hud_hint_gameplay_acceptance": "PENDING: native control-hint row installed; visual confirmation pending"
+  "hud_hint_gameplay_acceptance": "NOT_VISIBLE_IN_USER_TEST: experimental; user requested no further changes and approved release"
 }

@@ -11,8 +11,8 @@ Resolve services with `AnyAPI_Services()->query(name, version)` during
 | Settings tabs and menu extensions | [Menu integration](menu-extensions.md) | `anyapi_menu_v1.h`, `anyapi_menu_v2.h` |
 | Native settings rows | [Settings widgets](settings-widgets.md) | `anyapi_menu_v3.h` |
 | Current game UI state | [UI state](ui-state.md) | `anyapi_ui_state_v1.h` |
-| Local hotbar, inventory tools and native selection (0.31.0 candidate) | [Equipment](equipment.md) | `anyapi_equipment_v1.h`, `anyapi_equipment_v2.h` |
-| Native bottom-left control hints (0.31.0 candidate) | [HUD hints](hud-hints.md) | `anyapi_hud_hint_provider_v1.h` |
+| Local hotbar, inventory tools and native selection (0.31.0) | [Equipment](equipment.md) | `anyapi_equipment_v1.h`, `anyapi_equipment_v2.h` |
+| Experimental native control hints (0.31.0) | [HUD hints](hud-hints.md) | `anyapi_hud_hint_provider_v1.h` |
 | World day/night time (0.30.0) | [World time](world-time.md) | `anyapi_world_time_v1.h` |
 | Session/game mode | [Session](session.md) | `anyapi_session_v1.h` |
 | Item and component definitions | [Item catalog](item-catalog.md) | `anyapi_item_catalog_v1.h` |
