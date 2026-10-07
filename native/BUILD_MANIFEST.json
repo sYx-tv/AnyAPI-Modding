@@ -1,6 +1,6 @@
 {
   "revision": 29,
-  "date": "2026-10-06",
+  "date": "2026-10-07",
   "game_version": "0.1.23",
   "steam_build_id": 25755694,
   "architecture": "Windows x64",
@@ -8,7 +8,7 @@
     "game.exe": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
     "bin/game.gcl": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
   },
-  "tests_passed": 38,
+  "tests_passed": 39,
   "mods": [
     "AnyHelpers",
     "AnyMap",
@@ -23,20 +23,20 @@
   "storage_fix": "corrected bottom-origin cursor tooltip coordinates and native content alignment; exclusions and top-first placement retained",
   "storage_gameplay_acceptance": "USER_CONFIRMED_TOOLTIPS_AND_TOOLBAR",
   "map_renderer": "resident GPU terrain, cached text, every-present minimap, 30ms presentation smoothing",
-  "host_sha256": "66833dfc7d97c854423c2aa722f51acf3dc07f301727b09c35ab52be496ed107",
+  "host_sha256": "470e4b7d14da99e4d4891beeeb48862f1852ab178e17c6256233c5b62acf235c",
   "map_sha256": "faf0174ae46cc055a8e170d8e2064055b0890b01722d1a89cc74535368b4ec0a",
-  "graphics_sha256": "60c82aaab12b29d863f92084b1100e1d801a9098200cdd425622157e61c8b0cc",
-  "graphics_gameplay_acceptance": "USER_CONFIRMED visible fog with height falloff Off; live HDR pass active. Shafts and FPS acceptance pending.",
+  "graphics_sha256": "ef57af5842ad2af12e9e40bd4c7c34a02da0521d32ed662558eea824803caf53",
+  "graphics_gameplay_acceptance": "USER_CONFIRMED fog, sun shafts, local lights and preset update; publication authorized",
   "graphics_gpu_performance": "PENDING: native-world measurements",
   "graphics_version": "0.29.0",
   "helpers_sha256": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c",
   "graphics_settings_acceptance": "USER_CONFIRMED_NATIVE_GRAPHICS_MENU",
   "api_version": "0.29.0",
-  "status": "LOCAL_LIGHTING_CANDIDATE",
+  "status": "RELEASE_VERIFIED",
   "new_services": [
     "anyapi.scene_controls v1/v2",
     "anyapi.scene_antialiasing v1",
-    "anyapi.scene_lighting v1 (experimental)"
+    "anyapi.scene_lighting v1/v2"
   ],
   "native_patterns_audited": 112,
   "native_patterns_refreshed": 17,
@@ -47,7 +47,7 @@
     "AnyMap": "0.27.0",
     "AnyInventory": "0.27.0",
     "AnyStorage": "0.27.0",
-    "AnyGraphics": "0.28.0"
+    "AnyGraphics": "0.29.0"
   },
-  "acceptance_date": "2026-10-06"
+  "acceptance_date": "2026-10-07"
 }

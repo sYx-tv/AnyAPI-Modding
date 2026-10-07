@@ -2,9 +2,10 @@
 
 ## Current release
 
-AnyAPI and all five mods are released as 0.27.0 for Windows x64, Anymaker
+AnyAPI and AnyGraphics are released as 0.29.0; the other four mods remain at
+0.27.0 for Windows x64, Anymaker
 0.1.23 / Steam build 25755694. The build manifest records exact executable and
-game-data hashes. The complete native suite passes 32 checks covering contracts,
+game-data hashes. The complete native suite passes 39 checks covering contracts,
 menus, inventories, storage, map rendering and graphics shader output.
 
 Local gameplay acceptance was confirmed by the author on October 6, 2026 for
@@ -21,7 +22,7 @@ GPU/FPS cost across different hardware.
 
 ## Published resources
 
-The stable catalog provides API 0.27.0 and five independent mod downloads.
+The stable catalog provides API 0.29.0 and five independent mod downloads.
 Manager 1.3.1 bundles the API-only archive and matching offline guide, with 25
 headers and 100 guide articles. The manager fixture suite passes 93 checks,
 including installation rollback, local mod discovery, launch modes and verified
@@ -35,3 +36,12 @@ bodies, dependencies and layouts. Validate joining-client/server operations
 separately and measure graphics cost in a fixed scene with effects on and off.
 
 Historical records are retained under [releases](../releases/).
+
+## Graphics lighting acceptance
+
+On October 7, 2026 the author confirmed visible volumetric fog, sun shafts and
+local-light scattering, accepted the preset update and authorized publication.
+All 39 native checks pass, including 54 synthetic D3D12 lighting cases. Installed
+DLLs match the release packages. Controlled world FPS measurements are pending.
+Spotlights use matching native shadows; point lights without shadow maps remain
+unshadowed. No temporal AA or temporal volumetric accumulation is advertised.

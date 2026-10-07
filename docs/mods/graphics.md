@@ -83,3 +83,14 @@ automated GPU smoothing and HUD restoration tests pass. Unsupported bindings
 bypass rather than falling back to a finished-screen filter.
 
 See [Scene AA development](../development/scene-antialiasing.md).
+
+## Volumetric lighting
+
+Version 0.29.0 adds native-depth fog, shadowed sun shafts and local-light beams
+in the HDR scene before bloom, tone mapping, antialiasing and the HUD. Headlights,
+torches and other native point/spot lights participate. Fog, beam strengths,
+beam focus, sampling quality and local-light budgets are editable in Graphics.
+Performance disables the added lighting; Low through Ultra progressively add
+beams, fog and higher sampling budgets. Off restores game settings.
+
+See [Scene lighting](../scene-lighting.md) for preset values, the API and limits.

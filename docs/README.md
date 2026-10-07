@@ -22,5 +22,5 @@
 - [Compatibility and validation](development/validation.md)
 
 The API reference describes the checked-in source. Published manager resources
-are versioned separately; its bundled offline guide describes API 0.25.0.
+are versioned separately; its bundled offline guide describes API 0.27.0.
 [Release records](releases/) retain historical evidence and version numbers.

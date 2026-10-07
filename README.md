@@ -26,7 +26,7 @@ discovered from the game's mods folder.
 | AnyInventory | Item search, previews, favorites and mode-limited Add | [Guide](docs/mods/inventory.md) |
 | AnyStorage | Storage transfers, matching stacks and sorting | [Guide](docs/mods/storage.md) |
 | AnyMap | World map, rotating minimap, markers and road guidance | [Guide](docs/mods/map.md) |
-| AnyGraphics | Native graphics settings and scene antialiasing | [Guide](docs/mods/graphics.md) |
+| AnyGraphics | Native graphics, scene AA and volumetric lighting | [Guide](docs/mods/graphics.md) |
 
 ## Source and downloads
 
@@ -35,11 +35,11 @@ public SDK headers, examples, tests and documentation. Game executables, models,
 textures and the generated road cache are excluded. A compatible Anymaker
 installation is needed to build and test game-dependent features.
 
-The current release includes **AnyAPI and AnyGraphics 0.28.0**. AnyHelpers,
+The current release includes **AnyAPI and AnyGraphics 0.29.0**. AnyHelpers,
 AnyInventory, AnyStorage and AnyMap remain at **0.27.0**. **Manager 1.3.1**
 bundles API 0.27.0 and downloads the newer API through its update check;
-optional mods download individually. The native suite passes 35 checks.
-See [release notes](docs/releases/release-0.28.0.md).
+optional mods download individually. The native suite passes 39 checks.
+See [release notes](docs/releases/release-0.29.0.md).
 
 ## Compatibility
 

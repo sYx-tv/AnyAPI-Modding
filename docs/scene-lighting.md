@@ -1,8 +1,7 @@
 # Scene lighting
 
-AnyAPI and AnyGraphics 0.28.0 remain the public release. The 0.29.0 lighting
-candidate adds HDR fog, sun shafts and local-light scattering. It is installed
-locally for world validation before publication.
+AnyAPI and AnyGraphics 0.29.0 add HDR fog, sun shafts and local-light scattering
+for Anymaker 0.1.23 / Steam build 25755694.
 
 ## Render integration
 
@@ -87,8 +86,8 @@ cover wrapped light vectors, light prioritization and matching spotlight cameras
 Plugin tests cover V1 fallback, V2 local-only operation and Apply/Cancel/bypass.
 
 The user confirmed visible volumetric fog and calibrated sun shafts in a world.
-The user also confirmed the local-light build looks correct. The new preset
-balance and native FPS remain pending world acceptance. Synthetic GPU checks do not establish those outcomes.
+The user also confirmed the local-light build looks correct. The preset update was user-approved for publication. Native FPS measurements
+remain pending. Synthetic GPU checks do not establish those outcomes.
 
 A one-shot 32×24 offscreen probe logs sun shadow coverage/lit fractions through
 `SHAFT_PROBE`. Readback is fenced after native command submission and polled
