@@ -1,5 +1,5 @@
 {
-  "revision": 28,
+  "revision": 29,
   "date": "2026-10-06",
   "game_version": "0.1.23",
   "steam_build_id": 25755694,
@@ -8,7 +8,7 @@
     "game.exe": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
     "bin/game.gcl": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
   },
-  "tests_passed": 35,
+  "tests_passed": 38,
   "mods": [
     "AnyHelpers",
     "AnyMap",
@@ -23,19 +23,20 @@
   "storage_fix": "corrected bottom-origin cursor tooltip coordinates and native content alignment; exclusions and top-first placement retained",
   "storage_gameplay_acceptance": "USER_CONFIRMED_TOOLTIPS_AND_TOOLBAR",
   "map_renderer": "resident GPU terrain, cached text, every-present minimap, 30ms presentation smoothing",
-  "host_sha256": "7c5c8532d6feeb1a3de36fa682cb7d4e4bb238651a5c416a3b063cbb2b94ea25",
+  "host_sha256": "727a109e2eb6aa99fa99efbe2ec63224ba164c0e470ca7b9ec5e13c9e1c25092",
   "map_sha256": "faf0174ae46cc055a8e170d8e2064055b0890b01722d1a89cc74535368b4ec0a",
-  "graphics_sha256": "798601ca1a5db4efe563b414db08cc7a74e54b999b65e34ad8f1baa728f7aee3",
-  "graphics_gameplay_acceptance": "Enhanced SMAA Ultra observed in loaded world; user requests publication; residual aliasing remains, comparison camera differs",
-  "graphics_gpu_performance": "NOT_YET_MEASURED_IN_GAME",
-  "graphics_version": "0.28.0",
+  "graphics_sha256": "8ca91c2a7f9d50911f39cf3914aaf25257363e17b0e38d6c4fe3411553a1eff9",
+  "graphics_gameplay_acceptance": "PENDING: new HDR lighting; public 0.28.0 remains accepted",
+  "graphics_gpu_performance": "PENDING: native-world measurements",
+  "graphics_version": "0.29.0",
   "helpers_sha256": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c",
   "graphics_settings_acceptance": "USER_CONFIRMED_NATIVE_GRAPHICS_MENU",
-  "api_version": "0.28.0",
-  "status": "RELEASE",
+  "api_version": "0.29.0",
+  "status": "LOCAL_LIGHTING_CANDIDATE",
   "new_services": [
     "anyapi.scene_controls v1/v2",
-    "anyapi.scene_antialiasing v1"
+    "anyapi.scene_antialiasing v1",
+    "anyapi.scene_lighting v1 (experimental)"
   ],
   "native_patterns_audited": 112,
   "native_patterns_refreshed": 17,

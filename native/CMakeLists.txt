@@ -164,8 +164,8 @@ function(anyapi_version_resource target product)
   set(ANYAPI_VERSION_COMMA "0,27,0,0")
   set(ANYAPI_VERSION_TEXT "0.27.0")
   if(target STREQUAL "dinput8" OR target STREQUAL "AnyGraphics")
-    set(ANYAPI_VERSION_COMMA "0,28,0,0")
-    set(ANYAPI_VERSION_TEXT "0.28.0")
+    set(ANYAPI_VERSION_COMMA "0,29,0,0")
+    set(ANYAPI_VERSION_TEXT "0.29.0")
   endif()
   set(ANYAPI_BINARY_NAME "${product}.dll")
   if(target STREQUAL "dinput8")
@@ -205,8 +205,35 @@ target_include_directories(scene_smaa_gpu_test PRIVATE "${CMAKE_CURRENT_BINARY_D
 target_compile_options(scene_smaa_gpu_test PRIVATE /UNDEBUG /EHsc /utf-8)
 target_link_libraries(scene_smaa_gpu_test PRIVATE d3d12 dxgi d3dcompiler)
 add_test(NAME scene_smaa_gpu COMMAND scene_smaa_gpu_test)
+
+# Experimental HDR lighting passes, kept separate from the published 0.28.0 build.
+add_executable(lighting_shader_test lighting_shader_test.cpp)
+target_compile_options(lighting_shader_test PRIVATE /UNDEBUG /EHsc /utf-8)
+target_link_libraries(lighting_shader_test PRIVATE d3dcompiler)
+add_test(NAME lighting_kernels COMMAND lighting_shader_test "${CMAKE_CURRENT_SOURCE_DIR}/lighting/volumetric.hlsl")
+set(LIGHTING_GENERATED "${CMAKE_CURRENT_BINARY_DIR}/lighting-generated/volumetric_bytecode.h")
+add_custom_command(OUTPUT "${LIGHTING_GENERATED}"
+ COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/lighting-generated"
+ COMMAND lighting_shader_test "${CMAKE_CURRENT_SOURCE_DIR}/lighting/volumetric.hlsl" "${LIGHTING_GENERATED}"
+ DEPENDS lighting_shader_test lighting/volumetric.hlsl VERBATIM)
+add_custom_target(lighting_bytecode DEPENDS "${LIGHTING_GENERATED}")
+add_executable(lighting_gpu_test lighting_gpu_test.cpp)
+add_dependencies(lighting_gpu_test lighting_bytecode)
+target_include_directories(lighting_gpu_test PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/lighting-generated")
+target_compile_options(lighting_gpu_test PRIVATE /UNDEBUG /EHsc /utf-8)
+target_link_libraries(lighting_gpu_test PRIVATE d3d12 dxgi d3dcompiler)
+add_test(NAME lighting_gpu COMMAND lighting_gpu_test)
 # Native integration fixtures include the framework translation unit.
 foreach(target inventory_native_test menu_extensions_test players_producer_test settings_tabs_test settings_widgets_test storage_native_test)
  add_dependencies(${target} scene_smaa_bytecode)
  target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/aa-generated")
 endforeach()
+
+foreach(target dinput8 inventory_native_test menu_extensions_test players_producer_test settings_tabs_test settings_widgets_test storage_native_test)
+ add_dependencies(${target} lighting_bytecode)
+ target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/lighting-generated")
+endforeach()
+
+add_executable(scene_lighting_test tests/scene_lighting_test.cpp)
+target_compile_options(scene_lighting_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME scene_lighting_contract COMMAND scene_lighting_test)

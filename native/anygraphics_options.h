@@ -4,7 +4,7 @@
 #include <array>
 #include <cmath>
 namespace graphics_options {
-enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Count};
+enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,Count};
 struct Option {const char* id;const char* group;const char* label;const char* description;uint32_t kind;float initial,minimum,maximum,step;};
 static constexpr Option definitions[]={
  {"enabled","General","Enable AnyGraphics","Use the selected native graphics settings. Off restores the game's own settings.",ANY_SETTING_BOOL,1,0,1,1},
@@ -26,7 +26,11 @@ static constexpr Option definitions[]={
  {"aa_quality","Scene","SMAA quality","Edge search quality. Higher levels cost more GPU time.",ANY_SETTING_CHOICE,2,0,3,1},
  {"clouds","Scene","Cloud rendering","Use the native cloud-rendering setting, or override it off/on.",ANY_SETTING_CHOICE,0,0,2,1},
  {"grass","Scene","Grass rendering","Use the native grass-rendering setting, or override it off/on.",ANY_SETTING_CHOICE,0,0,2,1},
- {"foliage","Scene","Foliage rendering","Render native vegetation. Changes rendering only, not world objects or collision.",ANY_SETTING_CHOICE,0,0,2,1}
+ {"foliage","Scene","Foliage rendering","Render native vegetation. Changes rendering only, not world objects or collision.",ANY_SETTING_CHOICE,0,0,2,1},
+ {"atmosphere","Lighting","Volumetric fog","Experimental depth-aware fog in the HDR scene, before bloom and HUD.",ANY_SETTING_CHOICE,0,0,4,1},
+ {"sun_shafts","Lighting","Sun shafts","Experimental shadowed sunlight scattering. Current build uses the nearest native shadow cascade.",ANY_SETTING_CHOICE,0,0,4,1},
+ {"lighting_quality","Lighting","Volumetric quality","Ray-march sampling quality. Higher settings use more GPU time.",ANY_SETTING_CHOICE,1,0,3,1},
+ {"ground_fog","Lighting","Ground fog","Concentrate added fog near sea level; higher choices increase height falloff.",ANY_SETTING_CHOICE,1,0,3,1}
 };
 static_assert(std::size(definitions)==Count);
 using Values=std::array<float,Count>;

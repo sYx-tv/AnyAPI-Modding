@@ -8,6 +8,7 @@
 #include "anyapi_menu_v2.h"
 #include "anyapi_scene_controls_v1.h"
 #include "anyapi_scene_controls_v2.h"
+#include "anyapi_scene_lighting_v1.h"
 #include "anyapi_scene_antialiasing_v1.h"
 #include "anyapi_post_process_v1.h"
 #include "anygraphics_options.h"
@@ -17,6 +18,10 @@ static AnySceneAntialiasingParametersV1 aa_policy;static unsigned aa_submissions
 static bool aa_set(const AnySceneAntialiasingParametersV1* p){aa_policy=*p;++aa_submissions;return true;}
 static bool aa_status(AnySceneAntialiasingStatusV1* s){s->available=s->ready=1;return true;}
 static const AnySceneAntialiasingV1 aa_api{sizeof(AnySceneAntialiasingV1),1,aa_set,aa_status};
+static AnySceneLightingParametersV1 lighting_policy;static unsigned lighting_submissions{};
+static bool lighting_set(const AnySceneLightingParametersV1* p){lighting_policy=*p;++lighting_submissions;return true;}
+static bool lighting_status(AnySceneLightingStatusV1* s){s->available=s->ready=1;return true;}
+static const AnySceneLightingV1 lighting_api{sizeof(AnySceneLightingV1),1,lighting_set,lighting_status};
 static AnySceneParametersV1 policy;static bool ready=true;static unsigned submissions{},post_calls{};
 static bool set(const AnySceneParametersV1* p){policy=*p;++submissions;return true;}
 static AnySceneParametersV2 detail_policy;
@@ -28,7 +33,7 @@ static const AnySceneControlsV2 scene_v2{sizeof(AnySceneControlsV2),2,set_v2,sta
 static const AnyPostProcessV1 post{sizeof(AnyPostProcessV1),1,forbidden,nullptr,nullptr};
 static void log(uint32_t,const char*,const char* text){std::cout<<text<<'\n';}
 int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitbuf;using namespace graphics_options;assert(argc==4||argc==5);bool absent=argc==5;
- auto fixture=LoadLibraryW(argv[1]);assert(fixture);auto service=AnyAPI_Services();assert(service);assert(service->publish("anyapi.post_process",1,&post));if(!absent){assert(service->publish("anyapi.scene_controls",1,&scene));assert(service->publish("anyapi.scene_controls",2,&scene_v2));assert(service->publish("anyapi.scene_antialiasing",1,&aa_api));}auto graphics=LoadLibraryW(argv[3]);assert(graphics);
+ auto fixture=LoadLibraryW(argv[1]);assert(fixture);auto service=AnyAPI_Services();assert(service);assert(service->publish("anyapi.post_process",1,&post));if(!absent){assert(service->publish("anyapi.scene_controls",1,&scene));assert(service->publish("anyapi.scene_controls",2,&scene_v2));assert(service->publish("anyapi.scene_antialiasing",1,&aa_api));assert(service->publish("anyapi.scene_lighting",1,&lighting_api));}auto graphics=LoadLibraryW(argv[3]);assert(graphics);
  auto root=std::filesystem::temp_directory_path()/(L"AnyGraphicsNative-"+std::to_wstring(GetCurrentProcessId()));std::filesystem::create_directories(root/L"AnyHelpers");
  // Migration retains native keys, ignores removed post FX and does not load AnyHelpers.
  {std::ofstream old(root/L"AnyHelpers"/L"settings.tsv");old<<"anygraphics.scene\tsun_light\t3\t312e35\nanygraphics.general\tcomparison\t4\t31\nanygraphics.sharpness\tsharpen\t1\t31\n";}
@@ -45,12 +50,18 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  apply(NativeAA,4);assert(aa_policy.enabled&&aa_policy.method==2&&policy.aa==0);
  apply(NativeAA,1);assert(!aa_policy.enabled);apply(NativeBloom,5);assert(policy.aa==1&&policy.bloom==2&&policy.bloom_intensity==.35f);
  apply(NativeSSAO,1);apply(NativeShadows,2);apply(NativeFogBlur,1);apply(FogDensity,1);assert(policy.ssao==1&&policy.shadows==2&&policy.fog_blur==1&&policy.fog==.35f&&policy.light_exposure==0);
- for(int preset=1;preset<=5;++preset){apply(Preset,preset);auto expected=profile(defaults(),preset);assert(policy.enabled&&policy.sun==1&&policy.fog==expected[FogDensity]&&policy.ssao==uint32_t(expected[NativeSSAO])&&policy.bloom_intensity==expected[BloomAmount]);assert(detail_policy.clouds==uint32_t(expected[Clouds])&&detail_policy.grass==uint32_t(expected[Grass])&&detail_policy.foliage==0);event(ANY_MENU_OPEN);stage(0,0);assert(rows()==Count-3);event(ANY_MENU_CANCEL);}
- apply(Preset,0);assert(!policy.enabled&&!aa_policy.enabled);apply(Preset,3);assert(policy.enabled);
+ for(int preset=1;preset<=5;++preset){apply(Preset,preset);auto expected=profile(defaults(),preset);assert(policy.enabled&&policy.sun==1&&policy.fog==expected[FogDensity]&&policy.ssao==uint32_t(expected[NativeSSAO])&&policy.bloom_intensity==expected[BloomAmount]);assert(detail_policy.clouds==uint32_t(expected[Clouds])&&detail_policy.grass==uint32_t(expected[Grass])&&detail_policy.foliage==0);event(ANY_MENU_OPEN);stage(0,0);assert(rows()==Count-5);event(ANY_MENU_CANCEL);}
+ assert(lighting_submissions&&!lighting_policy.enabled);
+ apply(Atmosphere,3);apply(SunShafts,2);apply(LightingQuality,3);apply(GroundFog,2);
+ assert(lighting_policy.enabled&&lighting_policy.fog_density==.004f&&lighting_policy.sun_shafts==1&&lighting_policy.quality==3&&lighting_policy.height_falloff==.025f);
+ event(ANY_MENU_OPEN);stage(Atmosphere+1,4);render();assert(lighting_policy.fog_density==.004f);event(ANY_MENU_CANCEL);render();assert(lighting_policy.fog_density==.004f);
+ apply(Atmosphere,0);assert(lighting_policy.enabled&&lighting_policy.fog_strength==0&&lighting_policy.sun_shafts==1);
+ apply(SunShafts,0);assert(!lighting_policy.enabled);
+ apply(Atmosphere,2);apply(Preset,0);assert(!policy.enabled&&!aa_policy.enabled&&!lighting_policy.enabled);apply(Preset,3);assert(policy.enabled);
  for(int level=0;level<5;++level){apply(FogDensity,level);assert(policy.fog==fog_levels[level]);}
  for(int level=2;level<6;++level){apply(NativeBloom,level);assert(policy.bloom==2&&policy.bloom_intensity==bloom_levels[level-2]);}
  event(ANY_MENU_OPEN);stage(0,0);event(ANY_MENU_RESET);assert(dirty());render();assert(policy.fog==1.5f);event(ANY_MENU_APPLY);event(ANY_MENU_CANCEL);render();assert(policy.sun==1&&policy.aa==2&&policy.bloom==2&&policy.fog==.65f);
- apply(Enabled,0);assert(!policy.enabled);apply(Enabled,1);ui(13);render();assert(!policy.enabled);apply(GameplayOnly,0);assert(policy.enabled);ready=false;render();ready=true;render();assert(policy.enabled);
+ apply(Atmosphere,2);apply(Enabled,0);assert(!policy.enabled&&!lighting_policy.enabled);apply(Enabled,1);ui(13);render();assert(!policy.enabled&&!lighting_policy.enabled);apply(GameplayOnly,0);assert(policy.enabled);ready=false;render();ready=true;render();assert(policy.enabled);
 
  }
  {std::ifstream saved(root/L"AnyGraphics"/L"settings.tsv");std::string text((std::istreambuf_iterator<char>(saved)),{});assert(text.find("comparison")==std::string::npos&&text.find("sharpen")==std::string::npos);}

@@ -27,7 +27,9 @@ Resolve services with `AnyAPI_Services()->query(name, version)` during
 GPU post-processing requires API 0.26.0 or newer. Conditional settings presentation
 requires the updated AnyHelpers source. Both v1 settings and prior public API
 tables remain supported. The published stable manager bundles API 0.27.0.
-Native scene controls are a local 0.28.0 candidate pending live game acceptance.
+Native scene controls and scene SMAA are published in 0.28.0.
+The lighting branch adds [experimental scene lighting](../scene-lighting.md)
+with `anyapi_scene_lighting_v1.h`, pending native-world acceptance in 0.29.0.
 
 Native contract snapshots remain beside implementation files in `native/`.
 They identify reviewed game bodies and layouts; they do not grant compatibility

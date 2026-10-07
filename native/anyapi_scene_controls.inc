@@ -1,6 +1,6 @@
 #include "runtime_call_cell.h"
 namespace scene_controls {
-static anyapi_runtime::CallCellHook renderer_cell,scene_cell,pre_hud_cell;
+static anyapi_runtime::CallCellHook renderer_cell,scene_cell,pre_hud_cell,lighting_cell;
 static bool writable(void* pointer,size_t bytes){MEMORY_BASIC_INFORMATION m{};return pointer&&VirtualQuery(pointer,&m,sizeof(m))&&m.State==MEM_COMMIT&&!(m.Protect&(PAGE_GUARD|PAGE_NOACCESS))&&(m.Protect&(PAGE_READWRITE|PAGE_EXECUTE_READWRITE))&&uintptr_t(pointer)+bytes>=uintptr_t(pointer)&&uintptr_t(pointer)+bytes<=uintptr_t(m.BaseAddress)+m.RegionSize;}
 struct RendererSaved {unsigned char flags[9];double threshold,intensity;};
 static bool renderer_apply(void* object,const AnySceneParametersV1* p,RendererSaved* old,const uint32_t* details=nullptr){
@@ -52,6 +52,12 @@ static void pre_hud_hook(void* renderer,void* scene){
   log_line(ANY_LOG_INFO,"framework",("SCENE_AA_STAGE before_hud_calls="+std::to_string(calls)+" source_target_valid="+std::to_string(valid)+" width="+std::to_string(valid?dimensions[0]:0)+" height="+std::to_string(valid?dimensions[1]:0)+" diagnostic_scene_target=1").c_str());
  }
 }
+static void lighting_hook(void* renderer,void* scene){((SceneFn)lighting_cell.original())(renderer,scene);
+#ifndef ANYAPI_SCENE_CONTROLS_TEST
+ scene_lighting::record(renderer,scene);
+#endif
+}
+static const unsigned char ADDITIVE[]={0x53,0x55,0x56,0x57,0x41,0x54,0x48,0x81,0xec,0x50,0x01,0,0,0x48,0x89,0x8c,0x24,0xe8,0,0,0,0x48,0x89,0x94,0x24,0xf0,0,0,0,0x48,0x8b,0x05};
 static const unsigned char RECORD_COMMANDS[]={0x53,0x55,0x56,0x48,0x81,0xec,0x10,0x02,0,0,0x48,0x89,0x8c,0x24,0xb0,0x01,0,0,0x48,0x89,0x94,0x24,0xb8,0x01,0,0,0x48,0x8b,0x05,0x07,0x0a,0};
 static const unsigned char POST_COMPOSITE[]={0x53,0x55,0x56,0x48,0x81,0xec,0x80,0x04,0,0,0x48,0x89,0x8c,0x24,0x28,0x04,0,0,0x48,0x89,0x94,0x24,0x30,0x04,0,0,0x48,0x8b,0x05,0x17,0x17,0};
 static const unsigned char ON_RENDER[]={0x48,0x83,0xec,0x28,0x48,0x8b,0x05,0x15,0,0,0,0x48,0x8d,0x08,0x48,0x8b,0x05,0x13,0,0,0,0xff,0x10,0x48,0x83,0xc4,0x28,0xc3};
@@ -73,6 +79,7 @@ static DWORD WINAPI worker(void*){for(unsigned attempt=0;attempt<120&&!ready;++a
  if(boundary&&pre_hud_cell.install(boundary,(void*)pre_hud_hook)){pre_hud_ready=true;
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  scene_antialiasing::available=true;
+ auto light=resolve_unique_cell(record,2600,33,ADDITIVE,sizeof(ADDITIVE));if(light&&lighting_cell.install(light,(void*)lighting_hook)){scene_lighting::available=true;log_line(ANY_LOG_INFO,"framework","SCENE_LIGHTING resolved=1 location=HDR_AFTER_ADDITIVE_BEFORE_BLOOM_TONEMAP_HUD experimental=1");}
 #endif
  log_line(ANY_LOG_INFO,"framework","SCENE_AA_STAGE resolved=1 location=AFTER_SCENE_COMPOSITION_BEFORE_HUD scene_replacement_available=1");}
  else log_line(ANY_LOG_WARN,"framework","SCENE_AA_STAGE unavailable=1 replacement_AA_not_exposed=1");

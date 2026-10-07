@@ -5250,6 +5250,7 @@ static DWORD WINAPI framework_runtime_thread(void*) {
 #include "anyapi_inventory_actions.inc"
 #include "anyapi_screen_layout.inc"
 #include "anyapi_scene_antialiasing.inc"
+#include "anyapi_scene_lighting.inc"
 #include "anyapi_scene_controls.inc"
 #include "anyapi_inventory_ui.inc"
 #include "anyapi_client_tasks.inc"
