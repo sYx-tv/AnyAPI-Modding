@@ -66,3 +66,11 @@ nearest shadow target has an R16_UNORM SRV, not R32_FLOAT. The backend now
 accepts R16_TYPELESS/R16_UNORM shadow resources and creates the matching SRV;
 scene depth remains R32. Eight additional GPU cases exercise the native
 16-bit shadow format with reversed depth across all quality levels.
+
+## Visible fog acceptance
+
+The user confirmed clearly visible fog after setting height falloff Off and
+volumetric fog Ultra. The pass now renders into the native HDR scene. The former
+Ground fog High choice suppressed density at the tested altitude of about 34 m.
+It is renamed Fog height falloff, with a sea-level explanation and an Off
+default. Shadowed-shaft appearance and native GPU timing remain unaccepted.

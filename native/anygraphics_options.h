@@ -30,7 +30,7 @@ static constexpr Option definitions[]={
  {"atmosphere","Lighting","Volumetric fog","Experimental depth-aware fog in the HDR scene, before bloom and HUD.",ANY_SETTING_CHOICE,0,0,4,1},
  {"sun_shafts","Lighting","Sun shafts","Experimental shadowed sunlight scattering. Current build uses the nearest native shadow cascade.",ANY_SETTING_CHOICE,0,0,4,1},
  {"lighting_quality","Lighting","Volumetric quality","Ray-march sampling quality. Higher settings use more GPU time.",ANY_SETTING_CHOICE,1,0,3,1},
- {"ground_fog","Lighting","Ground fog","Concentrate added fog near sea level; higher choices increase height falloff.",ANY_SETTING_CHOICE,1,0,3,1}
+ {"ground_fog","Lighting","Fog height falloff","Off keeps added fog uniform with altitude. Higher levels concentrate fog near sea level and may make it faint on hills.",ANY_SETTING_CHOICE,0,0,3,1}
 };
 static_assert(std::size(definitions)==Count);
 using Values=std::array<float,Count>;
