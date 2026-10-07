@@ -39,6 +39,24 @@ static void activation_regression(){alignas(8) unsigned char ui[0xe0]{},element[
 static void scroll_regression(){menus::sections.front()->callbacks.draw=long_draw;auto second=menus::sections.back();second->faulted=true;auto memory=(unsigned char*)VirtualAlloc(nullptr,0x10000,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);assert(memory);memset(memory,0x90,0x10000);
  memory[0]=0x48;memory[1]=0x83;memory[2]=0xec;memory[3]=0x28;size_t offset=0x7726;memory[offset-12]=0x48;memory[offset-11]=0xb8;auto target=(uintptr_t)menus::end_hook;memcpy(memory+offset-10,&target,8);memory[offset-2]=0xff;memory[offset-1]=0xd0;unsigned char epilogue[]={0x48,0x83,0xc4,0x28,0xc3};memcpy(memory+offset,epilogue,5);DWORD old{};assert(VirtualProtect(memory,0x10000,PAGE_EXECUTE_READ,&old));FlushInstructionCache(GetCurrentProcess(),memory,0x10000);
  menus::builder=(uintptr_t)memory;track_scroll=true;container_depth=1;long_rows=0;enter_flag=false;((void(*)(void*))memory)((void*)1);assert(long_rows==256&&container_depth==0);track_scroll=false;second->faulted=false;VirtualFree(memory,0,MEM_RELEASE);}
+
+static int graphics_events[5]{},graphics_draws{};
+static void graphics_event_fixture(uint32_t e,void*){++graphics_events[e];}
+static void graphics_draw_fixture(const AnyMenuFrameV1* frame,void*){assert(frame->location==ANY_MENU_SETTINGS_GRAPHICS);assert(container_depth==2);++graphics_draws;menus::api.begin_table("native_graphics",1,0);menus::api.end_table();}
+static void graphics_apply_fixture(void*,void*,void*,const bool*){++apply_forwards;}
+static void graphics_regression(){
+ AnyMenuSectionV1 section;section.id="graphics";section.title="AnyGraphics Modded";section.location=ANY_MENU_SETTINGS_GRAPHICS;section.draw=graphics_draw_fixture;section.event=graphics_event_fixture;section.dirty=dirty_fixture;section.defaults=defaults_fixture;platform::current_plugin=0;assert(menus::api.add_section(&section));platform::current_plugin=-1;
+ // Execute the reviewed closing-call fragment from the real Graphics builder.
+ auto code=(uint8_t*)VirtualAlloc(nullptr,0x6000,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);assert(code);memcpy(code,MENU_GRAPHICS,sizeof(MENU_GRAPHICS));
+ unsigned char entry[]={0x48,0x81,0xec,0xa8,0,0,0,0x48,0x89,0x4c,0x24,0x78,0xe9};memcpy(code,entry,sizeof(entry));int32_t jump=0x3c45-17;memcpy(code+13,&jump,4);
+ unsigned char end[]={0x48,0x81,0xc4,0xa8,0,0,0,0xc3};memcpy(code+0x3c6d,end,sizeof(end));uintptr_t cell=(uintptr_t)menus::graphics_end_hook;*(uintptr_t*)(code+0x4730)=(uintptr_t)&cell;DWORD old{};assert(VirtualProtect(code,0x6000,PAGE_EXECUTE_READ,&old));FlushInstructionCache(GetCurrentProcess(),code,0x6000);
+ menus::graphics_builder=(uintptr_t)code;menus::inside_graphics=true;track_scroll=true;container_depth=2;((void(*)(void*))code)((void*)1);assert(graphics_draws==1&&container_depth==0);track_scroll=false;
+ // Run native comparison call sites with the correct return addresses.
+ auto compare=[&](size_t offset){DWORD old{};assert(VirtualProtect(code,0x6000,PAGE_READWRITE,&old));memset(code,0x90,512);code[0]=0x48;code[1]=0x83;code[2]=0xec;code[3]=0x28;code[offset-12]=0x48;code[offset-11]=0xb8;auto fn=(uintptr_t)menus::graphics_equal_hook;memcpy(code+offset-10,&fn,8);code[offset-2]=0xff;code[offset-1]=0xd0;unsigned char finish[]={0x48,0x83,0xc4,0x28,0xc3};memcpy(code+offset,finish,5);assert(VirtualProtect(code,0x6000,PAGE_EXECUTE_READ,&old));FlushInstructionCache(GetCurrentProcess(),code,0x6000);uint8_t value{};((void(*)(uint8_t*,void*,void*))code)(&value,nullptr,nullptr);return value;};
+ menus::original_graphics_equal=equal_fixture;dirty_flag=true;default_flag=false;assert(!compare(0x92)&&!compare(0x123));dirty_flag=false;default_flag=true;assert(compare(0x92));
+ menus::original_graphics_apply=graphics_apply_fixture;menus::original_graphics_reset=reset_fixture;bool yes=true,no=false;menus::graphics_apply_hook(nullptr,nullptr,nullptr,&no);assert(!graphics_events[ANY_MENU_APPLY]);menus::graphics_apply_hook(nullptr,nullptr,nullptr,&yes);assert(graphics_events[ANY_MENU_APPLY]==1);menus::graphics_reset_hook(nullptr,nullptr,&no);assert(graphics_events[ANY_MENU_RESET]==1);int prior=graphics_events[ANY_MENU_APPLY];menus::event(ANY_MENU_APPLY,ANY_MENU_SETTINGS_CONTROLS);assert(graphics_events[ANY_MENU_APPLY]==prior);
+ menus::inside_graphics=false;VirtualFree(code,0,MEM_RELEASE);
+}
 int main(){assert(!services::api.query("bad/name",1));assert(!services::api.publish("fixture",1,&events));assert(!menus::api.add_section(nullptr));
  platform::plugin_count=2;for(int i=0;i<2;++i){platform::plugins[i].path=i?L"B.dll":L"A.dll";platform::plugins[i].callbacks.id=i?"b":"a";platform::plugins[i].callbacks.input=ordinary;}
  AnyMenuSectionV1 s;s.id="custom";s.title="CUSTOM";s.draw=draw_fixture;s.event=event_fixture;s.dirty=dirty_fixture;s.defaults=defaults_fixture;
@@ -52,7 +70,7 @@ int main(){assert(!services::api.query("bad/name",1));assert(!services::api.publ
  menus::apply_hook(nullptr,nullptr,nullptr,&yes,&no);assert(!events[ANY_MENU_APPLY]);menus::apply_hook(nullptr,nullptr,nullptr,&yes,&yes);assert(events[ANY_MENU_APPLY]==2&&apply_forwards==2);
  menus::reset_hook(nullptr,nullptr,&yes);assert(!events[ANY_MENU_RESET]);menus::reset_hook(nullptr,nullptr,&no);assert(events[ANY_MENU_RESET]==2&&reset_forwards==2);
  menus::session=true;menus::close_hook(nullptr,nullptr);menus::close_hook(nullptr,nullptr);assert(events[ANY_MENU_CANCEL]==2&&close_forwards==2);
- activation_regression();scroll_regression();
+ activation_regression();scroll_regression();graphics_regression();
  platform::current_plugin=0;assert(services::api.input_filter(filter,nullptr,100));platform::current_plugin=-1;AnyInputV1 e;e.kind=ANY_KEY_DOWN;e.key='K';assert(platform::input(e));assert(filter_calls==1&&!ordinary_calls);
  e.kind=ANY_FOCUS_LOST;platform::input(e);assert(filter_calls==2&&ordinary_calls==2);platform::plugins[0].faulted=true;assert(!services::api.query("fixture",1));
  std::cout<<"PASS: multiple menu owners, ID namespaces, table recovery, native equality call sites, original forwarding, Apply/Reset/Cancel, optional service versions, filter ordering/focus, real native hover-vs-activation regression, 256 rows inside scroll-close boundary\n";}

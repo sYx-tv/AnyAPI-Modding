@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="35"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname=""
+	time="29"
+	timestamp="2026-10-06T21:00:31"
+	>
+	<testcase name="call_cell" classname="call_cell" time="0.0130295" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="task_queue" classname="task_queue" time="0.0089863" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="pointer_pool" classname="pointer_pool" time="0.0247494" status="run">
+		<properties/>
+		<system-out>PASS: 100000 create/destroy/reuse operations; no live slot aliasing
+</system-out>
+	</testcase>
+	<testcase name="abi_layout" classname="abi_layout" time="0.0086166" status="run">
+		<properties/>
+		<system-out>PASS: x64 API v16 preserves v15 context prefix
+</system-out>
+	</testcase>
+	<testcase name="detour_transaction" classname="detour_transaction" time="0.0086636" status="run">
+		<properties/>
+		<system-out>PASS: publication precedes resume; busy/protection/unwind failures leave entry unchanged
+</system-out>
+	</testcase>
+	<testcase name="map_math" classname="map_math" time="0.0088916" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="players_producer" classname="players_producer" time="0.0651279" status="run">
+		<properties/>
+		<system-out>PASS: native lookup, forwarding, bounded owned client tasks and build service ABI
+</system-out>
+	</testcase>
+	<testcase name="map_roads" classname="map_roads" time="0.0088011" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="map_roads_current_assets" classname="map_roads_current_assets" time="7.77836" status="run">
+		<properties/>
+		<system-out>Sandbox routes: 1033 nodes; furthest 8598.03 m; destination 85842.5,49155.3; snap 98.4764 m
+</system-out>
+	</testcase>
+	<testcase name="map_plugin" classname="map_plugin" time="0.813659" status="run">
+		<properties/>
+		<system-out>MARKERS_LOADED count=0 rejected=0
+DLL_READY bind=M embedded_roads=1 external_helpers=0
+MAP_OPENED_DLL
+MAP_CLOSED_DLL
+MAP_OPENED_DLL
+MAP_CLOSED_DLL
+PASS: actual DLL initialization, embedded road data, map/minimap rendering, M repeat suppression, inventory/stale/focus hiding
+</system-out>
+	</testcase>
+	<testcase name="platform_render" classname="platform_render" time="0.382376" status="run">
+		<properties/>
+		<system-out>PLUGIN_INPUT cursor_imports=2 capture=GAME_WINDOW_ONLY
+PLUGIN_PLATFORM graphics_hooks=READY mechanism=COM_TABLE_ATOMIC
+PLUGIN_INPUT game_window=ATTACHED overlay_windows=0
+PLUGIN_RENDER backend=D3D12_11ON12_D2D state=PRESENT_TO_PRESENT game_backbuffer=READY
+PLUGIN_RENDER game_backbuffer=DRAWN helper_processes=0
+PASS: GPU readback confirms red DLL canvas over green game backbuffer at 64x64
+PASS: GPU readback confirms red DLL canvas over green game backbuffer at 96x80
+PASS: GPU readback confirms red DLL canvas over green game backbuffer at 96x80
+PASS: GPU readback confirms red DLL canvas over green game backbuffer at 96x80
+PASS: GPU readback confirms red DLL canvas over green game backbuffer at 128x96
+PASS: GPU command-only frames, persistent texture reuse and re-upload after device reset
+PASS: native-only mods retain the presentation clock without a canvas
+</system-out>
+	</testcase>
+	<testcase name="mod_controls_state" classname="mod_controls_state" time="0.0288429" status="run">
+		<properties/>
+		<system-out>PASS: registration, draft/commit/cancel/reset, conflicts, unbind, persistence reload, dormant mods, malformed rows, failed-save retention
+</system-out>
+	</testcase>
+	<testcase name="menu_extensions" classname="menu_extensions" time="0.0612398" status="run">
+		<properties/>
+		<system-out>PASS: multiple menu owners, ID namespaces, table recovery, native equality call sites, original forwarding, Apply/Reset/Cancel, optional service versions, filter ordering/focus, real native hover-vs-activation regression, 256 rows inside scroll-close boundary
+</system-out>
+	</testcase>
+	<testcase name="settings_tabs" classname="settings_tabs" time="0.0645791" status="run">
+		<properties/>
+		<system-out>PASS: exact native Settings update/tab/render execution with mandatory icons, NONE default and missing-icon fallback/suppression, fifth/sixth tabs, all four vanilla dispatch slots, untouched native enums, independent Apply/Reset/drafts/scroll, deactivate, fault fallback, close/reopen, 256 compact rows within scroll, footer in native parent
+</system-out>
+	</testcase>
+	<testcase name="mod_controls_plugin" classname="mod_controls_plugin" time="1.63447" status="run">
+		<properties/>
+		<system-out>anyhelpers: DLL_READY native_tabs_registered=2 legacy_binding_service=1 rejected_saved_rows=0
+anymap: MARKERS_LOADED count=0 rejected=0
+anymap: DLL_READY bind=M embedded_roads=1 external_helpers=0
+anyhelpers: SETTING_REGISTER mod=anymap setting=show_minimap kind=1
+anyhelpers: SETTING_REGISTER mod=anymap setting=minimap_size kind=2
+anyhelpers: SETTING_REGISTER mod=anymap setting=minimap_range kind=3
+anyhelpers: SETTING_REGISTER mod=anymap setting=minimap_orientation kind=4
+anyhelpers: SETTING_REGISTER mod=anymap setting=player_names kind=1
+anyhelpers: SETTING_REGISTER mod=anymap setting=marker_scale kind=3
+anyhelpers: SETTING_REGISTER mod=anymap setting=route_guide kind=1
+anyhelpers: SETTING_REGISTER mod=anymap setting=waypoint_label kind=5
+anyhelpers: SETTING_REGISTER mod=anymap setting=minimap_corner kind=4
+anyhelpers: SETTING_REGISTER mod=anymap setting=minimap_x kind=3
+anyhelpers: SETTING_REGISTER mod=anymap setting=minimap_y kind=3
+anyhelpers: SETTING_REGISTER mod=anymap setting=minimap_opacity kind=2
+any...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="settings_state" classname="settings_state" time="0.0167038" status="run">
+		<properties/>
+		<system-out>PASS: typed ranges, defaults, draft isolation, durable save/reload, empty UTF-8, invalid text, dormant mods, schema changes and failed-save retention
+</system-out>
+	</testcase>
+	<testcase name="settings_widgets" classname="settings_widgets" time="0.0587684" status="run">
+		<properties/>
+		<system-out>PASS: exact native toggle and float slider bodies, hover versus activation, draft pointers, captured edit release, exact text-results ABI, game-string replacement/destruction and UTF-8 bounds
+</system-out>
+	</testcase>
+	<testcase name="anyhelpers_migration" classname="anyhelpers_migration" time="0.0203242" status="run">
+		<properties/>
+		<system-out>PASS: actual DLL preserves legacy N, loads typed settings, publishes canonical/compatibility services and writes only canonical binding storage
+</system-out>
+	</testcase>
+	<testcase name="map_polish" classname="map_polish" time="0.0295321" status="run">
+		<properties/>
+		<system-out>PASS: monotonic smooth zoom, accumulated requests, cursor anchor and limits; Unicode decoding/editing; durable named-marker create/rename/route/delete/reload; malformed data and failed-save retention
+</system-out>
+	</testcase>
+	<testcase name="minimap_render" classname="minimap_render" time="0.0166235" status="run">
+		<properties/>
+		<system-out>PASS: actual terrain pixels and route strokes match +X camera-right/+Z forward at zero and right-quarter-turn; north-up preserved
+</system-out>
+	</testcase>
+	<testcase name="item_catalog_parser" classname="item_catalog_parser" time="0.0089747" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="item_catalog_current_assets" classname="item_catalog_current_assets" time="0.244256" status="run">
+		<properties/>
+		<system-out>PASS: 970 current item/component definitions, localized variants, exact full JSON, six explicit default-stack values (not maximum stack sizes)
+</system-out>
+	</testcase>
+	<testcase name="inventory_browser" classname="inventory_browser" time="0.909748" status="run">
+		<properties/>
+		<system-out>DLL_READY native_tabs_registered=2 legacy_binding_service=1 rejected_saved_rows=0
+DLL_READY item_browser=1 item_previews=1 native_add_requests=1
+CATALOG_READY definitions=970 read_only=1
+ACTION_REGISTER mod=anyinventory action=toggle_browser key=119
+SETTING_REGISTER mod=anyinventory setting=enabled kind=1
+SETTING_REGISTER mod=anyinventory setting=panel_width kind=2
+SETTING_REGISTER mod=anyinventory setting=panel_side kind=4
+SETTING_REGISTER mod=anyinventory setting=search_descriptions kind=1
+SETTING_REGISTER mod=anyinventory setting=show_ids kind=1
+SETTINGS_SERVICE registered=5
+SETTINGS_APPLIED enabled=1 width=480 side=right
+SETTING_STAGE mod=anyinventory setting=panel_width accepted=1
+SETTING_STAGE mod=anyinventory setting=panel_side accepted=1
+SETTING_STAGE mod=anyinventory setting=show_ids accepted=1
+SETTINGS_APPLY saved=1
+SETTINGS_APPLIED enabled=1 width=420 side=left
+SETTINGS_CLOSED pending_discarded=0
+COMPONENT_ADD calls=3 id=component:gas_port_2_angle
+PASS: real DLL, current mesh previews, larger layou...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="item_previews_current_assets" classname="item_previews_current_assets" time="14.1591" status="run">
+		<properties/>
+		<system-out>PASS: all 970 installed item/component previews parsed/rendered; 894382 authored triangles; invalid/truncated meshes rejected
+</system-out>
+	</testcase>
+	<testcase name="inventory_native_actions_layout" classname="inventory_native_actions_layout" time="0.059881" status="run">
+		<properties/>
+		<system-out>PASS: exact native Give-event body, one request/one event, native constructor arguments, queue limits, stale/closed/changed-world cancellation, fallback actor, screen offset ownership/state/limits
+</system-out>
+	</testcase>
+	<testcase name="storage_sort" classname="storage_sort" time="0.0087288" status="run">
+		<properties/>
+		<system-out>PASS: top-first alphabetical/quantity packing, full-grid cycles, collision-free plan and refusal checks
+</system-out>
+	</testcase>
+	<testcase name="storage_native" classname="storage_native" time="0.0562964" status="run">
+		<properties/>
+		<system-out>PASS: independent vector byte layout, native crate dispatch/filtering, reserved column height without source mutation, copied collections, transfer IDs and lifecycle
+</system-out>
+	</testcase>
+	<testcase name="storage_plugin" classname="storage_plugin" time="0.0234151" status="run">
+		<properties/>
+		<system-out>PASS: actual AnyStorage DLL, native-only callbacks, six settings, matching-only/full-stack transfers, both bulk directions, replicated sort, no duplicate unacknowledged events, cancel/context change
+</system-out>
+	</testcase>
+	<testcase name="map_gpu" classname="map_gpu" time="1.21401" status="run">
+		<properties/>
+		<system-out>MARKERS_LOADED count=0 rejected=0
+DLL_READY bind=M embedded_roads=1 external_helpers=0
+MAP_OPENED_DLL
+SETTINGS_SERVICE available=0 defaults=1
+MAP_RENDER backend=GPU resident_terrain=1 refresh=every_present
+BINDING_SERVICE available=0 fallback=M
+BENCHMARK full_map_cpu_raster_ms=29.4174 gpu_command_collect_ms=0.278443 GPU execution not included; game FPS unmeasured
+MAP_CLOSED_DLL
+PASS: actual map DLL GPU rendering, texture residency, every-frame batches, UI/focus/data hiding and CPU fallback
+</system-out>
+	</testcase>
+	<testcase name="graphics_gpu" classname="graphics_gpu" time="0.386689" status="run">
+		<properties/>
+		<system-out>C:\Users\natha\OneDrive\Documents\ChatGPT\AnyApi Framework And Testing\github_public\build\AnyAPI mod shader(1,1-3): error X3000: unrecognized identifier 'not'
+
+PLUGIN_INPUT cursor_imports=2 capture=GAME_WINDOW_ONLY
+PLUGIN_PLATFORM graphics_hooks=READY mechanism=COM_TABLE_ATOMIC
+PLUGIN_INPUT game_window=ATTACHED overlay_windows=0
+PLUGIN_RENDER backend=D3D12_11ON12_D2D state=PRESENT_TO_PRESENT game_backbuffer=READY
+GPU_READY size=64x64 frame_copy=GPU_ONLY
+PLUGIN_RENDER game_backbuffer=DRAWN helper_processes=0
+PASS: GPU readback confirms red DLL canvas over green game backbuffer at 64x64
+GPU_READY size=96x80 frame_copy=GPU_ONLY
+PASS: GPU readback confirms red DLL canvas over green game backbuffer at 96x80
+PASS: GPU readback confirms red DLL canvas over green game backbuffer at 96x80
+PASS: GPU readback confirms red DLL canvas over green game backbuffer at 96x80
+PASS: shaders compile, effects change game pixels while AnyAPI UI stays intact, disable bypasses and resize recovers
+</system-out>
+	</testcase>
+	<testcase name="graphics_plugin" classname="graphics_plugin" time="0.122703" status="run">
+		<properties/>
+		<system-out>DLL_READY settings=20 presets=6 native_only=1 post_fx_passes=0
+NATIVE_SCENE service_available=1
+SETTINGS_REGISTERED count=20 location=settings.graphics native_only=1 post_fx_passes=0 imported=1
+SETTINGS_APPLIED revision=0 native_only=1
+SETTINGS_APPLIED revision=1 native_only=1
+SETTINGS_APPLIED revision=2 native_only=1
+SETTINGS_APPLIED revision=3 native_only=1
+SETTINGS_APPLIED revision=4 native_only=1
+SETTINGS_APPLIED revision=5 native_only=1
+SETTINGS_APPLIED revision=6 native_only=1
+SETTINGS_APPLIED revision=7 native_only=1
+SETTINGS_APPLIED revision=8 native_only=1
+SETTINGS_APPLIED revision=9 native_only=1
+SETTINGS_APPLIED revision=10 native_only=1
+SETTINGS_APPLIED revision=11 native_only=1
+SETTINGS_APPLIED revision=12 native_only=1
+SETTINGS_APPLIED revision=13 native_only=1
+SETTINGS_APPLIED revision=14 native_only=1
+SETTINGS_APPLIED revision=15 native_only=1
+SETTINGS_APPLIED revision=16 native_only=1
+SETTINGS_APPLIED revision=17 native_only=1
+SETTINGS_APPLIED revision=18 native_only=1
+SETTINGS_APPLIED revisi...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="graphics_no_scene" classname="graphics_no_scene" time="0.011152" status="run">
+		<properties/>
+		<system-out>DLL_READY settings=20 presets=6 native_only=1 post_fx_passes=0
+NATIVE_SCENE unavailable requires_API_28=1 overrides_disabled=1
+SETTINGS_REGISTERED count=20 location=settings.graphics native_only=1 post_fx_passes=0 imported=1
+SETTINGS_APPLIED revision=0 native_only=1
+PASS: native-only Graphics section, no AnyHelpers dependency or post-FX registrations, migration, draft/apply/cancel/reset, quality levels, six profiles, gameplay bypass and unavailable service
+</system-out>
+	</testcase>
+	<testcase name="scene_controls" classname="scene_controls" time="0.0254348" status="run">
+		<properties/>
+		<system-out>PASS: native pre-render settings, exact restoration including exceptions, pre-build scene lighting/fog, bounds, ownership, unavailable bypass and mismatching cells
+</system-out>
+	</testcase>
+	<testcase name="scene_smaa_kernels" classname="scene_smaa_kernels" time="0.277303" status="run">
+		<properties/>
+		<system-out>PASS: official SMAA 1x vertex/edge/weight/resolve kernels compile for Low, Medium, High and Ultra; complete lookup tables. Kernels=16
+</system-out>
+	</testcase>
+	<testcase name="scene_smaa_gpu" classname="scene_smaa_gpu" time="0.0974729" status="run">
+		<properties/>
+		<system-out>PASS: SMAA quality=0 size=64x64 blended_edge_pixels=62 edge_blending=3297 enhanced=0 flat=0 restored HUD stays crisp and clipped
+PASS: SMAA quality=0 size=64x64 blended_edge_pixels=0 edge_blending=0 enhanced=0 flat=1 restored HUD stays crisp and clipped
+PASS: SMAA quality=1 size=64x64 blended_edge_pixels=62 edge_blending=3297 enhanced=0 flat=0 restored HUD stays crisp and clipped
+PASS: SMAA quality=1 size=64x64 blended_edge_pixels=0 edge_blending=0 enhanced=0 flat=1 restored HUD stays crisp and clipped
+PASS: SMAA quality=2 size=64x64 blended_edge_pixels=62 edge_blending=3297 enhanced=0 flat=0 restored HUD stays crisp and clipped
+PASS: SMAA quality=2 size=64x64 blended_edge_pixels=0 edge_blending=0 enhanced=0 flat=1 restored HUD stays crisp and clipped
+PASS: SMAA quality=3 size=64x64 blended_edge_pixels=62 edge_blending=3297 enhanced=0 flat=0 restored HUD stays crisp and clipped
+PASS: SMAA quality=3 size=64x64 blended_edge_pixels=0 edge_blending=0 enhanced=0 flat=1 restored HUD stays crisp and clipped
+PASS: SM...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+</testsuite>

@@ -19,12 +19,15 @@ Resolve services with `AnyAPI_Services()->query(name, version)` during
 | Shared inventory layout | [Screen layout](screen-layout.md) | `anyapi_screen_layout_v1.h` |
 | GPU UI drawing | [GPU drawing](gpu-drawing.md) | `anyapi_gpu_draw_v1.h` |
 | GPU effect passes | [Post-processing](post-processing.md) | `anyapi_post_process_v1.h` |
+| Native scene rendering controls (0.28.0) | [Scene controls](scene-controls.md) | `anyapi_scene_controls_v1.h`, `anyapi_scene_controls_v2.h` |
+| Scene SMAA before HUD (0.28.0) | [Scene antialiasing](scene-antialiasing.md) | `anyapi_scene_antialiasing_v1.h` |
 | Optional editable settings | [Helper settings](helper-settings.md) | `anyhelpers_settings_v1.h`, `anyhelpers_settings_v2.h` |
 | Optional keybind registry | [AnyHelpers](../mods/helpers.md) | `mod_controls_v1.h` |
 
 GPU post-processing requires API 0.26.0 or newer. Conditional settings presentation
 requires the updated AnyHelpers source. Both v1 settings and prior public API
-tables remain supported. The published stable manager still bundles API 0.25.0.
+tables remain supported. The published stable manager bundles API 0.27.0.
+Native scene controls are a local 0.28.0 candidate pending live game acceptance.
 
 Native contract snapshots remain beside implementation files in `native/`.
 They identify reviewed game bodies and layouts; they do not grant compatibility

@@ -54,7 +54,7 @@ static void custom_page(void* ui,void* data){auto t=selected;if(!t||!enabled(t->
  // Vanilla Back button handles the actual Settings close and shared navigation.
  bool display=false;auto empty=make_const_geostring("");native_footer(ui,data,&display,&empty);native_end(ui);
  drawing=nullptr;native_ui=nullptr;platform::current_plugin=previous;}
-static void route(int index,void* ui,void* settings,void* data){if(ready){open_session(ui,data);if(selected){if(enabled(selected->section.get())){custom_page(ui,data);return;}select_tab(nullptr);}}if(index==3)build_hook(ui,settings,data);else vanilla_builders[index](ui,settings,data);}
+static void route(int index,void* ui,void* settings,void* data){if(ready){open_session(ui,data);if(selected){if(enabled(selected->section.get())){custom_page(ui,data);return;}select_tab(nullptr);}}if(index==3)build_hook(ui,settings,data);else {bool prior=inside_graphics;inside_graphics=index==1;vanilla_builders[index](ui,settings,data);inside_graphics=prior;}}
 static void route_general(void* ui,void* settings,void* data){route(0,ui,settings,data);}
 static void route_graphics(void* ui,void* settings,void* data){route(1,ui,settings,data);}
 static void route_audio(void* ui,void* settings,void* data){route(2,ui,settings,data);}

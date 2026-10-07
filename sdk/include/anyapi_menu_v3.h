@@ -5,7 +5,7 @@
 struct AnyMenuV3 {
     uint32_t struct_size{sizeof(AnyMenuV3)},version{3};
     const AnyMenuV2* tabs{};
-    // Widgets work only in the registered tab's draw callback. Values are drafts.
+    // Widgets work only in a registered native section or tab draw callback. Values are drafts.
     uint32_t (*toggle_row)(const char* id,const char* label,uint32_t* value){};
     uint32_t (*number_row)(const char* id,const char* label,double* value,
                           double minimum,double maximum,double step,uint32_t integer){};

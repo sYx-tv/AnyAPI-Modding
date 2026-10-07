@@ -1,4 +1,5 @@
 #include "anyapi_menu_patterns.h"
+#include "anyapi_graphics_menu_patterns.h"
 #include <intrin.h>
 // Shared native integration. This file has no Mod Controls titles, actions or binding policy.
 namespace menus {
@@ -24,9 +25,9 @@ static bool enabled(Section* s){return !s->faulted&&s->owner>=0&&s->owner<int(pl
 static void invoke_event(Section* s,uint32_t event){__try{if(s->callbacks.event)s->callbacks.event(event,s->callbacks.user);}__except(EXCEPTION_EXECUTE_HANDLER){s->faulted=true;anyapi_owner_fault(s->owner);log_line(ANY_LOG_ERROR,"framework","MENU_EVENT disabled_after_exception=1");}}
 static uint32_t invoke_flag(Section* s,bool defaults){__try{auto fn=defaults?s->callbacks.defaults:s->callbacks.dirty;return fn?fn(s->callbacks.user):(defaults?1:0);}__except(EXCEPTION_EXECUTE_HANDLER){s->faulted=true;anyapi_owner_fault(s->owner);return defaults?1:0;}}
 static void invoke_draw(Section* s,const AnyMenuFrameV1* frame){__try{s->callbacks.draw(frame,s->callbacks.user);}__except(EXCEPTION_EXECUTE_HANDLER){s->faulted=true;anyapi_owner_fault(s->owner);log_line(ANY_LOG_ERROR,"framework","MENU_SECTION disabled_after_exception=1");}}
-static void event(uint32_t type){for(auto& s:snapshot()){if(!enabled(s.get()))continue;int previous=platform::current_plugin;platform::current_plugin=s->owner;invoke_event(s.get(),type);platform::current_plugin=previous;}}
-static bool aggregate(bool defaults){bool result=defaults;for(auto& s:snapshot()){if(!enabled(s.get()))continue;int previous=platform::current_plugin;platform::current_plugin=s->owner;bool value=invoke_flag(s.get(),defaults)!=0;platform::current_plugin=previous;result=defaults?result&&value:result||value;}return result;}
-static bool add(const AnyMenuSectionV1* c){if(platform::current_plugin<0||!c||c->struct_size!=sizeof(*c)||c->location!=ANY_MENU_SETTINGS_CONTROLS||!services::identifier(c->id)||!c->title||!*c->title||strlen(c->title)>127||!c->draw)return false;
+static void event(uint32_t type,uint32_t location=0){for(auto& s:snapshot()){if((location&&s->callbacks.location!=location)||!enabled(s.get()))continue;int previous=platform::current_plugin;platform::current_plugin=s->owner;invoke_event(s.get(),type);platform::current_plugin=previous;}}
+static bool aggregate(bool defaults,uint32_t location=ANY_MENU_SETTINGS_CONTROLS){bool result=defaults;for(auto& s:snapshot()){if(s->callbacks.location!=location||!enabled(s.get()))continue;int previous=platform::current_plugin;platform::current_plugin=s->owner;bool value=invoke_flag(s.get(),defaults)!=0;platform::current_plugin=previous;result=defaults?result&&value:result||value;}return result;}
+static bool add(const AnyMenuSectionV1* c){if(platform::current_plugin<0||!c||c->struct_size!=sizeof(*c)||(c->location!=ANY_MENU_SETTINGS_CONTROLS&&c->location!=ANY_MENU_SETTINGS_GRAPHICS)||!services::identifier(c->id)||!c->title||!*c->title||strlen(c->title)>127||!c->draw)return false;
  auto s=std::make_shared<Section>();s->callbacks=*c;s->id=c->id;s->title=c->title;s->owner=platform::current_plugin;s->callbacks.id=s->id.c_str();s->callbacks.title=s->title.c_str();
  std::lock_guard<std::mutex> lock(registry_mutex);if(sections.size()>=32)return false;for(auto& existing:sections)if(existing->owner==s->owner&&existing->id==s->id)return false;
  sections.push_back(s);std::sort(sections.begin(),sections.end(),[](auto& a,auto& b){if(a->callbacks.order!=b->callbacks.order)return a->callbacks.order<b->callbacks.order;auto aid=platform::plugins[a->owner].path.filename().wstring(),bid=platform::plugins[b->owner].path.filename().wstring();return aid==bid?a->id<b->id:aid<bid;});
@@ -43,8 +44,8 @@ static uint32_t button(const char* id,const char* text,uint32_t disabled){if(!wi
  // The native result is hover/focus, not activation; vanilla UI queries the enter event separately.
  if(off||!clicked)return 0;uint8_t entered=0;native_enter(&entered,native_ui);return entered!=0;}
 static const AnyMenuV1 api{sizeof(AnyMenuV1),1,add,available,settings_open,heading,begin_table,end_table,button};
-static void draw(void* ui){AnyMenuFrameV1 frame;frame.tick=GetTickCount64();native_ui=ui;
- for(auto& s:snapshot()){if(!enabled(s.get()))continue;drawing=s.get();tables=0;int previous=platform::current_plugin;platform::current_plugin=s->owner;
+static void draw(void* ui,uint32_t location=ANY_MENU_SETTINGS_CONTROLS){AnyMenuFrameV1 frame;frame.location=location;frame.tick=GetTickCount64();native_ui=ui;
+ for(auto& s:snapshot()){if(s->callbacks.location!=location||!enabled(s.get()))continue;drawing=s.get();tables=0;int previous=platform::current_plugin;platform::current_plugin=s->owner;
   heading("section_heading",s->title.c_str());invoke_draw(s.get(),&frame);
   // Unbalanced tables in one mod never leak into another mod's native container stack.
   if(tables)log_line(ANY_LOG_WARN,"framework","MENU_SECTION unclosed_tables=RECOVERED");while(tables)end_table();drawing=nullptr;platform::current_plugin=previous;
@@ -54,15 +55,24 @@ static void end_hook(void* ui){auto caller=(uintptr_t)_ReturnAddress();if(ready&
 // Preserve vanilla equality; include extension state only in the two validated comparisons.
 static void equal_hook(uint8_t* out,void* a,void* b){auto caller=(uintptr_t)_ReturnAddress();original_equal(out,a,b);if(!ready||!inside)return;
  if(caller==builder+0x68&&aggregate(false))*out=0;if(caller==builder+0x12a&&!aggregate(true))*out=0;}
-static void apply_hook(void* ui,void* settings,void* data,const bool* dirty,const bool* valid){original_apply(ui,settings,data,dirty,valid);if(ready&&inside&&*dirty&&*valid){event(ANY_MENU_APPLY);log_line(ANY_LOG_INFO,"framework","MENU_EVENT apply=1");}}
-static void reset_hook(void* ui,void* data,const bool* defaults){original_reset(ui,data,defaults);if(ready&&inside&&!*defaults){event(ANY_MENU_RESET);log_line(ANY_LOG_INFO,"framework","MENU_EVENT reset=1");}}
+static void apply_hook(void* ui,void* settings,void* data,const bool* dirty,const bool* valid){original_apply(ui,settings,data,dirty,valid);if(ready&&inside&&*dirty&&*valid){event(ANY_MENU_APPLY,ANY_MENU_SETTINGS_CONTROLS);log_line(ANY_LOG_INFO,"framework","MENU_EVENT apply=1");}}
+static void reset_hook(void* ui,void* data,const bool* defaults){original_reset(ui,data,defaults);if(ready&&inside&&!*defaults){event(ANY_MENU_RESET,ANY_MENU_SETTINGS_CONTROLS);log_line(ANY_LOG_INFO,"framework","MENU_EVENT reset=1");}}
 static void close_hook(void* ui,void* data){if(ready&&session.exchange(false)){event(ANY_MENU_CANCEL);tabs_close();log_line(ANY_LOG_INFO,"framework","MENU_EVENT close_discard_pending=1");}original_close(ui,data);}
 static void open_session(void* ui,void* data){frontend.store((uintptr_t)ui);if(!session||options!=(uintptr_t)data){if(session){event(ANY_MENU_CANCEL);tabs_close();}options=(uintptr_t)data;session=true;event(ANY_MENU_OPEN);tabs_open();log_line(ANY_LOG_INFO,"framework","MENU_EVENT open=1");}}
 static void build_hook(void* ui,void* settings,void* data){if(ready)open_session(ui,data);
  bool previous=inside;inside=true;original_builder(ui,settings,data);inside=previous;}
+static thread_local bool inside_graphics{};
 #include "anyapi_settings_tabs.inc"
+static uintptr_t graphics_builder{};
+static EqualFn original_graphics_equal{};static ResetFn original_graphics_reset{};
+using GraphicsApplyFn=void(*)(void*,void*,void*,const bool*);static GraphicsApplyFn original_graphics_apply{};
+static void graphics_event(uint32_t type){for(auto& s:snapshot()){if(s->callbacks.location!=ANY_MENU_SETTINGS_GRAPHICS||!enabled(s.get()))continue;int prior=platform::current_plugin;platform::current_plugin=s->owner;invoke_event(s.get(),type);platform::current_plugin=prior;}}
+static void graphics_end_hook(void* ui){if(ready&&inside_graphics&&(uintptr_t)_ReturnAddress()==graphics_builder+0x3c59)draw(ui,ANY_MENU_SETTINGS_GRAPHICS);native_end(ui);}
+static void graphics_equal_hook(uint8_t* out,void* a,void* b){auto caller=(uintptr_t)_ReturnAddress();original_graphics_equal(out,a,b);if(!ready||!inside_graphics)return;if(caller==graphics_builder+0x92&&aggregate(false,ANY_MENU_SETTINGS_GRAPHICS))*out=0;if(caller==graphics_builder+0x123&&!aggregate(true,ANY_MENU_SETTINGS_GRAPHICS))*out=0;}
+static void graphics_apply_hook(void* ui,void* settings,void* data,const bool* updated){original_graphics_apply(ui,settings,data,updated);if(ready&&inside_graphics&&*updated)graphics_event(ANY_MENU_APPLY);}
+static void graphics_reset_hook(void* ui,void* data,const bool* defaults){original_graphics_reset(ui,data,defaults);if(ready&&inside_graphics&&!*defaults)graphics_event(ANY_MENU_RESET);}
 struct Replacement {uintptr_t owner;size_t offset;uintptr_t previous,cell;};
-static Replacement replacements[16];
+static Replacement replacements[24];
 static bool replace(Replacement& r){DWORD old{};auto slot=(void**)(r.owner+r.offset);if(!VirtualProtect(slot,8,PAGE_READWRITE,&old))return false;bool ok=InterlockedCompareExchangePointer(slot,&r.cell,(void*)r.previous)==(void*)r.previous;DWORD ignored{};VirtualProtect(slot,8,old,&ignored);return ok;}
 static void restore(Replacement& r){DWORD old{};auto slot=(void**)(r.owner+r.offset);if(VirtualProtect(slot,8,PAGE_READWRITE,&old)){InterlockedCompareExchangePointer(slot,(void*)r.previous,&r.cell);DWORD ignored{};VirtualProtect(slot,8,old,&ignored);}}
 static std::string last_diagnostic;
@@ -84,7 +94,8 @@ static bool prepare(){auto hits=scan_exact(MENU_BUILDER,sizeof(MENU_BUILDER));if
  native_toggle=(ToggleFn)toggle;native_float=(FloatFn)slider_float;native_int=(IntFn)slider_int;native_text=(TextFn)texts[0];native_capture=(UiFn)capture;native_release=(UiFn)release;native_back=(EnterFn)back;native_string_ctor=(StringCtorFn)string_ctor;native_string_dtor=(StringDtorFn)string_dtor;
  uintptr_t width{},height{};if(!safe_read_memory(builder+0x8670,&width,8)||!safe_read_memory(width,&column_width,4)||column_width<8||column_width>128||!safe_read_memory(builder+0x8658,&height,8)||!safe_read_memory(height,&row_height,4)||row_height<1||row_height>16)return diagnostic("native_dimensions");
  native_enter=(EnterFn)enter;original_equal=(EqualFn)eq;native_heading=(ClientUiHeadingFn)head;native_table=(P26TableFn)table;native_end=(P26EndContainerFn)end;native_button=(ClientUiButtonFn)button;original_apply=(ApplyFn)apply;original_reset=(ResetFn)reset;original_close=(CloseFn)close;
- struct Spec {uintptr_t owner;size_t offset;uintptr_t fn;};Spec specs[]={{builder,0x85c8,(uintptr_t)equal_hook},{builder,0x8698,(uintptr_t)end_hook},{builder,0x86f8,(uintptr_t)reset_hook},{builder,0x8700,(uintptr_t)apply_hook},{footer,0x680,(uintptr_t)close_hook},{update,0xfd8,(uintptr_t)close_hook},{update,0xfa0,(uintptr_t)vanilla_tab_hook},{update,0xfa8,(uintptr_t)vanilla_enter_hook},{update,0xfb0,(uintptr_t)update_end_hook},{update,0xfb8,(uintptr_t)route_general},{update,0xfc0,(uintptr_t)route_graphics},{update,0xfc8,(uintptr_t)route_audio},{update,0xfd0,(uintptr_t)route_controls}};
+ uintptr_t geq{},greset{},gapply{},gend{};if(!contract(graphics,0x4678,MENU_GRAPHICS_EQUAL,geq)||!contract(graphics,0x4730,MENU_END,gend)||gend!=end||!contract(graphics,0x4810,MENU_GRAPHICS_RESET,greset)||!contract(graphics,0x4818,MENU_GRAPHICS_APPLY,gapply))return false;graphics_builder=graphics;original_graphics_equal=(EqualFn)geq;original_graphics_reset=(ResetFn)greset;original_graphics_apply=(GraphicsApplyFn)gapply;
+ struct Spec {uintptr_t owner;size_t offset;uintptr_t fn;};Spec specs[]={{builder,0x85c8,(uintptr_t)equal_hook},{builder,0x8698,(uintptr_t)end_hook},{builder,0x86f8,(uintptr_t)reset_hook},{builder,0x8700,(uintptr_t)apply_hook},{footer,0x680,(uintptr_t)close_hook},{update,0xfd8,(uintptr_t)close_hook},{update,0xfa0,(uintptr_t)vanilla_tab_hook},{update,0xfa8,(uintptr_t)vanilla_enter_hook},{update,0xfb0,(uintptr_t)update_end_hook},{update,0xfb8,(uintptr_t)route_general},{update,0xfc0,(uintptr_t)route_graphics},{update,0xfc8,(uintptr_t)route_audio},{update,0xfd0,(uintptr_t)route_controls},{graphics,0x4678,(uintptr_t)graphics_equal_hook},{graphics,0x4730,(uintptr_t)graphics_end_hook},{graphics,0x4810,(uintptr_t)graphics_reset_hook},{graphics,0x4818,(uintptr_t)graphics_apply_hook}};
  size_t count=0;for(auto& s:specs){auto& r=replacements[count];r.owner=s.owner;r.offset=s.offset;r.cell=s.fn;if(!safe_read_memory(s.owner+s.offset,&r.previous,8)||!replace(r)){while(count)restore(replacements[--count]);return false;}++count;}
  if(!install_detour("settings_update_current",update,BODY_SETTINGS_UPDATE_PREFIX,19,(uintptr_t)update_hook,(void**)&original_update)){while(count)restore(replacements[--count]);return false;}
  ready=true;log_line(ANY_LOG_INFO,"framework","MENU_BRIDGE ready=1 locations=settings.tabs,settings.controls native_widgets=tab,heading,label,key_row,toggle,number,choice,text,table,button,scroll lifecycle=open,apply,reset,cancel,deactivate shared_cells_modified=0 native_tab_enum_modified=0");return true;}

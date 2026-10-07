@@ -57,7 +57,7 @@ try {
     foreach ($package in $packages) { Apply-Candidate 'install' $package (Join-Path $PackagesDirectory ($package.Name + '-' + $package.Version + '.zip')) }
     if ([AnyApiManager.Engine]::Incompatible($gameRoot,$catalog).Count) { throw 'An installed mod is still incompatible.' }
     foreach ($package in $packages) { if ([AnyApiManager.Engine]::Status($gameRoot,$package) -ne 'Installed') { throw ('Installed checksum differs: ' + $package.Name) } }
-    $record = @{ Api='0.27.0'; Game='0.1.23'; Backup=$backup; GameDirectory=$gameRoot; GameplayAcceptance='PENDING'; Mods=@($catalog.Mods | ForEach-Object { $_.Name }) }
+    $record = @{ Api=$catalog.Api[0].Version; Game='0.1.23'; Backup=$backup; GameDirectory=$gameRoot; GameplayAcceptance='PENDING'; Mods=@($catalog.Mods | ForEach-Object { $_.Name }) }
     $record | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backup 'installation.json') -Encoding UTF8
     Write-Output ('Installed and checksum-verified. Backup: ' + $backup)
 } catch {

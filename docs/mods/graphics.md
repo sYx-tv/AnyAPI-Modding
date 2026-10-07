@@ -1,63 +1,85 @@
 # AnyGraphics
 
-In-process DLL mod using generic AnyAPI GPU post-processing. API 0.26.0 or newer;
-the initial effects were confirmed working in game. Requires AnyAPI 0.26.0 or newer.
-Install AnyHelpers for the editable menu in Settings → Mod Settings.
+AnyGraphics 0.28.0 is a native graphics mod for Anymaker 0.1.23. Its controls
+live inside Settings â†’ Graphics, in the scrolling **AnyGraphics Â· Modded**
+section. It requires AnyAPI 0.28.0 and does not require AnyHelpers.
 
-The menu now has one AnyGraphics section and five presets. A preset shows four
-main controls: Enable AnyGraphics, Look, Gameplay only and Before / after.
-Custom / saved tuning preserves your existing settings and reveals edge smoothing,
-sharpness, bloom, exposure and saturation. Advanced tuning reveals the remaining
-controls. Select Apply Changes to commit. Cancel discards pending
-changes; Reset stages the documented defaults. All groups share AnyHelpers'
-native scrolling, save file and Apply/Cancel lifecycle. Visibility responds to
-pending selections immediately; effects change only after Apply.
+## Controls
 
-| Look | Appearance | Processing |
-| --- | --- | --- |
-| Natural | Light edge smoothing and modest sharpening | Two full-size passes |
-| Soft edges | Stronger smoothing with gentler sharpening | Two full-size passes |
-| Vibrant | Slightly richer color and contrast | Smoothing, sharpening, color |
-| Cinematic | Soft glow, warm tone and restrained saturation | Quarter-resolution bloom, smoothing, sharpening, color |
-| Lightweight | Modest sharpening alone | One full-size pass |
+The original game controls remain above the mod section. Choosing Game setting
+uses those values; choosing an override tells the renderer to use AnyGraphics'
+value during gameplay. Override choices are explicitly labelled. Disable
+AnyGraphics to return to the game's own rendering settings.
 
-Presets do not overwrite saved custom values. Select Custom to restore them;
-select Advanced tuning to adjust detailed values. Initial Look remains Custom
-so upgrading preserves the appearance you already chose. The new preset/menu
-layout awaits in-game acceptance. It requires the accompanying updated AnyHelpers;
-older AnyHelpers versions still show all registered rows. No gameplay FPS benefit
-is claimed for any preset; Lightweight simply enables fewer effect passes.
+Controls include native FXAA, SSAO, shadows, fog blur, bloom intensity and
+threshold, sunlight, sky light, ambient light, base fog and scene-lighting stops.
+They alter native renderer switches or frame lighting inputs before the game
+builds scene constants and records rendering commands.
 
-Defaults enable modest sharpening (0.15), with gameplay-only rendering. Bloom,
-edge smoothing, vignette, grain and chromatic separation start off. Color and tone
-start neutral. Additional effects remain opt-in. Without AnyHelpers the same
-conservative defaults run; there is no separate external interface.
+Fog, bloom and optional lighting controls use **Off / Low / Medium / High /
+Ultra** strength levels instead of numeric sliders. Bloom also offers Game
+setting. These levels change native intensity inputs; they are not separate
+shadow-map or SSAO sampling-quality modes. Shadows, ambient occlusion and fog
+blur retain the game's actual on/off capability.
 
-- Edges: spatial edge smoothing strength and threshold. Native AA stays enabled;
-  this is not TAA, SMAA or DLSS and cannot eliminate temporal shimmer.
-- Sharpness: strength, radius and halo limit.
-- Bloom: intensity, threshold, soft knee, spread, quarter/half resolution, warmth
-  and saturation. This uses the finished image, not an HDR scene buffer.
-- Color/tone: exposure, gamma, contrast, brightness, saturation, vibrance,
-  temperature, tint, shadows, highlights, black lift, white point and tone curve.
-- Lens/film: vignette, grain and chromatic separation with individual controls.
-- General: enable/bypass, gameplay-only and original/processed split comparison.
+Presets are **Off / Performance / Low / Medium / High / Ultra**. Choosing a
+profile stages a group of settings; individual choices may then be changed.
+Off bypasses overrides and restores the game's own values. Medium is the
+initial profile. Advanced options reveals sunlight, sky and ambient strength,
+plus native Cloud rendering, Grass rendering and Foliage rendering switches.
+Each detail switch offers Game setting / Off / On and changes rendering only;
+world objects and collision remain intact. Numeric controls are hidden.
 
-For the first visual test, enable Edge smoothing, keep sharpening modest, and
-compare a static scene using Before / after. Enable bloom separately and start
-with quarter resolution. Native bloom can be disabled in the game's Graphics
-tab if you prefer a single bloom implementation. Heavy bloom and lens settings
-can soften detail or affect the native HUD. Menus and inventories are bypassed by
-default; disable Gameplay only if you intentionally want those affected too.
+| Preset | Native settings |
+| --- | --- |
+| Off | Game settings; no native overrides |
+| Performance | FXAA on; SSAO, shadows, fog blur, bloom, base fog, clouds and grass off |
+| Low | Shadows on, low bloom/base fog; SSAO, fog blur and grass off |
+| Medium | Native effects on; medium bloom/base fog |
+| High | Native effects on; high bloom/base fog |
+| Ultra | Native effects on; strongest supplied bloom/base fog |
 
-The mod does not spawn an EXE. Capture, effect textures and rendering stay on the
-GPU; no frame pixels are copied back to the CPU. With all effects disabled the
-pipeline skips the image copy and draws. Default sharpening requires one shader
-pass and one GPU image copy. Bloom adds three small intermediate passes and one
-full-resolution composite. Persistent resources avoid per-frame allocation.
-Actual game FPS impact has not yet been measured.
+High and Ultra do not claim greater texture resolution or sample counts.
 
-Saved values live in `AnyAPI and Modding/mods/AnyHelpers/settings.tsv`. Logs include
-DLL_READY, POST_PROCESS_REGISTERED, SETTINGS_REGISTERED, SETTINGS_APPLIED,
-GPU_READY and failure/bypass reasons. Settings are committed through AnyHelpers.
-See [Post-processing](../api/post-processing.md) for service declarations, limits and rendering order.
+Performance is a combination of settings, not a measured FPS guarantee.
+Native bloom is part of the game's own render pipeline. AnyGraphics registers
+no finished-screen filter passes. SMAA copies scene colour before HUD drawing
+for its three AA passes.
+Sharpening, supplemental smoothing, colour filters, tone curves, grain,
+vignette, chromatic separation and split comparison have been removed.
+Version 0.28.0 offers native FXAA and SMAA 1x. TAA, MSAA and DLSS are
+not implemented.
+
+## Apply and persistence
+
+Use the Graphics tab's existing Apply Changes, Reset and Back buttons. Draft
+changes stay pending until Apply; Cancel discards them. Reset stages defaults.
+The mod participates in the native tab's dirty/default comparisons so the same
+buttons work for both the original controls and AnyGraphics.
+
+On first launch the mod imports retained native values from the old AnyHelpers
+settings file. Removed effect values are ignored. Subsequent changes save to
+`AnyAPI and Modding/mods/AnyGraphics/settings.tsv`. Other mods' settings are
+untouched. The old shared file remains available for rollback.
+
+Native hooks are confirmed active in the prior corrected build, with renderer
+and scene calls recorded and no rejected frames. This native-only menu revision
+has live menu acceptance from the user. The simplified quality levels still need a live check. A connection warning appears in the
+section if native hooks are unavailable. Readiness and rejection counts are
+also recorded in the game-root `anymaker_modding.log`.
+
+See [Native scene controls](../api/scene-controls.md) and
+[Menu extensions](../api/menu-extensions.md) for integration contracts.
+
+## Scene antialiasing development
+
+Version 0.28.0 offers Game setting, Off, FXAA **SMAA 1x (scene)**, and **Enhanced SMAA (scene)**.
+Enhanced SMAA adds stronger contrast-aware blending at diagonal edges; it may
+soften fine scene detail. Both methods keep the HUD untouched.
+Choosing SMAA reveals **SMAA quality: Low / Medium / High / Ultra**. Use Apply
+Changes. SMAA disables native FXAA once ready and processes scene colour before
+the HUD, preserving UI sharpness. The game-bound visual/FPS check is pending;
+automated GPU smoothing and HUD restoration tests pass. Unsupported bindings
+bypass rather than falling back to a finished-screen filter.
+
+See [Scene AA development](../development/scene-antialiasing.md).

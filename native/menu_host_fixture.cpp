@@ -10,6 +10,7 @@
 #include "anyapi_menu_v3.h"
 #include <map>
 #include <string>
+static AnyMenuSectionV1 graphics_section;
 static AnyMenuTabV2 section,settings;static bool registered{},open{},clicked{};
 static std::map<std::string,const void*> providers;
 static uint32_t rows,click_mode;static std::string setting_click,setting_text;static double setting_number;
@@ -27,7 +28,8 @@ static uint32_t choice(const char* id,const char*,const char*const*,uint32_t,uin
 static uint32_t text(const char* id,const char*,char* value,uint32_t capacity){if(!change(id))return 0;strncpy_s(value,capacity,setting_text.c_str(),_TRUNCATE);return 1;}
 static const AnyMenuV2 menu2{sizeof(AnyMenuV2),2,add,available,is_open,heading,label,key_row};
 static const AnyMenuV3 menu3{sizeof(AnyMenuV3),3,&menu2,toggle,number,choice,text};
-static const AnyMenuV1 menu{sizeof(AnyMenuV1),1,nullptr,available,is_open,heading,table,end,button};
+static bool add_section(const AnyMenuSectionV1* s){if(!s||s->location!=ANY_MENU_SETTINGS_GRAPHICS||graphics_section.draw)return false;graphics_section=*s;return true;}
+static const AnyMenuV1 menu{sizeof(AnyMenuV1),1,add_section,available,is_open,heading,table,end,button};
 static std::vector<itemcatalog::Entry> catalog_entries;
 static uint32_t catalog_count(){return uint32_t(catalog_entries.size());}
 static bool catalog_copy(uint32_t i,AnyItemDefinitionV1* out){if(!out||out->struct_size!=sizeof(*out)||out->version!=1||i>=catalog_entries.size())return false;*out=catalog_entries[i].metadata;return true;}
@@ -72,3 +74,8 @@ extern "C" __declspec(dllexport) uint32_t FixtureDirty(){return section.dirty(se
 extern "C" __declspec(dllexport) void FixtureSettingsEvent(uint32_t event){open=event!=ANY_MENU_CANCEL;settings.event(event,settings.user);}
 extern "C" __declspec(dllexport) uint32_t FixtureSettingsDirty(){return settings.dirty(settings.user);}
 extern "C" __declspec(dllexport) void FixtureStage(uint64_t token,double number,const char* text){rows=0;setting_click="setting."+std::to_string(token);setting_number=number;setting_text=text?text:"";AnyMenuFrameV1 frame;frame.location=ANY_MENU_SETTINGS_TAB;settings.draw(&frame,settings.user);setting_click.clear();}
+
+extern "C" __declspec(dllexport) const char* FixtureGraphicsTitle(){return graphics_section.title;}
+extern "C" __declspec(dllexport) void FixtureGraphicsEvent(uint32_t type){assert(graphics_section.event);graphics_section.event(type,graphics_section.user);}
+extern "C" __declspec(dllexport) uint32_t FixtureGraphicsDirty(){return graphics_section.dirty(graphics_section.user);}
+extern "C" __declspec(dllexport) void FixtureGraphicsStage(uint64_t token,double value){rows=0;setting_click="setting."+std::to_string(token);setting_number=value;AnyMenuFrameV1 frame;frame.location=ANY_MENU_SETTINGS_GRAPHICS;graphics_section.draw(&frame,graphics_section.user);setting_click.clear();}

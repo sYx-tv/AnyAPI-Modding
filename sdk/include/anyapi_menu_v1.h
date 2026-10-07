@@ -1,8 +1,8 @@
 #pragma once
 #include <cstdint>
-// Version 1 exposes a native section slot in Settings > Controls.
+// Native sections: Controls and, from API 0.28.0, Graphics.
 // Additional menu locations require separate, verified native contracts.
-enum AnyMenuLocation:uint32_t { ANY_MENU_SETTINGS_CONTROLS=1 };
+enum AnyMenuLocation:uint32_t { ANY_MENU_SETTINGS_CONTROLS=1,ANY_MENU_SETTINGS_GRAPHICS=3 }; // Graphics requires API 0.28.0
 enum AnyMenuEvent:uint32_t { ANY_MENU_OPEN=1,ANY_MENU_APPLY,ANY_MENU_RESET,ANY_MENU_CANCEL };
 struct AnyMenuFrameV1 {uint32_t struct_size{sizeof(AnyMenuFrameV1)},location{ANY_MENU_SETTINGS_CONTROLS};uint64_t tick{};};
 struct AnyMenuSectionV1 {

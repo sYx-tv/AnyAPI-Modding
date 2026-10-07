@@ -15,7 +15,6 @@ static bool p34_copy_snapshot(AnySessionPlayersV1*,uint32_t*);
 #include "anyapi_platform.inc"
 static const AnyBuildV1* anyapi_build_service(){return nullptr;}
 #include "anyapi_client_tasks.inc"
-#include "anygraphics_shaders.h"
 static const AnyMenuV1* anyapi_menu_service(){return nullptr;}
 static const AnyMenuV2* anyapi_menu_service_v2(){return nullptr;}
 static const AnyMenuV3* anyapi_menu_service_v3(){return nullptr;}
@@ -44,7 +43,6 @@ int main(){
  input_events.clear();assert(!platform::text_input(0xd83c)&&input_events.empty());assert(platform::text_input(0xdfe0)&&input_events.size()==1&&input_events[0].kind==ANY_TEXT_INPUT&&input_events[0].key==0x1f3e0);assert(platform::text_input('N')&&input_events.back().kind==ANY_TEXT_INPUT&&input_events.back().key=='N');platform::text_decoder.reset();assert(!platform::text_input(0xdfe0));
  AnyCanvasV1 bad{};assert(!platform::valid_canvas(bad));bad.pixels=pixels;bad.width=8193;bad.height=1;bad.pitch=32772;assert(!platform::valid_canvas(bad));
  platform::current_plugin=0;AnyPostPassV1 pass;pass.id="invert";pass.shader="Texture2D image:register(t0);SamplerState s:register(s0);float4 main(float4 p:SV_Position,float2 uv:TEXCOORD):SV_Target{return float4(1-image.SampleLevel(s,uv,0).rgb,1);}";pass.shader_bytes=uint32_t(strlen(pass.shader));effect=post_process::registration(&pass);assert(effect);
- for(auto shader:{graphics_shaders::smoothing(),graphics_shaders::extract(),graphics_shaders::blur(true),graphics_shaders::blur(false),graphics_shaders::composite(),graphics_shaders::sharpen(),graphics_shaders::finish()}){std::string id="compile_"+std::to_string(post_process::passes.size());pass.id=id.c_str();pass.shader=shader.c_str();pass.shader_bytes=uint32_t(shader.size());assert(post_process::registration(&pass));}
  AnyPostParametersV1 params;params.enabled=1;platform::current_plugin=1;assert(!post_process::set(effect,&params));platform::current_plugin=0;params.values[0]=NAN;assert(!post_process::set(effect,&params));pass.id="invalid";pass.shader="not HLSL";pass.shader_bytes=8;assert(!post_process::registration(&pass));pass.shader=post_process::copy_source;pass.shader_bytes=uint32_t(strlen(pass.shader));pass.id="future";pass.input=999;assert(!post_process::registration(&pass));pass.input=effect;platform::current_plugin=1;assert(!post_process::registration(&pass));platform::current_plugin=0;AnyPostStatusV1 invalid_status;invalid_status.version=2;assert(!post_process::status(&invalid_status));platform::current_plugin=-1;
  assert(platform::start());ComPtr<IDXGIFactory4> factory;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));ComPtr<IDXGIAdapter> warp;assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));
  ComPtr<ID3D12Device> device;assert(SUCCEEDED(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));D3D12_COMMAND_QUEUE_DESC qdesc{};ComPtr<ID3D12CommandQueue> queue;assert(SUCCEEDED(device->CreateCommandQueue(&qdesc,IID_PPV_ARGS(&queue))));
