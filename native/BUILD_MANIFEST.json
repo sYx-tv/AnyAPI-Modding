@@ -26,7 +26,7 @@
   "storage_fix": "corrected bottom-origin cursor tooltip coordinates and native content alignment; exclusions and top-first placement retained",
   "storage_gameplay_acceptance": "USER_CONFIRMED_TOOLTIPS_AND_TOOLBAR",
   "map_renderer": "resident GPU terrain, cached text, every-present minimap, 30ms presentation smoothing",
-  "host_sha256": "d48e78d50de843ad253ee0d1083c05a1e4ccf318a9abb9df0504b9ca015a0959",
+  "host_sha256": "360aab351c6799c3f23ed65c6771e7d6109e46c86d294396d84eee8f6d76df46",
   "map_sha256": "faf0174ae46cc055a8e170d8e2064055b0890b01722d1a89cc74535368b4ec0a",
   "graphics_sha256": "ef57af5842ad2af12e9e40bd4c7c34a02da0521d32ed662558eea824803caf53",
   "graphics_gameplay_acceptance": "USER_CONFIRMED fog, sun shafts, local lights and preset update; publication authorized",
@@ -65,8 +65,8 @@
   "wheel_gameplay_acceptance": "USER_CONFIRMED: inventory tool wheel and native equipping work in a world",
   "wheel_hotbar_gameplay_acceptance": "USER_CONFIRMED: original hotbar wheel works in a world",
   "hud_hint_gameplay_acceptance": "NOT_VISIBLE_IN_USER_TEST: experimental; user requested no further changes and approved release",
-  "balance_sha256": "776d84bf3a28dbbf9eaaee6170f9b25b812f6b675596a4f2738dfab32d9c18a7",
+  "balance_sha256": "535e791a7c716e8d509bbd11a3df60579e1adfc78143863681552b8773271d35",
   "balance_version": "1.0.0",
-  "balance_gameplay_acceptance": "CORRECTION_PENDING: user reported per-body targets and viewpoint-dependent marker; local connection graph, stable chassis and bare-body hover correction tested",
+  "balance_gameplay_acceptance": "CORRECTION_PENDING: targeted connection sampling, cached body properties and exact render-matrix projection; simulation and anchoring retest required",
   "balance_mechanism": "Properties overlay plus copied local server connection IDs; mass-weighted connected body centres"
 }

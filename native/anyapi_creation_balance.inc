@@ -23,6 +23,8 @@ static const AnyCreationBalanceV1 api{sizeof(AnyCreationBalanceV1),1,copy};
 } // namespace balance_runtime
 #include "balance_assembly.inc"
 namespace balance_runtime {
+struct BodyProperties {uintptr_t object{};uint64_t tick{};AnyBalancePointV1 centre{},bounds[2]{};double mass{};};
+static std::unordered_map<int32_t,BodyProperties> body_properties;static uint64_t properties_context=UINT64_MAX;
 static bool capture_inner(void* item,void* camera,void* scene,void* client=nullptr){
  uintptr_t state{},fn{},vehicle{};int32_t id=-1;
  // ref<T> stores its object pointer in the second word; checked against the
@@ -42,17 +44,27 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  bool local=false;if(client)safe_read_memory(uintptr_t(client)+3748,&local,1);
  auto ids=assembly_ids(id,local);if(ids.empty())return false;
  struct Body {int32_t id;double transform[12];AnyBalancePointV1 centre,bounds[2];double mass{};};
- std::vector<Body> bodies;
- for(auto body_id:ids){uintptr_t object{};((Lookup)fn)(&object,(void*)container,&body_id);if(!object)return false;
+ std::vector<Body> bodies;bodies.reserve(ids.size());
+ if(properties_context!=uint64_t(context)){body_properties.clear();properties_context=context;}
+ for(auto body_id:ids){uintptr_t object{};auto known=body_properties.find(body_id);auto now=GetTickCount64();
+  if(body_id==id)object=vehicle;
+  else if(known!=body_properties.end()&&now>=known->second.tick&&now-known->second.tick<200)object=known->second.object;
+  else ((Lookup)fn)(&object,(void*)container,&body_id);
+  int32_t actual_id=-1;if(!object||!safe_read_memory(object+8,&actual_id,4)||actual_id!=body_id)return false;
   Body body{};body.id=body_id;uintptr_t method{};
   if(!p34_virtual(object,transform_slot,method)||!p34_body(method,TRANSFORM))return false;
   ((Transform)method)(body.transform,(void*)object);
   for(double value:body.transform)if(!std::isfinite(value)||std::abs(value)>1e9)return false;
-  if(!safe_read_memory(object+0x408,&body.centre,sizeof(body.centre))||!p34_virtual(object,15*8,method)||!p34_body(method,BOUNDS))return false;
-  ((Bounds)method)(body.bounds,(void*)object);
-  AnyCreationBalanceSnapshotV1 check;check.centre_local=body.centre;check.bounds_min=body.bounds[0];check.bounds_max=body.bounds[1];if(!balance::derive(check))return false;
-  uintptr_t physics{};if(mass_fn&&safe_read_memory(object+0x4d8,&physics,8)&&physics)((Mass)mass_fn)(&body.mass,(void*)(object+0x4d0));
-  if(!std::isfinite(body.mass)||body.mass<=0||body.mass>=1e12)body.mass=0;
+  auto& cached=body_properties[body_id];now=GetTickCount64();
+  if(cached.object!=object||now<cached.tick||now-cached.tick>=200){
+   BodyProperties next;next.object=object;next.tick=now;
+   if(!safe_read_memory(object+0x408,&next.centre,sizeof(next.centre))||!p34_virtual(object,15*8,method)||!p34_body(method,BOUNDS))return false;
+   ((Bounds)method)(next.bounds,(void*)object);
+   AnyCreationBalanceSnapshotV1 check;check.centre_local=next.centre;check.bounds_min=next.bounds[0];check.bounds_max=next.bounds[1];if(!balance::derive(check))return false;
+   uintptr_t physics{};if(mass_fn&&safe_read_memory(object+0x4d8,&physics,8)&&physics)((Mass)mass_fn)(&next.mass,(void*)(object+0x4d0));
+   if(!std::isfinite(next.mass)||next.mass<=0||next.mass>=1e12)next.mass=0;cached=next;
+  }
+  body.centre=cached.centre;body.bounds[0]=cached.bounds[0];body.bounds[1]=cached.bounds[1];body.mass=cached.mass;
   bodies.push_back(body);
  }
  // A stable chassis frame: the heaviest body, with ID as deterministic tie-break.
@@ -75,9 +87,11 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  if(!balance::derive(sample))return false;
  sample.centre_world=balance::transform(transform,sample.centre_local);if(!balance::finite(sample.centre_world))return false;
  AnyBalancePointV1 bounds[2]={sample.bounds_min,sample.bounds_max};
- RECT rect{};if(!GetClientRect(platform::game_window,&rect)||rect.right<=0||rect.bottom<=0)return false;
- double aspect=double(rect.right)/rect.bottom;
- auto project=[&](AnyBalancePointV1 local,AnyBalanceScreenV1& out){auto world=balance::transform(transform,local);((Project)project_fn)(&out,camera,&world,&aspect);};
+ balance::Camera view{};
+ if(!camera||!safe_read_memory(uintptr_t(camera)+8,view.transform,sizeof(view.transform))||!safe_read_memory(uintptr_t(camera)+416,view.projection,sizeof(view.projection)))return false;
+ for(auto value:view.transform)if(!std::isfinite(value))return false;
+ for(auto value:view.projection)if(!std::isfinite(value))return false;
+ auto project=[&](AnyBalancePointV1 local,AnyBalanceScreenV1& out){out=balance::project(view,balance::transform(transform,local));};
  project(sample.centre_local,sample.centre);
  auto base=sample.centre_local;base.y=sample.bounds_min.y;project(base,sample.base);
  project({(bounds[0].x+bounds[1].x)*.5,(bounds[0].y+bounds[1].y)*.5,(bounds[0].z+bounds[1].z)*.5},sample.geometric_centre);
@@ -85,8 +99,9 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  auto p=sample.centre_local;p.x+=axis;project(p,sample.axes[0]);p=sample.centre_local;p.y+=axis;project(p,sample.axes[1]);p=sample.centre_local;p.z+=axis;project(p,sample.axes[2]);
  for(unsigned i=0;i<8;++i)project({i&1?bounds[1].x:bounds[0].x,i&2?bounds[1].y:bounds[0].y,i&4?bounds[1].z:bounds[0].z},sample.corners[i]);
  AnyEquipmentSnapshotV1 equipped;if(equipment_runtime::api.copy(&equipped))for(unsigned i=0;i<equipped.count;++i)if(equipped.slots[i].slot_index==equipped.selected_slot)sample.tool_item_id=equipped.slots[i].item_id;
+ if(body_properties.size()>256){auto now=GetTickCount64();for(auto it=body_properties.begin();it!=body_properties.end();)if(now-it->second.tick>1000)it=body_properties.erase(it);else ++it;}
  store.publish(sample);++captures;
- if(last_vehicle!=vehicle){last_vehicle=vehicle;log_line(ANY_LOG_INFO,"framework",("BALANCE sampled=1 vehicle="+std::to_string(sample.vehicle_id)+" bodies="+std::to_string(sample.body_count)+" native_weighted_centre=1 body_mass_available="+std::to_string(bool(sample.valid_fields&ANY_BALANCE_BODY_MASS))).c_str());}
+ if(last_vehicle!=uintptr_t(sample.vehicle_id)+1){last_vehicle=uintptr_t(sample.vehicle_id)+1;log_line(ANY_LOG_INFO,"framework",("BALANCE sampled=1 vehicle="+std::to_string(sample.vehicle_id)+" bodies="+std::to_string(sample.body_count)+" native_weighted_centre=1 body_mass_available="+std::to_string(bool(sample.valid_fields&ANY_BALANCE_BODY_MASS))).c_str());}
  return true;
 }
 static bool capture(void* item,void* camera,void* scene,void* client){__try{return capture_inner(item,camera,scene,client);}__except(EXCEPTION_EXECUTE_HANDLER){faulted=true;return false;}}

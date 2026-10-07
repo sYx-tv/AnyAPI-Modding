@@ -8,6 +8,13 @@ inline bool finite(AnyBalancePointV1 p){return std::isfinite(p.x)&&std::isfinite
 inline AnyBalancePointV1 transform(const double* m,AnyBalancePointV1 p){return {m[0]*p.x+m[3]*p.y+m[6]*p.z+m[9],m[1]*p.x+m[4]*p.y+m[7]*p.z+m[10],m[2]*p.x+m[5]*p.y+m[8]*p.z+m[11]};}
 // Native mat34 basis columns are orthonormal; inverse uses their transpose.
 inline AnyBalancePointV1 inverse_transform(const double* m,AnyBalancePointV1 p){p.x-=m[9];p.y-=m[10];p.z-=m[11];return {m[0]*p.x+m[1]*p.y+m[2]*p.z,m[3]*p.x+m[4]*p.y+m[5]*p.z,m[6]*p.x+m[7]*p.y+m[8]*p.z};}
+struct Camera {double transform[12]{},projection[16]{};};
+inline AnyBalanceScreenV1 project(const Camera& camera,AnyBalancePointV1 world){
+ auto p=inverse_transform(camera.transform,world);auto m=camera.projection;
+ double x=m[0]*p.x+m[4]*p.y+m[8]*p.z+m[12],y=m[1]*p.x+m[5]*p.y+m[9]*p.z+m[13];
+ double w=m[3]*p.x+m[7]*p.y+m[11]*p.z+m[15];
+ if(!std::isfinite(w)||w<=1e-8||p.z<=0)return {0,0,-1};return {x/w,y/w,p.z};
+}
 inline bool derive(AnyCreationBalanceSnapshotV1& s){
  if(!finite(s.centre_local)||!finite(s.bounds_min)||!finite(s.bounds_max))return false;
  double lo[]={s.bounds_min.x,s.bounds_min.y,s.bounds_min.z},hi[]={s.bounds_max.x,s.bounds_max.y,s.bounds_max.z};

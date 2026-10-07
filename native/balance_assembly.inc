@@ -6,6 +6,8 @@ namespace balance_runtime {
 struct AssemblyLinks {uint64_t tick{};std::vector<int32_t> ids;};
 static std::mutex links_mutex;static uintptr_t links_scene{};
 static std::unordered_map<int32_t,AssemblyLinks> links;
+static std::vector<int32_t> requested;
+static std::unordered_map<uintptr_t,uintptr_t> connection_offsets;
 static anyapi_runtime::CallCellHook server_hook;static std::atomic<bool> assembly_ready{};
 using ServerTick=void(*)(void*,void*,const bool*);
 struct NativeVector {uintptr_t buffer;int32_t offset,count,capacity,size;uintptr_t ctor,dtor;};
@@ -16,21 +18,27 @@ static bool vector_items(uintptr_t address,int expected,std::vector<uintptr_t>& 
  return true;
 }
 static void sample_links(void* self,void* scene){
- int32_t id=-1;if(!safe_read_memory(uintptr_t(self)+64,&id,4)||id<0)return;
- {std::lock_guard lock(links_mutex);auto it=links.find(id);if(links_scene==uintptr_t(scene)&&it!=links.end()&&GetTickCount64()-it->second.tick<100)return;}
+ int32_t id=-1;if(!safe_read_native(uintptr_t(self)+64,&id,4)||id<0)return;
+ {std::lock_guard lock(links_mutex);auto it=links.find(id);if(std::find(requested.begin(),requested.end(),id)==requested.end())return;
+  if(links_scene==uintptr_t(scene)&&it!=links.end()&&GetTickCount64()-it->second.tick<200)return;}
  std::vector<uintptr_t> grids;if(!vector_items(uintptr_t(self)+96,16,grids))return;
  AssemblyLinks entry;entry.tick=GetTickCount64();
  for(auto grid:grids){std::vector<uintptr_t> components;if(!vector_items(grid+96,16,components))return;
   for(auto component:components){uintptr_t fn{};if(!p34_virtual(component,78*8,fn))continue;
-   for(auto& contract:balance_assembly_contract::LINKS){unsigned char bytes[96]{};
-    if(!safe_read_memory(fn,bytes,contract.size)||memcmp(bytes,contract.bytes,contract.size))continue;
-    uintptr_t other{},parent{};int32_t other_id=-1;
-    if(safe_read_memory(component+contract.offset,&other,8)&&other&&safe_read_memory(other+320,&parent,8)&&parent&&safe_read_memory(parent+64,&other_id,4)&&other_id>=0&&other_id!=id)entry.ids.push_back(other_id);
-    break;
-   }
+   auto cached=connection_offsets.find(fn);uintptr_t offset{};
+   if(cached==connection_offsets.end()){unsigned char bytes[96]{};
+    if(safe_read_memory(fn,bytes,sizeof(bytes)))for(auto& contract:balance_assembly_contract::LINKS)if(!memcmp(bytes,contract.bytes,contract.size)){offset=contract.offset;break;}
+    connection_offsets[fn]=offset;
+   }else offset=cached->second;
+   if(!offset)continue;
+   uintptr_t other{},parent{};int32_t other_id=-1;
+   if(safe_read_memory(component+offset,&other,8)&&other&&safe_read_memory(other+320,&parent,8)&&parent&&safe_read_memory(parent+64,&other_id,4)&&other_id>=0&&other_id!=id)entry.ids.push_back(other_id);
+
   }
  }
- std::lock_guard lock(links_mutex);if(links_scene!=uintptr_t(scene)){links.clear();links_scene=uintptr_t(scene);}links[id]=std::move(entry);
+ std::lock_guard lock(links_mutex);if(links_scene!=uintptr_t(scene)){links.clear();links_scene=uintptr_t(scene);}
+ for(auto next:entry.ids)if(requested.size()<128&&std::find(requested.begin(),requested.end(),next)==requested.end())requested.push_back(next);
+ links[id]=std::move(entry);
  if(links.size()>4096){auto now=GetTickCount64();for(auto it=links.begin();it!=links.end();)if(now-it->second.tick>2000)it=links.erase(it);else ++it;}
 }
 static void sample_links_safe(void* self,void* scene){__try{sample_links(self,scene);}__except(EXCEPTION_EXECUTE_HANDLER){}}
@@ -48,10 +56,11 @@ static bool attach_assembly(){using namespace balance_assembly_contract;
 static std::vector<int32_t> assembly_ids(int32_t id,bool local){
  std::vector<int32_t> result{id};if(!local)return result;
  std::lock_guard lock(links_mutex);const auto now=GetTickCount64();
+ if(std::find(requested.begin(),requested.end(),id)==requested.end()){requested={id};links.clear();}
  std::unordered_map<int32_t,std::vector<int32_t>> graph;
- for(auto& [key,entry]:links){if(now<entry.tick||now-entry.tick>500)continue;graph[key];for(auto next:entry.ids){graph[key].push_back(next);graph[next].push_back(key);}}
+ for(auto& [key,entry]:links){if(now<entry.tick||now-entry.tick>1000)continue;graph[key];for(auto next:entry.ids){graph[key].push_back(next);graph[next].push_back(key);}}
  for(size_t i=0;i<result.size()&&result.size()<=128;++i){auto it=links.find(result[i]);
-  if(it==links.end()||now<it->second.tick||now-it->second.tick>500)return assembly_ready?std::vector<int32_t>{}:std::vector<int32_t>{id};
+  if(it==links.end()||now<it->second.tick||now-it->second.tick>1000)return assembly_ready?std::vector<int32_t>{}:std::vector<int32_t>{id};
   for(auto next:graph[result[i]])if(std::find(result.begin(),result.end(),next)==result.end())result.push_back(next);
  }
 
