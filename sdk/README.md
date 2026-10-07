@@ -23,4 +23,4 @@ AnyAPI 0.29.0 includes `anyapi.scene_lighting` v1/v2 for HDR fog, sun
 shafts and local-light scattering before the HUD. See [Scene lighting](../docs/scene-lighting.md)
 for the public policy contract, tested behavior and limitations.
 
-The AnyAPI 0.30.0 local candidate adds `anyapi.world_time` v1 for copied native day/night time. See [World time](../docs/api/world-time.md). Live-world acceptance is pending.
+AnyAPI 0.30.0 adds `anyapi.world_time` v1 for copied native day/night time. See [World time](../docs/api/world-time.md). The native clock readout was confirmed in a loaded world.

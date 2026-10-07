@@ -16,6 +16,7 @@ api.update(Version='0.30.0', Revision=30, Description='Native mod framework with
 clock = dict(Id='anyclock', Name='AnyClock', Version='1.0.0', Revision=1, MinimumApi=30,
              Description='Press a configurable key for a temporary native game-time HUD.',
              FileHashes={'AnyAPI and Modding/mods/AnyClock.dll': ''}, GameBuilds=api['GameBuilds'])
+catalog['Mods'] = [p for p in catalog['Mods'] if p['Id'] != 'anyclock']
 catalog['Mods'].append(clock)
 for p in catalog['Api'] + catalog['Mods']:
     name = p['Name'] + '-' + p['Version'] + '.zip'

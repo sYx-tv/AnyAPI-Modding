@@ -20,4 +20,4 @@ Requires **AnyAPI 0.30.0** on the reviewed Anymaker 0.1.23 build. The framework 
 
 The popup uses the existing GPU HUD drawing service and has no separate window or executable. An unavailable or stale native sample displays **Time unavailable**, rather than inventing a time.
 
-**Status:** local test candidate. Automated behaviour checks pass; live-world native getter and appearance validation are pending. The public mod catalog remains unchanged until acceptance.
+**Status:** released as AnyClock 1.0.0 with AnyAPI 0.30.0. All 42 native checks pass, and the author confirmed the live game-time popup works.

@@ -11,7 +11,7 @@ Resolve services with `AnyAPI_Services()->query(name, version)` during
 | Settings tabs and menu extensions | [Menu integration](menu-extensions.md) | `anyapi_menu_v1.h`, `anyapi_menu_v2.h` |
 | Native settings rows | [Settings widgets](settings-widgets.md) | `anyapi_menu_v3.h` |
 | Current game UI state | [UI state](ui-state.md) | `anyapi_ui_state_v1.h` |
-| World day/night time (0.30.0 candidate) | [World time](world-time.md) | `anyapi_world_time_v1.h` |
+| World day/night time (0.30.0) | [World time](world-time.md) | `anyapi_world_time_v1.h` |
 | Session/game mode | [Session](session.md) | `anyapi_session_v1.h` |
 | Item and component definitions | [Item catalog](item-catalog.md) | `anyapi_item_catalog_v1.h` |
 | Item previews | [Item images](item-images.md) | `anyapi_item_images_v1.h` |

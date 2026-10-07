@@ -1,6 +1,6 @@
 # World time
 
-Query `anyapi.world_time`, version **1**, during `AnyAPI_ModReady`. Available in the AnyAPI 0.30.0 local candidate. Header: [anyapi_world_time_v1.h](../../sdk/include/anyapi_world_time_v1.h).
+Query `anyapi.world_time`, version **1**, during `AnyAPI_ModReady`. Available in AnyAPI 0.30.0. Header: [anyapi_world_time_v1.h](../../sdk/include/anyapi_world_time_v1.h).
 
 `copy(AnyWorldTimeSnapshotV1*)` validates the caller's structure size and version and returns a copied snapshot. It returns false before the first native sample or when the sample is older than 500 milliseconds. A valid caller's output is cleared on an unavailable result.
 
@@ -12,7 +12,7 @@ Query `anyapi.world_time`, version **1**, during `AnyAPI_ModReady`. Available in
 
 This is a day/night-cycle service, not real-world time, a calendar or a simulation tick API. It respects the game's time override getter. Callers should check UI state separately before drawing gameplay UI.
 
-The provider observes a verified native shared call cell, forwards the original getter exactly once and exposes no native pointers. The game's executable and data fingerprints must match the reviewed build. No setter is exposed. Live-world acceptance remains pending for this candidate.
+The provider observes a verified native shared call cell, forwards the original getter exactly once and exposes no native pointers. The game's executable and data fingerprints must match the reviewed build. No setter is exposed. The native clock popup was confirmed in a loaded world before publication.
 
 ```cpp
 #include "anyapi_services_v1.h"

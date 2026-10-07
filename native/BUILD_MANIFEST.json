@@ -33,7 +33,7 @@
   "helpers_sha256": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c",
   "graphics_settings_acceptance": "USER_CONFIRMED_NATIVE_GRAPHICS_MENU",
   "api_version": "0.30.0",
-  "status": "LOCAL_CANDIDATE_GAMEPLAY_PENDING",
+  "status": "RELEASE_VERIFIED",
   "new_services": [
     "anyapi.scene_controls v1/v2",
     "anyapi.scene_antialiasing v1",
@@ -53,6 +53,6 @@
     "AnyClock": "1.0.0"
   },
   "acceptance_date": "2026-10-07",
-  "clock_gameplay_acceptance": "PENDING: native getter observation and popup in an active world",
+  "clock_gameplay_acceptance": "USER_CONFIRMED: native game-time popup and configuration; publication authorized",
   "clock_sha256": "ec683dccc998d2158b46897f7a8523b5082c5873b213c0a48f7c24cf8101304e"
 }

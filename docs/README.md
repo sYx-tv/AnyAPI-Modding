@@ -11,7 +11,7 @@
 ## Mod guides
 
 [AnyHelpers](mods/helpers.md) · [AnyInventory](mods/inventory.md) ·
-[AnyStorage](mods/storage.md) · [AnyMap](mods/map.md) · [AnyGraphics](mods/graphics.md) · [AnyClock (test candidate)](mods/clock.md)
+[AnyStorage](mods/storage.md) · [AnyMap](mods/map.md) · [AnyGraphics](mods/graphics.md) · [AnyClock](mods/clock.md)
 
 ## Developer reference
 
