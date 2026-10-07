@@ -220,6 +220,7 @@ using ResizeFn=HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain*,UINT,UINT,UINT,DXGI_F
 using Resize1Fn=HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain3*,UINT,UINT,UINT,DXGI_FORMAT,UINT,const UINT*,IUnknown*const*);
 using ExecuteFn=void(STDMETHODCALLTYPE*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*);
 static thread_local bool presenting{};
+static std::atomic<void(*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*)> after_execute{};
 // Chain DXGI Present and draw plugin canvases before normal presentation; skip test-only presents.
 static HRESULT STDMETHODCALLTYPE present(IDXGISwapChain* s,UINT interval,UINT flags){auto fn=original<PresentFn>(s,8);if(!fn)return E_FAIL;
  if(!presenting&&!(flags&DXGI_PRESENT_TEST)){presenting=true;try{draw(s);}catch(...){capture_owner.store(-1);log_line(ANY_LOG_ERROR,"framework","PLUGIN_RENDER exception=CPP frame_skipped=1");}presenting=false;}return fn(s,interval,flags);}
@@ -232,7 +233,7 @@ static HRESULT STDMETHODCALLTYPE resize(IDXGISwapChain* s,UINT count,UINT w,UINT
 static HRESULT STDMETHODCALLTYPE resize1(IDXGISwapChain3* s,UINT count,UINT w,UINT h,DXGI_FORMAT format,UINT flags,const UINT* masks,IUnknown*const* queues){auto fn=original<Resize1Fn>(s,39);if(!fn)return E_FAIL;std::lock_guard<std::recursive_mutex> lock(render_mutex);if(swap.Get()==s)reset();retry_at=0;return fn(s,count,w,h,format,flags,masks,queues);}
 // Observe direct command-queue submissions for graphics discovery, then forward the original submission.
 static void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists){auto fn=original<ExecuteFn>(q,10);if(!fn)return;
- if(q->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_DIRECT){std::lock_guard<std::mutex> lock(queue_mutex);if(observed_queue.Get()!=q)observed_queue=q;}fn(q,count,lists);}
+ if(q->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_DIRECT){std::lock_guard<std::mutex> lock(queue_mutex);if(observed_queue.Get()!=q)observed_queue=q;}fn(q,count,lists);if(auto callback=after_execute.load())callback(q,count,lists);}
 // Install presentation and resize callbacks on the interfaces supported by a swapchain.
 static bool hook_chain(IDXGISwapChain* chain){bool ok=hook_slot(chain,8,(void*)present)&&hook_slot(chain,13,(void*)resize);ComPtr<IDXGISwapChain1> one;ComPtr<IDXGISwapChain3> three;
  if(SUCCEEDED(chain->QueryInterface(IID_PPV_ARGS(&one))))ok=hook_slot(one.Get(),22,(void*)present1)&&ok;
