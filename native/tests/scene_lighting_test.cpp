@@ -11,7 +11,7 @@ int main(){
  using namespace scene_lighting;
  AnySceneLightingParametersV1 p;p.enabled=1;available=true;
  assert(set(&p)&&copy().enabled);platform::current_plugin=1;assert(!set(&p));platform::current_plugin=0;
- auto bad=p;bad.fog_density=std::numeric_limits<float>::quiet_NaN();assert(!set(&bad));bad=p;bad.quality=4;assert(!set(&bad));bad=p;bad.version=2;assert(!set(&bad));
+ auto bad=p;bad.fog_density=std::numeric_limits<float>::quiet_NaN();assert(!set(&bad));bad=p;bad.quality=4;assert(!set(&bad));bad=p;bad.sun_shafts=15.01f;assert(!set(&bad));bad=p;bad.sun_shafts=12;assert(set(&bad));bad=p;bad.version=2;assert(!set(&bad));
  active=false;assert(!copy().enabled);active=true;available=false;assert(!copy().enabled);available=true;
  std::vector<unsigned char> memory(0x5000);uintptr_t base=0x10000;
  auto write=[&](uintptr_t addr,const auto& value){memcpy(memory.data()+addr-base,&value,sizeof(value));};

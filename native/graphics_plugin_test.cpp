@@ -50,13 +50,17 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  apply(NativeAA,4);assert(aa_policy.enabled&&aa_policy.method==2&&policy.aa==0);
  apply(NativeAA,1);assert(!aa_policy.enabled);apply(NativeBloom,5);assert(policy.aa==1&&policy.bloom==2&&policy.bloom_intensity==.35f);
  apply(NativeSSAO,1);apply(NativeShadows,2);apply(NativeFogBlur,1);apply(FogDensity,1);assert(policy.ssao==1&&policy.shadows==2&&policy.fog_blur==1&&policy.fog==.35f&&policy.light_exposure==0);
- for(int preset=1;preset<=5;++preset){apply(Preset,preset);auto expected=profile(defaults(),preset);assert(policy.enabled&&policy.sun==1&&policy.fog==expected[FogDensity]&&policy.ssao==uint32_t(expected[NativeSSAO])&&policy.bloom_intensity==expected[BloomAmount]);assert(detail_policy.clouds==uint32_t(expected[Clouds])&&detail_policy.grass==uint32_t(expected[Grass])&&detail_policy.foliage==0);event(ANY_MENU_OPEN);stage(0,0);assert(rows()==Count-5);event(ANY_MENU_CANCEL);}
+ for(int preset=1;preset<=5;++preset){apply(Preset,preset);auto expected=profile(defaults(),preset);assert(policy.enabled&&policy.sun==1&&policy.fog==expected[FogDensity]&&policy.ssao==uint32_t(expected[NativeSSAO])&&policy.bloom_intensity==expected[BloomAmount]);assert(detail_policy.clouds==uint32_t(expected[Clouds])&&detail_policy.grass==uint32_t(expected[Grass])&&detail_policy.foliage==0);event(ANY_MENU_OPEN);stage(0,0);assert(rows()==Count-7);event(ANY_MENU_CANCEL);}
  assert(lighting_submissions&&!lighting_policy.enabled);
  apply(Atmosphere,3);apply(SunShafts,2);apply(LightingQuality,3);apply(GroundFog,2);
  assert(lighting_policy.enabled&&lighting_policy.fog_density==.004f&&lighting_policy.sun_shafts==1&&lighting_policy.quality==3&&lighting_policy.height_falloff==.025f);
  event(ANY_MENU_OPEN);stage(Atmosphere+1,4);render();assert(lighting_policy.fog_density==.004f);event(ANY_MENU_CANCEL);render();assert(lighting_policy.fog_density==.004f);
  apply(Atmosphere,0);assert(lighting_policy.enabled&&lighting_policy.fog_strength==0&&lighting_policy.sun_shafts==1);
- apply(SunShafts,0);assert(!lighting_policy.enabled);
+ apply(ShaftIntensity,2);assert(lighting_policy.sun_shafts==2&&lighting_policy.fog_density==.002f);
+ apply(BeamFocus,2);assert(lighting_policy.anisotropy==.55f);
+ event(ANY_MENU_OPEN);stage(ShaftIntensity+1,4);render();assert(lighting_policy.sun_shafts==2);event(ANY_MENU_CANCEL);render();assert(lighting_policy.sun_shafts==2);
+ apply(ShaftIntensity,0);assert(!lighting_policy.enabled);apply(ShaftIntensity,1);assert(lighting_policy.enabled&&lighting_policy.sun_shafts==1);
+ apply(SunShafts,4);apply(ShaftIntensity,4);assert(lighting_policy.sun_shafts==12);apply(SunShafts,0);assert(!lighting_policy.enabled);
  apply(Atmosphere,2);apply(Preset,0);assert(!policy.enabled&&!aa_policy.enabled&&!lighting_policy.enabled);apply(Preset,3);assert(policy.enabled);
  for(int level=0;level<5;++level){apply(FogDensity,level);assert(policy.fog==fog_levels[level]);}
  for(int level=2;level<6;++level){apply(NativeBloom,level);assert(policy.bloom==2&&policy.bloom_intensity==bloom_levels[level-2]);}

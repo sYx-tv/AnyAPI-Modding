@@ -32,7 +32,7 @@ and status, not raw native resource pointers.
 
 ## Validation
 
-All 38 native checks pass, including shader compilation/reflection, 44 synthetic
+All 38 native checks pass, including shader compilation/reflection, 49 synthetic
 D3D12 lighting cases, policy ownership, camera/depth contracts and menu staging.
 GPU cases cover all quality levels, standard/reversed-depth shadow occlusion, depth-limited fog, zero
 density identity, resize and a sharp HUD drawn afterward. Production restores
@@ -109,3 +109,15 @@ This changes scattering radiance, not global exposure, native surface lighting,
 shadow geometry, sample count or pass placement. Eight GPU regressions use the
 measured sun colour and viewing angle at Low fog density; visible native-world
 beam contrast and performance remain to be tested.
+
+## Beam customization
+
+The user confirmed visible sun shafts with the calibrated build. Graphics now
+adds Sun shaft intensity (0-4 times the selected shaft tier; default 1) and Beam
+focus (Soft, Balanced, Focused, Strong; default Balanced). These affect only
+sunlight scattering, with no added samples or full-screen passes. Controls are
+hidden when shafts are Off and use native Apply, Cancel, Reset and saved settings.
+The lighting service accepts shaft radiance 0-15; current UI combinations reach
+12. Defaults preserve the accepted appearance. GPU checks verify linear intensity
+scaling independent of fog and finite focused scattering. Native-world acceptance
+of the new controls remains pending.
