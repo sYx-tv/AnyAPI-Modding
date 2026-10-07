@@ -89,7 +89,11 @@ float4 Integrate(Varying v) : SV_Target {
     distance=min(distance/max(abs(dot(ray,normalize(forward_axis.xyz))),.05),controls.y);
     uint count=(uint)clamp(controls.x,8,64);
     float g=clamp(medium.w,-.8,.8);float mu=dot(ray,normalize(sunlight.xyz));
-    float phase=(1-g*g)/(12.5663706*pow(max(1+g*g-2*g*mu,.001),1.5));
+    // Native sun_colour is the renderer's artistic direct-light value, not
+    // radiometric intensity per steradian. Use an isotropic-relative phase
+    // (g=0 -> 1) so shaft strength shares the native lighting scale. The old
+    // 1/(4*pi) factor suppressed already small game sun values by 12.57x.
+    float phase=(1-g*g)/pow(max(1+g*g-2*g*mu,.001),1.5);
     float transmittance=1;float3 scattered=0;
     [loop]for(uint i=0;i<count;++i) {
         // Quadratic spacing resolves nearby branch shadows without more samples.

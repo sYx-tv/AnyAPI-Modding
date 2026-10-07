@@ -32,7 +32,7 @@ and status, not raw native resource pointers.
 
 ## Validation
 
-All 38 native checks pass, including shader compilation/reflection, 36 synthetic
+All 38 native checks pass, including shader compilation/reflection, 44 synthetic
 D3D12 lighting cases, policy ownership, camera/depth contracts and menu staging.
 GPU cases cover all quality levels, standard/reversed-depth shadow occlusion, depth-limited fog, zero
 density identity, resize and a sharp HUD drawn afterward. Production restores
@@ -88,7 +88,7 @@ confirmed; this revised shaft build still needs a world test.
 
 ## Live shadow diagnostics
 
-The current development build records a one-shot 32×24 offscreen probe on the
+The current development build records a one-shot 32Ã—24 offscreen probe on the
 lighting pass's first valid frame. It reports shadow coverage and lit fractions
 through `SHAFT_PROBE`; regular frame logs also report native sun RGB and the
 view/sun cosine. Probe readback is fenced after the original command-list
@@ -96,3 +96,16 @@ submission and polled without waiting. It is never displayed or composited.
 GPU tests verify lit/blocked results, no premature readback, repeated requests
 with increasing fence values, and preservation of native HUD rendering.
 These diagnostics do not by themselves fix or validate the live shaft appearance.
+
+## Native light-scale calibration
+
+A live world probe reported sun RGB (0.305571, 0.280569, 0.245261), shadow
+coverage 0.999994 and lit fractions ranging from 0 to 0.90625. This confirms
+that the shader samples covered, occluded native shadow regions. The original
+phase included 1/(4*pi) while using the game's artistic direct-light values;
+that reduced shaft illumination by 12.57 times relative to the ambient fog.
+The shader now uses an isotropic-relative phase, with g=0 giving a factor of 1.
+This changes scattering radiance, not global exposure, native surface lighting,
+shadow geometry, sample count or pass placement. Eight GPU regressions use the
+measured sun colour and viewing angle at Low fog density; visible native-world
+beam contrast and performance remain to be tested.
