@@ -15,8 +15,8 @@ $gameRoot = (Resolve-Path -LiteralPath $GameDirectory).Path
 if ([AnyApiManager.Engine]::Running()) { throw 'Close Anymaker before installing.' }
 $packages = @($catalog.Api) + @($catalog.Mods)
 $required = @('anyapi','anyhelpers','anyinventory','anystorage','anymap','anygraphics')
-$allowed = $required + @('anyclock','anyquickwheel')
-if (@($packages | Where-Object { $_.Id -notin $allowed }).Count -or @($required | Where-Object { $_ -notin $packages.Id }).Count -or $packages.Count -notin @(6,7,8)) { throw 'Expected the API, five standard mods and optional AnyClock / AnyQuickWheel.' }
+$allowed = $required + @('anyclock','anyquickwheel','anybalance')
+if (@($packages | Where-Object { $_.Id -notin $allowed }).Count -or @($required | Where-Object { $_ -notin $packages.Id }).Count -or $packages.Count -notin @(6,7,8,9)) { throw 'Expected the API, five standard mods and optional AnyClock / AnyQuickWheel / AnyBalance.' }
 foreach ($package in $packages) {
     if (-not [AnyApiManager.Rules]::Matches($package, [AnyApiManager.Rules]::Hash((Join-Path $gameRoot 'game.exe')), [AnyApiManager.Rules]::Hash((Join-Path $gameRoot 'bin/game.gcl')))) { throw 'Game build differs from candidate.' }
     [void][AnyApiManager.Engine]::ReadPackage($package, (Join-Path $PackagesDirectory ($package.Name + '-' + $package.Version + '.zip')))

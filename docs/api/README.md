@@ -42,3 +42,5 @@ with another game build or advertise disabled legacy hooks as active APIs.
 
 - [Build information](build-info.md)
 - [Client task scheduling](client-tasks.md)
+
+- [Creation balance snapshots](creation-balance.md) — AnyAPI 0.32.0 local test build.

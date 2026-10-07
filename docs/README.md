@@ -10,8 +10,8 @@
 
 ## Mod guides
 
-[AnyHelpers](mods/helpers.md) · [AnyInventory](mods/inventory.md) ·
-[AnyStorage](mods/storage.md) · [AnyMap](mods/map.md) · [AnyGraphics](mods/graphics.md) · [AnyClock](mods/clock.md) · [AnyQuickWheel](mods/quick-wheel.md)
+[AnyHelpers](mods/helpers.md) Â· [AnyInventory](mods/inventory.md) Â·
+[AnyStorage](mods/storage.md) Â· [AnyMap](mods/map.md) Â· [AnyGraphics](mods/graphics.md) Â· [AnyClock](mods/clock.md) Â· [AnyQuickWheel](mods/quick-wheel.md)
 
 ## Developer reference
 
@@ -24,3 +24,5 @@
 The API reference describes the checked-in source. Published manager resources
 are versioned separately; its bundled offline guide describes API 0.27.0.
 [Release records](releases/) retain historical evidence and version numbers.
+
+- [AnyBalance: Properties-tool centre of mass](mods/balance.md) — local test build, awaiting in-game validation.

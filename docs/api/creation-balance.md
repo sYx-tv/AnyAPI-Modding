@@ -1,0 +1,23 @@
+# Creation balance snapshots
+
+Query `anyapi.creation_balance`, version **1**, after `AnyAPI_ModReady`. Header: [anyapi_creation_balance_v1.h](../../sdk/include/anyapi_creation_balance_v1.h). Added in the local AnyAPI **0.32.0** test build; live acceptance is pending.
+
+`copy` returns a bounded, copied snapshot of the creation targeted by the locally equipped Properties Tool. It exposes no game pointers and no physics mutation functions. A copy is unavailable outside focused gameplay, when another tool is equipped, without a valid target, or after **150 ms** without a native overlay sample.
+
+The snapshot contains the vehicle ID, selected tool item ID, context generation, sampling time, local shape centre, local bounds, world centre, local height/offsets and projected centre/axes/bounds points. Screen positions use native NDC X/Y and positive forward depth; consumers convert X/Y to viewport pixels and reject points behind the camera. Body mass is optional and indicated by `ANY_BALANCE_BODY_MASS`.
+
+## Native contracts
+
+All hooks require the loader's exact executable and GCL identity checks. Reviewed bodies are in `native/balance_contract.h`.
+
+- `client_scene.item_world.vehicle_editor_properties.update_ui_overlay` is reached through the equipped item's virtual slot **12**. Its 424-byte body is shared by thirteen editor-tool implementations, so byte scanning alone cannot identify Properties. The runtime uses the selected authored definition ID and its actual virtual call cell; it does not pick the first matching body.
+- The Properties overlay reads its state object from the second word of the `ref` at item **+0x38**, i.e. item **+0x40**. The state overlay virtual offset is read from dependency **2** of that actual Properties function. Only the exact hovered or selected Properties-state overlay bodies are accepted.
+- Hovered/selected vehicle ID is at state **+8**. The scene's vehicle container is at **+0xa0**. The unique hovered-state overlay provides the vehicle lookup virtual offset at dependency **0** and render-transform virtual offset at dependency **9**.
+- Vehicle lookup checks the returned vehicle ID at **+8**. The render transform is copied through the reviewed native getter. Native bounds come from virtual slot **15**, checked against `get_bounds_outer` before use.
+- Vehicle **+0x408** is `m_grid_to_physics_center`. The reviewed `build_physics_shape` body assigns it from accumulated weighted positions divided by accumulated weight (division and assignment at body offsets **0x2706–0x27d3**). This is the client shape centre, not a server cargo estimate.
+- Client vehicle physics is at **+0x4d0**. The optional native `physics.object.get_mass` import is obtained through dependency **7** of the unique `client_scene.vehicle_element.rotor.get_is_downwash_surface` body.
+- Projection uses the pinned executable's `application.graphics.camera.get_screen` at RVA **0x120e90**, with its entire 58-byte wrapper checked. The reviewed wrapper takes a hidden result pointer followed by camera, world position and aspect pointers. Its underlying implementation returns NDC X/Y and forward distance divided by the camera far distance.
+
+The overlay observer forwards the original call exactly once, then copies only the authorised locally selected tool's target. Sampling runs on the native overlay thread. The selected tool is tracked on the local actor tick; context/tool changes invalidate earlier data. Snapshot access uses a lock and never invokes borrowed game objects from the drawing thread.
+
+The display describes one native body. Articulated assemblies, fluids, cargo and contact forces need additional server/physics evidence before they can be exposed as aggregate mass, tipping predictions or axle loads.
