@@ -10,7 +10,7 @@ static bool active=true;static bool anyapi_owner_active(int who){return active&&
 int main(){
  using namespace scene_lighting;
  AnySceneLightingParametersV1 p;p.enabled=1;available=true;
- assert(set(&p)&&copy().enabled);platform::current_plugin=1;assert(!set(&p));platform::current_plugin=0;
+ assert(set(&p)&&copy().enabled);AnySceneLightingParametersV2 extended;extended.scene=p;extended.local_strength=2;assert(set_v2(&extended)&&copy_v2().local_strength==2);extended.local_budget=9;assert(!set_v2(&extended));assert(set(&p)&&copy_v2().local_strength==0);platform::current_plugin=1;assert(!set(&p));platform::current_plugin=0;
  auto bad=p;bad.fog_density=std::numeric_limits<float>::quiet_NaN();assert(!set(&bad));bad=p;bad.quality=4;assert(!set(&bad));bad=p;bad.sun_shafts=15.01f;assert(!set(&bad));bad=p;bad.sun_shafts=12;assert(set(&bad));bad=p;bad.version=2;assert(!set(&bad));
  active=false;assert(!copy().enabled);active=true;available=false;assert(!copy().enabled);available=true;
  std::vector<unsigned char> memory(0x5000);uintptr_t base=0x10000;
@@ -28,6 +28,21 @@ int main(){
  write(scene+0x610,uint32_t(9));assert(!volumetric::capture(renderer,scene,p,frame,read));write(scene+0x610,uint32_t(4));
  assert(frame.gpu.sun[3]==1);matrix[10]=-.001;write(cameras+0x1a0,matrix);assert(volumetric::capture(renderer,scene,p,frame,read)&&frame.gpu.sun[3]==2);
  write(shadow+0x50,uint32_t(56));assert(volumetric::capture(renderer,scene,p,frame,read));write(shadow+0x50,uint32_t(28));assert(!volumetric::capture(renderer,scene,p,frame,read)&&frame.failure==4);write(shadow+0x50,uint32_t(56));
+ // Wrapped native ring buffer and light priority. Radius/colour survive packing;
+ // the native volume field is a culling volume, not a scattering multiplier.
+ uintptr_t lamp=base+0x4500;write(scene+0xc48,lamp);write(scene+0xc50,uint32_t(1));write(scene+0xc54,uint32_t(1));write(scene+0xc58,uint32_t(2));write(scene+0xc5c,uint32_t(56));
+ float bulb[14]={2,3,6,10,1,.5f,.25f,999};write(lamp+56,bulb);assert(volumetric::capture(renderer,scene,p,frame,read,2,4));assert(frame.gpu.fog_color[3]==1&&frame.gpu.sun_color[3]==2&&frame.gpu.lights[0][2]==6&&frame.gpu.lights[0][11]==0);
+ write(scene+0xc5c,uint32_t(120));assert(volumetric::capture(renderer,scene,p,frame,read,2,4)&&frame.gpu.fog_color[3]==0);write(scene+0xc5c,uint32_t(56));
+ float brighter[14]={2,3,5,10,4,2,1,999};write(lamp,brighter);write(scene+0xc54,uint32_t(2));assert(volumetric::capture(renderer,scene,p,frame,read,2,1)&&frame.gpu.fog_color[3]==1&&frame.gpu.lights[0][8]==4);
+ assert(volumetric::capture(renderer,scene,p,frame,read,0,4)&&frame.gpu.fog_color[3]==0&&frame.gpu.local_shadow_count==0);
+ // A spotlight matches its shadow camera by matrix, including reversed depth.
+ write(scene+0xc54,uint32_t(0));uintptr_t spot=base+0x4700;write(scene+0xc70,spot);write(scene+0xc7c,uint32_t(1));write(scene+0xc80,uint32_t(1));write(scene+0xc84,uint32_t(120));
+ float cone[30]{};double spot_matrix[16]{};spot_matrix[0]=spot_matrix[5]=spot_matrix[15]=1;spot_matrix[10]=-.001;
+ for(unsigned j=0;j<16;++j)cone[j]=float(spot_matrix[j]);cone[16]=2;cone[17]=3;cone[18]=6;cone[19]=10;cone[22]=-1;cone[23]=.5f;cone[24]=cone[25]=cone[26]=1;cone[28]=.9f;write(spot,cone);
+ write(scene+0x5c8,uint32_t(5));write(refs+4*16+8,shadow);write(cameras+4*720+0x220,spot_matrix);write(cameras+4*720+0x1a0,spot_matrix);
+ assert(volumetric::capture(renderer,scene,p,frame,read,2,4)&&frame.gpu.local_shadow_count==1&&frame.gpu.lights[0][12]==8&&frame.gpu.lights[0][13]==2);
+ spot_matrix[0]=2;write(cameras+4*720+0x220,spot_matrix);assert(volumetric::capture(renderer,scene,p,frame,read,2,4)&&frame.gpu.local_shadow_count==0&&frame.gpu.lights[0][12]==-1);
+ cone[22]=0;write(spot,cone);assert(volumetric::capture(renderer,scene,p,frame,read,2,4)&&frame.gpu.fog_color[3]==0);write(scene+0x5c8,uint32_t(4));
  write(depth+0x34,uint32_t(1280));assert(!volumetric::capture(renderer,scene,p,frame,read));write(depth+0x34,uint32_t(2560));
  write(scene+0x668,uint32_t(1));assert(!volumetric::capture(renderer,scene,p,frame,read));write(scene+0x668,uint32_t(0));
  write(scene+0x5c8,uint32_t(33));assert(!volumetric::capture(renderer,scene,p,frame,read));write(scene+0x5c8,uint32_t(4));write(scene+0x5cc,uint32_t(0x2d0));

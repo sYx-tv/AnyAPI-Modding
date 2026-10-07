@@ -25,6 +25,10 @@ Texture2D<float> shadow4 : register(t8);
 Texture2D<float> shadow5 : register(t9);
 Texture2D<float> shadow6 : register(t10);
 Texture2D<float> shadow7 : register(t11);
+Texture2D<float> shadow8 : register(t12);
+Texture2D<float> shadow9 : register(t13);
+Texture2D<float> shadow10 : register(t14);
+Texture2D<float> shadow11 : register(t15);
 SamplerState linear_sampler : register(s0);
 SamplerState point_sampler : register(s1);
 // Drawn once per cascade. Matrix rows travel in immutable command-list constants.
@@ -40,7 +44,11 @@ float shadow_sample(uint cascade,float2 uv) {
     case 4:return shadow4.SampleLevel(point_sampler,uv,0);
     case 5:return shadow5.SampleLevel(point_sampler,uv,0);
     case 6:return shadow6.SampleLevel(point_sampler,uv,0);
-    default:return shadow7.SampleLevel(point_sampler,uv,0);
+    case 7:return shadow7.SampleLevel(point_sampler,uv,0);
+    case 8:return shadow8.SampleLevel(point_sampler,uv,0);
+    case 9:return shadow9.SampleLevel(point_sampler,uv,0);
+    case 10:return shadow10.SampleLevel(point_sampler,uv,0);
+    default:return shadow11.SampleLevel(point_sampler,uv,0);
     }
 }
 
@@ -83,6 +91,31 @@ float4 Probe(Varying v) : SV_Target {
     [loop]for(uint i=0;i<32;++i){float a=float(i)/32,b=float(i+1)/32;result+=shadow_result(camera.xyz+ray*distance*(a*a+b*b)*.5);}
     return float4(result/32,distance/controls.y,1);
 }
+float3 local_illumination(float3 position,float3 ray) {
+    float3 result=0;
+    [loop]for(uint i=0;i<(uint)fog_colour.w;++i){
+        float4 location=matrices.Load(int3(0,12+i,0));
+        float3 delta=location.xyz-position;float distance=length(delta);
+        if(distance>=location.w)continue;
+        float3 toward_light=delta/max(distance,.001);
+        float4 direction=matrices.Load(int3(1,12+i,0));
+        float4 colour=matrices.Load(int3(2,12+i,0));
+        float4 properties=matrices.Load(int3(3,12+i,0));
+        float attenuation=pow(saturate(1-distance/location.w),2);
+        if(colour.w>.5)attenuation*=smoothstep(direction.w,min(.9999,direction.w+.08),dot(direction.xyz,-toward_light));
+        if(attenuation<=.00001)continue;
+        float visible=1;
+        if(properties.x>=8){uint cascade=(uint)properties.x;row_major float4x4 transform=float4x4(matrices.Load(int3(0,cascade,0)),matrices.Load(int3(1,cascade,0)),matrices.Load(int3(2,cascade,0)),matrices.Load(int3(3,cascade,0)));
+            float4 clip=mul(float4(position,1),transform);if(clip.w<=.00001)continue;
+            float3 p=clip.xyz/clip.w;float2 uv=p.xy*float2(.5,-.5)+.5;
+            if(any(uv<0)||any(uv>1)||p.z<0||p.z>1)continue;
+            float stored=shadow_sample(cascade,uv);visible=properties.y>1.5?(p.z>=stored-.00002?1:0):(p.z<=stored+.00002?1:0);
+        }
+        float g=medium.w,mu=dot(ray,toward_light);float phase=(1-g*g)/pow(max(1+g*g-2*g*mu,.001),1.5);
+        result+=colour.rgb*attenuation*visible*phase*sun_colour.w;
+    }
+    return result;
+}
 float4 Integrate(Varying v) : SV_Target {
     float3 ray=view_ray(v.uv);
     float distance=view_distance(scene_depth.SampleLevel(point_sampler,v.uv,0));
@@ -103,11 +136,11 @@ float4 Integrate(Varying v) : SV_Target {
         float world_height=camera.w+ray.y*d;
         float density=medium.x*exp(-max(world_height-medium.y,0)*medium.z);
         float segment=exp(-density*step);float weight=transmittance*(1-segment);
-        float3 illumination=fog_colour.rgb*controls.w+sun_colour.rgb*controls.z*phase*visibility(position);
+        float3 illumination=fog_colour.rgb*controls.w+sun_colour.rgb*controls.z*phase*visibility(position)+local_illumination(position,ray);
         scattered+=illumination*weight;transmittance*=segment;
         if(transmittance<.001)break;
     }
-    return float4(scattered,transmittance);
+    return float4(scattered,(controls.z>0||controls.w>0)?transmittance:1);
 }
 float4 Composite(Varying v) : SV_Target {
     uint w,h;volume.GetDimensions(w,h);float2 pixel=v.uv*float2(w,h)-.5;

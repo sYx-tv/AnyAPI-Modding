@@ -9,6 +9,7 @@
 #include "anyapi_scene_controls_v1.h"
 #include "anyapi_scene_controls_v2.h"
 #include "anyapi_scene_lighting_v1.h"
+#include "anyapi_scene_lighting_v2.h"
 #include "anyapi_scene_antialiasing_v1.h"
 #include "anyapi_post_process_v1.h"
 #include "anygraphics_options.h"
@@ -22,6 +23,9 @@ static AnySceneLightingParametersV1 lighting_policy;static unsigned lighting_sub
 static bool lighting_set(const AnySceneLightingParametersV1* p){lighting_policy=*p;++lighting_submissions;return true;}
 static bool lighting_status(AnySceneLightingStatusV1* s){s->available=s->ready=1;return true;}
 static const AnySceneLightingV1 lighting_api{sizeof(AnySceneLightingV1),1,lighting_set,lighting_status};
+static AnySceneLightingParametersV2 local_policy;
+static bool lighting_set_v2(const AnySceneLightingParametersV2* p){local_policy=*p;return lighting_set(&p->scene);}
+static const AnySceneLightingV2 local_api{sizeof(AnySceneLightingV2),2,lighting_set_v2,lighting_status};
 static AnySceneParametersV1 policy;static bool ready=true;static unsigned submissions{},post_calls{};
 static bool set(const AnySceneParametersV1* p){policy=*p;++submissions;return true;}
 static AnySceneParametersV2 detail_policy;
@@ -32,8 +36,9 @@ static const AnySceneControlsV1 scene{sizeof(AnySceneControlsV1),1,set,status};
 static const AnySceneControlsV2 scene_v2{sizeof(AnySceneControlsV2),2,set_v2,status};
 static const AnyPostProcessV1 post{sizeof(AnyPostProcessV1),1,forbidden,nullptr,nullptr};
 static void log(uint32_t,const char*,const char* text){std::cout<<text<<'\n';}
-int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitbuf;using namespace graphics_options;assert(argc==4||argc==5);bool absent=argc==5;
+int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitbuf;using namespace graphics_options;assert(argc==4||argc==5);bool local=argc==5&&std::wstring(argv[4])==L"--local-lights",absent=argc==5&&!local;
  auto fixture=LoadLibraryW(argv[1]);assert(fixture);auto service=AnyAPI_Services();assert(service);assert(service->publish("anyapi.post_process",1,&post));if(!absent){assert(service->publish("anyapi.scene_controls",1,&scene));assert(service->publish("anyapi.scene_controls",2,&scene_v2));assert(service->publish("anyapi.scene_antialiasing",1,&aa_api));assert(service->publish("anyapi.scene_lighting",1,&lighting_api));}auto graphics=LoadLibraryW(argv[3]);assert(graphics);
+ if(local)assert(service->publish("anyapi.scene_lighting",2,&local_api));
  auto root=std::filesystem::temp_directory_path()/(L"AnyGraphicsNative-"+std::to_wstring(GetCurrentProcessId()));std::filesystem::create_directories(root/L"AnyHelpers");
  // Migration retains native keys, ignores removed post FX and does not load AnyHelpers.
  {std::ofstream old(root/L"AnyHelpers"/L"settings.tsv");old<<"anygraphics.scene\tsun_light\t3\t312e35\nanygraphics.general\tcomparison\t4\t31\nanygraphics.sharpness\tsharpen\t1\t31\n";}
@@ -41,7 +46,15 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  auto event=(void(*)(uint32_t))GetProcAddress(fixture,"FixtureGraphicsEvent");auto stage=(void(*)(uint64_t,double))GetProcAddress(fixture,"FixtureGraphicsStage");auto rows=(uint32_t(*)())GetProcAddress(fixture,"FixtureRows");auto dirty=(uint32_t(*)())GetProcAddress(fixture,"FixtureGraphicsDirty");auto title=(const char*(*)())GetProcAddress(fixture,"FixtureGraphicsTitle");auto ui=(void(*)(int32_t))GetProcAddress(fixture,"FixtureUiState");assert(event&&stage&&rows&&dirty&&title&&ui);assert(std::string(title()).find("Modded")!=std::string::npos);assert(!service->query("anyhelpers.settings",1));
  AnyFrameV1 frame;frame.tick=100;frame.focused=1;AnyCanvasV1 canvas;ui(1);auto render=[&](){frame.tick+=16;g.render(&frame,&canvas,nullptr);assert(!canvas.pixels&&post_calls==0);};auto apply=[&](Index i,double v){event(ANY_MENU_OPEN);stage(i+1,v);event(ANY_MENU_APPLY);event(ANY_MENU_CANCEL);render();};render();
  if(absent){assert(!submissions);event(ANY_MENU_OPEN);stage(0,0);assert(rows()>3);event(ANY_MENU_CANCEL);}
- else {
+ else if(local){
+ assert(lighting_policy.enabled&&local_policy.local_strength==1&&local_policy.local_budget==4);
+ apply(Atmosphere,0);apply(SunShafts,0);assert(lighting_policy.enabled&&lighting_policy.fog_strength==0&&lighting_policy.sun_shafts==0);
+ apply(LocalBeams,4);apply(LocalIntensity,3);apply(LocalBudget,3);assert(local_policy.local_strength==9&&local_policy.local_budget==8);
+ event(ANY_MENU_OPEN);stage(LocalIntensity+1,1);render();assert(local_policy.local_strength==9);event(ANY_MENU_CANCEL);render();assert(local_policy.local_strength==9);
+ apply(LocalIntensity,0);assert(!lighting_policy.enabled);apply(LocalIntensity,1);assert(lighting_policy.enabled);
+ apply(LocalBeams,0);assert(!lighting_policy.enabled);apply(LocalBeams,2);apply(Preset,0);assert(!lighting_policy.enabled);apply(Preset,3);assert(lighting_policy.enabled);
+ apply(Enabled,0);assert(!lighting_policy.enabled);apply(Enabled,1);ui(13);render();assert(!lighting_policy.enabled);apply(GameplayOnly,0);assert(lighting_policy.enabled);
+ }else {
  assert(policy.enabled&&policy.sun==1.3f);apply(Advanced,1);apply(SunLight,3);assert(policy.sun==1.15f);
  apply(Clouds,1);apply(Grass,2);apply(Foliage,1);assert(detail_policy.clouds==1&&detail_policy.grass==2&&detail_policy.foliage==1);
  event(ANY_MENU_OPEN);stage(Clouds+1,2);render();assert(detail_policy.clouds==1);event(ANY_MENU_CANCEL);render();assert(detail_policy.clouds==1);
@@ -50,7 +63,7 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  apply(NativeAA,4);assert(aa_policy.enabled&&aa_policy.method==2&&policy.aa==0);
  apply(NativeAA,1);assert(!aa_policy.enabled);apply(NativeBloom,5);assert(policy.aa==1&&policy.bloom==2&&policy.bloom_intensity==.35f);
  apply(NativeSSAO,1);apply(NativeShadows,2);apply(NativeFogBlur,1);apply(FogDensity,1);assert(policy.ssao==1&&policy.shadows==2&&policy.fog_blur==1&&policy.fog==.35f&&policy.light_exposure==0);
- for(int preset=1;preset<=5;++preset){apply(Preset,preset);auto expected=profile(defaults(),preset);assert(policy.enabled&&policy.sun==1&&policy.fog==expected[FogDensity]&&policy.ssao==uint32_t(expected[NativeSSAO])&&policy.bloom_intensity==expected[BloomAmount]);assert(detail_policy.clouds==uint32_t(expected[Clouds])&&detail_policy.grass==uint32_t(expected[Grass])&&detail_policy.foliage==0);event(ANY_MENU_OPEN);stage(0,0);assert(rows()==Count-7);event(ANY_MENU_CANCEL);}
+ for(int preset=1;preset<=5;++preset){apply(Preset,preset);auto expected=profile(defaults(),preset);assert(policy.enabled&&policy.sun==1&&policy.fog==expected[FogDensity]&&policy.ssao==uint32_t(expected[NativeSSAO])&&policy.bloom_intensity==expected[BloomAmount]);assert(detail_policy.clouds==uint32_t(expected[Clouds])&&detail_policy.grass==uint32_t(expected[Grass])&&detail_policy.foliage==0);event(ANY_MENU_OPEN);stage(0,0);assert(rows()==Count-10);event(ANY_MENU_CANCEL);}
  assert(lighting_submissions&&!lighting_policy.enabled);
  apply(Atmosphere,3);apply(SunShafts,2);apply(LightingQuality,3);apply(GroundFog,2);
  assert(lighting_policy.enabled&&lighting_policy.fog_density==.004f&&lighting_policy.sun_shafts==1&&lighting_policy.quality==3&&lighting_policy.height_falloff==.025f);

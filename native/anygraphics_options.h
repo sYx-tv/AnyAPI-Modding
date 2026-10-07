@@ -4,7 +4,7 @@
 #include <array>
 #include <cmath>
 namespace graphics_options {
-enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,Count};
+enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,Count};
 struct Option {const char* id;const char* group;const char* label;const char* description;uint32_t kind;float initial,minimum,maximum,step;};
 static constexpr Option definitions[]={
  {"enabled","General","Enable AnyGraphics","Use the selected native graphics settings. Off restores the game's own settings.",ANY_SETTING_BOOL,1,0,1,1},
@@ -32,7 +32,10 @@ static constexpr Option definitions[]={
  {"lighting_quality","Lighting","Volumetric quality","Ray-march sampling quality. Higher settings use more GPU time.",ANY_SETTING_CHOICE,1,0,3,1},
  {"ground_fog","Lighting","Fog height falloff","Off keeps added fog uniform with altitude. Higher levels concentrate fog near sea level and may make it faint on hills.",ANY_SETTING_CHOICE,0,0,3,1},
  {"shaft_intensity","Lighting","Sun shaft intensity","Scale beam brightness independently of fog. 1 is the current look; higher values make beams more dramatic without adding samples.",ANY_SETTING_NUMBER,1,0,4,.1f},
- {"beam_focus","Lighting","Beam focus","Soft spreads sunlight widely. Focused and Strong concentrate scattering toward the sun.",ANY_SETTING_CHOICE,1,0,3,1}
+ {"beam_focus","Lighting","Beam focus","Soft spreads scattering widely. Focused and Strong concentrate sun and local beams toward their light sources.",ANY_SETTING_CHOICE,1,0,3,1},
+ {"local_beams","Lighting","Local light beams","Volumetric headlights, torches, spotlights and point lights in the same scene pass. Native spotlight shadows are used when available.",ANY_SETTING_CHOICE,2,0,4,1},
+ {"local_intensity","Lighting","Local beam intensity","Scale local-light scattering independently of sun shafts and fog.",ANY_SETTING_NUMBER,1,0,4,.1f},
+ {"local_budget","Lighting","Local light budget","Prioritize nearby influential lights: 2, 4, 6 or 8 per frame. Higher budgets cost more GPU time.",ANY_SETTING_CHOICE,1,0,3,1}
 };
 static_assert(std::size(definitions)==Count);
 using Values=std::array<float,Count>;
@@ -47,7 +50,7 @@ inline Values profile(const Values& current,int level){
  if(!level)return current; // Off bypasses overrides and keeps the previous individual choices.
  v[NativeAA]=2;v[NativeSSAO]=level>=3?2.f:1.f;v[NativeShadows]=level>=2?2.f:1.f;v[NativeFogBlur]=level>=3?2.f:1.f;
  v[NativeBloom]=level>=2?2.f:1.f;v[BloomAmount]=level>=2?bloom_levels[level-2]:0;v[BloomThreshold]=.75f;
- v[Clouds]=level==1?1.f:0.f;v[Grass]=level<=2?1.f:0.f;v[Foliage]=0;v[FogDensity]=fog_levels[level-1];return v;
+ v[LocalBeams]=level<=2?0.f:2.f;v[Clouds]=level==1?1.f:0.f;v[Grass]=level<=2?1.f:0.f;v[Foliage]=0;v[FogDensity]=fog_levels[level-1];return v;
 }
 inline Values effective(const Values& custom){return custom;}
 inline bool advanced(size_t i){return (i>=SunLight&&i<=SceneExposure)||i>=Clouds;}

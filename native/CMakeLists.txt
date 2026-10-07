@@ -156,6 +156,7 @@ add_executable(graphics_plugin_test graphics_plugin_test.cpp)
 target_compile_options(graphics_plugin_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_dependencies(graphics_plugin_test menu_host_fixture AnyGraphics AnyHelpers)
 add_test(NAME graphics_plugin COMMAND graphics_plugin_test "$<TARGET_FILE:menu_host_fixture>" "$<TARGET_FILE:AnyHelpers>" "$<TARGET_FILE:AnyGraphics>")
+add_test(NAME graphics_local_lights COMMAND graphics_plugin_test "$<TARGET_FILE:menu_host_fixture>" "$<TARGET_FILE:AnyHelpers>" "$<TARGET_FILE:AnyGraphics>" "--local-lights")
 add_test(NAME graphics_no_scene COMMAND graphics_plugin_test "$<TARGET_FILE:menu_host_fixture>" "$<TARGET_FILE:AnyHelpers>" "$<TARGET_FILE:AnyGraphics>" "--no-scene")
 
 # Give each shipped DLL a readable Windows version and product identity.

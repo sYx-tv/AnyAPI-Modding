@@ -1,123 +1,91 @@
-# Scene lighting development
+# Scene lighting
 
-The public release is AnyAPI and AnyGraphics 0.28.0. The lighting branch adds
-an experimental 0.29.0 service and local candidate; it is not a public release.
+AnyAPI and AnyGraphics 0.28.0 remain the public release. The 0.29.0 lighting
+candidate adds HDR fog, sun shafts and local-light scattering. It is installed
+locally for world validation before publication.
 
 ## Render integration
 
-The new pass records immediately after `renderer._record_commands_additive`,
-before native bloom, tone mapping, scene antialiasing and UI. It samples HDR
-scene colour, native scene depth, and up to eight native sun-shadow cascades.
-The camera, sun and shadow transform are copied from the current scene frame.
-It never changes world weather, time, materials or the HUD.
+The pass records immediately after `renderer._record_commands_additive`, before
+native bloom, tone mapping, scene antialiasing and the HUD. Sun shafts, fog,
+spotlights and point lights share one half-resolution integration pass and one
+depth-aware composite. There is no additional full-screen pass for local lights.
 
-A tiny GPU matrix texture carries copied cascade transforms through inline draw
-constants, avoiding mutable per-frame upload buffers. Two full-screen GPU passes integrate scattering at half resolution and composite it using
-depth-aware upsampling. Settings provide fog and shaft strengths, four sampling
-levels, and height falloff. Lighting starts Off. Existing presets leave these
-experimental effects Off. Settings use native Apply, Cancel and Reset.
+Copied native data includes HDR colour, scene depth, camera axes and projection,
+sun colour/direction, up to eight sun-shadow cascades, and the current GPU light
+vectors. Light positions use the native graphics-relative coordinate system.
+A small GPU data texture carries matrices and local-light records through
+immutable command-list constants. Borrowed resources and caller bindings are
+restored before native rendering resumes. Special vision, underwater and
+underground views bypass the effect.
 
-## Service
+## Settings
 
-`anyapi.scene_lighting`, version 1, uses
-[`anyapi_scene_lighting_v1.h`](../sdk/include/anyapi_scene_lighting_v1.h).
-Only an active mod can submit policy. A second active owner cannot replace an
-enabled policy. Missing/inactive owners disable the pass. Inputs are finite,
-bounded values. Query status to distinguish a registered service from a
-successfully rendered frame. A failed native-frame or GPU-resource contract
-bypasses the effect and records a reason.
+The mod adds these controls to the native Graphics tab, marked Modded:
 
-The service requires the exact supported game build. It exposes copied settings
-and status, not raw native resource pointers.
+- Volumetric fog: Off, Low, Medium, High, Ultra.
+- Sun shafts and Local light beams: independent strength tiers.
+- Sun shaft intensity and Local beam intensity: independent 0–4 multipliers.
+- Beam focus: Soft, Balanced, Focused, Strong, shared by sun and local scattering.
+- Volumetric quality: Low, Medium, High, Ultra; 16, 24, 32 or 48 march samples.
+- Local light budget: 2, 4, 6 or 8 influential nearby lights per frame.
+- Fog height falloff: concentrates fog near sea level; Off preserves density on hills.
 
-## Validation
+Apply commits changes; Cancel discards drafts; Reset stages defaults. Settings
+persist in AnyGraphics/settings.tsv. Local beams default to Medium with a budget
+of four. Performance and Low presets disable local beams. Fog and sun shafts
+remain Off by default; previously saved settings are retained.
 
-All 38 native checks pass, including shader compilation/reflection, 49 synthetic
-D3D12 lighting cases, policy ownership, camera/depth contracts and menu staging.
-GPU cases cover all quality levels, standard/reversed-depth shadow occlusion, depth-limited fog, zero
-density identity, resize and a sharp HUD drawn afterward. Production restores
-borrowed resource states and the tracked caller bindings.
+Local beams can operate with fog and sun shafts Off. In that mode, scattering
+adds light without globally dimming the scene. Headlights, torches and other
+sources participate when the game includes them in its current point/spot light
+vectors. Selection prioritizes colour intensity, radius and camera distance.
+Spotlights respect their native cone and radius. Up to four matching native
+spotlight shadow maps provide occlusion. Point lights without a native shadow
+map and unmatched spotlights remain unshadowed; new shadow maps are not generated.
 
-Native-world visual acceptance and FPS measurements are pending. Synthetic GPU
-success does not establish correct game camera/shadow conventions.
+## API contract
 
-## Current limits and next work
+Query `anyapi.scene_lighting` through the service registry:
 
-The finest sun cascade containing a sample supplies occlusion. Cascade count
-comes from the native sun-radius array, so spotlight targets are excluded.
-Samples beyond all sun cascades remain unshadowed. There is no local point/spotlight
-scattering, temporal accumulation, cascade cross-fading, volumetric cloud replacement or water reflection
-overhaul. Special vision, underwater and underground views bypass this pass.
+| Version | Header | Policy |
+|---|---|---|
+| 1 | [anyapi_scene_lighting_v1.h](../sdk/include/anyapi_scene_lighting_v1.h) | Fog and sun scattering; local lights disabled |
+| 2 | [anyapi_scene_lighting_v2.h](../sdk/include/anyapi_scene_lighting_v2.h) | V1 scene policy plus local strength and light budget |
 
-After native-world acceptance, prioritize stable accumulation, then local-light volumes and material/water/cloud
-integration. Each addition needs its own native contract and visual/performance
-validation. This prototype is not equivalent to a complete shader pack.
+V2 preserves the V1 ABI. Local strength is finite, 0–15; budget is 1–8. Shaft
+radiance is 0–15; the menu reaches 12 through its tier and multiplier. Only an
+active mod can own an enabled policy. Missing/inactive owners disable it. A
+second active owner cannot replace an enabled policy. Query status to distinguish
+availability from a successfully recorded frame.
 
-## Native-world correction
+Native capture is gated to the supported game build and checks array/ring
+layouts, dimensions, formats, projection and finite data. Failed contracts bypass
+the effect and log a reason. The service exposes copied policy and status,
+not raw native resource pointers.
 
-The first candidate skipped all lighting because camera-array element size was
-read as count. Native arrays place count at +8 and stride at +12. The corrected
-capture checks both independently, including 720-byte cameras and 16-byte target
-references. A read-only world probe confirmed these layouts and reversed-Z
-projection/shadow depth. The shader now selects the correct shadow comparison
-from the shadow-camera projection. World visual acceptance remains pending.
+## Validation and acceptance
 
-The next live session rejected the shadow format at resource capture. The
-nearest shadow target has an R16_UNORM SRV, not R32_FLOAT. The backend now
-accepts R16_TYPELESS/R16_UNORM shadow resources and creates the matching SRV;
-scene depth remains R32. Eight additional GPU cases exercise the native
-16-bit shadow format with reversed depth across all quality levels.
+The automated suite contains 39 checks, including 54 D3D12 lighting cases.
+Coverage includes standard/reversed-depth sun shadows, native R16 shadows,
+farther cascades, measured native sun colours, intensity scaling, point-light
+scattering, spotlight cones and shadow blocking, fog depth, zero-density identity,
+resizing, alpha preservation and a crisp HUD rendered afterward. Native fixtures
+cover wrapped light vectors, light prioritization and matching spotlight cameras.
+Plugin tests cover V1 fallback, V2 local-only operation and Apply/Cancel/bypass.
 
-## Visible fog acceptance
+The user confirmed visible volumetric fog and calibrated sun shafts in a world.
+Local lights, the new strength/focus controls and native FPS remain pending world
+acceptance. Synthetic GPU checks do not establish those outcomes.
 
-The user confirmed clearly visible fog after setting height falloff Off and
-volumetric fog Ultra. The pass now renders into the native HDR scene. The former
-Ground fog High choice suppressed density at the tested altitude of about 34 m.
-It is renamed Fog height falloff, with a sea-level explanation and an Off
-default. Shadowed-shaft appearance and native GPU timing remain unaccepted.
+A one-shot 32×24 offscreen probe logs sun shadow coverage/lit fractions through
+`SHAFT_PROBE`. Readback is fenced after native command submission and polled
+without waiting; it is never composited. Frame logs include local light and
+local shadow counts to assist world validation.
 
-## Sun-shaft correction
+## Limits
 
-The local candidate now samples all available sun cascades (bounded at eight),
-with quadratic near-camera sampling and a smaller depth bias that preserves
-thin branch occlusion. Eight additional GPU cases use distinct near/far shadow
-resources and place the view outside the nearest cascade; a blocked farther
-cascade must suppress light. This establishes GPU routing and occlusion, not
-native-world visual acceptance or an FPS measurement. Fog visibility was user
-confirmed; this revised shaft build still needs a world test.
-
-## Live shadow diagnostics
-
-The current development build records a one-shot 32×24 offscreen probe on the
-lighting pass's first valid frame. It reports shadow coverage and lit fractions
-through `SHAFT_PROBE`; regular frame logs also report native sun RGB and the
-view/sun cosine. Probe readback is fenced after the original command-list
-submission and polled without waiting. It is never displayed or composited.
-GPU tests verify lit/blocked results, no premature readback, repeated requests
-with increasing fence values, and preservation of native HUD rendering.
-These diagnostics do not by themselves fix or validate the live shaft appearance.
-
-## Native light-scale calibration
-
-A live world probe reported sun RGB (0.305571, 0.280569, 0.245261), shadow
-coverage 0.999994 and lit fractions ranging from 0 to 0.90625. This confirms
-that the shader samples covered, occluded native shadow regions. The original
-phase included 1/(4*pi) while using the game's artistic direct-light values;
-that reduced shaft illumination by 12.57 times relative to the ambient fog.
-The shader now uses an isotropic-relative phase, with g=0 giving a factor of 1.
-This changes scattering radiance, not global exposure, native surface lighting,
-shadow geometry, sample count or pass placement. Eight GPU regressions use the
-measured sun colour and viewing angle at Low fog density; visible native-world
-beam contrast and performance remain to be tested.
-
-## Beam customization
-
-The user confirmed visible sun shafts with the calibrated build. Graphics now
-adds Sun shaft intensity (0-4 times the selected shaft tier; default 1) and Beam
-focus (Soft, Balanced, Focused, Strong; default Balanced). These affect only
-sunlight scattering, with no added samples or full-screen passes. Controls are
-hidden when shafts are Off and use native Apply, Cancel, Reset and saved settings.
-The lighting service accepts shaft radiance 0-15; current UI combinations reach
-12. Defaults preserve the accepted appearance. GPU checks verify linear intensity
-scaling independent of fog and finite focused scattering. Native-world acceptance
-of the new controls remains pending.
+There is no temporal accumulation, new point-light shadow generation, cascade
+cross-fading, volumetric cloud replacement or material/water overhaul. Samples
+outside all sun cascades remain unshadowed. More lights and march samples increase
+GPU cost. This candidate is a lighting extension, not a complete shader pack.

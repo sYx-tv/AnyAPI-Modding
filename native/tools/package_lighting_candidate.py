@@ -12,8 +12,8 @@ packages = out / 'manager-packages'
 packages.mkdir(parents=True, exist_ok=True)
 tests_path = root / 'build/lighting-tests.xml'
 tests = ET.parse(tests_path).getroot()
-if int(tests.get('tests', 0)) != 38 or int(tests.get('failures', 0)) or int(tests.get('errors', 0)):
-    raise SystemExit('All 38 checks must pass before packaging.')
+if int(tests.get('tests', 0)) != 39 or int(tests.get('failures', 0)) or int(tests.get('errors', 0)):
+    raise SystemExit('All 39 checks must pass before packaging.')
 catalog = json.loads((root / 'catalog.json').read_text(encoding='utf-8-sig'))
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 for package in catalog['Api'] + catalog['Mods']:
@@ -30,7 +30,7 @@ for package in catalog['Api'] + catalog['Mods']:
         package['Sha256'] = sha(packages / name)
         package['FileHashes'] = {member: sha(dll)}
         package['Url'] = 'https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.29.0/' + name
-        package['Description'] = 'Experimental HDR volumetric fog and sun shafts before bloom and HUD.'
+        package['Description'] = 'HDR volumetric fog, sun shafts and local-light beams before bloom and HUD.'
     else:
         name = package['Name'] + '-' + package['Version'] + '.zip'
         shutil.copy2(root / 'manager/publishing/assets' / name, packages / name)
@@ -40,10 +40,10 @@ for package in catalog['Api'] + catalog['Mods']:
             assert hashlib.sha256(archive.read(member)).hexdigest() == digest
 (packages / 'catalog.json').write_text(json.dumps(catalog, indent=2) + '\n')
 (out / 'checks.json').write_text(json.dumps(dict(
-    NativeTests=38, AllPassed=True, LocalInstallation='PENDING',
-    VisualAcceptance='PENDING', FpsMeasurements='PENDING', VolumetricGpuCases=49,
+    NativeTests=39, AllPassed=True, LocalInstallation='PENDING',
+    VisualAcceptance='PENDING', FpsMeasurements='PENDING', VolumetricGpuCases=54,
     Limitations=['Up to eight native sun cascades; no temporal accumulation', 'Native-world visual acceptance pending',
-                 'No point/spot light volumes or temporal accumulation'],
+                 'Point lights without native shadow maps are unshadowed; up to four spotlight shadows and eight local lights'],
     Files={k: v for p in catalog['Api'] + catalog['Mods'] for k, v in p['FileHashes'].items()}
 ), indent=2) + '\n')
 shutil.copy2(tests_path, out / 'tests.xml')
