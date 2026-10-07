@@ -4,14 +4,14 @@ import json, hashlib, shutil, zipfile
 import xml.etree.ElementTree as ET
 root=Path(__file__).resolve().parents[2]
 tests=ET.parse(root/'build/wheel-tests.xml').getroot()
-if int(tests.get('tests',0))<45 or int(tests.get('failures',0)) or int(tests.get('errors',0)):
+if int(tests.get('tests',0))<46 or int(tests.get('failures',0)) or int(tests.get('errors',0)):
  raise SystemExit('All native checks must pass before packaging.')
-out=root/'release/AnyQuickWheel-1.0.0-Candidate';packages=out/'manager-packages';packages.mkdir(parents=True,exist_ok=True)
+out=root/'release/AnyQuickWheel-1.1.0-Candidate';packages=out/'manager-packages';packages.mkdir(parents=True,exist_ok=True)
 catalog=json.loads((root/'catalog.json').read_text(encoding='utf-8-sig'))
 api=catalog['Api'][0];api.update(Version='0.31.0',Revision=31,Description='Native mod framework with copied equipment and queued native hotbar selection.')
 catalog['Mods']=[p for p in catalog['Mods'] if p['Id']!='anyquickwheel']
-catalog['Mods'].append(dict(Id='anyquickwheel',Name='AnyQuickWheel',Version='1.0.0',Revision=1,MinimumApi=31,
- Description='Hold a configurable key, point at a hotbar tool, and release to equip.',
+catalog['Mods'].append(dict(Id='anyquickwheel',Name='AnyQuickWheel',Version='1.1.0',Revision=2,MinimumApi=31,
+ Description='Automatically discover carried construction tools; hold, point and release to equip.',
  FileHashes={'AnyAPI and Modding/mods/AnyQuickWheel.dll':''},GameBuilds=api['GameBuilds']))
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 for p in catalog['Api']+catalog['Mods']:

@@ -8,6 +8,7 @@
 #include <vector>
 #include <map>
 #include "../equipment_state.h"
+#include "../native_player_patterns.h"
 static constexpr int ANY_LOG_INFO=0,ANY_LOG_WARN=1,ANY_LOG_ERROR=2;
 static uintptr_t g_p34_frontend;
 namespace platform {static HWND game_window;}

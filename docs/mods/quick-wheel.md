@@ -1,21 +1,29 @@
 # AnyQuickWheel
 
-Hold **Q** during gameplay to open the equipment wheel. Move the mouse toward a tool and release **Q** to equip it directly. You can also left-click to confirm. Release in the centre, right-click or press Escape to cancel.
+Hold **Q** during gameplay, point at a construction tool, then release **Q** to equip. Left-click also confirms. Release in the centre, right-click or press Escape to cancel.
 
-The wheel shows occupied native hotbar slots, plus the primary-hand / empty-hands slot. This first version gives direct access to your existing hotbar equipment; it does not create equipment or assign arbitrary backpack items to the hotbar. With more than twelve choices, scroll the mouse wheel to change pages.
+## Automatic inventory wheel
+
+AnyQuickWheel 1.1 finds construction tools in your carried inventory, including backpack contents. Each available tool definition gets one slice; duplicate copies share a slice. Two tools give two halves, three give three slices, and picking up or dropping tools updates the open wheel. Edge Tool and Edge Tool 3×3 are separate choices. More than twelve choices use mouse-wheel pages.
+
+Weapons, torches, clothing, empty hands and physical parts such as engines are excluded. No manual wheel assignments are required. External crates and floor items are excluded until their tools enter your carried inventory.
+
+## Equipping and the shared slot
+
+The game activates stored tools through hotbar references. A tool already on your hotbar uses its existing slot. An unassigned tool uses one empty slot; the wheel then reuses that same slot for subsequent tools. Keep one hotbar slot free when first equipping an unassigned tool. No existing weapon or manually assigned item is overwritten. Tools remain in their containers rather than being moved, spawned or dropped.
+
+Assignments use the game's normal replicated hotbar event. Selection waits for the matching slot/item to appear locally. If the server rejects the assignment, the item disappears or confirmation times out, the request fails without selecting the previous slot item.
 
 ## Configuration
 
 With AnyHelpers installed:
 
 - **Mod Controls → AnyQuickWheel → Hold equipment wheel** changes the key.
-- **Mod Settings → AnyQuickWheel** changes size, opacity, centre cancel radius, item icons and whether the primary-hand slot is shown.
+- **Mod Settings → AnyQuickWheel** changes size, opacity, centre cancel radius and icons.
 - Choose **Apply** to save changes.
 
-Menus, inventory and focus loss close the wheel and release input. While open, the wheel captures camera/mouse and action input. It uses native GPU HUD drawing with resident item-preview textures; no separate window or executable is used.
+Menus, inventory and focus loss close the wheel and release input. The wheel uses native GPU HUD drawing with resident preview textures.
 
-## Native selection and compatibility
+## Compatibility and validation
 
-Requires the AnyAPI **0.31.0 local candidate**, for the reviewed Anymaker 0.1.23 build. Selection is queued to the player's native tick and calls the game's own hotbar authority selector. The current slot/item pair is revalidated before execution. Requests expire after 500 milliseconds, on a changed context or if the item disappears. The game retains its normal networking and equipment rules.
-
-**Status:** local development candidate. Live-world equipping, input release and appearance acceptance are pending.
+Requires the updated AnyAPI **0.31.0 local candidate**, including `anyapi.equipment` v2, for reviewed Anymaker 0.1.23. The earlier hotbar-only wheel was confirmed in a live world. This inventory-tool update is a local test candidate; live-world acceptance is pending.

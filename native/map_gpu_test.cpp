@@ -14,6 +14,7 @@ static std::string utf8(const std::filesystem::path& p){return p.filename().stri
 static bool p34_copy_snapshot(AnySessionPlayersV1*,uint32_t*);
 #include "anyapi_platform.inc"
 static const AnyEquipmentV1* anyapi_equipment_service(){return nullptr;}
+static const AnyEquipmentV2* anyapi_equipment_service_v2(){return nullptr;}
 static const AnyWorldTimeV1* anyapi_world_time_service(){return nullptr;}
 static const AnyBuildV1* anyapi_build_service(){return nullptr;}
 #include "anyapi_client_tasks.inc"

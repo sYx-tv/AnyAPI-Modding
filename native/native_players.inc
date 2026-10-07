@@ -1,4 +1,4 @@
-static void anyapi_equipment_tick(void*,void*);
+static void anyapi_equipment_tick(void*,void*,void*);
 static void anyapi_world_time_sample(void*);
 #include "anyapi_players_v1.h"
 static void inventory_actions_tick(void*,void*,void*);
@@ -141,7 +141,7 @@ static void p34_player_hook(void* actor,void* client,void* scene,
     g_p34_original(actor,client,scene,tick,delta,camera);
     if(g_p34_faulted||!client||!scene)return;
     inventory_actions_tick(client,scene,actor);
-    anyapi_equipment_tick(scene,actor);
+    anyapi_equipment_tick(client,scene,actor);
     const uint64_t now=GetTickCount64();
     if(!TryAcquireSRWLockExclusive(&g_p34_publish_lock))return;
     if(now-g_p34_last_tick<50){ReleaseSRWLockExclusive(&g_p34_publish_lock);return;}
