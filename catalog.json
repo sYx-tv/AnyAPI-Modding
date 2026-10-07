@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.28.0",
-      "Revision": 28,
+      "Version": "0.29.0",
+      "Revision": 29,
       "MinimumApi": 0,
-      "Description": "Native mod framework with scene antialiasing before HUD.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.28.0/AnyAPI-0.28.0.zip",
-      "Sha256": "a3de5b7c906a0b3f6c57578a228add0e211b7f06149e1ee0302389da89bc0f6d",
+      "Description": "Native mod framework with scene antialiasing and HDR volumetric lighting before HUD.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.29.0/AnyAPI-0.29.0.zip",
+      "Sha256": "69058dd34440352020c14c44e9507564cadd5d2089dd177a42d4097d1823773d",
       "FileHashes": {
-        "dinput8.dll": "7c5c8532d6feeb1a3de36fa682cb7d4e4bb238651a5c416a3b063cbb2b94ea25"
+        "dinput8.dll": "470e4b7d14da99e4d4891beeeb48862f1852ab178e17c6256233c5b62acf235c"
       },
       "GameBuilds": [
         {
@@ -112,14 +112,14 @@
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "0.28.0",
-      "Revision": 28,
-      "MinimumApi": 28,
-      "Description": "Native graphics options and scene SMAA before HUD.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.28.0/AnyGraphics-0.28.0.zip",
-      "Sha256": "dadb7abf6839ee333832f7bbc554ee36a9044b230aa71d755c38717a57c4fa06",
+      "Version": "0.29.0",
+      "Revision": 29,
+      "MinimumApi": 29,
+      "Description": "HDR volumetric fog, sun shafts and local-light beams before bloom and HUD.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.29.0/AnyGraphics-0.29.0.zip",
+      "Sha256": "8eab85e8e1d56745759c3d6c57fea81ab10bc417d46d90ea624b966168995c9d",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "798601ca1a5db4efe563b414db08cc7a74e54b999b65e34ad8f1baa728f7aee3"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "ef57af5842ad2af12e9e40bd4c7c34a02da0521d32ed662558eea824803caf53"
       },
       "GameBuilds": [
         {
