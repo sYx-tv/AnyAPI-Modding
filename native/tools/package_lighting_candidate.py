@@ -41,7 +41,7 @@ for package in catalog['Api'] + catalog['Mods']:
 (packages / 'catalog.json').write_text(json.dumps(catalog, indent=2) + '\n')
 (out / 'checks.json').write_text(json.dumps(dict(
     NativeTests=38, AllPassed=True, LocalInstallation='PENDING',
-    VisualAcceptance='PENDING', FpsMeasurements='PENDING', VolumetricGpuCases=20,
+    VisualAcceptance='PENDING', FpsMeasurements='PENDING', VolumetricGpuCases=28,
     Limitations=['Nearest shadow cascade only', 'Native-world visual acceptance pending',
                  'No point/spot light volumes or temporal accumulation'],
     Files={k: v for p in catalog['Api'] + catalog['Mods'] for k, v in p['FileHashes'].items()}

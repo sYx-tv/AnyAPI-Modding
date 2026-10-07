@@ -25,6 +25,7 @@ int main(){
  double matrix[16]{};matrix[0]=matrix[5]=matrix[10]=matrix[15]=1;write(cameras+0x220,matrix);write(cameras+0x1a0,matrix);
  volumetric::NativeFrame frame;assert(volumetric::capture(renderer,scene,p,frame,read));assert(frame.gpu.camera[3]==203&&frame.gpu.sun[1]==1&&frame.shadow_count==4);
  assert(frame.gpu.sun[3]==1);matrix[10]=-.001;write(cameras+0x1a0,matrix);assert(volumetric::capture(renderer,scene,p,frame,read)&&frame.gpu.sun[3]==2);
+ write(shadow+0x50,uint32_t(56));assert(volumetric::capture(renderer,scene,p,frame,read));write(shadow+0x50,uint32_t(28));assert(!volumetric::capture(renderer,scene,p,frame,read)&&frame.failure==4);write(shadow+0x50,uint32_t(56));
  write(depth+0x34,uint32_t(1280));assert(!volumetric::capture(renderer,scene,p,frame,read));write(depth+0x34,uint32_t(2560));
  write(scene+0x668,uint32_t(1));assert(!volumetric::capture(renderer,scene,p,frame,read));write(scene+0x668,uint32_t(0));
  write(scene+0x5c8,uint32_t(33));assert(!volumetric::capture(renderer,scene,p,frame,read));write(scene+0x5c8,uint32_t(4));write(scene+0x5cc,uint32_t(0x2d0));

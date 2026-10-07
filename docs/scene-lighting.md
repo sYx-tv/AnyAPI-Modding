@@ -31,7 +31,7 @@ and status, not raw native resource pointers.
 
 ## Validation
 
-All 38 native checks pass, including shader compilation/reflection, 20 synthetic
+All 38 native checks pass, including shader compilation/reflection, 28 synthetic
 D3D12 lighting cases, policy ownership, camera/depth contracts and menu staging.
 GPU cases cover all quality levels, standard/reversed-depth shadow occlusion, depth-limited fog, zero
 density identity, resize and a sharp HUD drawn afterward. Production restores
@@ -60,3 +60,9 @@ capture checks both independently, including 720-byte cameras and 16-byte target
 references. A read-only world probe confirmed these layouts and reversed-Z
 projection/shadow depth. The shader now selects the correct shadow comparison
 from the shadow-camera projection. World visual acceptance remains pending.
+
+The next live session rejected the shadow format at resource capture. The
+nearest shadow target has an R16_UNORM SRV, not R32_FLOAT. The backend now
+accepts R16_TYPELESS/R16_UNORM shadow resources and creates the matching SRV;
+scene depth remains R32. Eight additional GPU cases exercise the native
+16-bit shadow format with reversed depth across all quality levels.
