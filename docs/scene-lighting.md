@@ -47,8 +47,12 @@ Height falloff stays Off in every preset so hills do not lose the effect. Ultra
 uses High fog density to preserve scene visibility; standalone Ultra fog remains
 available. These are visual/performance starting points, not measured FPS guarantees.
 
-Local beams can operate with fog and sun shafts Off. In that mode, scattering
-adds light without globally dimming the scene. Headlights, torches and other
+Sun and local beams use a fixed clear-air scattering density, independent of the
+Volumetric fog tier and Fog height falloff. With Volumetric fog Off, beams add
+light without globally dimming the scene. With fog enabled, fog alone controls
+extinction and ambient haze; it also attenuates beams through dense air. Native
+base fog remains a separate game setting. Local beams can operate with fog and
+sun shafts Off. Headlights, torches and other
 sources participate when the game includes them in its current point/spot light
 vectors. Selection prioritizes colour intensity, radius and camera distance.
 Spotlights respect their native cone and radius. Up to four matching native

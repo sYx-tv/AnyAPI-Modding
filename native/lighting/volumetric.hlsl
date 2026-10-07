@@ -127,7 +127,9 @@ float4 Integrate(Varying v) : SV_Target {
     // (g=0 -> 1) so shaft strength shares the native lighting scale. The old
     // 1/(4*pi) factor suppressed already small game sun values by 12.57x.
     float phase=(1-g*g)/pow(max(1+g*g-2*g*mu,.001),1.5);
-    float transmittance=1;float3 scattered=0;
+    // Fog owns extinction and ambient haze. Beams use a fixed, clear-air
+    // scattering medium so their brightness does not depend on the fog tier.
+    float transmittance=1,beam_transmittance=1,local_transmittance=1;float3 scattered=0;
     [loop]for(uint i=0;i<count;++i) {
         // Quadratic spacing resolves nearby branch shadows without more samples.
         float a=float(i)/count,b=float(i+1)/count;
@@ -135,12 +137,19 @@ float4 Integrate(Varying v) : SV_Target {
         float step=end-begin,d=(begin+end)*.5;float3 position=camera.xyz+ray*d;
         float world_height=camera.w+ray.y*d;
         float density=medium.x*exp(-max(world_height-medium.y,0)*medium.z);
-        float segment=exp(-density*step);float weight=transmittance*(1-segment);
-        float3 illumination=fog_colour.rgb*controls.w+sun_colour.rgb*controls.z*phase*visibility(position)+local_illumination(position,ray);
-        scattered+=illumination*weight;transmittance*=segment;
+        float segment=exp(-density*controls.w*step);
+        float fog_weight=transmittance*(1-segment);
+        float beam_segment=exp(-.002*step);
+        float beam_weight=transmittance*beam_transmittance*(1-beam_segment);
+        float local_segment=exp(-.02*step);
+        float local_weight=transmittance*local_transmittance*(1-local_segment);
+        scattered+=fog_colour.rgb*fog_weight
+            +sun_colour.rgb*controls.z*phase*visibility(position)*beam_weight
+            +local_illumination(position,ray)*local_weight;
+        transmittance*=segment;beam_transmittance*=beam_segment;local_transmittance*=local_segment;
         if(transmittance<.001)break;
     }
-    return float4(scattered,(controls.z>0||controls.w>0)?transmittance:1);
+    return float4(scattered,transmittance);
 }
 float4 Composite(Varying v) : SV_Target {
     uint w,h;volume.GetDimensions(w,h);float2 pixel=v.uv*float2(w,h)-.5;
