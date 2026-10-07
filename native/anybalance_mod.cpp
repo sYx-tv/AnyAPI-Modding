@@ -41,7 +41,7 @@ static void draw(const AnyFrameV1* frame,void*){
   float inset=14*scale;label(px+inset,py+10*scale,w-inset*2,21*scale,L"AnyBalance",13*scale,0xffedf1f5,ANY_GPU_BOLD);
   wchar_t text[100];swprintf_s(text,L"Centre height  %.2f m",data.height_m);label(px+inset,py+37*scale,w-inset*2,21*scale,text,12*scale,0xffffd47c);
   swprintf_s(text,L"X offset  %+.2f m     Z  %+.2f m",data.offset_x_m,data.offset_z_m);label(px+inset,py+60*scale,w-inset*2,21*scale,text,11*scale,0xffced8e2);
-  if(data.valid_fields&ANY_BALANCE_BODY_MASS){swprintf_s(text,L"Physics body  %.1f kg",data.body_mass_kg);label(px+inset,py+82*scale,w-inset*2,21*scale,text,11*scale,0xffced8e2);}
+  if(data.valid_fields&ANY_BALANCE_BODY_MASS){swprintf_s(text,data.body_count>1?L"Creation mass  %.1f kg":L"Body mass  %.1f kg",data.body_mass_kg);label(px+inset,py+82*scale,w-inset*2,21*scale,text,11*scale,0xffced8e2);}
   label(px+inset,py+h-25*scale,w-inset*2,18*scale,L"Offsets from the build's bounds centre",9*scale,0xff929fab);
  }
 }

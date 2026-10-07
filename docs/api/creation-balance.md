@@ -4,7 +4,7 @@ Query `anyapi.creation_balance`, version **1**, after `AnyAPI_ModReady`. Header:
 
 `copy` returns a bounded, copied snapshot of the creation targeted by the locally equipped Properties Tool. It exposes no game pointers and no physics mutation functions. A copy is unavailable outside focused gameplay, when another tool is equipped, without a valid target, or after **150 ms** without a native overlay sample.
 
-The snapshot contains the vehicle ID, selected tool item ID, context generation, sampling time, local shape centre, local bounds, world centre, local height/offsets and projected centre/axes/bounds points. Screen positions use native NDC X/Y and positive forward depth; consumers convert X/Y to viewport pixels and reject points behind the camera. Body mass is optional and indicated by `ANY_BALANCE_BODY_MASS`.
+The snapshot contains the vehicle ID, selected tool item ID, context generation, sampling time, local shape centre, local bounds, world centre, local height/offsets and projected centre/axes/bounds points. Screen positions use native NDC X/Y and positive forward depth; consumers convert X/Y to viewport pixels and reject points behind the camera. Body mass is optional and indicated by `ANY_BALANCE_BODY_MASS`. `body_count` reports the combined bodies; `ANY_BALANCE_CONNECTED_CREATION` indicates a multi-body aggregate from verified local connection data. The vehicle ID identifies the heaviest body, with ID tie-breaks, rather than the current hovered member.
 
 ## Native contracts
 
@@ -20,4 +20,12 @@ All hooks require the loader's exact executable and GCL identity checks. Reviewe
 
 The overlay observer forwards the original call exactly once, then copies only the authorised locally selected tool's target. Sampling runs on the native overlay thread. The selected tool is tracked on the local actor tick; context/tool changes invalidate earlier data. Snapshot access uses a lock and never invokes borrowed game objects from the drawing thread.
 
-The display describes one native body. Articulated assemblies, fluids, cargo and contact forces need additional server/physics evidence before they can be exposed as aggregate mass, tipping predictions or axle loads.
+## Connected creations
+
+The exact `server_scene.vehicle` constructor resolves its actual type metadata and virtual slot **9**, checked against the unique `server_scene.vehicle.tick` body before observing its shared call cell. The observer forwards the original tick exactly once. It copies connected body IDs from grid/component containers and the reviewed `get_connected_components` pointer reads on the owning server thread. The client receives only a locked ID graph, capped at 128 bodies with a 500 ms freshness limit. It is used only when the native client identifies itself as a local peer.
+
+Graph traversal treats connections as undirected, including slider connections whose records exist on only one endpoint. The client combines mass-weighted native centres in world space, transforms all member bounds into the heaviest body frame, and projects the aggregate using the current overlay camera. Incomplete local topology hides the result rather than switching to a partial-body centre. Remote-server topology is not exposed yet.
+
+Bare vehicle hover targets fall back to the first native hovered interactible when the Properties state has no component target. This uses the reviewed 272-byte interactible and bounded native vector descriptor.
+
+Fluids, cargo and contact forces still need additional server/physics evidence before they can be exposed as tipping predictions or axle loads.
