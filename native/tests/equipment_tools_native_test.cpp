@@ -14,7 +14,8 @@ static uintptr_t g_p34_frontend;
 namespace platform {static HWND game_window;}
 static bool safe_read_memory(uintptr_t p,void* out,size_t n){if(!p)return false;memcpy(out,(void*)p,n);return true;}
 static bool p34_executable(uintptr_t p){return p!=0;}
-static std::vector<uintptr_t> scan_exact(const unsigned char*,size_t){return {};}
+static std::map<const unsigned char*,std::vector<uintptr_t>> scan_hits;
+static std::vector<uintptr_t> scan_exact(const unsigned char* p,size_t){return scan_hits[p];}
 static void log_line(int,const char*,const char*){}
 static unsigned char actor[2048]{},scene[512]{},client[256]{},item1[64]{},item2[64]{},item3[64]{},item4[64]{},item5[64]{},definition1[64]{},definition2[64]{},definition3[64]{},definition4[64]{};
 static int32_t ids[3]{111,222,-1};static unsigned select_calls;static bool verified=true;
@@ -38,7 +39,19 @@ static void enumerate(void* inv,const uintptr_t* filter,equipment_runtime::Point
 static void source(int32_t* out,void* inv,const int32_t* id){assert(inv==actor+0x5c8);*out=*id==222?2:*id==300?2:0;}
 static void assign(void* peer,const int32_t* slot,const equipment_runtime::InventoryId* id,const bool* activate){assert(peer==client+0x90&&!*activate);assert(id->type==2&&id->actor==10&&id->floor==-1&&id->vehicle==-1&&id->component==-1);++assign_calls;assigned_slot=*slot;assigned_id=id->item;}
 static void setup(unsigned char* item,unsigned char* def,int32_t id,const char* key,const char* name,const char* cls){uintptr_t p=uintptr_t(def);memcpy(item+0x28,&p,8);memcpy(item+16,&id,4);strings[p]=key;strings[p+16]=name;strings[p+48]=cls;}
-int main(){using namespace equipment_runtime;inventory_slot=0;bar_slot=8;count_slot=16;item_slot=24;select_slot=32;equipment_runtime::lookup=uintptr_t(::lookup);property_slot=40;context=1;ready=tools_ready=true;vector_ctor=ctor;vector_dtor=dtor;enumerate_items=enumerate;item_source=source;assign_item=assign;
+static void resolver_test(){using namespace equipment_runtime;using namespace equipment_tools_contract;
+ static unsigned char parent[54000]{},gun[1200]{},owner[600]{},passive[600]{};
+ uintptr_t owner_cell=uintptr_t(owner),ctor_cell=uintptr_t(ctor),dtor_cell=uintptr_t(dtor),event_cell=uintptr_t(assign),prop=40;
+ auto put=[](unsigned char* b,size_t offset,uintptr_t p){memcpy(b+offset,&p,8);};
+ put(parent,ASSIGN_PARENT_OFFSET,uintptr_t(&owner_cell));put(gun,VECTOR_OWNER_END+8,uintptr_t(&ctor_cell));put(gun,VECTOR_OWNER_END+80,uintptr_t(&dtor_cell));put(gun,VECTOR_OWNER_END+72,prop);put(owner,ASSIGN_OWNER_END+16,uintptr_t(&event_cell));
+ scan_hits[TOOLS]={uintptr_t(enumerate)};scan_hits[TOOL_SOURCE]={uintptr_t(source)};scan_hits[VECTOR_OWNER]={uintptr_t(gun)};scan_hits[ASSIGN_PARENT]={uintptr_t(parent)};
+ // Active/passive functions have identical code: resolve through the unique caller.
+ scan_hits[ASSIGN_OWNER]={uintptr_t(owner),uintptr_t(passive)};
+ assert(prepare_tools()&&assign_item==assign&&enumerate_items==enumerate&&property_slot==40);
+ verified=false;assert(!prepare_tools());verified=true;
+ scan_hits[ASSIGN_PARENT].push_back(uintptr_t(passive));assert(!prepare_tools());scan_hits.clear();
+}
+int main(){resolver_test();using namespace equipment_runtime;inventory_slot=0;bar_slot=8;count_slot=16;item_slot=24;select_slot=32;equipment_runtime::lookup=uintptr_t(::lookup);property_slot=40;context=1;ready=tools_ready=true;vector_ctor=ctor;vector_dtor=dtor;enumerate_items=enumerate;item_source=source;assign_item=assign;
  int32_t actor_id=10;memcpy(actor+8,&actor_id,4);
  setup(item1,definition1,111,"torch","Torch","torch");setup(item2,definition2,222,"vehicle_editor_repair","Repair Tool","vehicle_editor_repair");setup(item3,definition3,300,"vehicle_editor_add_edge_2","Edge Tool 3x3","vehicle_editor_add_edge_2");setup(item4,definition2,333,"vehicle_editor_repair","Repair Tool","vehicle_editor_repair");setup(item5,definition4,500,"vehicle_editor_add_component","Part","vehicle_editor_add_component");
  carried[0]=uintptr_t(item1);carried[1]=uintptr_t(item2);carried[2]=uintptr_t(item3);carried[3]=uintptr_t(item4);carried[4]=uintptr_t(item5);

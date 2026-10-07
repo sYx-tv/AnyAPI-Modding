@@ -31,6 +31,7 @@ Reviewed anchors are in `native/equipment_tools_contract.h`:
 
 - `client_scene.inventory.get_items(inventory, filter_pointer, pointer_vector)` recursively enumerates carried items.
 - `client_scene.item_world.gun._is_internal_magazine_ammo_available` provides pointer-vector constructor/destructor call cells at body end +8/+80 and the s32 property virtual slot at +72.
+- The unique `frontend_ui_inventory.update_ui` caller resolves the active-slot handler at body end +149×8. Active and passive slot handlers have identical machine code, so prefix scanning alone cannot distinguish them.
 - `frontend_ui_inventory._release_item_into_hotbar_slot` provides the normal `client_peer.data.push_event_hotbar_set_slot_item` call cell at body end +16.
 - `client_scene.inventory.get_item_source_by_item_id` distinguishes worn-container and primary-hand sources.
 - `inventory_definition.m_class` is a native string at +0x30; item IDs use the checked s32 property getter on item +8.
