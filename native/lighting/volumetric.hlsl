@@ -7,7 +7,7 @@ cbuffer Frame : register(b0) {
     float4 up_axis;      // w: vertical tangent of half field of view
     float4 forward_axis;
     float4 projection;   // A B C D: depth=(A*z+B)/(C*z+D)
-    float4 sunlight;     // xyz: direction towards the light; w: shadow enabled
+    float4 sunlight;     // xyz: direction towards the light; w: 0 off, 1 standard depth, 2 reversed depth
     float4 sun_colour;
     float4 medium;       // extinction, base height, height falloff, anisotropy
     float4 controls;     // sample count, maximum distance, shafts, fog strength
@@ -40,7 +40,7 @@ float visibility(float3 position) {
     float3 p=clip.xyz/clip.w;float2 uv=p.xy*float2(.5,-.5)+.5;
     if(any(uv<0)||any(uv>1)||p.z<0||p.z>1)return 1;
     float stored=shadow_depth.SampleLevel(point_sampler,uv,0);
-    return p.z<=stored+.0008?1:0;
+    return sunlight.w>1.5?(p.z>=stored-.0008?1:0):(p.z<=stored+.0008?1:0);
 }
 float4 Integrate(Varying v) : SV_Target {
     float3 ray=view_ray(v.uv);

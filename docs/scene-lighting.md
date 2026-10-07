@@ -31,9 +31,9 @@ and status, not raw native resource pointers.
 
 ## Validation
 
-All 38 native checks pass, including shader compilation/reflection, 12 synthetic
+All 38 native checks pass, including shader compilation/reflection, 20 synthetic
 D3D12 lighting cases, policy ownership, camera/depth contracts and menu staging.
-GPU cases cover all quality levels, shadow occlusion, depth-limited fog, zero
+GPU cases cover all quality levels, standard/reversed-depth shadow occlusion, depth-limited fog, zero
 density identity, resize and a sharp HUD drawn afterward. Production restores
 borrowed resource states and the tracked caller bindings.
 
@@ -51,3 +51,12 @@ After native-world acceptance, prioritize all-cascade shadow sampling and
 stable accumulation, then local-light volumes and material/water/cloud
 integration. Each addition needs its own native contract and visual/performance
 validation. This prototype is not equivalent to a complete shader pack.
+
+## Native-world correction
+
+The first candidate skipped all lighting because camera-array element size was
+read as count. Native arrays place count at +8 and stride at +12. The corrected
+capture checks both independently, including 720-byte cameras and 16-byte target
+references. A read-only world probe confirmed these layouts and reversed-Z
+projection/shadow depth. The shader now selects the correct shadow comparison
+from the shadow-camera projection. World visual acceptance remains pending.
