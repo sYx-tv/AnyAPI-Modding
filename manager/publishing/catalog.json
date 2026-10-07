@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.31.0",
-      "Revision": 31,
+      "Version": "0.32.0",
+      "Revision": 32,
       "MinimumApi": 0,
-      "Description": "Native mod framework with copied equipment and queued native hotbar selection.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.31.0/AnyAPI-0.31.0.zip",
-      "Sha256": "c49d95d89d137899e70a1faa6f5897cb625f99829bc324f74205b1022d199a33",
+      "Description": "Native mod framework with independent beam scattering and fog extinction.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.32.0/AnyAPI-0.32.0.zip",
+      "Sha256": "431cbb9642a733a133de8688e8a85fa48029772acf0b52336d611b8e7791f20d",
       "FileHashes": {
-        "dinput8.dll": "18c8e37e0e273e3e0a32c21a9b15622314907f812b509b7d7611a2b218181cab"
+        "dinput8.dll": "3a6ed207aa2ceb50001dbddce2e9f775b54e80bba8565735f95dbc448387cb07"
       },
       "GameBuilds": [
         {
@@ -112,14 +112,14 @@
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "0.29.0",
-      "Revision": 29,
-      "MinimumApi": 29,
-      "Description": "HDR volumetric fog, sun shafts and local-light beams before bloom and HUD.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.29.0/AnyGraphics-0.29.0.zip",
-      "Sha256": "8eab85e8e1d56745759c3d6c57fea81ab10bc417d46d90ea624b966168995c9d",
+      "Version": "0.29.1",
+      "Revision": 30,
+      "MinimumApi": 32,
+      "Description": "Native graphics controls, scene AA and independent sun/local beams with clear-air lighting.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.32.0/AnyGraphics-0.29.1.zip",
+      "Sha256": "6f83f5ea9ff9676e77e221c0e8ab6ceb0f5d726e0afb979687f754e6cba163b1",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "ef57af5842ad2af12e9e40bd4c7c34a02da0521d32ed662558eea824803caf53"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "1f3ce68b4336b391c02c50e09ba845c852659e4c14988d16589d914d39098b87"
       },
       "GameBuilds": [
         {

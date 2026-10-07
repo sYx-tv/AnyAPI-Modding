@@ -3,7 +3,7 @@
 AnyAPI loads C++ DLL mods inside Anymaker. AnyAPI Manager installs the framework,
 browses the mod library, manages local mods and launches the game with or without mods.
 
-[Download the manager](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest/download/AnyAPI.Manager.exe) · [Documentation](docs/README.md) · [Developer SDK](sdk/README.md) · [Build from source](docs/development/building.md)
+[Download the manager](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest/download/AnyAPI.Manager.exe) Â· [Documentation](docs/README.md) Â· [Developer SDK](sdk/README.md) Â· [Build from source](docs/development/building.md)
 
 ## For players
 
@@ -37,12 +37,12 @@ public SDK headers, examples, tests and documentation. Game executables, models,
 textures and the generated road cache are excluded. A compatible Anymaker
 installation is needed to build and test game-dependent features.
 
-The current release includes **AnyAPI 0.31.0** and **AnyQuickWheel 1.1.0**.
-AnyGraphics remains at **0.29.0**. AnyHelpers,
+The current release includes **AnyAPI 0.32.0** and **AnyQuickWheel 1.1.0**.
+AnyGraphics is **0.29.1**. AnyHelpers,
 AnyInventory, AnyStorage and AnyMap remain at **0.27.0**. **Manager 1.3.1**
 bundles API 0.27.0 and downloads the newer API through its update check;
 optional mods download individually. The native suite passes 47 checks.
-See [release notes](docs/releases/release-0.31.0.md).
+See [release notes](docs/releases/release-0.32.0.md).
 
 ## Compatibility
 
