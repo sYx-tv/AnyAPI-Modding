@@ -18,7 +18,7 @@ static std::map<const unsigned char*,std::vector<uintptr_t>> scan_hits;
 static std::vector<uintptr_t> scan_exact(const unsigned char* p,size_t){return scan_hits[p];}
 static void log_line(int,const char*,const char*){}
 static unsigned char actor[2048]{},scene[512]{},client[256]{},item1[64]{},item2[64]{},item3[64]{},item4[64]{},item5[64]{},definition1[64]{},definition2[64]{},definition3[64]{},definition4[64]{};
-static int32_t ids[3]{111,222,-1};static unsigned select_calls;static bool verified=true;
+static int32_t ids[3]{111,222,0};static unsigned select_calls;static bool verified=true;
 static std::map<uintptr_t,std::string> strings;
 static bool p34_copy_string(uintptr_t object,char* out,size_t capacity){auto it=strings.find(object);if(it==strings.end()||it->second.size()>=capacity)return false;strcpy_s(out,capacity,it->second.c_str());return true;}
 static void inv(uintptr_t* out,void* self){assert(self==actor);*out=uintptr_t(actor)+0x5c8;}
@@ -67,7 +67,7 @@ int main(){resolver_test();using namespace equipment_runtime;inventory_slot=0;ba
  // User overwrote that slot: all slots occupied, so fail without overwriting any.
  ids[2]=888;ticket=tools_api.equip(context,300);capture(GetTickCount64());assert(tools_api.state(ticket)==ANY_EQUIPMENT_FAILED&&assign_calls==2&&ids[0]==111&&ids[1]==999&&ids[2]==888);
  // A dropped tool removes its slice and expires an unexecuted request.
- ids[2]=-1;ticket=tools_api.equip(context,300);carried[2]=0;capture(GetTickCount64());assert(tools_api.state(ticket)==ANY_EQUIPMENT_EXPIRED&&assign_calls==2);assert(tools_api.copy(&snap)&&snap.count==1);
+ ids[2]=0;ticket=tools_api.equip(context,300);carried[2]=0;capture(GetTickCount64());assert(tools_api.state(ticket)==ANY_EQUIPMENT_EXPIRED&&assign_calls==2);assert(tools_api.copy(&snap)&&snap.count==1);
  carried[2]=uintptr_t(item3);capture(GetTickCount64());ticket=tools_api.equip(context,300);capture(GetTickCount64());assert(assign_calls==3);capture(GetTickCount64()+3001);assert(tools_api.state(ticket)==ANY_EQUIPMENT_FAILED&&select_calls==3);
  assert(!tools_api.equip(context,500));assert(!tools_api.equip(context,111));
 }

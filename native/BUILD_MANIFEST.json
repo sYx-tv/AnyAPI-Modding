@@ -25,7 +25,7 @@
   "storage_fix": "corrected bottom-origin cursor tooltip coordinates and native content alignment; exclusions and top-first placement retained",
   "storage_gameplay_acceptance": "USER_CONFIRMED_TOOLTIPS_AND_TOOLBAR",
   "map_renderer": "resident GPU terrain, cached text, every-present minimap, 30ms presentation smoothing",
-  "host_sha256": "17c8ecb1879bd503988b2313694f6d22ef65a8ee1c1e9fafcaf21fa298eb7715",
+  "host_sha256": "1d8bcf1b5e55d69014244a5f1675578ab9047e1401f0c5d0878afa37f16e48fd",
   "map_sha256": "faf0174ae46cc055a8e170d8e2064055b0890b01722d1a89cc74535368b4ec0a",
   "graphics_sha256": "ef57af5842ad2af12e9e40bd4c7c34a02da0521d32ed662558eea824803caf53",
   "graphics_gameplay_acceptance": "USER_CONFIRMED fog, sun shafts, local lights and preset update; publication authorized",
@@ -58,7 +58,7 @@
   "acceptance_date": "2026-10-07",
   "clock_gameplay_acceptance": "USER_CONFIRMED: native game-time popup and configuration; publication authorized",
   "clock_sha256": "ec683dccc998d2158b46897f7a8523b5082c5873b213c0a48f7c24cf8101304e",
-  "wheel_sha256": "107597b96b03c09f5b06d93c6f715d5ebf52a47c7fff04ec53910f3702c36191",
-  "wheel_gameplay_acceptance": "PENDING: corrected active hotbar caller lookup; live function chain verified; restart test required",
+  "wheel_sha256": "50656870f0dc042b67c2ca8db471f88f4a2f1eed66077d8b0785302d8adae1ef",
+  "wheel_gameplay_acceptance": "PENDING: native empty slot ID zero corrected; installed and checksum verified",
   "wheel_hotbar_gameplay_acceptance": "USER_CONFIRMED: original hotbar wheel works in a world"
 }

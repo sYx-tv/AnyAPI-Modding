@@ -64,7 +64,7 @@ static void text(const std::wstring& s,float x,float y,float w,float h,float siz
 static void circle(float x,float y,float radius,uint32_t color){AnyGpuCommandV1 c;c.kind=ANY_GPU_ELLIPSE;c.rect[0]=x-radius;c.rect[1]=y-radius;c.rect[2]=c.rect[3]=radius*2;c.color=color;gpu->emit(&c);}
 static void draw(const AnyFrameV1* f,void*){if(!f||!gpu)return;std::lock_guard lock(mutex);
  if(!f->focused||!gameplay()||!values[0])return;
- if(message_until>f->tick)text(L"Could not equip. Check tools and a free hotbar slot.",cx-260,cy-30,520,60,18,0xffeeeeee);
+ if(message_until>f->tick)text(L"Could not equip tool. Please try again.",cx-260,cy-30,520,60,18,0xffeeeeee);
  if(!opened)return;int count=visible_count();float inner=outer*.43f;
  for(int i=0;i<count;++i){int index=int(page*12)+i;double angle=-wheel::pi/2+i*2*wheel::pi/count,half=wheel::pi/count-.025;
   std::vector<AnyGpuPointV1> points;for(int step=0;step<=16;++step){double a=angle-half+2*half*step/16;points.push_back({cx+outer*float(cos(a)),cy+outer*float(sin(a))});}

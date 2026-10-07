@@ -43,10 +43,11 @@ static bool tools_tick(void* client,void* scene,void* actor,uintptr_t inventory,
  uintptr_t object{};((Lookup)lookup)(&object,(void*)inventory,&job->item);AnyEquipmentToolV2 candidate;
  int32_t source=0;item_source(&source,(void*)inventory,&job->item);int32_t actor_id=-1;
  if(!tool_entry(object,candidate)||candidate.item_id!=job->item||(source!=2&&source!=3)||!safe_read_memory(uintptr_t(actor)+8,&actor_id,4)||actor_id<0){tools_store.finish(job->ticket,false);return true;}
- int32_t target=-1,empty=-1;for(int32_t slot=0;slot<count;++slot){int32_t id=-1;get_item(&id,(void*)bar,&inventory,&slot);if(id==job->item){target=slot;break;}if(id<0&&empty<0)empty=slot;}
+ // Native get_slot_item_id returns zero for empty slots; -1 denotes primary hands.
+ int32_t target=-1,empty=-1;for(int32_t slot=0;slot<count;++slot){int32_t id=-1;get_item(&id,(void*)bar,&inventory,&slot);if(id==job->item){target=slot;break;}if(id<=0&&empty<0)empty=slot;}
  if(target>=0){select_item((void*)bar,&inventory,&target);int32_t selected=-2;tools_store.finish(job->ticket,safe_read_memory(bar+0x58,&selected,4)&&selected==target);return true;}
  // Only replace the shared slot if it still contains the item we assigned.
- if(managed_slot>=0&&managed_slot<count){int32_t id=-1;get_item(&id,(void*)bar,&inventory,&managed_slot);if(id==managed_item||id<0)target=managed_slot;else managed_slot=managed_item=-1;}
+ if(managed_slot>=0&&managed_slot<count){int32_t id=-1;get_item(&id,(void*)bar,&inventory,&managed_slot);if(id==managed_item||id<=0)target=managed_slot;else managed_slot=managed_item=-1;}
  if(target<0)target=empty;if(target<0){tools_store.finish(job->ticket,false);log_line(ANY_LOG_WARN,"framework","EQUIPMENT_TOOL_EQUIP needs_one_free_hotbar_slot=1 no_existing_slot_overwritten=1");return true;}
  InventoryId id;id.type=source;id.actor=actor_id;id.item=job->item;bool activate=false;
  assign_item((void*)(uintptr_t(client)+0x90),&target,&id,&activate);pending={job->ticket,context,now,target,job->item};
