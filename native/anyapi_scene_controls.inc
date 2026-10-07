@@ -45,6 +45,7 @@ static bool pre_hud_ready{};
 static void pre_hud_hook(void* renderer,void* scene){
  ((SceneFn)pre_hud_cell.original())(renderer,scene);auto calls=++before_hud_calls;
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
+ anyapi_creation_balance_render_camera(scene);
  scene_antialiasing::record();
 #endif
  if(calls==1||calls%600==0){uintptr_t target{};int32_t dimensions[2]{};

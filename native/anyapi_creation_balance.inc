@@ -1,4 +1,5 @@
 #include "balance_math.h"
+#include <array>
 #include "balance_contract.h"
 #include "runtime_call_cell.h"
 namespace balance_runtime {
@@ -15,9 +16,18 @@ static std::atomic<int32_t> allowed_id{-1};
 static std::atomic<uint64_t> context{};static std::atomic<bool> ready{},faulted{};
 static uintptr_t vehicle_slot{},transform_slot{},state_slot{},mass_fn{},project_fn{};
 static uintptr_t last_vehicle{};static uint64_t captures{};
+static std::mutex projection_mutex;
+static balance::RenderCamera render_camera;
+static uint64_t render_camera_tick{},geometry_tick{},geometry_context{};
+static std::array<AnyBalancePointV1,14> world_geometry{};
 static bool copy(AnyCreationBalanceSnapshotV1* out){int32_t ui=-1;
  if(!ready||faulted||!allowed_item||GetForegroundWindow()!=platform::game_window||!g_p34_frontend||!safe_read_memory(g_p34_frontend+0x828,&ui,4)||ui!=1)return false;
- return store.copy(out,GetTickCount64());
+ auto now=GetTickCount64();if(!store.copy(out,now))return false;
+ std::lock_guard lock(projection_mutex);
+ if(now<render_camera_tick||now-render_camera_tick>150||geometry_tick!=out->sampled_tick||geometry_context!=out->context)return false;
+ AnyBalanceScreenV1* points[]={&out->centre,&out->base,&out->geometric_centre,&out->axes[0],&out->axes[1],&out->axes[2],&out->corners[0],&out->corners[1],&out->corners[2],&out->corners[3],&out->corners[4],&out->corners[5],&out->corners[6],&out->corners[7]};
+ for(unsigned i=0;i<14;++i)*points[i]=balance::project(render_camera,world_geometry[i]);
+ return true;
 }
 static const AnyCreationBalanceV1 api{sizeof(AnyCreationBalanceV1),1,copy};
 } // namespace balance_runtime
@@ -91,7 +101,8 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  if(!camera||!safe_read_memory(uintptr_t(camera)+8,view.transform,sizeof(view.transform))||!safe_read_memory(uintptr_t(camera)+416,view.projection,sizeof(view.projection)))return false;
  for(auto value:view.transform)if(!std::isfinite(value))return false;
  for(auto value:view.projection)if(!std::isfinite(value))return false;
- auto project=[&](AnyBalancePointV1 local,AnyBalanceScreenV1& out){out=balance::project(view,balance::transform(transform,local));};
+ std::array<AnyBalancePointV1,14> geometry{};unsigned point_index{};
+ auto project=[&](AnyBalancePointV1 local,AnyBalanceScreenV1& out){auto world=balance::transform(transform,local);geometry[point_index++]=world;out=balance::project(view,world);};
  project(sample.centre_local,sample.centre);
  auto base=sample.centre_local;base.y=sample.bounds_min.y;project(base,sample.base);
  project({(bounds[0].x+bounds[1].x)*.5,(bounds[0].y+bounds[1].y)*.5,(bounds[0].z+bounds[1].z)*.5},sample.geometric_centre);
@@ -100,6 +111,7 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  for(unsigned i=0;i<8;++i)project({i&1?bounds[1].x:bounds[0].x,i&2?bounds[1].y:bounds[0].y,i&4?bounds[1].z:bounds[0].z},sample.corners[i]);
  AnyEquipmentSnapshotV1 equipped;if(equipment_runtime::api.copy(&equipped))for(unsigned i=0;i<equipped.count;++i)if(equipped.slots[i].slot_index==equipped.selected_slot)sample.tool_item_id=equipped.slots[i].item_id;
  if(body_properties.size()>256){auto now=GetTickCount64();for(auto it=body_properties.begin();it!=body_properties.end();)if(now-it->second.tick>1000)it=body_properties.erase(it);else ++it;}
+ {std::lock_guard lock(projection_mutex);world_geometry=geometry;geometry_tick=sample.sampled_tick;geometry_context=sample.context;}
  store.publish(sample);++captures;
  if(last_vehicle!=uintptr_t(sample.vehicle_id)+1){last_vehicle=uintptr_t(sample.vehicle_id)+1;log_line(ANY_LOG_INFO,"framework",("BALANCE sampled=1 vehicle="+std::to_string(sample.vehicle_id)+" bodies="+std::to_string(sample.body_count)+" native_weighted_centre=1 body_mass_available="+std::to_string(bool(sample.valid_fields&ANY_BALANCE_BODY_MASS))).c_str());}
  return true;
@@ -139,3 +151,14 @@ static DWORD WINAPI worker(void*){for(unsigned i=0;i<120;++i){if(prepare())retur
 }
 static const AnyCreationBalanceV1* anyapi_creation_balance_service(){return &balance_runtime::api;}
 static void anyapi_creation_balance_tick(void* scene,void* actor){balance_runtime::tick(scene,actor);}
+
+// Copy the exact final scene camera on its owning render thread. Never retain
+// the native scene pointer across threads or use the tool-overlay camera for HUD.
+static void anyapi_creation_balance_render_camera(void* scene){
+ if(!balance_runtime::allowed_item||!scene)return;
+ balance::RenderCamera camera;
+ if(!safe_read_memory(uintptr_t(scene)+8,&camera.origin,sizeof(camera.origin))||
+    !safe_read_memory(uintptr_t(scene)+0x20+0x220,camera.matrix,sizeof(camera.matrix))||!balance::finite(camera.origin))return;
+ for(double value:camera.matrix)if(!std::isfinite(value))return;
+ std::lock_guard lock(balance_runtime::projection_mutex);balance_runtime::render_camera=camera;balance_runtime::render_camera_tick=GetTickCount64();
+}

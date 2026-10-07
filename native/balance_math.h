@@ -15,6 +15,17 @@ inline AnyBalanceScreenV1 project(const Camera& camera,AnyBalancePointV1 world){
  double w=m[3]*p.x+m[7]*p.y+m[11]*p.z+m[15];
  if(!std::isfinite(w)||w<=1e-8||p.z<=0)return {0,0,-1};return {x/w,y/w,p.z};
 }
+// The renderer consumes graphics-relative world coordinates through its
+// final view-projection matrix, including camera effects and viewport aspect.
+struct RenderCamera {double matrix[16]{};AnyBalancePointV1 origin{};};
+inline AnyBalanceScreenV1 project(const RenderCamera& camera,AnyBalancePointV1 world){
+ auto m=camera.matrix;world.x-=camera.origin.x;world.y-=camera.origin.y;world.z-=camera.origin.z;
+ double x=m[0]*world.x+m[4]*world.y+m[8]*world.z+m[12];
+ double y=m[1]*world.x+m[5]*world.y+m[9]*world.z+m[13];
+ double w=m[3]*world.x+m[7]*world.y+m[11]*world.z+m[15];
+ if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(w)||w<=1e-8)return {0,0,-1};
+ return {x/w,y/w,w};
+}
 inline bool derive(AnyCreationBalanceSnapshotV1& s){
  if(!finite(s.centre_local)||!finite(s.bounds_min)||!finite(s.bounds_max))return false;
  double lo[]={s.bounds_min.x,s.bounds_min.y,s.bounds_min.z},hi[]={s.bounds_max.x,s.bounds_max.y,s.bounds_max.z};

@@ -11,6 +11,12 @@ int main(){AnyCreationBalanceSnapshotV1 s;s.centre_local={1,2,-1};s.bounds_min={
  camera.transform[9]=0;double a=.2;camera.transform[0]=cos(a);camera.transform[2]=-sin(a);camera.transform[6]=sin(a);camera.transform[8]=cos(a);
  projected=balance::project(camera,{1,2,10});double depth=sin(a)+10*cos(a);assert(std::abs(projected.x-.5*(cos(a)-10*sin(a))/depth)<1e-12&&std::abs(projected.y-2/depth)<1e-12);
  assert(balance::project(camera,{0,0,-10}).depth<0);
+ // World origin is removed exactly once, and view translation comes from
+ // the renderer's final matrix rather than a separate tool camera.
+ balance::RenderCamera render;render.origin={84000,0,56000};render.matrix[0]=.5;render.matrix[5]=1;render.matrix[11]=1;
+ auto actual=balance::project(render,{84001,2,56010});assert(std::abs(actual.x-.05)<1e-12&&std::abs(actual.y-.2)<1e-12);
+ render.matrix[12]=-1;actual=balance::project(render,{84001,2,56010});assert(std::abs(actual.x+.05)<1e-12);
+ assert(balance::project(render,{84000,0,55990}).depth<0);
  float x,y;assert(balance::pixel({0,0,.5},1920,1080,x,y)&&x==960&&y==540);assert(balance::pixel({-1,1,1},1920,1080,x,y)&&x==0&&y==0);assert(!balance::pixel({0,0,-1},1920,1080,x,y));assert(!balance::pixel({0,0,0},1920,1080,x,y));assert(!balance::pixel({INFINITY,0,1},1920,1080,x,y));assert(!balance::pixel({0,0,1},0,1080,x,y));
  balance::Store store;AnyCreationBalanceSnapshotV1 out;s.sampled_tick=100;store.publish(s);assert(store.copy(&out,250));assert(!store.copy(&out,251));assert(!store.copy(&out,99));out.version=2;assert(!store.copy(&out,100));out.version=1;store.clear();assert(!store.copy(&out,100));
  s.bounds_max.x=-3;assert(!balance::derive(s));s.bounds_max.x=2;s.centre_local.x=std::numeric_limits<double>::quiet_NaN();assert(!balance::derive(s));

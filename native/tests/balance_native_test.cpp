@@ -104,6 +104,16 @@ int main(){using namespace balance_runtime;
  uintptr_t local=uintptr_t(actor),class_ptr=uintptr_t(klass),table_ptr=uintptr_t(table);memcpy(scene+0x188,&local,8);memcpy(tool,&class_ptr,8);memcpy(klass+0x80,&table_ptr,8);table[12]=uintptr_t(cell);
  equipment_runtime::lookup=uintptr_t(selected_lookup);auto& equipped=equipment_runtime::equipped;equipped.count=1;equipped.selected_slot=0;equipped.slots[0].slot_index=0;equipped.slots[0].item_id=1;strcpy_s(equipped.slots[0].definition_id,"vehicle_editor_properties");
  tick_inner(scene,actor);assert(allowed_item==uintptr_t(tool)&&allowed_id==1);observe(tool,camera,nullptr,scene,&authority,&active,nullptr);assert(store.copy(&out,GetTickCount64()));
+ // HUD projection must follow the final renderer camera even when the tool
+ // camera and world geometry do not change between renders.
+ auto fixture_window=platform::game_window;platform::game_window=GetForegroundWindow();
+ unsigned char frontend[2200]{},render_scene[1024]{};int gameplay=1;memcpy(frontend+0x828,&gameplay,4);g_p34_frontend=uintptr_t(frontend);
+ assert(!api.copy(&out));
+ double final_matrix[16]={2,0,0,0,0,3,0,0,0,0,0,1,-2,0,0,0};memcpy(render_scene+0x240,final_matrix,sizeof(final_matrix));
+ anyapi_creation_balance_render_camera(render_scene);assert(api.copy(&out));auto final_x=out.centre.x;auto final_world=out.centre_world;
+ final_matrix[12]=-4;memcpy(render_scene+0x240,final_matrix,sizeof(final_matrix));anyapi_creation_balance_render_camera(render_scene);
+ assert(api.copy(&out)&&out.centre.x<final_x&&out.centre_world.x==final_world.x&&out.centre_world.z==final_world.z);
+ render_camera_tick=GetTickCount64()-151;assert(!api.copy(&out));platform::game_window=fixture_window;
  strcpy_s(equipped.slots[0].definition_id,"torch");tick_inner(scene,vehicle);assert(allowed_item==uintptr_t(tool));tick_inner(scene,actor);assert(!allowed_item&&!store.copy(&out,GetTickCount64()));
  equipped.count=0;tick_inner(scene,actor);assert(!allowed_item);
  overlay_hook.remove();VirtualFree(cell,0,MEM_RELEASE);DestroyWindow(platform::game_window);
