@@ -50,7 +50,13 @@ inline Values profile(const Values& current,int level){
  if(!level)return current; // Off bypasses overrides and keeps the previous individual choices.
  v[NativeAA]=2;v[NativeSSAO]=level>=3?2.f:1.f;v[NativeShadows]=level>=2?2.f:1.f;v[NativeFogBlur]=level>=3?2.f:1.f;
  v[NativeBloom]=level>=2?2.f:1.f;v[BloomAmount]=level>=2?bloom_levels[level-2]:0;v[BloomThreshold]=.75f;
- v[LocalBeams]=level<=2?0.f:2.f;v[Clouds]=level==1?1.f:0.f;v[Grass]=level<=2?1.f:0.f;v[Foliage]=0;v[FogDensity]=fog_levels[level-1];return v;
+ // Fog density is an artistic strength, not sample quality: Ultra keeps it
+ // below the standalone Ultra fog tier so beams do not wash out the scene.
+ static constexpr float atmosphere[]={0,0,1,2,3},beams[]={0,1,2,3,4},quality[]={0,0,1,2,3};
+ static constexpr float sun_intensity[]={1,1,1,1.3f,1.5f},local_intensity[]={1,1,1,1.2f,1.3f};
+ auto tier=size_t(level-1);v[Atmosphere]=atmosphere[tier];v[SunShafts]=v[LocalBeams]=beams[tier];
+ v[LightingQuality]=v[LocalBudget]=quality[tier];v[ShaftIntensity]=sun_intensity[tier];v[LocalIntensity]=local_intensity[tier];v[BeamFocus]=level>=4?2.f:1.f;v[GroundFog]=0;
+ v[Clouds]=level==1?1.f:0.f;v[Grass]=level<=2?1.f:0.f;v[Foliage]=0;v[FogDensity]=fog_levels[level-1];return v;
 }
 inline Values effective(const Values& custom){return custom;}
 inline bool advanced(size_t i){return (i>=SunLight&&i<=SceneExposure)||i>=Clouds;}

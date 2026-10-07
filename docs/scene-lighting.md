@@ -32,9 +32,21 @@ The mod adds these controls to the native Graphics tab, marked Modded:
 - Fog height falloff: concentrates fog near sea level; Off preserves density on hills.
 
 Apply commits changes; Cancel discards drafts; Reset stages defaults. Settings
-persist in AnyGraphics/settings.tsv. Local beams default to Medium with a budget
-of four. Performance and Low presets disable local beams. Fog and sun shafts
-remain Off by default; previously saved settings are retained.
+persist in AnyGraphics/settings.tsv. Previously saved settings are retained until a preset is selected. Selecting a
+preset stages all its lighting choices together:
+
+| Preset | Volumetric fog | Sun / local beams | Samples | Local lights | Sun / local intensity | Focus |
+|---|---|---|---|---|---|---|
+| Off | Game settings | Off | No pass | None | Bypassed | Bypassed |
+| Performance | Off | Off | No pass | None | Bypassed | Balanced |
+| Low | Off | Low | 16 | 2 | 1 / 1 | Balanced |
+| Medium | Low | Medium | 24 | 4 | 1 / 1 | Balanced |
+| High | Medium | High | 32 | 6 | 1.3 / 1.2 | Focused |
+| Ultra | High | Ultra | 48 | 8 | 1.5 / 1.3 | Focused |
+
+Height falloff stays Off in every preset so hills do not lose the effect. Ultra
+uses High fog density to preserve scene visibility; standalone Ultra fog remains
+available. These are visual/performance starting points, not measured FPS guarantees.
 
 Local beams can operate with fog and sun shafts Off. In that mode, scattering
 adds light without globally dimming the scene. Headlights, torches and other
@@ -75,8 +87,8 @@ cover wrapped light vectors, light prioritization and matching spotlight cameras
 Plugin tests cover V1 fallback, V2 local-only operation and Apply/Cancel/bypass.
 
 The user confirmed visible volumetric fog and calibrated sun shafts in a world.
-Local lights, the new strength/focus controls and native FPS remain pending world
-acceptance. Synthetic GPU checks do not establish those outcomes.
+The user also confirmed the local-light build looks correct. The new preset
+balance and native FPS remain pending world acceptance. Synthetic GPU checks do not establish those outcomes.
 
 A one-shot 32×24 offscreen probe logs sun shadow coverage/lit fractions through
 `SHAFT_PROBE`. Readback is fenced after native command submission and polled

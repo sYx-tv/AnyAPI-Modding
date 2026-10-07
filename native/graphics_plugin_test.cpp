@@ -53,6 +53,11 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  event(ANY_MENU_OPEN);stage(LocalIntensity+1,1);render();assert(local_policy.local_strength==9);event(ANY_MENU_CANCEL);render();assert(local_policy.local_strength==9);
  apply(LocalIntensity,0);assert(!lighting_policy.enabled);apply(LocalIntensity,1);assert(lighting_policy.enabled);
  apply(LocalBeams,0);assert(!lighting_policy.enabled);apply(LocalBeams,2);apply(Preset,0);assert(!lighting_policy.enabled);apply(Preset,3);assert(lighting_policy.enabled);
+ // Exercise real menu selection and submitted policy, not just the profile helper.
+ const float densities[]={.002f,.002f,.001f,.002f,.004f},sun_strength[]={0,.5f,1,2.6f,4.5f},local_strength[]={0,.5f,1,2.4f,3.9f};
+ const uint32_t quality[]={0,0,1,2,3},budgets[]={2,2,4,6,8};
+ for(int preset=1;preset<=5;++preset){apply(Preset,preset);auto i=preset-1;std::cout<<"PRESET "<<preset<<" enabled="<<lighting_policy.enabled<<" density="<<lighting_policy.fog_density<<" sun="<<lighting_policy.sun_shafts<<" local="<<local_policy.local_strength<<" quality="<<lighting_policy.quality<<" budget="<<local_policy.local_budget<<" height="<<lighting_policy.height_falloff<<std::endl;assert(lighting_policy.enabled==(preset>1)&&lighting_policy.fog_density==densities[i]&&std::abs(lighting_policy.sun_shafts-sun_strength[i])<.001f&&std::abs(local_policy.local_strength-local_strength[i])<.001f&&lighting_policy.quality==quality[i]&&local_policy.local_budget==budgets[i]&&lighting_policy.height_falloff==0);}
+ event(ANY_MENU_OPEN);stage(Preset+1,1);render();assert(std::abs(local_policy.local_strength-3.9f)<.001f);event(ANY_MENU_CANCEL);render();assert(std::abs(local_policy.local_strength-3.9f)<.001f);
  apply(Enabled,0);assert(!lighting_policy.enabled);apply(Enabled,1);ui(13);render();assert(!lighting_policy.enabled);apply(GameplayOnly,0);assert(lighting_policy.enabled);
  }else {
  assert(policy.enabled&&policy.sun==1.3f);apply(Advanced,1);apply(SunLight,3);assert(policy.sun==1.15f);
@@ -63,9 +68,9 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  apply(NativeAA,4);assert(aa_policy.enabled&&aa_policy.method==2&&policy.aa==0);
  apply(NativeAA,1);assert(!aa_policy.enabled);apply(NativeBloom,5);assert(policy.aa==1&&policy.bloom==2&&policy.bloom_intensity==.35f);
  apply(NativeSSAO,1);apply(NativeShadows,2);apply(NativeFogBlur,1);apply(FogDensity,1);assert(policy.ssao==1&&policy.shadows==2&&policy.fog_blur==1&&policy.fog==.35f&&policy.light_exposure==0);
- for(int preset=1;preset<=5;++preset){apply(Preset,preset);auto expected=profile(defaults(),preset);assert(policy.enabled&&policy.sun==1&&policy.fog==expected[FogDensity]&&policy.ssao==uint32_t(expected[NativeSSAO])&&policy.bloom_intensity==expected[BloomAmount]);assert(detail_policy.clouds==uint32_t(expected[Clouds])&&detail_policy.grass==uint32_t(expected[Grass])&&detail_policy.foliage==0);event(ANY_MENU_OPEN);stage(0,0);assert(rows()==Count-10);event(ANY_MENU_CANCEL);}
- assert(lighting_submissions&&!lighting_policy.enabled);
- apply(Atmosphere,3);apply(SunShafts,2);apply(LightingQuality,3);apply(GroundFog,2);
+ for(int preset=1;preset<=5;++preset){apply(Preset,preset);auto expected=profile(defaults(),preset);assert(policy.enabled&&policy.sun==1&&policy.fog==expected[FogDensity]&&policy.ssao==uint32_t(expected[NativeSSAO])&&policy.bloom_intensity==expected[BloomAmount]);assert(detail_policy.clouds==uint32_t(expected[Clouds])&&detail_policy.grass==uint32_t(expected[Grass])&&detail_policy.foliage==0);event(ANY_MENU_OPEN);stage(0,0);assert(rows()>10);event(ANY_MENU_CANCEL);}
+ assert(lighting_submissions&&lighting_policy.enabled);apply(Atmosphere,0);apply(SunShafts,0);assert(!lighting_policy.enabled);
+ apply(Atmosphere,3);apply(SunShafts,2);apply(ShaftIntensity,1);apply(BeamFocus,1);apply(LightingQuality,3);apply(GroundFog,2);
  assert(lighting_policy.enabled&&lighting_policy.fog_density==.004f&&lighting_policy.sun_shafts==1&&lighting_policy.quality==3&&lighting_policy.height_falloff==.025f);
  event(ANY_MENU_OPEN);stage(Atmosphere+1,4);render();assert(lighting_policy.fog_density==.004f);event(ANY_MENU_CANCEL);render();assert(lighting_policy.fog_density==.004f);
  apply(Atmosphere,0);assert(lighting_policy.enabled&&lighting_policy.fog_strength==0&&lighting_policy.sun_shafts==1);
