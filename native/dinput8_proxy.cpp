@@ -5253,6 +5253,7 @@ static DWORD WINAPI framework_runtime_thread(void*) {
 #include "anyapi_scene_lighting.inc"
 #include "anyapi_scene_controls.inc"
 #include "anyapi_world_time.inc"
+#include "anyapi_equipment.inc"
 #include "anyapi_inventory_ui.inc"
 #include "anyapi_client_tasks.inc"
 static DWORD WINAPI loader_thread(void*) {
@@ -5261,6 +5262,7 @@ static DWORD WINAPI loader_thread(void*) {
     log_line(ANY_LOG_INFO,"framework","DLL_PLUGIN_PROFILE current_build=MATCH generic_players=1 v16_legacy_hooks=DISABLED map_specific_startup=0");
     platform::load();platform::ready();
     if(platform::plugin_count.load()&&!platform::start())log_line(ANY_LOG_ERROR,"framework","PLUGIN_PLATFORM graphics_hooks=FAILED");
+    HANDLE equipment_worker=CreateThread(nullptr,0,equipment_runtime::worker,nullptr,0,nullptr);if(equipment_worker)CloseHandle(equipment_worker);
     HANDLE time_worker=CreateThread(nullptr,0,world_time_runtime::worker,nullptr,0,nullptr);if(time_worker)CloseHandle(time_worker);
     HANDLE scene_worker=CreateThread(nullptr,0,scene_controls::worker,nullptr,0,nullptr);if(scene_worker)CloseHandle(scene_worker);
     HANDLE menu_worker=CreateThread(nullptr,0,menus::worker,nullptr,0,nullptr);if(menu_worker)CloseHandle(menu_worker);
