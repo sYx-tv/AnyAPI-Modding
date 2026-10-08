@@ -189,7 +189,7 @@ static std::string route_name(){auto m=saved_markers.find(saved_markers.active);
 static void marker_editor(MapGraphics& g,int w,int h){if(!naming)return;SolidBrush shade(Color(155,0,0,0));g.FillRectangle(&shade,0,0,w,h);float width=std::min(480.f,float(w)-40),x=(w-width)/2,y=(h-240.f)/2;
  round_rect(g,{x,y,width,240},4,Color(255,30,30,30));text(g,editing_marker?L"EDIT MARKER":L"NAME THIS MARKER",x+22,y+20,18,Color(255,241,242,222),true);
  round_rect(g,{x+20,y+61,width-40,45},8,Color(255,13,29,25));auto value=utf16(editing_name.c_str())+L"_";FontFamily family(L"Segoe UI");Font font(&family,16,FontStyleRegular,UnitPixel);SolidBrush ink(Color(255,236,237,218));StringFormat format;format.SetFormatFlags(StringFormatFlagsNoWrap);format.SetTrimming(StringTrimmingEllipsisCharacter);g.DrawString(value.c_str(),int(value.size()),&font,RectF(x+30,y+74,width-60,26),&format,&ink);
- text(g,saved_markers.error.empty()?L"Type a name  ·  Enter saves  ·  Esc cancels":utf16(saved_markers.error.c_str()),x+22,y+119,12,Color(255,185,211,193));
+ text(g,saved_markers.error.empty()?L"Type a name  Ã‚Â·  Enter saves  Ã‚Â·  Esc cancels":utf16(saved_markers.error.c_str()),x+22,y+119,12,Color(255,185,211,193));
  float cell=(width-52)/4;editor_save={x+20,y+160,cell,44};editor_cancel={x+28+cell,y+160,cell,44};editor_route={x+36+2*cell,y+160,cell,44};editor_delete={x+44+3*cell,y+160,cell,44};
  const RectF buttons[]={editor_save,editor_cancel,editor_route,editor_delete};const wchar_t* labels[]={L"Save",L"Cancel",L"Route",L"Delete"};
  for(int i=0;i<4;++i){bool enabled=i!=3||editing_marker;round_rect(g,buttons[i],7,i==0?Color(255,9,79,119):Color(255,39,39,39));text(g,labels[i],buttons[i].X+12,buttons[i].Y+13,14,enabled?Color(255,236,238,220):Color(255,104,130,118));}
@@ -206,10 +206,12 @@ static void draw(MapGraphics& g,int w,int h,bool preview) {
     float side=float(std::min(w-560,h-182));if(side<280)side=float(std::min(w-40,h-182));float left=(w-side)/2,top=88;map_left=left;map_top=top;map_side=side;
     round_rect(g,{left-12,top-64,side+24,side+105},4,Color(255,30,30,30));
     text(g,L"Anymap",left,top-45,19,Color(255,235,239,219),true);
-    text(g,preview?L"VISUAL PREVIEW · SAMPLE PLAYERS":(map_key_name()+L" / ESC  CLOSE"),left+side-230,top-42,12,Color(255,157,180,165));
+    text(g,preview?L"VISUAL PREVIEW Ã‚Â· SAMPLE PLAYERS":(map_key_name()+L" / ESC  CLOSE"),left+side-230,top-42,12,Color(255,157,180,165));
     GraphicsState state=g.Save();g.SetClip(RectF(left,top,side,side));
     RectF map_rect(left,top,side,side);
+    auto terrain_state=g.Save();auto terrain_transform=atlas::fullmap_matrix(top,side);g.MultiplyTransform(&terrain_transform);
     if(g.gpu()){float size=float(layers[0]->GetWidth()),source=size/float(view.zoom);g.DrawImage(layers[0].get(),RectF(left,top,side,side),float(view.center.x)*size-source/2,float(view.center.y)*size-source/2,source,source,UnitPixel);}else g.DrawImage(terrain(int(side)),int(left),int(top));
+    g.Restore(terrain_state);
     Pen grid(Color(20,39,68,54),1);
     if(options.grid)for(int i=1;i<8;++i){auto q=view.screen({i/8.,i/8.});g.DrawLine(&grid,left+float(q.x)*side,top,left+float(q.x)*side,top+side);g.DrawLine(&grid,left,top+float(q.y)*side,left+side,top+float(q.y)*side);}
     if(waypoint){
@@ -229,14 +231,14 @@ static void draw(MapGraphics& g,int w,int h,bool preview) {
     unsigned missing_names=0,missing_positions=0;for(uint32_t i=0;i<players.count;++i){
         if(!(players.players[i].valid_fields&PLAYER_NAME))++missing_names;
         if(!(players.players[i].valid_fields&PLAYER_POSITION))++missing_positions;}
-    std::wstring footer=std::to_wstring(players.count)+L" PLAYERS  ·  STEAM NAMES";
-    if(missing_names)footer+=L"  ·  "+std::to_wstring(missing_names)+L" NAMES UNAVAILABLE";
-    if(missing_positions)footer+=L"  ·  "+std::to_wstring(missing_positions)+L" POSITIONS UNAVAILABLE";
-    if(players.dropped)footer+=L"  ·  "+std::to_wstring(players.dropped)+L" OVER CAPACITY";
+    std::wstring footer=std::to_wstring(players.count)+L" PLAYERS  Ã‚Â·  STEAM NAMES";
+    if(missing_names)footer+=L"  Ã‚Â·  "+std::to_wstring(missing_names)+L" NAMES UNAVAILABLE";
+    if(missing_positions)footer+=L"  Ã‚Â·  "+std::to_wstring(missing_positions)+L" POSITIONS UNAVAILABLE";
+    if(players.dropped)footer+=L"  Ã‚Â·  "+std::to_wstring(players.dropped)+L" OVER CAPACITY";
     if(!preview&&!live)footer=players.count?L"PLAYER DATA PAUSED WHILE MAP HAS FOCUS":L"WAITING FOR LIVE PLAYER DATA";
     text(g,footer,left,top+side+15,12,Color(255,172,192,171));
     text(g,L"WHEEL  ZOOM  \u00b7  DRAG  PAN  \u00b7  CLICK  ROUTE  \u00b7  SHIFT + CLICK  ADD MARKER",left,top+side+47,11,Color(255,172,192,171));
-    text(g,L"CLICK MARKER  EDIT / ROUTE  ·  RIGHT CLICK  CLEAR ROUTE  ·  F  FIND ME",left,top+side+65,10,Color(255,172,192,171));
+    text(g,L"CLICK MARKER  EDIT / ROUTE  Ã‚Â·  RIGHT CLICK  CLEAR ROUTE  Ã‚Â·  F  FIND ME",left,top+side+65,10,Color(255,172,192,171));
 
     const float scale=side*250.f*float(view.zoom)/float(atlas::half_width*2);
     Pen scale_pen(Color(255,180,198,173),2);float sx=left+side-scale,sy=top+side+30;
@@ -250,13 +252,13 @@ static void hud_draw(MapGraphics& g,bool full,float width){g.SetSmoothingMode(Sm
  std::wstring action=L"No road connection",detail=utf16(route_name().c_str())+L" "+meters(gap);
  if(gap<15){action=utf16(route_name().c_str())+L" reached";detail=L"Right click the map to clear";}
  else if(route.connected&&route.points.size()>1){
-  if(route.start_gap>25){action=L"Join the highlighted road";detail=meters(route.start_gap)+L" to road  ·  "+meters(route.length)+L" remaining";}
+  if(route.start_gap>25){action=L"Join the highlighted road";detail=meters(route.start_gap)+L" to road  Ã‚Â·  "+meters(route.length)+L" remaining";}
   else if(route.length<route.end_gap+30){action=L"Leave road for waypoint";detail=meters(gap)+L" to waypoint";}
   else {action=L"Follow highlighted road";detail=meters(route.length)+L" remaining";
    double covered=0;for(size_t i=2;i<route.points.size();++i){auto a=route.points[i-2],b=route.points[i-1],c=route.points[i];
     covered+=roads::flat(a,b);if(covered>500)break;if(roads::flat(a,b)<.01||roads::flat(b,c)<.01)continue;
     double angle=roads::turn_angle(a,b,c);
-    if(std::abs(angle)>.30&&covered>15){action=angle>0?L"Turn right":L"Turn left";detail=L"In "+meters(covered)+L"  ·  "+meters(route.length)+L" remaining";break;}
+    if(std::abs(angle)>.30&&covered>15){action=angle>0?L"Turn right":L"Turn left";detail=L"In "+meters(covered)+L"  Ã‚Â·  "+meters(route.length)+L" remaining";break;}
    }
   }
  }
@@ -296,7 +298,7 @@ static void full_panels(MapGraphics& g,int w,int h){float width=std::min(300.f,m
  text(g,L"MARKERS",lx+16,top+18,17,Color(255,238,238,238));text(g,std::to_wstring(saved_markers.records.size())+(saved_markers.records.size()==1?L" saved place":L" saved places"),lx+16,top+47,13,Color(255,165,165,165));
  marker_list={lx+10,top+80,width-20,std::max(58.f,float(h)-310)};int rows=std::max(1,int(marker_list.Height/58));marker_scroll=std::clamp(marker_scroll,0,std::max(0,int(saved_markers.records.size())-rows));
  if(saved_markers.records.empty()){panel_label(g,L"No saved markers",{lx+16,top+87,width-32,25});text(g,L"Shift-click the map to add one.",lx+16,top+116,12,Color(255,170,170,170));}
- for(int i=marker_scroll;i<int(saved_markers.records.size())&&i<marker_scroll+rows;++i){auto& pin=saved_markers.records[i];RectF row(marker_list.X,marker_list.Y+(i-marker_scroll)*58,marker_list.Width-8,52);round_rect(g,row,3,pin.id==selected_marker?Color(255,9,79,119):Color(255,39,39,39));panel_label(g,utf16(pin.name.c_str()),{row.X+12,row.Y+7,row.Width-24,24});auto p=local_player();std::wstring detail=pin.id==saved_markers.active&&waypoint?L"Active destination":L"Saved marker";if(p)detail+=L"  ·  "+meters(std::hypot(pin.position.x-p->position[0],pin.position.y-p->position[2]));panel_label(g,detail,{row.X+12,row.Y+30,row.Width-24,18},11);marker_rows.push_back({row,pin.id});}
+ for(int i=marker_scroll;i<int(saved_markers.records.size())&&i<marker_scroll+rows;++i){auto& pin=saved_markers.records[i];RectF row(marker_list.X,marker_list.Y+(i-marker_scroll)*58,marker_list.Width-8,52);round_rect(g,row,3,pin.id==selected_marker?Color(255,9,79,119):Color(255,39,39,39));panel_label(g,utf16(pin.name.c_str()),{row.X+12,row.Y+7,row.Width-24,24});auto p=local_player();std::wstring detail=pin.id==saved_markers.active&&waypoint?L"Active destination":L"Saved marker";if(p)detail+=L"  Ã‚Â·  "+meters(std::hypot(pin.position.x-p->position[0],pin.position.y-p->position[2]));panel_label(g,detail,{row.X+12,row.Y+30,row.Width-24,18},11);marker_rows.push_back({row,pin.id});}
  if(int(saved_markers.records.size())>rows){float travel=marker_list.Height-30;float y=marker_list.Y+travel*marker_scroll/std::max(1,int(saved_markers.records.size())-rows);round_rect(g,{marker_list.GetRight()-4,y,4,30},2,Color(255,85,85,85));}
  selected_route={lx+12,float(h)-170,(width-30)/2,40};selected_edit={selected_route.GetRight()+6,selected_route.Y,selected_route.Width,40};ui_button(g,selected_route,L"Route");ui_button(g,selected_edit,L"Edit marker");text(g,L"Select a marker to view it on the map.",lx+14,float(h)-110,11,Color(255,165,165,165));
  text(g,L"ROUTE",rx+16,top+18,17,Color(255,238,238,238));panel_label(g,waypoint?utf16(route_name().c_str()):L"No destination",{rx+16,top+57,width-32,50},20);

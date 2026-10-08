@@ -13,6 +13,8 @@ int main(){GdiplusStartupInput in;ULONG_PTR token;assert(GdiplusStartup(&token,&
  if(!quarter){check(rendered,35,80,Color::Green);check(rendered,125,80,Color::Blue);check(rendered,80,35,Color::Yellow);check(rendered,100,80,Color::Red);}
  else{check(rendered,80,125,Color::Green);check(rendered,80,35,Color::Blue);check(rendered,35,80,Color::Yellow);check(rendered,80,60,Color::Red);}
  }
- // North-up retains authored atlas orientation; it must not acquire a reflection.
- auto north=atlas::minimap_matrix(1,true,80,80);PointF point(10,20);assert(north.TransformPoints(&point,1)==Ok);assert(point.X==90&&point.Y==100);
- }GdiplusShutdown(token);std::cout<<"PASS: actual terrain pixels and route strokes match +X camera-right/+Z forward at zero and right-quarter-turn; north-up preserved\n";}
+ // Fixed north-up matches the same world handedness as heading-up.
+ auto north=atlas::minimap_matrix(1,true,80,80);PointF point(10,20);assert(north.TransformPoints(&point,1)==Ok);assert(point.X==90&&point.Y==60);
+ Bitmap full(160,160,PixelFormat32bppARGB);{Graphics g(&full);g.Clear(Color::Black);g.SetInterpolationMode(InterpolationModeNearestNeighbor);auto m=atlas::fullmap_matrix(20,120);g.SetTransform(&m);g.DrawImage(&tile,Rect(20,20,120,120),0,0,120,120,UnitPixel);}
+ check(full,35,80,Color::Green);check(full,125,80,Color::Blue);check(full,80,35,Color::Yellow);
+ }GdiplusShutdown(token);std::cout<<"PASS: actual terrain pixels and route strokes match +X camera-right/+Z forward at zero and right-quarter-turn; north-up corrected\n";}

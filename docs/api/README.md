@@ -42,3 +42,9 @@ with another game build or advertise disabled legacy hooks as active APIs.
 
 - [Build information](build-info.md)
 - [Client task scheduling](client-tasks.md)
+
+## Experimental game access
+
+[Full reference and binding tools](../../sdk/experimental/README.md) expose known
+functions, layouts, globals and hook routes, including unvalidated pathways.
+Generated bindings run inside mods and use the existing host build-check service.

@@ -91,14 +91,14 @@
     {
       "Id": "anymap",
       "Name": "AnyMap",
-      "Version": "0.27.0",
-      "Revision": 27,
+      "Version": "0.27.1",
+      "Revision": 28,
       "MinimumApi": 27,
-      "Description": "World map, smooth minimap, markers and road guidance.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyMap-0.27.0.zip",
-      "Sha256": "834b5bde316ca5b721650573de1152180e28dd8097bf5d4ce23bb24f5a82a10e",
+      "Description": "World map and minimap with consistent orientation, route placement and zoom.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.08/AnyMap-0.27.1.zip",
+      "Sha256": "7c1c599c7a03602144ee5e4b5f4d79ab0f4079453faac44f2d71044cca04bb8b",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyMap.dll": "faf0174ae46cc055a8e170d8e2064055b0890b01722d1a89cc74535368b4ec0a"
+        "AnyAPI and Modding/mods/AnyMap.dll": "cbfa00b4da7ce9896b0a598863f641a28a8978a1e33eb1da955ba6143cf02af7"
       },
       "GameBuilds": [
         {
@@ -112,14 +112,14 @@
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "0.29.1",
-      "Revision": 30,
+      "Version": "0.29.2",
+      "Revision": 31,
       "MinimumApi": 32,
-      "Description": "Native graphics controls, scene AA and independent sun/local beams with clear-air lighting.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.32.0/AnyGraphics-0.29.1.zip",
-      "Sha256": "6f83f5ea9ff9676e77e221c0e8ab6ceb0f5d726e0afb979687f754e6cba163b1",
+      "Description": "Native graphics controls with clear-air beams and recovery after rejected renderer settings.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.08/AnyGraphics-0.29.2.zip",
+      "Sha256": "ac39a9a7e9c053ef2635cc24581f96109f1fd42cb69a0a8869d669fd6e5b95d3",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "1f3ce68b4336b391c02c50e09ba845c852659e4c14988d16589d914d39098b87"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "86828fb9c987fe94ad31d6a9fc3f9f2d4dee9cb6ea3223fe043e6981a6b215b6"
       },
       "GameBuilds": [
         {

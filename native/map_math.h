@@ -15,12 +15,12 @@ inline bool project(double x,double z,Point& uv) {
 }
 // Convert atlas UV coordinates back to world X/Z.
 inline Point world(Point uv){return {center_x+(uv.x-.5)*half_width*2,center_z+(uv.y-.5)*half_width*2};}
-// Convert native yaw into the existing full-map arrow drawing angle.
-inline double screen_heading(double yaw){return std::acos(-1.)-yaw;}
+// Convert native yaw into the north-up map arrow drawing angle.
+inline double screen_heading(double yaw){return yaw;}
 // Native view forward is +Z and camera-right is +X at zero yaw. Atlas +Z
 // points down, so heading-up needs a reflected basis, not a pure rotation.
 inline Point minimap_point(Point p,double yaw,bool north_up=false){
-    if(north_up)return p;
+    if(north_up)return {p.x,-p.y};
     const double c=std::cos(yaw),s=std::sin(yaw);
     return {p.x*c-p.y*s,-p.x*s-p.y*c};
 }
@@ -34,15 +34,15 @@ struct KeyEdge {
 struct View {
     Point center{.5,.5};double zoom{1};
     // Apply view zoom and pan to atlas UV coordinates.
-    Point screen(Point uv)const{return {.5+(uv.x-center.x)*zoom,.5+(uv.y-center.y)*zoom};}
+    Point screen(Point uv)const{return {.5+(uv.x-center.x)*zoom,.5-(uv.y-center.y)*zoom};}
     // Undo view zoom and pan to recover atlas UV coordinates from a displayed point.
-    Point inverse(Point p)const{return {center.x+(p.x-.5)/zoom,center.y+(p.y-.5)/zoom};}
+    Point inverse(Point p)const{return {center.x+(p.x-.5)/zoom,center.y-(p.y-.5)/zoom};}
     // Keep the visible area inside atlas bounds at the current zoom.
     void clamp(){double r=.5/zoom;center.x=std::clamp(center.x,r,1-r);center.y=std::clamp(center.y,r,1-r);}
     // Zoom between 1x and 8x while preserving the atlas point under the cursor where bounds permit.
-    void magnify(double factor,Point anchor){auto uv=inverse(anchor);zoom=std::clamp(zoom*factor,1.,8.);center={uv.x-(anchor.x-.5)/zoom,uv.y-(anchor.y-.5)/zoom};clamp();}
+    void magnify(double factor,Point anchor){auto uv=inverse(anchor);zoom=std::clamp(zoom*factor,1.,8.);center={uv.x-(anchor.x-.5)/zoom,uv.y+(anchor.y-.5)/zoom};clamp();}
     // Move the view by a displayed drag delta, then clamp to atlas bounds.
-    void pan(Point delta){center.x-=delta.x/zoom;center.y-=delta.y/zoom;clamp();}
+    void pan(Point delta){center.x-=delta.x/zoom;center.y+=delta.y/zoom;clamp();}
 };
 // Rotate a 2D point by radians using screen-coordinate sine and cosine.
 inline Point rotate(Point p,double yaw) {
