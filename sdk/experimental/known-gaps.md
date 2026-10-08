@@ -3,6 +3,10 @@
 Build: Steam 25755694. "Runtime" below means `validation/probe.py`, which only reads memory, run at the main
 menu. Nothing has run inside a loaded world yet, and nothing has called game code from a mod yet.
 
+Paths under `validation/` and `json/` on this page refer to the release downloads
+([experimental SDK](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.08.1) and
+[research references](../../docs/sdk-reference/README.md)), not to files in this repository.
+
 ## Closed since the previous SDK
 
 | Previous gap | Now |

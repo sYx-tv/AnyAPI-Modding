@@ -1,0 +1,22 @@
+name: Repository checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  checks:
+    # Linux-only checks. Native builds and tests still need Windows and the installed game.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Docs, encoding and catalog
+        run: python3 .github/scripts/check_repo.py
+      - name: Examples compile against the public headers
+        run: |
+          status=0
+          for file in native/examples/*.cpp docs/development/tutorial/ModeBadge/mod.cpp; do
+            clang++ -std=c++20 -fms-extensions -fsyntax-only -Wno-ignored-attributes -D_WIN32 \
+              -I .github/scripts/stub -I sdk/include "$file" || { echo "::error file=$file::does not compile"; status=1; }
+          done
+          exit $status

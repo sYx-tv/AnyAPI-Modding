@@ -1,0 +1,46 @@
+name: Bug report
+description: A mod, the API or the manager does not work as described.
+labels: [bug]
+body:
+  - type: input
+    id: component
+    attributes:
+      label: Which part
+      description: For example AnyMap, AnyAPI, the manager.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: API and mod versions shown in the manager, and the Anymaker version.
+      placeholder: AnyAPI 0.32.0, AnyMap 0.27.2, Anymaker 0.1.23
+    validations:
+      required: true
+  - type: dropdown
+    id: session
+    attributes:
+      label: How were you playing?
+      options:
+        - Single player or hosting
+        - Joined someone else's world
+        - Dedicated server
+        - Not in a world (menus, manager)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Attach or paste the relevant part of anymaker_modding.log from the game folder.
+      render: text

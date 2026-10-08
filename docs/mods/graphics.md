@@ -1,8 +1,13 @@
 # AnyGraphics
 
-AnyGraphics 0.28.0 is a native graphics mod for Anymaker 0.1.23. Its controls
-live inside Settings → Graphics, in the scrolling **AnyGraphics · Modded**
-section. It requires AnyAPI 0.28.0 and does not require AnyHelpers.
+AnyGraphics is a native graphics mod for Anymaker 0.1.23. The current release is
+**0.29.3**, which requires **AnyAPI 0.32.0**. Its controls live inside
+Settings → Graphics, in the scrolling **AnyGraphics · Modded** section. It does
+not require AnyHelpers.
+
+The menu and native controls arrived in 0.28.0, volumetric lighting in 0.29.0,
+fog-independent light beams in 0.29.1 (with API 0.32.0), and bounded retries for
+rejected settings in 0.29.3. See the [release records](../releases/README.md).
 
 ## Controls
 
@@ -47,8 +52,8 @@ no finished-screen filter passes. SMAA copies scene colour before HUD drawing
 for its three AA passes.
 Sharpening, supplemental smoothing, colour filters, tone curves, grain,
 vignette, chromatic separation and split comparison have been removed.
-Version 0.28.0 offers native FXAA and SMAA 1x. TAA, MSAA and DLSS are
-not implemented.
+Antialiasing choices are native FXAA, SMAA 1x and Enhanced SMAA. TAA, MSAA
+and DLSS are not implemented.
 
 ## Apply and persistence
 
@@ -73,7 +78,7 @@ See [Native scene controls](../api/scene-controls.md) and
 
 ## Scene antialiasing development
 
-Version 0.28.0 offers Game setting, Off, FXAA **SMAA 1x (scene)**, and **Enhanced SMAA (scene)**.
+Since 0.28.0 the antialiasing choices are Game setting, Off, FXAA, **SMAA 1x (scene)** and **Enhanced SMAA (scene)**.
 Enhanced SMAA adds stronger contrast-aware blending at diagonal edges; it may
 soften fine scene detail. Both methods keep the HUD untouched.
 Choosing SMAA reveals **SMAA quality: Low / Medium / High / Ultra**. Use Apply

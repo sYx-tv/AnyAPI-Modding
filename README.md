@@ -29,6 +29,7 @@ discovered from the game's mods folder.
 | AnyGraphics | Native graphics, scene AA and volumetric lighting | [Guide](docs/mods/graphics.md) |
 | AnyQuickWheel | Automatic inventory construction-tool wheel | [Guide](docs/mods/quick-wheel.md) |
 | AnyClock | Configurable temporary game-time HUD | [Guide](docs/mods/clock.md) |
+| AnyBalance (in development) | Centre-of-mass overlay for creations with the Properties Tool | [Guide](docs/mods/balance.md) |
 
 ## Source and downloads
 
@@ -37,12 +38,25 @@ public SDK headers, examples, tests and documentation. Game executables, models,
 textures and the generated road cache are excluded. A compatible Anymaker
 installation is needed to build and test game-dependent features.
 
-The current release includes **AnyAPI 0.32.0** and **AnyQuickWheel 1.1.0**.
-AnyGraphics is **0.29.1**. AnyHelpers,
-AnyInventory, AnyStorage and AnyMap remain at **0.27.0**. **Manager 1.3.1**
-bundles API 0.27.0 and downloads the newer API through its update check;
-optional mods download individually. The native suite passes 47 checks.
-See [release notes](docs/releases/release-0.32.0.md).
+### Current versions
+
+| Package | Stable download | Requires |
+| --- | --- | --- |
+| AnyAPI | **0.32.0** | Anymaker 0.1.23 |
+| AnyHelpers, AnyInventory, AnyStorage | 0.27.0 | API 0.27.0 |
+| AnyMap | 0.27.2 | API 0.27.0 |
+| AnyGraphics | 0.29.3 | API 0.32.0 |
+| AnyClock | 1.0.0 | API 0.30.0 |
+| AnyQuickWheel | 1.1.0 | API 0.31.0 |
+| AnyAPI Manager | 1.3.1 | Windows x64 |
+
+[`catalog.json`](catalog.json) is the source of truth for these numbers. Manager 1.3.1
+bundles API 0.27.0 and downloads the newer API through its update check; optional
+mods download individually. See the [release notes](docs/releases/README.md).
+
+**In development (source only, not in the catalog):** AnyAPI 0.33.0 and
+[AnyBalance 1.0.0](docs/mods/balance.md). The development build passes 51 native
+checks; AnyBalance still needs a live-world targeting check before release.
 
 ## Compatibility
 
@@ -59,10 +73,12 @@ alone does not establish compatibility.
 
 - [Build the API and mods](docs/development/building.md)
 - [Start a DLL mod](docs/development/first-mod.md)
+- [Tutorial: a complete mod from start to finish](docs/development/mod-tutorial.md)
 - [API service reference](docs/api/README.md)
 - [Register settings and controls](docs/mods/helpers.md)
 - [Publish a mod](docs/development/publishing.md)
 - [Validation and release status](docs/development/validation.md)
+- [Contributing](CONTRIBUTING.md)
 
 Mods implement behavior; AnyAPI exposes reusable mechanisms. AnyHelpers is an
 optional provider of settings and keybind registries. Mods must explicitly register

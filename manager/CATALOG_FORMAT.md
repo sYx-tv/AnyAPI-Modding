@@ -1,6 +1,6 @@
 # Catalog schema 1
 
-`catalog.json` sits at the repository root on `main`. The manager accepts a GitHub repository URL or `owner/repository` in Settings. Its request is `https://raw.githubusercontent.com/owner/repository/main/catalog.json`. Downloads point to versioned GitHub Release ZIP assets. No sign-in is required for a public repository.
+`catalog.json` sits at the repository root on `main`. The manager always reads the repository named in its bundled catalog (`sYx-tv/AnyAPI-Modding`); saved repository preferences from older versions are overridden. Its request is `https://raw.githubusercontent.com/sYx-tv/AnyAPI-Modding/main/catalog.json`. Downloads point to versioned GitHub Release ZIP assets. No sign-in is required for a public repository.
 
 Top-level fields: `Schema` (1), `Repository` (GitHub URL used by a newly built manager), `Api` (verified API releases), `Mods` (one entry per browsable mod).
 
@@ -10,8 +10,10 @@ An API ZIP contains exactly `dinput8.dll`. A mod ZIP contains exactly one `AnyAP
 
 Limits: 32 API releases, 256 mod entries, 32 verified game fingerprints per package, 2 MiB catalog, 64 MiB download/expanded DLL. Archives are rejected for undeclared/duplicate paths, wrong checksums, wrong executable architecture, executable rather than DLL content, linked destination paths, or a running game. Versions cannot downgrade a newer managed installation.
 
-The current four mods are independent. AnyHelpers provides editable settings/controls, but the other mods retain their own defaults if it is absent. There is no forced mod dependency or bundled-mod install.
+The current seven mods are independent. AnyHelpers provides editable settings/controls, but the other mods retain their own defaults if it is absent. There is no forced mod dependency or bundled-mod install.
 
-Checksums protect integrity relative to the chosen catalog. The repository is the user's trust source; these checksums are not a separate publisher signature. Configure a repository you trust. The manager does not run install scripts or fetch arbitrary executable installers.
+Checksums protect integrity relative to the chosen catalog. The repository is the user's trust source; these checksums are not a separate publisher signature. A fork that changes `Repository` and rebuilds the manager becomes its own trust source. The manager does not run install scripts or fetch arbitrary executable installers.
 
 To add a mod: package the tested x64 DLL under its exact loader path, calculate archive and DLL hashes, add its verified game fingerprints and minimum API revision, upload the ZIP as a release asset, then add one entry under Mods. The browser discovers it on refresh.
+
+The repository check (`.github/scripts/check_repo.py`) validates these rules for `catalog.json` and `manager/publishing/catalog.json` on every push and pull request.

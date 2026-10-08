@@ -1,47 +1,91 @@
 # Compatibility and validation
 
-## Current release
+All current packages target Windows x64, Anymaker **0.1.23** / Steam build
+**25755694**. [`BUILD_MANIFEST.json`](../../native/BUILD_MANIFEST.json) records the
+exact `game.exe` and `bin/game.gcl` hashes. The loader refuses to enable native
+hooks on any other build.
 
-AnyAPI and AnyGraphics are released as 0.29.0; the other four mods remain at
-0.27.0 for Windows x64, Anymaker
-0.1.23 / Steam build 25755694. The build manifest records exact executable and
-game-data hashes. The complete native suite passes 39 checks covering contracts,
-menus, inventories, storage, map rendering and graphics shader output.
+## Stable release
 
-Local gameplay acceptance was confirmed by the author on October 6, 2026 for
-all five mods and the manager. Runtime logs confirmed the build guard matched,
-all five plugins initialized, storage moves were confirmed, map routes were
-selected and graphics settings were applied. Joining-client and dedicated-server
-acceptance require separate coverage; local host success does not establish them.
+The stable catalog ([`catalog.json`](../../catalog.json)) provides:
 
-The profile audit reviewed 112 patterns and refreshed 17. New build identity and
-client task services have automated coverage; the client task example compiles.
-Gameplay confirmation does not imply every API service was individually exercised.
-Graphics tests check shader output and settings behavior; they do not establish
-GPU/FPS cost across different hardware.
+| Package | Version | Released in | Automated checks at release |
+| --- | --- | --- | --- |
+| AnyAPI | 0.32.0 | [0.32.0 notes](../releases/release-0.32.0.md) | 47 |
+| AnyMap, AnyGraphics | 0.27.2, 0.29.3 | [2026-10-08 SDK and mod update](../releases/sdk-and-mods-2026-10-08.md) | 48 |
+| AnyQuickWheel | 1.1.0 | [0.31.0 notes](../releases/release-0.31.0.md) | 47 |
+| AnyClock | 1.0.0 | [0.30.0 notes](../releases/release-0.30.0.md) | 42 |
+| AnyHelpers, AnyInventory, AnyStorage | 0.27.0 | [0.27.0 notes](../releases/release-0.27.0.md) | 32 |
+
+Each release's notes say what the author confirmed in game and what is still
+pending. The headline items still open across the stable release:
+
+- **Visual retest of 0.32.0 lighting** in a native world (published at the
+  author's request before the retest).
+- **AnyGraphics 0.29.3 retry fix** passed fixtures only; no new live visual check.
+- **Controlled FPS measurements** for graphics, lighting and map rendering. No
+  release claims a measured frame-rate cost or saving.
+- **HUD control hints** (`hud.hints.<mod>`) did not appear in the author's live
+  test and stay experimental.
+
+## Development source
+
+`main` also carries **AnyAPI 0.33.0** and **AnyBalance 1.0.0**, which are not in the
+catalog. The development build passed **51 native checks** on Windows and the eight
+experimental SDK examples compile. The author confirmed the AnyBalance marker stays
+anchored. The bare-body targeting fix passed automated tests and still needs the
+in-world check described in the [workspace handoff](workspace-handoff.md#next-anybalance-test).
+Keep development builds out of `catalog.json` until that check passes.
+
+## Multiplayer coverage
+
+Almost all gameplay acceptance so far was done while **hosting a world locally**.
+Local-host success does not establish joining-client or dedicated-server behavior.
+
+| Area | Local host | Joining client | Dedicated server |
+| --- | --- | --- | --- |
+| Inventory actions (AnyInventory Add) | Confirmed | Permissions and rejection not verified | Not tested |
+| Storage transfers and sorting (AnyStorage) | Confirmed | Not verified | Not tested |
+| Session mode | Confirmed | Not asserted | Not tested |
+| Equipment wheel (AnyQuickWheel) | Confirmed | Not verified | Not tested |
+| Creation balance (AnyBalance) | Connected bodies merged | Targeted body only; topology not exposed to clients | Not tested |
+| Rendering, menus, map, clock | Confirmed | Client-side; not separately tested | Not applicable |
+| Experimental SDK probes | Hosted-world probe done | Pending ([known gaps](../../sdk/experimental/known-gaps.md)) | Not tested |
+
+Requests that go through native replicated events (inventory, storage, hotbar)
+report "submitted", not "server confirmed". Treat a missing confirmation as unknown.
 
 ## Published resources
 
-The stable catalog provides API 0.29.0 and five independent mod downloads.
-Manager 1.3.1 bundles the API-only archive and matching offline guide, with 25
-headers and 100 guide articles. The manager fixture suite passes 93 checks,
-including installation rollback, local mod discovery, launch modes and verified
-EXE self-updates. Public download checks compare each archive and DLL checksum.
+Manager 1.3.1 bundles the API 0.27.0 archive and a matching offline guide with 25
+headers and 100 guide articles; newer API and mod versions come from the catalog.
+The manager fixture suite (`--self-test`) covers installation rollback, local mod
+discovery, launch modes and verified EXE self-updates. Public download checks
+compare each archive and DLL checksum.
 
 ## Rechecking a build
 
 Use the commands in [Building](building.md). Inspect failures before packaging.
 Do not change a game fingerprint without reviewing the corresponding native
-bodies, dependencies and layouts. Validate joining-client/server operations
-separately and measure graphics cost in a fixed scene with effects on and off.
+bodies, dependencies and layouts. Validate joining-client and server operations
+separately, and measure graphics cost in a fixed scene with effects on and off.
 
-Historical records are retained under [releases](../releases/).
+The repository also runs a Linux check on every push and pull request
+(`.github/scripts/check_repo.py`). It validates Markdown links, text encoding,
+`catalog.json` and `manager-update.json`. It does not build or test native code;
+that still needs Windows and the installed game.
 
-## Graphics lighting acceptance
+## History
 
-On October 7, 2026 the author confirmed visible volumetric fog, sun shafts and
-local-light scattering, accepted the preset update and authorized publication.
-All 39 native checks pass, including 54 synthetic D3D12 lighting cases. Installed
-DLLs match the release packages. Controlled world FPS measurements are pending.
-Spotlights use matching native shadows; point lights without shadow maps remain
-unshadowed. No temporal AA or temporal volumetric accumulation is advertised.
+Older acceptance records, test reports and evidence JSON are kept under
+[releases](../releases/README.md). Highlights:
+
+- **October 6, 2026 (0.27.0):** local gameplay acceptance for the first five mods
+  and the manager. Runtime logs confirmed the build guard, plugin initialization,
+  storage moves, map routes and graphics settings. The 0.1.23 profile audit
+  reviewed 112 patterns and refreshed 17.
+- **October 7, 2026 (0.29.0):** the author confirmed visible volumetric fog, sun
+  shafts and local-light scattering and authorized publication. All 39 native
+  checks passed at the time, including 54 synthetic D3D12 lighting cases.
+  Spotlights use matching native shadows; point lights without shadow maps stay
+  unshadowed. No temporal AA or temporal volumetric accumulation is advertised.

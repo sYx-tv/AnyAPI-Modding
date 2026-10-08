@@ -1,8 +1,8 @@
 # GPU post-processing API v1
 
-AnyAPI 0.26.0, Windows x64, Anymaker 0.1.21 / Steam 25725299.
+Introduced in AnyAPI 0.26.0. Current target: Windows x64, Anymaker 0.1.23 / Steam build 25755694.
 Query `anyapi.post_process`, version 1, from `AnyAPI_ModReady`. The framework owns
-the generic shader pipeline; AnyGraphics.dll owns effect policy and settings.
+the generic shader pipeline; the calling mod owns effect policy and settings.
 Existing plugin ABI 1 layouts remain unchanged.
 
 ## Pass registration
@@ -56,10 +56,13 @@ Microsoft reference: [D3D11On12 resource ownership and flushing](https://learn.m
 
 ## Validation
 
-`graphics_gpu_test` tests actual D3D12/D3D11On12 composition, shader compilation,
-ownership, invalid parameters, immediate bypass, cached views and resize recovery.
-`graphics_shader_test` validates actual GPU pixels for neutral color, exposure,
-gamma, before/after comparison, bloom, blur, edge smoothing, sharpening and vignette.
-`graphics_plugin_test` loads actual AnyGraphics and AnyHelpers DLLs, checks all 40
-registered settings, Apply/Cancel, clamping and menu/inventory bypass.
+The `graphics_gpu` check (`graphics_gpu_test.cpp`) tests actual D3D12/D3D11On12
+composition, shader compilation, ownership, invalid parameters, immediate bypass,
+cached views and resize recovery.
+
+AnyGraphics no longer registers post-processing passes: its finished-screen
+filters were removed in 0.28.0 in favour of native renderer controls. The shader-output
+check and 40-setting plugin check described in older versions of this page no
+longer exist. The service remains
+available to other mods; see `native/examples/post_process_example.cpp`.
 Live gameplay and GPU performance acceptance are separate from these fixtures.

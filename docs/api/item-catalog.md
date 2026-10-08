@@ -12,9 +12,9 @@ The service/table and catalog remain valid for the process. No hot reload/unload
 
 This is authored item information, not owned inventory, live quantity, network state, recipe availability or permission to spawn. Default authored stack is not maximum stack. Native item icon rendering is not exposed. No game assets are bundled in the public source/SDK archives.
 
-See `examples/item_catalog.cpp` for querying and copying a record and full JSON. `item_catalog_test` verifies the current October 5 Steam build assets and malformed parser cases. `inventory_browser_test` verifies the real DLL and AnyHelpers with the current catalog fixture; normal Steam startup evidence is recorded separately.
+See `examples/item_catalog.cpp` for querying and copying a record and full JSON. `item_catalog_parser` covers malformed input and `item_catalog_current_assets` verifies the installed game's assets. `inventory_browser_test` verifies the real DLL and AnyHelpers with the current catalog fixture; normal Steam startup evidence is recorded separately.
 
-copied previews, native Add requests and generic screen offsets are separate services; see item-images.md, inventory-actions.md and screen-layout.md. Original JSON copying remains available; the browser export controls were removed. Current target is v0.1.21, Steam build 25725299.
+copied previews, native Add requests and generic screen offsets are separate services; see item-images.md, inventory-actions.md and screen-layout.md. Original JSON copying remains available; the browser export controls were removed. Current target is Anymaker 0.1.23, Steam build 25755694.
 
 ## Component definitions
 
