@@ -28,14 +28,14 @@ pending. The headline items still open across the stable release:
 - **HUD control hints** (`hud.hints.<mod>`) did not appear in the author's live
   test and stay experimental.
 
-## Development source
+## AnyAPI 0.33.0 and AnyBalance 1.0.0
 
-`main` also carries **AnyAPI 0.33.0** and **AnyBalance 1.0.0**, which are not in the
-catalog. The development build passed **51 native checks** on Windows and the eight
-experimental SDK examples compile. The author confirmed the AnyBalance marker stays
-anchored. The bare-body targeting fix passed automated tests and still needs the
-in-world check described in the [workspace handoff](workspace-handoff.md#next-anybalance-test).
-Keep development builds out of `catalog.json` until that check passes.
+The release build passed **51 native checks** on Windows and the eight experimental
+SDK examples compile. The author confirmed in a locally hosted world that the
+AnyBalance marker stays anchored, targets a bare chassis, plate edge, door handle and
+tyre, hides when looking away or switching tools, leaves Properties actions working
+and does not slow the simulation. Keep untested development builds out of
+`catalog.json`.
 
 ## Multiplayer coverage
 

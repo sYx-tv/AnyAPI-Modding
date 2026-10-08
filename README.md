@@ -29,7 +29,7 @@ discovered from the game's mods folder.
 | AnyGraphics | Native graphics, scene AA and volumetric lighting | [Guide](docs/mods/graphics.md) |
 | AnyQuickWheel | Automatic inventory construction-tool wheel | [Guide](docs/mods/quick-wheel.md) |
 | AnyClock | Configurable temporary game-time HUD | [Guide](docs/mods/clock.md) |
-| AnyBalance (in development) | Centre-of-mass overlay for creations with the Properties Tool | [Guide](docs/mods/balance.md) |
+| AnyBalance | Centre-of-mass overlay for creations with the Properties Tool | [Guide](docs/mods/balance.md) |
 
 ## Source and downloads
 
@@ -42,21 +42,21 @@ installation is needed to build and test game-dependent features.
 
 | Package | Stable download | Requires |
 | --- | --- | --- |
-| AnyAPI | **0.32.0** | Anymaker 0.1.23 |
+| AnyAPI | **0.33.0** | Anymaker 0.1.23 |
 | AnyHelpers, AnyInventory, AnyStorage | 0.27.0 | API 0.27.0 |
 | AnyMap | 0.27.2 | API 0.27.0 |
 | AnyGraphics | 0.29.3 | API 0.32.0 |
 | AnyClock | 1.0.0 | API 0.30.0 |
 | AnyQuickWheel | 1.1.0 | API 0.31.0 |
+| AnyBalance | 1.0.0 | API 0.33.0 |
 | AnyAPI Manager | 1.3.1 | Windows x64 |
 
 [`catalog.json`](catalog.json) is the source of truth for these numbers. Manager 1.3.1
 bundles API 0.27.0 and downloads the newer API through its update check; optional
 mods download individually. See the [release notes](docs/releases/README.md).
 
-**In development (source only, not in the catalog):** AnyAPI 0.33.0 and
-[AnyBalance 1.0.0](docs/mods/balance.md). The development build passes 51 native
-checks; AnyBalance still needs a live-world targeting check before release.
+AnyAPI 0.33.0 and [AnyBalance 1.0.0](docs/mods/balance.md) were released on 8 October 2026
+after 51 native checks and an in-world targeting check.
 
 ## Compatibility
 
@@ -97,7 +97,7 @@ Both supplied reference bundles, including analysis tools and validation reports
 
 ### Continuing development in another workspace
 
-See [Workspace handoff](docs/development/workspace-handoff.md) for requirements, SDK downloads, build commands and the current AnyBalance test status. AnyBalance and its API 0.33.0 support are included in source; the stable download catalog remains separate.
+See [Workspace handoff](docs/development/workspace-handoff.md) for requirements, SDK downloads, build commands and the current development status.
 
 ## License
 

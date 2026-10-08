@@ -4,10 +4,9 @@ Updated 8 October 2026. The repository contains the API, optional mods, manager 
 
 ## Current state
 
-- Stable downloads: API 0.32.0, AnyMap 0.27.2, AnyGraphics 0.29.3, AnyClock 1.0.0, AnyQuickWheel 1.1.0, and Helpers/Inventory/Storage 0.27.0. Manager 1.3.1 has its own update channel.
-- Development source now includes **API 0.33.0 and AnyBalance 1.0.0**. The stable catalog deliberately remains on released packages.
-- AnyBalance's marker is confirmed by the user to stay anchored correctly. The latest correction handles the native Properties tool's **zero** unset target ID, allowing fallback to a bare vehicle/body hover. This correction passed automated tests but still needs an in-world check.
-- The development build passed **51 native checks** on Windows. Eight experimental SDK examples also compile. Tests using game assets require the matching installed game; GPU tests require a working graphics environment.
+- Stable downloads: API 0.33.0, AnyBalance 1.0.0, AnyMap 0.27.2, AnyGraphics 0.29.3, AnyClock 1.0.0, AnyQuickWheel 1.1.0, and Helpers/Inventory/Storage 0.27.0. Manager 1.3.1 has its own update channel.
+- **API 0.33.0 and AnyBalance 1.0.0** were released on 8 October 2026 ([v0.33.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.33.0)). The bare-body targeting correction (zero unset Properties target ID) was confirmed in game before release.
+- The release build passed **51 native checks** on Windows. Eight experimental SDK examples also compile. Tests using game assets require the matching installed game; GPU tests require a working graphics environment.
 - AnyMap's orientation correction is user-confirmed. AnyGraphics includes native scene controls, scene-only AA before the HUD, volumetric fog, and configurable sun/local-light beams. The latest submission-retry correction passed fixtures, not a new visual acceptance session.
 
 ## Get started
@@ -49,7 +48,7 @@ Manager build: `powershell -File manager/build.ps1`. The manager's embedded API/
 
 Extract the SDK ZIP into a separate research directory. Start with its `sdk/experimental/README.md`; the reference root for `tools/bind.py --reference` is the extracted `sdk/experimental/reference` directory. Do not overwrite maintained repository headers with older generated headers from the original bundle.
 
-## Next AnyBalance test
+## AnyBalance regression test
 
 Equip Properties and aim at a bare chassis, an edge/plate, a door handle and a tyre. The same connected creation should retain its centre while you move the camera. Looking away or changing tools should hide the display. Check that ordinary Properties actions still work and simulation speed remains normal.
 

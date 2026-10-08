@@ -30,7 +30,7 @@ uses several services together, see the [mod tutorial](../development/mod-tutori
 | HDR fog, sun shafts and local beams (0.29.0) | [Scene lighting](../scene-lighting.md) | `anyapi_scene_lighting_v1.h`, `anyapi_scene_lighting_v2.h` |
 | Optional editable settings | [Helper settings](helper-settings.md) | `anyhelpers_settings_v1.h`, `anyhelpers_settings_v2.h` |
 | Optional keybind registry | [AnyHelpers](../mods/helpers.md) | `mod_controls_v1.h` |
-| Creation centre of mass (0.33.0, development) | [Creation balance](creation-balance.md) | `anyapi_creation_balance_v1.h` |
+| Creation centre of mass (0.33.0) | [Creation balance](creation-balance.md) | `anyapi_creation_balance_v1.h` |
 
 GPU post-processing requires API 0.26.0 or newer. Conditional settings presentation
 requires the updated AnyHelpers source. Both v1 settings and prior public API
@@ -52,6 +52,6 @@ with another game build or advertise disabled legacy hooks as active APIs.
 functions, layouts, globals and hook routes, including unvalidated pathways.
 Generated bindings run inside mods and use the existing host build-check service.
 
-## Development: creation balance
+## Creation balance
 
-[Creation balance snapshots](creation-balance.md) document the AnyAPI 0.33.0 development service used by [AnyBalance](../mods/balance.md). Bare-body targeting still awaits a live-world check.
+[Creation balance snapshots](creation-balance.md) document the AnyAPI 0.33.0 service used by [AnyBalance](../mods/balance.md).

@@ -31,4 +31,4 @@ AnyAPI 0.31.0 adds `anyapi.equipment` v1/v2 for copied hotbar and carried constr
 
 AnyAPI 0.32.0 separates light-beam scattering from fog extinction in `anyapi.scene_lighting`. See the [0.32.0 notes](../docs/releases/release-0.32.0.md).
 
-AnyAPI 0.33.0 (development source, not yet in the catalog) adds `anyapi.creation_balance` v1 for copied creation centre-of-mass snapshots. See [Creation balance](../docs/api/creation-balance.md).
+AnyAPI 0.33.0 adds `anyapi.creation_balance` v1 for copied creation centre-of-mass snapshots. See [Creation balance](../docs/api/creation-balance.md).

@@ -1,6 +1,6 @@
 # Creation balance snapshots
 
-Query `anyapi.creation_balance`, version **1**, after `AnyAPI_ModReady`. Header: [anyapi_creation_balance_v1.h](../../sdk/include/anyapi_creation_balance_v1.h). Added in the local AnyAPI **0.33.0** development build. Marker anchoring is user-confirmed; bare-body targeting still needs live verification.
+Query `anyapi.creation_balance`, version **1**, after `AnyAPI_ModReady`. Header: [anyapi_creation_balance_v1.h](../../sdk/include/anyapi_creation_balance_v1.h). Added in AnyAPI **0.33.0**. Marker anchoring and bare-body targeting are user-confirmed in game.
 
 `copy` returns a bounded, copied snapshot of the creation targeted by the locally equipped Properties Tool. It exposes no game pointers and no physics mutation functions. A copy is unavailable outside focused gameplay, when another tool is equipped, without a valid target, or after **150 ms** without a native overlay sample.
 

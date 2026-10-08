@@ -6,7 +6,7 @@ The gold marker identifies the centre of mass. Coloured X/Y/Z guides show the bu
 
 Open **Mod Settings → AnyBalance** to change marker size and opacity, or toggle axes, bounds, the height guide and summary. It works without AnyHelpers using the default display.
 
-This is a separate mod. The local test build requires **AnyAPI 0.33.0**, Anymaker **0.1.23**, Steam build **25755694**. The user confirmed the marker stays anchored correctly in game. The bare-body targeting correction still needs a live-world check; the stable manager catalog remains on the released API until validation is complete.
+This is a separate mod. AnyBalance **1.0.0** requires **AnyAPI 0.33.0**, Anymaker **0.1.23**, Steam build **25755694**; install both from the manager. Marker anchoring and bare-body targeting (chassis, plate edge, door handle and tyre) were confirmed in game before release.
 
 ## What the readings mean
 
@@ -18,11 +18,9 @@ The summary shows **Creation mass** for a verified connected assembly, or **Body
 
 Connection topology is currently captured from the locally hosted server. A remote multiplayer server does not expose that topology to this client service, so the display describes the targeted body there. Server-only fluid and cargo mass remain outside this calculation.
 
-## Local test
+## Manual test
 
 Equip Properties Tool directly or through AnyQuickWheel, aim at a creation and check that the marker follows it. Switch to another tool and confirm the display disappears. Aim at the bed, cab, hinged door and wheels of the same vehicle and verify that the centre stays attached to one world position. Try a second creation, move around it, and open/close inventory and settings. Adding or removing a heavy structural part should update the marker after the native physics shape rebuild and the next 200 ms mass refresh. Verify that equipping Properties does not slow simulation, and that changing view angle leaves the marker anchored to the same point on the creation.
-
-The local test API is versioned separately from the public graphics release. Its manager receipt records the matching DLL hash so the manager can recognize it and reject a downgrade to the public API during testing.
 
 ## Bare vehicle targeting correction
 
