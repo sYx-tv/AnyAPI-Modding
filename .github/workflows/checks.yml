@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Docs, encoding and catalog
         run: python3 .github/scripts/check_repo.py
+      - name: Publish script tests
+        run: python3 .github/scripts/test_publish_release.py
       - name: Examples compile against the public headers
         run: |
           status=0
