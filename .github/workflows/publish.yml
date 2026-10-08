@@ -24,14 +24,15 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ inputs.tag }}
-      ASSETS: ${{ runner.temp }}/assets
-      PLAN: ${{ runner.temp }}/plan.json
     steps:
       - uses: actions/checkout@v5
         with:
           ref: main
       - name: Download the draft release
         run: |
+          echo "ASSETS=$RUNNER_TEMP/assets" >> "$GITHUB_ENV"
+          echo "PLAN=$RUNNER_TEMP/plan.json" >> "$GITHUB_ENV"
+          ASSETS="$RUNNER_TEMP/assets"
           if ! draft=$(gh release view "$TAG" --json isDraft --jq .isDraft); then
             echo "::error::No release named $TAG. Create it as a draft with its assets first."; exit 1
           fi
