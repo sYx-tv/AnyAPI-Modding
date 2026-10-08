@@ -98,3 +98,10 @@ Both supplied reference bundles, including analysis tools and validation reports
 ### Continuing development in another workspace
 
 See [Workspace handoff](docs/development/workspace-handoff.md) for requirements, SDK downloads, build commands and the current AnyBalance test status. AnyBalance and its API 0.33.0 support are included in source; the stable download catalog remains separate.
+
+## License
+
+AnyAPI, its mods, the manager and the SDK are released under the [MIT License](LICENSE).
+Third-party code keeps its own license, for example [SMAA](native/third_party/smaa/LICENSE.txt).
+The license covers this project's code only. It grants no rights to Anymaker, its
+executables or its assets, which are not included in this repository.

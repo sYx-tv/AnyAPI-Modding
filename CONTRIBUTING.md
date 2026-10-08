@@ -57,3 +57,8 @@ installed, so CI cannot cover them. Say in the pull request which of them you ra
 Use the issue templates. For a crash or a mod not loading, attach
 `anymaker_modding.log` from the game folder (beside `game.exe`) and say which
 API and mod versions the manager shows.
+
+## License
+
+By contributing, you agree that your contributions are licensed under the
+project's [MIT License](LICENSE).
