@@ -1,7 +1,7 @@
 {
   "Schema": 1,
-  "Version": "1.3.1",
-  "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/manager-v1.3.1/AnyAPI.Manager.exe",
-  "Sha256": "809295b784b49f414a64103956bc585c9b8f8136dfab219bd445c272ae57b353",
-  "Size": 1087488
+  "Version": "1.3.2",
+  "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/manager-v1.3.2/AnyAPI.Manager.exe",
+  "Sha256": "bcc214b3ea839e5931f6fd2fb11e6cfa1dd49a6b30df01638d8e635106abf8cc",
+  "Size": 1369600
 }
