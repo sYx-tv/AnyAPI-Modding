@@ -57,8 +57,9 @@ report "submitted", not "server confirmed". Treat a missing confirmation as unkn
 
 ## Published resources
 
-Manager 1.3.1 bundles the API 0.27.0 archive and a matching offline guide with 25
-headers and 100 guide articles; newer API and mod versions come from the catalog.
+Manager 1.3.2 bundles the API 0.33.0 archive and a matching offline guide with 35
+headers and 124 guide articles; newer API and mod versions come from the catalog.
+Its fixture suite passes 94 checks.
 The manager fixture suite (`--self-test`) covers installation rollback, local mod
 discovery, launch modes and verified EXE self-updates. Public download checks
 compare each archive and DLL checksum.
