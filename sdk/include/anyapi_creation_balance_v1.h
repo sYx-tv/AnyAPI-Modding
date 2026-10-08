@@ -1,7 +1,9 @@
 #pragma once
 #include <cstdint>
-// Copied client physics-shape centre, not a server cargo/axle-load calculation.
-constexpr uint32_t ANY_BALANCE_BODY_MASS=1, ANY_BALANCE_CONNECTED_CREATION=2;
+// Copied native physics centre of mass. Not an axle-load or tipping calculation.
+// ANY_BALANCE_FLUID_MASS (API 0.34.0+): body_mass_kg and the centre include the
+// server-simulated liquid in the creation's tanks (locally hosted worlds only).
+constexpr uint32_t ANY_BALANCE_BODY_MASS=1, ANY_BALANCE_CONNECTED_CREATION=2, ANY_BALANCE_FLUID_MASS=4;
 struct AnyBalancePointV1 { double x{},y{},z{}; };
 struct AnyBalanceScreenV1 { double x{},y{},depth{}; }; // Native NDC; positive depth is in front.
 struct AnyCreationBalanceSnapshotV1 {

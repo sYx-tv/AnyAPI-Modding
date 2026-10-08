@@ -28,6 +28,12 @@ pending. The headline items still open across the stable release:
 - **HUD control hints** (`hud.hints.<mod>`) did not appear in the author's live
   test and stay experimental.
 
+## AnyAPI 0.34.0 and AnyBalance 1.1.0
+
+Tank fluid mass passed native fixtures (server sampling, scene check, weighted centre,
+stale-sample rejection) and the author confirmed in game that filling and draining a
+tank changes the mass and moves the marker as expected.
+
 ## AnyAPI 0.33.0 and AnyBalance 1.0.0
 
 The release build passed **51 native checks** on Windows and the eight experimental
