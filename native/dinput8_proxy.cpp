@@ -5252,9 +5252,11 @@ static DWORD WINAPI framework_runtime_thread(void*) {
 #include "anyapi_screen_layout.inc"
 #include "anyapi_scene_antialiasing.inc"
 #include "anyapi_scene_lighting.inc"
+static void anyapi_creation_balance_render_camera(void*);
 #include "anyapi_scene_controls.inc"
 #include "anyapi_world_time.inc"
 #include "anyapi_equipment.inc"
+#include "anyapi_creation_balance.inc"
 #include "anyapi_inventory_ui.inc"
 #include "anyapi_client_tasks.inc"
 static DWORD WINAPI loader_thread(void*) {
@@ -5265,6 +5267,7 @@ static DWORD WINAPI loader_thread(void*) {
     if(platform::plugin_count.load()&&!platform::start())log_line(ANY_LOG_ERROR,"framework","PLUGIN_PLATFORM graphics_hooks=FAILED");
     HANDLE hud_worker=CreateThread(nullptr,0,hud_hints::worker,nullptr,0,nullptr);if(hud_worker)CloseHandle(hud_worker);
     HANDLE equipment_worker=CreateThread(nullptr,0,equipment_runtime::worker,nullptr,0,nullptr);if(equipment_worker)CloseHandle(equipment_worker);
+    HANDLE balance_worker=CreateThread(nullptr,0,balance_runtime::worker,nullptr,0,nullptr);if(balance_worker)CloseHandle(balance_worker);
     HANDLE time_worker=CreateThread(nullptr,0,world_time_runtime::worker,nullptr,0,nullptr);if(time_worker)CloseHandle(time_worker);
     HANDLE scene_worker=CreateThread(nullptr,0,scene_controls::worker,nullptr,0,nullptr);if(scene_worker)CloseHandle(scene_worker);
     HANDLE menu_worker=CreateThread(nullptr,0,menus::worker,nullptr,0,nullptr);if(menu_worker)CloseHandle(menu_worker);

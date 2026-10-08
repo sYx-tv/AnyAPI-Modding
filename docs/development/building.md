@@ -6,7 +6,7 @@
 - Visual Studio with **Desktop development with C++**, the Windows SDK and CMake.
 - Python 3 for local road-cache generation.
 
-The 0.27.0 native profile targets Anymaker 0.1.23 / Steam build 25755694.
+The current native development profile (API 0.33.0, including AnyBalance) targets Anymaker 0.1.23 / Steam build 25755694.
 Run these commands from the repository root in a developer PowerShell. Adjust
 the game folder to match your installation.
 
@@ -27,7 +27,7 @@ not required for the normal C++ build.
 ## Output
 
 `build/Release` contains `dinput8.dll`, `AnyHelpers.dll`, `AnyInventory.dll`,
-`AnyStorage.dll`, `AnyMap.dll` and `AnyGraphics.dll`.
+`AnyStorage.dll`, `AnyMap.dll`, `AnyGraphics.dll`, `AnyClock.dll`, `AnyQuickWheel.dll` and `AnyBalance.dll`.
 Close the game before replacing DLLs. The API loader belongs beside `game.exe`;
 mod DLLs belong in `AnyAPI and Modding/mods`. Prefer manager import for local mods
 so metadata, backups and receipts are maintained.

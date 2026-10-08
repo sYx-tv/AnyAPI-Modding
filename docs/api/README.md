@@ -48,3 +48,7 @@ with another game build or advertise disabled legacy hooks as active APIs.
 [Full reference and binding tools](../../sdk/experimental/README.md) expose known
 functions, layouts, globals and hook routes, including unvalidated pathways.
 Generated bindings run inside mods and use the existing host build-check service.
+
+## Development: creation balance
+
+[Creation balance snapshots](creation-balance.md) document the AnyAPI 0.33.0 development service used by [AnyBalance](../mods/balance.md). Bare-body targeting still awaits a live-world check.

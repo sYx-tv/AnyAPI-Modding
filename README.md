@@ -78,3 +78,7 @@ for the generated bindings and machine-readable database.
 ### Complete research reference downloads
 
 Both supplied reference bundles, including analysis tools and validation reports, are available from [Complete supplied SDK references](docs/sdk-reference/README.md).
+
+### Continuing development in another workspace
+
+See [Workspace handoff](docs/development/workspace-handoff.md) for requirements, SDK downloads, build commands and the current AnyBalance test status. AnyBalance and its API 0.33.0 support are included in source; the stable download catalog remains separate.
