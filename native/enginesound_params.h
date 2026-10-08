@@ -68,12 +68,14 @@ inline Params unpack(int32_t value) {
 
 // Starting points to tune by ear. Each is stored as slider steps so it shares one code path with Custom.
 struct Preset { const char* name; Params params; };
+// Deliberately far from stock so each is easy to tell apart; tune by ear after testing.
+// Pitch steps: 0.40 + 0.06*v. Range: 0.5 + 0.1*v. Curve: 0.5 + 0.25*v. Volume: 0.1*v. Idle layer: 0.2*v.
 inline constexpr Preset kPresets[] = {
     //                     base pitch range curve vol idle smooth pops
-    {"Muscle V8",        {{2,   7,   6,    2,    11,  6,   2,     1}}},
-    {"Smooth inline",    {{0,   6,   4,    1,    9,   5,   2,     0}}},
-    {"Tamed sport",      {{1,   6,   3,    1,    7,   5,   1,     0}}},
-    {"Big diesel",       {{2,   4,   4,    3,    11,  7,   3,     1}}},
+    {"Muscle V8",        {{2,   8,   11,   3,    12,  6,   2,     1}}},  // stock 3 loop, higher idle, wide rev climb
+    {"Smooth inline",    {{0,   2,   8,    2,    9,   3,   3,     0}}},  // stock 1 loop pitched far down, softer idle
+    {"Tamed sport",      {{1,   3,   3,    1,    6,   4,   2,     0}}},  // stock 2 loop pitched down, narrow range, quieter
+    {"Big diesel",       {{2,   1,   4,    4,    13,  7,   5,     1}}},  // stock 3 loop very low and slow to rev
 };
 inline constexpr int32_t kPresetCount = int32_t(sizeof(kPresets) / sizeof(kPresets[0]));
 inline constexpr int32_t kFirstPreset = kVanillaMax + 1;

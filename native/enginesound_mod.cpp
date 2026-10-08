@@ -49,9 +49,8 @@ const AnyGpuDrawV1* gpu;
 std::atomic<bool> g_ready{false}, g_stop{false};
 
 // ------------------------------------------------------------------ logging (capped, diagnostic build)
-std::atomic<int> g_log_budget{400};
 void log(int level, const char* fmt, ...) {
-    if (!host.log || (level == 0 && g_log_budget.fetch_sub(1) <= 0)) return;
+    if (!host.log) return;
     char buf[512];
     va_list ap; va_start(ap, fmt); vsnprintf(buf, sizeof buf, fmt, ap); va_end(ap);
     host.log(uint32_t(level), kModId, buf);
@@ -89,22 +88,26 @@ EngineState& state_for(uint8_t* e) {
 }
 
 // Diagnostics: what each sound index maps to and how each voice is driven.
-struct VoiceDiag { int32_t index = INT32_MIN; uint32_t calls; double vmin, vmax, smin, smax; int32_t effect, group; };
-VoiceDiag g_voice_diag[4];
+// Aggregated per voice and sound index; only audible calls count, so stopped engines don't drown the log.
+struct VoiceDiag { uint32_t calls; double vmin, vmax, smin, smax, out_vmin, out_vmax, out_smin, out_smax; int32_t effect, group; };
+VoiceDiag g_voice_diag[4][17];   // index 0..15, 16 = packed Custom
+std::atomic<int> g_voice_budget{120};
 bool g_index_logged[16];
 
-void diag_voice(int slot, int32_t index, double v, double s, int32_t effect, int32_t group) {
-    auto& d = g_voice_diag[slot];
-    static const char* names[4] = {"operate", "power", "knock", "leak"};
-    if (d.index != index) {
-        if (d.index != INT32_MIN && d.calls) log(0, "voice %s idx=%d effect=%d group=%d calls=%u volume %.3f..%.3f speed %.3f..%.3f",
-            names[slot], d.index, d.effect, d.group, d.calls, d.vmin, d.vmax, d.smin, d.smax);
-        d = {index, 0, v, v, s, s, effect, group};
-    }
+void diag_voice(int slot, int32_t index, double v, double s, double out_v, double out_s, int32_t effect, int32_t group) {
+    if (!(v > 0.001)) return;
+    int bucket = is_packed(index) ? 16 : (index >= 0 && index < 16 ? index : -1);
+    if (bucket < 0) return;
+    auto& d = g_voice_diag[slot][bucket];
+    if (!d.calls) d = {0, v, v, s, s, out_v, out_v, out_s, out_s, effect, group};
     ++d.calls; d.vmin = std::min(d.vmin, v); d.vmax = std::max(d.vmax, v); d.smin = std::min(d.smin, s); d.smax = std::max(d.smax, s);
+    d.out_vmin = std::min(d.out_vmin, out_v); d.out_vmax = std::max(d.out_vmax, out_v); d.out_smin = std::min(d.out_smin, out_s); d.out_smax = std::max(d.out_smax, out_s);
     d.effect = effect; d.group = group;
-    if (d.calls == 1 || d.calls == 1200) log(0, "voice %s idx=%d effect=%d group=%d volume %.3f..%.3f speed %.3f..%.3f (calls %u)",
-        names[slot], index, effect, group, d.vmin, d.vmax, d.smin, d.smax, d.calls);
+    if ((d.calls == 1 || d.calls == 300 || d.calls % 3000 == 0) && g_voice_budget.fetch_sub(1) > 0) {
+        static const char* names[4] = {"operate", "power", "knock", "leak"};
+        log(0, "voice %s idx=%d effect=%d group=%d audible calls=%u game volume %.3f..%.3f speed %.3f..%.3f -> sent volume %.3f..%.3f speed %.3f..%.3f",
+            names[slot], index, effect, group, d.calls, d.vmin, d.vmax, d.smin, d.smax, d.out_vmin, d.out_vmax, d.out_smin, d.out_smax);
+    }
 }
 
 void hk_selected(int32_t* ret, uint8_t* engine) {
@@ -112,6 +115,7 @@ void hk_selected(int32_t* ret, uint8_t* engine) {
     if (!ret || !engine) return;
     int32_t index = rd<int32_t>(engine, off::engine_sound_index);
     if (index >= 0 && index < 16 && !g_index_logged[index]) { g_index_logged[index] = true; log(0, "sound index %d -> vanilla effect %d", index, *ret); }
+    static bool packed_logged; if (is_packed(index) && !packed_logged) { packed_logged = true; log(0, "sound index packed 0x%08x -> vanilla effect %d", unsigned(index), *ret); }
     Choice c = decode(index);
     if (c.mode != Mode::Vanilla) *ret = base_effect(c.params);
 }
@@ -131,9 +135,11 @@ void hk_vol_speed(uint8_t* single, const double* volume_in, const double* speed_
     int slot = o == off::voice_operate ? 0 : o == off::voice_power ? 1 : o == off::voice_knock ? 2 : o == off::voice_leak ? 3 : -1;
     if (slot < 0) return original(single, volume_in, speed_in, effect, group, pos);
     int32_t index = rd<int32_t>(e, off::engine_sound_index);
-    diag_voice(slot, index, *volume_in, *speed_in, effect ? *effect : -1, group ? *group : -1);
     Choice c = decode(index);
-    if (c.mode == Mode::Vanilla || slot > 1) return original(single, volume_in, speed_in, effect, group, pos);
+    if (c.mode == Mode::Vanilla || slot > 1) {
+        diag_voice(slot, index, *volume_in, *speed_in, *volume_in, *speed_in, effect ? *effect : -1, group ? *group : -1);
+        return original(single, volume_in, speed_in, effect, group, pos);
+    }
     double volume_out = *volume_in, speed_out = *speed_in;
     if (slot == 1) {
         double rpm = rd<double>(e, off::engine_factor_speed);
@@ -145,6 +151,7 @@ void hk_vol_speed(uint8_t* single, const double* volume_in, const double* speed_
         speed_out = clamp_speed(*speed_in * idle_pitch(c.params));
         volume_out = clamp_volume(*volume_in * idle_layer(c.params));
     }
+    diag_voice(slot, index, *volume_in, *speed_in, volume_out, speed_out, effect ? *effect : -1, group ? *group : -1);
     original(single, &volume_out, &speed_out, effect, group, pos);
 }
 
@@ -283,6 +290,8 @@ void draw(const AnyFrameV1* frame, void*) {
     std::lock_guard lock(g_mutex);
     g_panel.visible = g_ready && frame->focused && GetTickCount64() - g_panel.seen < 300;
     if (!g_panel.visible) { g_panel.dragging = -1; return; }
+    static bool shown_logged;
+    if (!shown_logged) { shown_logged = true; log(0, "panel shown: row %d value %d, frame %ux%u", g_panel.row_id, g_panel.value, frame->width, frame->height); }
     Choice c = decode(g_panel.value);
     bool custom = c.mode == Mode::Custom;
     float s = std::clamp(float(frame->height) / 1080.f, .7f, 1.8f);
@@ -327,8 +336,11 @@ uint32_t input(const AnyInputV1* e, void*) {
     std::lock_guard lock(g_mutex);
     if (e->kind == ANY_FOCUS_LOST) { g_panel.dragging = -1; return 0; }
     if (!g_panel.visible || decode(g_panel.value).mode != Mode::Custom) return 0;
+    static int click_logs = 6;
+    if (e->kind == ANY_MOUSE_DOWN && click_logs > 0) { --click_logs; log(0, "panel click button=%u at %d,%d; panel x %.0f..%.0f y %.0f..%.0f",
+        e->button, e->x, e->y, g_panel.x, g_panel.x + g_panel.w, g_panel.y, g_panel.y + g_panel.row_h * kSliderCount); }
     bool inside = e->x >= g_panel.x && e->x < g_panel.x + g_panel.w && e->y >= g_panel.y && e->y < g_panel.y + g_panel.row_h * kSliderCount;
-    if (e->kind == ANY_MOUSE_DOWN && e->button == 0 && inside) {
+    if (e->kind == ANY_MOUSE_DOWN && e->button == 1 && inside) {
         g_panel.dragging = std::clamp(int((e->y - g_panel.y) / g_panel.row_h), 0, kSliderCount - 1);
         set_from_mouse(g_panel.dragging, e->x);
         return 1;
