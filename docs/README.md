@@ -10,8 +10,8 @@
 
 ## Mod guides
 
-[AnyHelpers](mods/helpers.md) Â· [AnyInventory](mods/inventory.md) Â·
-[AnyStorage](mods/storage.md) Â· [AnyMap](mods/map.md) Â· [AnyGraphics](mods/graphics.md) Â· [AnyClock](mods/clock.md) Â· [AnyQuickWheel](mods/quick-wheel.md)
+[AnyHelpers](mods/helpers.md) · [AnyInventory](mods/inventory.md) ·
+[AnyStorage](mods/storage.md) · [AnyMap](mods/map.md) · [AnyGraphics](mods/graphics.md) · [AnyClock](mods/clock.md) · [AnyQuickWheel](mods/quick-wheel.md)
 
 ## Developer reference
 

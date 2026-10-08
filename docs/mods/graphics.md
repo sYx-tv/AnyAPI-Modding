@@ -1,7 +1,7 @@
 # AnyGraphics
 
 AnyGraphics 0.28.0 is a native graphics mod for Anymaker 0.1.23. Its controls
-live inside Settings â†’ Graphics, in the scrolling **AnyGraphics Â· Modded**
+live inside Settings → Graphics, in the scrolling **AnyGraphics · Modded**
 section. It requires AnyAPI 0.28.0 and does not require AnyHelpers.
 
 ## Controls
