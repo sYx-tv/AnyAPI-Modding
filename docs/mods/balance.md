@@ -6,7 +6,7 @@ The gold marker identifies the centre of mass. Coloured X/Y/Z guides show the bu
 
 Open **Mod Settings â†’ AnyBalance** to change marker size and opacity, or toggle axes, bounds, the height guide and summary. It works without AnyHelpers using the default display.
 
-This is a separate mod. The local test build requires **AnyAPI 0.33.0**, Anymaker **0.1.23**, Steam build **25755694**. Live-world acceptance is pending; the public manager catalog remains unchanged.
+This is a separate mod. The local test build requires **AnyAPI 0.33.0**, Anymaker **0.1.23**, Steam build **25755694**. The user confirmed the marker stays anchored correctly in game. The bare-body targeting correction still needs a live-world check; the public manager catalog remains unchanged.
 
 ## What the readings mean
 
@@ -23,3 +23,9 @@ Connection topology is currently captured from the locally hosted server. A remo
 Equip Properties Tool directly or through AnyQuickWheel, aim at a creation and check that the marker follows it. Switch to another tool and confirm the display disappears. Aim at the bed, cab, hinged door and wheels of the same vehicle and verify that the centre stays attached to one world position. Try a second creation, move around it, and open/close inventory and settings. Adding or removing a heavy structural part should update the marker after the native physics shape rebuild and the next 200 ms mass refresh. Verify that equipping Properties does not slow simulation, and that changing view angle leaves the marker anchored to the same point on the creation.
 
 The local test API is versioned separately from the public graphics release. Its manager receipt records the matching DLL hash so the manager can recognize it and reject a downgrade to the public API during testing.
+
+## Bare vehicle targeting correction
+
+The native Properties tick clears its component target IDs to zero when the hover is not a component. AnyBalance now resolves a zero or negative tool target from the first native hover entry, including vehicle bodies, edges and plates. It rejects non-vehicle hover entries rather than looking through them. Native tool callbacks, assembly sampling and camera projection are unchanged.
+
+Regression coverage includes zero and negative target IDs, empty and wrapped hover vectors, non-vehicle targets and invalid vehicle IDs.

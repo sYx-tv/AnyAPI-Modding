@@ -41,10 +41,12 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  // Properties tool's actual overlay body, which reads item + 0x40.
  if(!safe_read_memory(uintptr_t(item)+0x40,&state,8)||!state||!p34_virtual(state,state_slot,fn)||
    (!p34_body(fn,HOVER_OVERLAY)&&!p34_body(fn,SELECT_OVERLAY))||!safe_read_memory(state+8,&id,4))return false;
- // Whole-body hovers do not populate the tool's component-only target.
- if(id<0){int32_t type{};NativeVector hovered{};if(!safe_read_memory(uintptr_t(scene)+10672+8,&hovered,sizeof(hovered))||hovered.size!=272||hovered.count<1||hovered.count>64||hovered.capacity<hovered.count||hovered.capacity>4096||hovered.offset<0||hovered.offset>=hovered.capacity||!hovered.buffer)return false;
+ // The native Properties tick clears both IDs to zero and populates them only
+ // for component hovers. Bare bodies/edges must use the first native hover,
+ // matching get_hovered_interactible; never search through occluding objects.
+ if(id<=0){int32_t type{};NativeVector hovered{};if(!safe_read_memory(uintptr_t(scene)+10672+8,&hovered,sizeof(hovered))||hovered.size!=272||hovered.count<1||hovered.count>64||hovered.capacity<hovered.count||hovered.capacity>4096||hovered.offset<0||hovered.offset>=hovered.capacity||!hovered.buffer)return false;
   auto interaction=hovered.buffer+uintptr_t(hovered.offset)*272;
-  if(!safe_read_memory(interaction,&type,4)||(type!=1&&type!=2)||!safe_read_memory(interaction+8,&id,4)||id<0)return false;}
+  if(!safe_read_memory(interaction,&type,4)||(type!=1&&type!=2)||!safe_read_memory(interaction+8,&id,4)||id<=0)return false;}
  auto container=uintptr_t(scene)+0xa0;
  if(!p34_virtual(container,vehicle_slot,fn)||!p34_body(fn,VEHICLE_LOOKUP))return false;
  ((Lookup)fn)(&vehicle,(void*)container,&id);

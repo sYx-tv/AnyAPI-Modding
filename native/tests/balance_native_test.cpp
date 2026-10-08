@@ -66,8 +66,21 @@ int main(){using namespace balance_runtime;
  links.clear();allowed_item=0;
  // A hover on a bare body has no component target, but still resolves the creation.
  unsigned char hovered[272]{};int32_t type=1;memcpy(hovered,&type,4);memcpy(hovered+8,&id,4);
- NativeVector hv{uintptr_t(hovered),0,1,1,272,0,0};memcpy(scene+10672+8,&hv,sizeof(hv));int32_t absent=-1;memcpy(state+8,&absent,4);
+ NativeVector hv{uintptr_t(hovered),0,1,1,272,0,0};memcpy(scene+10672+8,&hv,sizeof(hv));int32_t absent=0;memcpy(state+8,&absent,4);
  assert(capture_inner(tool,camera,scene)&&store.copy(&out,GetTickCount64())&&out.vehicle_id==7);
+ // The real native tick uses zero, not -1. Both unset forms take the fallback.
+ absent=-1;memcpy(state+8,&absent,4);assert(capture_inner(tool,camera,scene));
+ absent=0;memcpy(state+8,&absent,4);
+ // An occluding non-vehicle must not reveal the vehicle behind it.
+ type=3;memcpy(hovered,&type,4);assert(!capture_inner(tool,camera,scene));
+ type=1;memcpy(hovered,&type,4);memcpy(hovered+8,&absent,4);assert(!capture_inner(tool,camera,scene));
+ memcpy(hovered+8,&id,4);
+ // Empty and wrapped hover vectors follow the native first-entry convention.
+ hv.count=0;memcpy(scene+10672+8,&hv,sizeof(hv));assert(!capture_inner(tool,camera,scene));
+ unsigned char wrapped_hover[544]{};memcpy(wrapped_hover+272,hovered,272);
+ hv={uintptr_t(wrapped_hover),1,1,2,272,0,0};memcpy(scene+10672+8,&hv,sizeof(hv));
+ assert(capture_inner(tool,camera,scene)&&store.copy(&out,GetTickCount64())&&out.vehicle_id==7);
+ hv={uintptr_t(hovered),0,1,1,272,0,0};memcpy(scene+10672+8,&hv,sizeof(hv));
  memcpy(state+8,&id,4);
  // Connected bodies use mass-weighted world positions and a deterministic chassis
  // frame, regardless of which door/body the Properties Tool currently hovers.
