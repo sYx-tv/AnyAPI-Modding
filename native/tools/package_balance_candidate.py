@@ -9,11 +9,12 @@ if int(tests.get('tests',0))<50 or int(tests.get('failures',0)) or int(tests.get
 out=root/'release/AnyBalance-1.0.0-Candidate'
 packages=out/'manager-packages'
 packages.mkdir(parents=True,exist_ok=True)
-catalog=json.loads((root/'catalog.json').read_text(encoding='utf-8-sig'))
+published=root.parent/'graphics_clear_air_release'
+catalog=json.loads((published/'catalog.json').read_text(encoding='utf-8-sig'))
 api=catalog['Api'][0]
-api.update(Version='0.32.0',Revision=32,Description='Native framework with Properties-tool creation balance snapshots.')
+api.update(Version='0.33.0',Revision=33,Description='Native framework with Properties-tool creation balance snapshots.')
 catalog['Mods']=[p for p in catalog['Mods'] if p['Id']!='anybalance']
-catalog['Mods'].append(dict(Id='anybalance',Name='AnyBalance',Version='1.0.0',Revision=1,MinimumApi=32,
+catalog['Mods'].append(dict(Id='anybalance',Name='AnyBalance',Version='1.0.0',Revision=1,MinimumApi=33,
     Description='Native centre of mass, local balance offsets and bounds with Properties Tool equipped.',
     FileHashes={'AnyAPI and Modding/mods/AnyBalance.dll':''},GameBuilds=api['GameBuilds']))
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
@@ -26,8 +27,8 @@ for entry in catalog['Api']+catalog['Mods']:
         with zipfile.ZipFile(target,'w',zipfile.ZIP_DEFLATED) as z:z.write(dll,member)
         entry['Sha256']=sha(target)
         entry['FileHashes']={member:sha(dll)}
-        entry['Url']='https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.32.0/'+name
-    else:shutil.copy2(root/'manager/publishing/assets'/name,target)
+        entry['Url']='https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.33.0/'+name
+    else:shutil.copy2(published/'manager/publishing/assets'/name,target)
     assert sha(target)==entry['Sha256']
     with zipfile.ZipFile(target) as z:
         for member,digest in entry['FileHashes'].items():assert hashlib.sha256(z.read(member)).hexdigest()==digest

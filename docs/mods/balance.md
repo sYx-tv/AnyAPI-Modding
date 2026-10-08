@@ -4,9 +4,9 @@ AnyBalance displays a creation's native client physics-shape centre while you eq
 
 The gold marker identifies the centre of mass. Coloured X/Y/Z guides show the build's local axes. A dashed guide connects the centre to the build's local lower bounds. The summary shows centre height and X/Z offsets from the bounds centre. Optional wireframe bounds help you interpret those offsets.
 
-Open **Mod Settings → AnyBalance** to change marker size and opacity, or toggle axes, bounds, the height guide and summary. It works without AnyHelpers using the default display.
+Open **Mod Settings â†’ AnyBalance** to change marker size and opacity, or toggle axes, bounds, the height guide and summary. It works without AnyHelpers using the default display.
 
-This is a separate mod. The local test build requires **AnyAPI 0.32.0**, Anymaker **0.1.23**, Steam build **25755694**. Live-world acceptance is pending; the public manager catalog remains unchanged.
+This is a separate mod. The local test build requires **AnyAPI 0.33.0**, Anymaker **0.1.23**, Steam build **25755694**. Live-world acceptance is pending; the public manager catalog remains unchanged.
 
 ## What the readings mean
 
@@ -21,3 +21,5 @@ Connection topology is currently captured from the locally hosted server. A remo
 ## Local test
 
 Equip Properties Tool directly or through AnyQuickWheel, aim at a creation and check that the marker follows it. Switch to another tool and confirm the display disappears. Aim at the bed, cab, hinged door and wheels of the same vehicle and verify that the centre stays attached to one world position. Try a second creation, move around it, and open/close inventory and settings. Adding or removing a heavy structural part should update the marker after the native physics shape rebuild and the next 200 ms mass refresh. Verify that equipping Properties does not slow simulation, and that changing view angle leaves the marker anchored to the same point on the creation.
+
+The local test API is versioned separately from the public graphics release. Its manager receipt records the matching DLL hash so the manager can recognize it and reject a downgrade to the public API during testing.
