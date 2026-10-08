@@ -27,7 +27,8 @@ static AnySceneLightingParametersV2 local_policy;
 static bool lighting_set_v2(const AnySceneLightingParametersV2* p){local_policy=*p;return lighting_set(&p->scene);}
 static const AnySceneLightingV2 local_api{sizeof(AnySceneLightingV2),2,lighting_set_v2,lighting_status};
 static AnySceneParametersV1 policy;static bool ready=true;static unsigned submissions{},post_calls{};
-static bool set(const AnySceneParametersV1* p){policy=*p;++submissions;return true;}
+static bool reject_scene=false;
+static bool set(const AnySceneParametersV1* p){++submissions;if(reject_scene)return false;policy=*p;return true;}
 static AnySceneParametersV2 detail_policy;
 static bool set_v2(const AnySceneParametersV2* p){detail_policy=*p;return set(&p->scene);}
 static bool status(AnySceneStatusV1* s){s->ready=ready;return true;}
@@ -84,6 +85,7 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  for(int level=2;level<6;++level){apply(NativeBloom,level);assert(policy.bloom==2&&policy.bloom_intensity==bloom_levels[level-2]);}
  event(ANY_MENU_OPEN);stage(0,0);event(ANY_MENU_RESET);assert(dirty());render();assert(policy.fog==1.5f);event(ANY_MENU_APPLY);event(ANY_MENU_CANCEL);render();assert(policy.sun==1&&policy.aa==2&&policy.bloom==2&&policy.fog==.65f);
  apply(Atmosphere,2);apply(Enabled,0);assert(!policy.enabled&&!lighting_policy.enabled);apply(Enabled,1);ui(13);render();assert(!policy.enabled&&!lighting_policy.enabled);apply(GameplayOnly,0);assert(policy.enabled);ready=false;render();ready=true;render();assert(policy.enabled);
+ reject_scene=true;ready=false;render();auto rejected_count=submissions;render();assert(submissions==rejected_count);reject_scene=false;frame.tick+=501;render();assert(submissions==rejected_count+1);render();assert(submissions==rejected_count+1);
 
  }
  {std::ifstream saved(root/L"AnyGraphics"/L"settings.tsv");std::string text((std::istreambuf_iterator<char>(saved)),{});assert(text.find("comparison")==std::string::npos&&text.find("sharpen")==std::string::npos);}

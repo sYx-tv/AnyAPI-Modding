@@ -43,4 +43,11 @@ with another game build or advertise disabled legacy hooks as active APIs.
 - [Build information](build-info.md)
 - [Client task scheduling](client-tasks.md)
 
-- [Creation balance snapshots](creation-balance.md) — AnyAPI 0.32.0 local test build.
+- [Creation balance snapshots](creation-balance.md) â€” AnyAPI 0.33.0 local test build.
+
+## Experimental game access
+
+[Complete reference and binding tools](../../sdk/experimental/README.md) expose
+discovered functions, types, globals and hook routes beyond the supported services.
+Bindings are generated into mods and can use the existing build service; they do
+not require a new host wrapper for every mod. Unresolved routes remain explicit.

@@ -8,9 +8,10 @@ Mods are Windows x64 C++ DLLs exporting `AnyAPI_ModInit`. Check the host ABI and
 structure size. Resolve versioned services during `AnyAPI_ModReady`, after providers
 have initialized. Optional providers may be absent; keep working defaults.
 
-This SDK is the **AnyAPI mod interface**, not the game's original source or a
-complete game-engine SDK. Native pointers remain inside the framework; public
-services use copied data, owned tokens and guarded native operations.
+The supported AnyAPI services use copied data, owned tokens and guarded native
+operations. The [experimental game-access SDK](experimental/README.md) additionally
+provides discovered game layouts, function bindings, globals, native RVAs and
+hooking tools, including unvalidated pathways for advanced mod authors.
 
 `anymaker_mod_api.h` and `anymaker_mod_extension.h` are retained legacy references.
 Their historical native action/hook registry is disabled in the current loader.

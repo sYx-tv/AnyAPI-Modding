@@ -7,7 +7,7 @@ int main(){atlas::Point p{};
     assert(atlas::project(81000+6508,52000+6508,p)&&p.x==1&&p.y==1);
     assert(atlas::project(83955.394,55845.817,p)&&p.x>.72&&p.x<.73&&p.y>.79&&p.y<.80);
     auto world=atlas::world(p);assert(std::abs(world.x-83955.394)<1e-8&&std::abs(world.y-55845.817)<1e-8);
-    auto south=atlas::rotate({0,-7},atlas::screen_heading(0));assert(south.y>6.99);
+    auto south=atlas::rotate({0,-7},atlas::screen_heading(0));assert(south.y< -6.99);
     auto facing_east=atlas::rotate({0,-7},atlas::screen_heading(std::acos(-1.)*.5));assert(facing_east.x>6.99);
     const double pi=std::acos(-1.);
     // World landmarks ahead/right/left must land on the matching screen side
@@ -23,6 +23,13 @@ int main(){atlas::Point p{};
         assert(std::abs(arrow.x)<1e-8&&arrow.y< -6.99);
         auto relative=atlas::rotate({0,-7},atlas::minimap_marker_heading(yaw+pi*.5,yaw));assert(relative.x>6.99);
     }
+    // Full map and fixed-orientation minimap agree; click inverse and drag
+    // must remain in world/atlas coordinates after the vertical correction.
+    atlas::View fixed;auto north=fixed.screen({.5,.7});assert(north.y<.5);
+    auto eastward=fixed.screen({.7,.5});assert(eastward.x>.5);
+    auto recovered=fixed.inverse(north);assert(std::abs(recovered.y-.7)<1e-9);
+    fixed.zoom=2;auto original=fixed.screen({.55,.55});fixed.pan({.1,.1});auto moved=fixed.screen({.55,.55});
+    assert(std::abs(moved.x-original.x-.1)<1e-9&&std::abs(moved.y-original.y-.1)<1e-9);
     atlas::KeyEdge key;assert(key.event(true,true));assert(!key.event(true,true));assert(!key.event(false,true));
     assert(key.event(true,true));assert(!key.event(false,true));assert(!key.event(true,false));assert(!key.event(true,true));
     assert(!key.event(false,false));assert(key.event(true,true));
