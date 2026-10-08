@@ -1,6 +1,6 @@
 # Build information
 
-Query `anyapi.build`, version 1, through AnyAPI_GetServices. Include
+Query `anyapi.build`, version 1, through `AnyAPI_Services()`. Include
 `anyapi_build_v1.h` and pass an initialized AnyBuildInfoV1 to copy().
 
 The copied status records the loader's exact executable and game.gcl SHA-256

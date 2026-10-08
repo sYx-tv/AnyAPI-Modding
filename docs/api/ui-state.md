@@ -1,14 +1,15 @@
 # Current native UI state: anyapi.ui_state v1
 
-Query `anyapi.ui_state`, version 1 through AnyAPI_GetServices. Include anyapi_ui_state_v1.h.
+Query `anyapi.ui_state`, version 1, through `AnyAPI_Services()`. Include anyapi_ui_state_v1.h.
 The immutable service table exposes copy(AnyUiSnapshotV1*). Initialize the POD normally;
 its size and version must match. No game-owned pointer leaves this API.
 
 copy reads the reviewed frontend UI owner's int32 state at +0x828 on every call.
 It does not use player snapshots, simulation ticks, a timer, or the previous render frame.
 The frontend pointer is resolved by the existing exact-build-guarded player resolver.
-No new native hook is installed. This contract targets Anymaker 0.1.21 / Steam 25725299.
-The dispatch evidence is frontend_ui.update_client_ui, current GCL record 26049;
+No new native hook is installed. The current profile targets Anymaker 0.1.23 / Steam build 25755694.
+The snapshot in [UI_STATE_NATIVE_CONTRACT.json](../../native/UI_STATE_NATIVE_CONTRACT.json) was recorded
+on 0.1.21 (frontend_ui.update_client_ui, GCL record 26049); at runtime the exact 0.1.23 build guard must match;
 inventory is state 2, Options 11, Pause 13. State 1 is normal gameplay.
 
 Kinds: GAMEPLAY (1), INVENTORY (2), MENU (all other valid native states).

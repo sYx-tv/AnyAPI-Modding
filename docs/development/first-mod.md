@@ -29,10 +29,14 @@ endif()
 
 Replace `PATH_TO_ANYAPI`, configure with `cmake -S . -B build -A x64`, then build
 with `cmake --build build --config Release`. Import the DLL using the manager.
-Check `AnyAPI and Modding/anymaker_modding.log` after launching with mods.
+Check `anymaker_modding.log` in the game folder (beside `game.exe`) after launching
+with mods; your `Loaded` line appears with the mod's ID.
 
 For integrations, implement `AnyAPI_ModReady`, query the required service and
 validate its version and structure size. Follow its callback/thread restrictions
 and check return values. See [examples](../../native/examples/) and
 [service contracts](../api/README.md). Hot unloading is unsupported; restart the
 game after rebuilding. Settings and controls require explicit registration.
+
+Next, follow the [mod tutorial](mod-tutorial.md) for a complete mod with services,
+HUD drawing, a keybind, settings, packaging and in-game testing.

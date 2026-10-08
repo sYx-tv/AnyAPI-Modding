@@ -1,0 +1,6 @@
+{
+  "Name": "ModeBadge",
+  "Version": "1.0.0",
+  "Description": "Press F7 to show the current game mode.",
+  "MinimumApi": 27
+}

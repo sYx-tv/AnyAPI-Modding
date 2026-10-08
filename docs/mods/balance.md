@@ -4,7 +4,7 @@ AnyBalance displays a creation's native client physics-shape centre while you eq
 
 The gold marker identifies the centre of mass. Coloured X/Y/Z guides show the build's local axes. A dashed guide connects the centre to the build's local lower bounds. The summary shows centre height and X/Z offsets from the bounds centre. Optional wireframe bounds help you interpret those offsets.
 
-Open **Mod Settings â†’ AnyBalance** to change marker size and opacity, or toggle axes, bounds, the height guide and summary. It works without AnyHelpers using the default display.
+Open **Mod Settings → AnyBalance** to change marker size and opacity, or toggle axes, bounds, the height guide and summary. It works without AnyHelpers using the default display.
 
 This is a separate mod. The local test build requires **AnyAPI 0.33.0**, Anymaker **0.1.23**, Steam build **25755694**. The user confirmed the marker stays anchored correctly in game. The bare-body targeting correction still needs a live-world check; the stable manager catalog remains on the released API until validation is complete.
 

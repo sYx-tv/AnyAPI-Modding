@@ -29,10 +29,26 @@ the necessary gameplay checks. Create an API-only package and matching source/do
 Upload assets before updating the catalog so clients never receive broken links.
 Rebuild the manager separately if its bundled API and offline guide should change.
 
-`manager/publish.ps1` and the manually triggered GitHub workflow publish prepared,
-verified resources. They do not download Steam builds or repair hooks automatically.
-The currently prepared resources are the stable 0.27.0 packages; replacing them
-with a new profile requires matching fingerprints, evidence, hashes and guide data.
+### Release tags in use
+
+Each release gets its own tag, and each catalog entry points at the tag it was
+published under: `vX.Y.Z` for API releases (with any mods released alongside),
+`mods-YYYY.MM.DD[.N]` for mod-only updates, `manager-vX.Y.Z` for the manager and
+`sdk-reference-YYYY.MM.DD` for research downloads. Release tags and their assets
+are immutable once a catalog entry points at them; publish a new tag instead of
+replacing an asset.
+
+### The publish workflow is out of date
+
+`manager/publish.ps1` and the manually triggered **Publish verified AnyAPI
+packages** workflow (`.github/workflows/publish.yml`) come from the first
+releases. They upload every package under one tag (default `v0.25.0`) and rewrite
+every catalog URL to that tag, and they require each package to be present in
+`manager/publishing/assets/`. That folder holds the 0.25.0 to 0.31.0 packages but
+not API 0.32.0, AnyMap 0.27.2 or AnyGraphics 0.29.3, so a run today stops at
+"Missing release package" before uploading anything. Recent releases did not
+use it: their catalog URLs point at per-release tags. Do not run the workflow until it is
+updated for per-release tags.
 
 ## Publish a manager update
 

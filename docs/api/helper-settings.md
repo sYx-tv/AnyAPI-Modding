@@ -20,7 +20,8 @@ control committed values. Settings sharing an identical display name form one
 heading, ordered by their declared order, with mod ID and setting ID tie breaks.
 Persisted identities still use the original mod ID plus setting ID.
 
-AnyGraphics uses Look=Custom as the first condition, and Advanced tuning=On as
-the second for detailed rows. Existing map, inventory and storage registrations
-remain unconditional. Tests exercise compact/advanced row counts, staged visibility,
-cancel behavior, all five presets and restoration of saved custom values.
+No mod in this repository uses v2 conditions today. AnyGraphics used them for its
+compact and advanced rows before it moved into the native Graphics tab in 0.28.0.
+No current native check calls `visibility`. AnyHelpers still
+publishes v2 (`native/anyhelpers_settings.inc`), but treat it as lightly tested
+until a current mod or fixture exercises it again.

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/sYx-tv/AnyAPI-Modding/blob/main/docs/README.md
+    about: Player guides, the mod tutorial and the API reference.

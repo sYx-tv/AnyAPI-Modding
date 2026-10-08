@@ -3,6 +3,9 @@
 The declarations in [sdk/include](../../sdk/include/) are the exact public ABI.
 Resolve services with `AnyAPI_Services()->query(name, version)` during
 `AnyAPI_ModReady`. Validate returned pointers, versions and structure sizes.
+Versions in parentheses are the AnyAPI release that introduced the service; rows
+without one have been available since 0.27.0 or earlier. For a worked example that
+uses several services together, see the [mod tutorial](../development/mod-tutorial.md).
 
 | Surface | Contract | Header |
 | --- | --- | --- |
@@ -27,12 +30,12 @@ Resolve services with `AnyAPI_Services()->query(name, version)` during
 | HDR fog, sun shafts and local beams (0.29.0) | [Scene lighting](../scene-lighting.md) | `anyapi_scene_lighting_v1.h`, `anyapi_scene_lighting_v2.h` |
 | Optional editable settings | [Helper settings](helper-settings.md) | `anyhelpers_settings_v1.h`, `anyhelpers_settings_v2.h` |
 | Optional keybind registry | [AnyHelpers](../mods/helpers.md) | `mod_controls_v1.h` |
+| Creation centre of mass (0.33.0, development) | [Creation balance](creation-balance.md) | `anyapi_creation_balance_v1.h` |
 
 GPU post-processing requires API 0.26.0 or newer. Conditional settings presentation
 requires the updated AnyHelpers source. Both v1 settings and prior public API
-tables remain supported. The published stable manager bundles API 0.27.0.
-Native scene controls and scene SMAA are published in 0.28.0.
-HDR scene lighting is published in 0.29.0 with v1/v2 policy tables.
+tables remain supported. The stable catalog provides API 0.32.0; the manager's
+bundled offline copy is API 0.27.0.
 
 Native contract snapshots remain beside implementation files in `native/`.
 They identify reviewed game bodies and layouts; they do not grant compatibility
