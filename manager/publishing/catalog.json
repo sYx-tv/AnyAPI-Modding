@@ -91,14 +91,14 @@
     {
       "Id": "anymap",
       "Name": "AnyMap",
-      "Version": "0.27.1",
-      "Revision": 28,
+      "Version": "0.27.2",
+      "Revision": 29,
       "MinimumApi": 27,
       "Description": "World map and minimap with consistent orientation, route placement and zoom.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.08/AnyMap-0.27.1.zip",
-      "Sha256": "7c1c599c7a03602144ee5e4b5f4d79ab0f4079453faac44f2d71044cca04bb8b",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.08.1/AnyMap-0.27.2.zip",
+      "Sha256": "8c867e260429bcecbc89904b6aac300aeaafe9c0df2f7c1a39dc62ae986aea0a",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyMap.dll": "cbfa00b4da7ce9896b0a598863f641a28a8978a1e33eb1da955ba6143cf02af7"
+        "AnyAPI and Modding/mods/AnyMap.dll": "a22b13d34da56bfa23bd47e2e76654cd2e33b107ba9929a3fcd8dcd61dddd710"
       },
       "GameBuilds": [
         {
@@ -112,14 +112,14 @@
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "0.29.2",
-      "Revision": 31,
+      "Version": "0.29.3",
+      "Revision": 32,
       "MinimumApi": 32,
       "Description": "Native graphics controls with clear-air beams and recovery after rejected renderer settings.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.08/AnyGraphics-0.29.2.zip",
-      "Sha256": "ac39a9a7e9c053ef2635cc24581f96109f1fd42cb69a0a8869d669fd6e5b95d3",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.08.1/AnyGraphics-0.29.3.zip",
+      "Sha256": "c41f3c8173ea64b495bef265dac410eaa3d3d60297b210771c1ee22ccfeef9ef",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "86828fb9c987fe94ad31d6a9fc3f9f2d4dee9cb6ea3223fe043e6981a6b215b6"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "26a282a0c278a93c7c39878be8127c1299c5ebf41984f80a7943462540b93cdf"
       },
       "GameBuilds": [
         {

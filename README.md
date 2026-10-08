@@ -3,7 +3,7 @@
 AnyAPI loads C++ DLL mods inside Anymaker. AnyAPI Manager installs the framework,
 browses the mod library, manages local mods and launches the game with or without mods.
 
-[Download the manager](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest/download/AnyAPI.Manager.exe) Ã‚Â· [Documentation](docs/README.md) Ã‚Â· [Developer SDK](sdk/README.md) Ã‚Â· [Build from source](docs/development/building.md)
+[Download the manager](https://github.com/sYx-tv/AnyAPI-Modding/releases/latest/download/AnyAPI.Manager.exe) · [Documentation](docs/README.md) · [Developer SDK](sdk/README.md) · [Build from source](docs/development/building.md)
 
 ## For players
 
@@ -72,5 +72,5 @@ their editable options and use the returned values in their implementation.
 
 Use the [experimental SDK](sdk/experimental/README.md) for discovered game types,
 functions, globals and hook pathways beyond the supported API services. Download
-the [complete SDK and reference](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.08)
+the [complete SDK and reference](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.08.1)
 for the generated bindings and machine-readable database.
