@@ -6,19 +6,21 @@ The gold marker identifies the centre of mass. Coloured X/Y/Z guides show the bu
 
 Open **Mod Settings → AnyBalance** to change marker size and opacity, or toggle axes, bounds, the height guide and summary. It works without AnyHelpers using the default display.
 
-This is a separate mod. AnyBalance **1.0.0** requires **AnyAPI 0.33.0**, Anymaker **0.1.23**, Steam build **25755694**; install both from the manager. Marker anchoring and bare-body targeting (chassis, plate edge, door handle and tyre) were confirmed in game before release.
+This is a separate mod. AnyBalance **1.1.0** requires **AnyAPI 0.33.0** (fluid mass needs **0.34.0**), Anymaker **0.1.23**, Steam build **25755694**; install both from the manager. Marker anchoring and bare-body targeting (chassis, plate edge, door handle and tyre) were confirmed in game before release.
 
 ## What the readings mean
 
 The centre comes from the game's weighted client physics-shape construction. In a locally hosted world, connected hinges, mounts, latches, sliders, hydraulic connectors and tow connections are followed to combine the bodies into one mass-weighted creation. The heaviest body supplies a consistent local frame, so aiming at a door or chassis gives the same centre. It is not a geometric midpoint invented by the mod. Bounds and transforms come from the game's native getters.
 
-Height and offsets use the build's local axes, including when the build is tilted. A high centre can help explain balance problems, but this display does not calculate a tipping threshold, tyre contact polygon or axle loads. It does not claim that server-only inventory cargo or fluid mass is included in the client shape centre.
+Height and offsets use the build's local axes, including when the build is tilted. A high centre can help explain balance problems, but this display does not calculate a tipping threshold, tyre contact polygon or axle loads.
 
-The summary shows **Creation mass** for a verified connected assembly, or **Body mass** for one body. Static or kinematic bodies may not provide a useful mass, so that row is omitted. Assemblies wait for complete positive body masses rather than displaying a partial or unweighted result.
+The summary shows **Creation mass** for a verified connected assembly, or **Body mass** for one body. **incl. fluid** after the mass means tank contents are counted (see below). Static or kinematic bodies may not provide a useful mass, so that row is omitted. Assemblies wait for complete positive body masses rather than displaying a partial or unweighted result.
 
 Connection topology is currently captured from the locally hosted server. A remote multiplayer server does not expose that topology to this client service, so the display describes the targeted body there.
 
-**Fluid and cargo.** The game does simulate fluid weight, but not inside the part itself. Each liquid tank creates a separate server-side physics box, linked to the tank by a distance constraint, and sets that box's mass to the current fluid mass every tick (`server_scene.vehicle_component.liquid_tank._rebuild_fluid_physics` and `.tick`). That box exists only on the server, so the client body masses AnyBalance reads do not include tank contents. No code path was found that adds stored item (cargo) mass to a vehicle body. This comes from the build 25755694 call graph, not a runtime measurement; a quick check is to fill a large tank and see whether the shown creation mass changes.
+**Fluid.** The game simulates fluid weight outside the tank part itself: each liquid tank creates a separate server-side physics box, linked to the tank by a distance constraint, and sets that box's mass to the current fluid mass every tick (minimum 0.01 kg). With AnyAPI 0.34.0, AnyBalance copies each tank's fluid mass and live position on the locally hosted server and adds them to the centre and total, shown as **incl. fluid**. Sloshing moves the fluid box, so the centre shifts slightly as the creation accelerates. On a remote server the fluid boxes are not visible to the client, so fluid is left out and the label is not shown.
+
+**Cargo.** No code path was found that adds stored item mass to a vehicle body, so items in storage do not change the centre or mass in the game's physics either.
 
 ## Manual test
 

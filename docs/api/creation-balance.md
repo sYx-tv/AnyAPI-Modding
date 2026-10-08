@@ -1,10 +1,14 @@
 # Creation balance snapshots
 
-Query `anyapi.creation_balance`, version **1**, after `AnyAPI_ModReady`. Header: [anyapi_creation_balance_v1.h](../../sdk/include/anyapi_creation_balance_v1.h). Added in AnyAPI **0.33.0**. Marker anchoring and bare-body targeting are user-confirmed in game.
+Query `anyapi.creation_balance`, version **1**, after `AnyAPI_ModReady`. Header: [anyapi_creation_balance_v1.h](../../sdk/include/anyapi_creation_balance_v1.h). Added in AnyAPI **0.33.0**; tank fluid mass added in **0.34.0**. Marker anchoring, bare-body targeting and fluid mass are user-confirmed in game.
 
 `copy` returns a bounded, copied snapshot of the creation targeted by the locally equipped Properties Tool. It exposes no game pointers and no physics mutation functions. A copy is unavailable outside focused gameplay, when another tool is equipped, without a valid target, or after **150 ms** without a native overlay sample.
 
 The snapshot contains the vehicle ID, selected tool item ID, context generation, sampling time, local shape centre, local bounds, world centre, local height/offsets and projected centre/axes/bounds points. Screen positions use NDC X/Y from the final renderer view-projection matrix and positive homogeneous depth; consumers convert X/Y to viewport pixels and reject points behind the camera. Body mass is optional and indicated by `ANY_BALANCE_BODY_MASS`. `body_count` reports the combined bodies; `ANY_BALANCE_CONNECTED_CREATION` indicates a multi-body aggregate from verified local connection data. The vehicle ID identifies the heaviest body, with ID tie-breaks, rather than the current hovered member.
+
+## Fluid mass (0.34.0)
+
+When `ANY_BALANCE_FLUID_MASS` is set, `body_mass_kg` and the centre include the fluid in every tank of the creation. On the owning server tick, each component whose typeinfo slot 20 is the exact `liquid_tank.tick` body has its `_m_fluid_physics` object (**+776**) sampled with native `physics.object.get_mass` and `physics.object.get_transform`, only while `get_is_added_to_scene` (dependency 11 of that tick) is true. `get_transform` comes from dependency 1 of the unique `physics.actor_creature_large_centipede.get_body_physics_transform` body. Only copied masses and world positions reach the client. The flag is set only for a locally hosted world when every body in the assembly has a fresh server sample; otherwise fluid is left out rather than partially counted. Reviewed bytes are in `native/balance_fluid_contract.h`.
 
 ## Native contracts
 

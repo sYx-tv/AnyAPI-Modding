@@ -10,6 +10,7 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Contents | Evidence |
 | --- | --- | --- | --- | --- |
+| 2026-10-08 | [v0.34.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.34.0) | [0.34.0](release-0.34.0.md) | AnyAPI 0.34.0, AnyBalance 1.1.0 fluid mass | |
 | 2026-10-08 | [v0.33.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.33.0) | [0.33.0](release-0.33.0.md) | AnyAPI 0.33.0, AnyBalance 1.0.0 | |
 | 2026-10-08 | [mods-2026.10.08.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.08.1) | [2026-10-08 SDK and mod update](sdk-and-mods-2026-10-08.md) | Experimental SDK expansion, AnyMap 0.27.2, AnyGraphics 0.29.3 | |
 | 2026-10-07 | [v0.32.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.32.0) | [0.32.0](release-0.32.0.md) | AnyAPI 0.32.0, AnyGraphics 0.29.1 clear-air lighting | |

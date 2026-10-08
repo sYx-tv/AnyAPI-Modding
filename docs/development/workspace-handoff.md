@@ -4,8 +4,8 @@ Updated 8 October 2026. The repository contains the API, optional mods, manager 
 
 ## Current state
 
-- Stable downloads: API 0.33.0, AnyBalance 1.0.0, AnyMap 0.27.2, AnyGraphics 0.29.3, AnyClock 1.0.0, AnyQuickWheel 1.1.0, and Helpers/Inventory/Storage 0.27.0. Manager 1.3.2 has its own update channel.
-- **API 0.33.0 and AnyBalance 1.0.0** were released on 8 October 2026 ([v0.33.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.33.0)). The bare-body targeting correction (zero unset Properties target ID) was confirmed in game before release.
+- Stable downloads: API 0.34.0, AnyBalance 1.1.0, AnyMap 0.27.2, AnyGraphics 0.29.3, AnyClock 1.0.0, AnyQuickWheel 1.1.0, and Helpers/Inventory/Storage 0.27.0. Manager 1.3.2 has its own update channel.
+- **API 0.34.0 and AnyBalance 1.1.0** add tank fluid mass ([v0.34.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.34.0), user-confirmed in game). **API 0.33.0 and AnyBalance 1.0.0** were released earlier on 8 October 2026 ([v0.33.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.33.0)). The bare-body targeting correction (zero unset Properties target ID) was confirmed in game before release.
 - The release build passed **51 native checks** on Windows. Eight experimental SDK examples also compile. Tests using game assets require the matching installed game; GPU tests require a working graphics environment.
 - AnyMap's orientation correction is user-confirmed. AnyGraphics includes native scene controls, scene-only AA before the HUD, volumetric fog, and configurable sun/local-light beams. The latest submission-retry correction passed fixtures, not a new visual acceptance session.
 
