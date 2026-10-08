@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.33.0",
-      "Revision": 33,
+      "Version": "0.34.0",
+      "Revision": 34,
       "MinimumApi": 0,
-      "Description": "Native mod framework with Properties-tool creation balance snapshots.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.33.0/AnyAPI-0.33.0.zip",
-      "Sha256": "2a0b42d33dd7f1d46a828d4fe0e8f158ce8065504eaa9a1845d65a88a3de0578",
+      "Description": "Native mod framework with creation balance snapshots including tank fluid mass.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.34.0/AnyAPI-0.34.0.zip",
+      "Sha256": "a0513c727c403479f69de09b912482861c93dde8e5307df3a0168485e07ddd68",
       "FileHashes": {
-        "dinput8.dll": "258bf2629a64f5801e77d5d7fa815ef9bc98ecfc9c2280d73ff04e82283a2d9f"
+        "dinput8.dll": "07c0b15f3265e1197e8250e0ac7ee727d52a0e92137f026a12a43be451e8fb37"
       },
       "GameBuilds": [
         {
@@ -175,14 +175,14 @@
     {
       "Id": "anybalance",
       "Name": "AnyBalance",
-      "Version": "1.0.0",
-      "Revision": 1,
+      "Version": "1.1.0",
+      "Revision": 2,
       "MinimumApi": 33,
-      "Description": "Native centre of mass, local balance offsets and bounds with Properties Tool equipped.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.33.0/AnyBalance-1.0.0.zip",
-      "Sha256": "6a9f8b8113c7fdc7b882b3e6936ab3fe55bae232e02c02010a9ea3fe14d949e5",
+      "Description": "Native centre of mass, including tank fluid, with local balance offsets and bounds while the Properties Tool is equipped.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.34.0/AnyBalance-1.1.0.zip",
+      "Sha256": "8859b83f2246d55a91197dec754d194c19a30e3ada06e0fdcfb4fda0b88ac7f8",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyBalance.dll": "91b678dcd6cb46e9666ad1fde3a665b2b30de5cbaba6f7bf2d863cd313f39008"
+        "AnyAPI and Modding/mods/AnyBalance.dll": "30ac9715c499aab285eb5b795c4e1ad82cc54214a1a868fe494e4452e0b2ab76"
       },
       "GameBuilds": [
         {
