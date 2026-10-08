@@ -41,7 +41,7 @@ static void draw(const AnyFrameV1* frame,void*){
   float inset=14*scale;label(px+inset,py+10*scale,w-inset*2,21*scale,L"AnyBalance",13*scale,0xffedf1f5,ANY_GPU_BOLD);
   wchar_t text[100];swprintf_s(text,L"Centre height  %.2f m",data.height_m);label(px+inset,py+37*scale,w-inset*2,21*scale,text,12*scale,0xffffd47c);
   swprintf_s(text,L"X offset  %+.2f m     Z  %+.2f m",data.offset_x_m,data.offset_z_m);label(px+inset,py+60*scale,w-inset*2,21*scale,text,11*scale,0xffced8e2);
-  if(data.valid_fields&ANY_BALANCE_BODY_MASS){swprintf_s(text,data.body_count>1?L"Creation mass  %.1f kg":L"Body mass  %.1f kg",data.body_mass_kg);label(px+inset,py+82*scale,w-inset*2,21*scale,text,11*scale,0xffced8e2);}
+  if(data.valid_fields&ANY_BALANCE_BODY_MASS){swprintf_s(text,data.valid_fields&ANY_BALANCE_FLUID_MASS?(data.body_count>1?L"Creation mass  %.1f kg  incl. fluid":L"Body mass  %.1f kg  incl. fluid"):(data.body_count>1?L"Creation mass  %.1f kg":L"Body mass  %.1f kg"),data.body_mass_kg);label(px+inset,py+82*scale,w-inset*2,21*scale,text,11*scale,0xffced8e2);}
   label(px+inset,py+h-25*scale,w-inset*2,18*scale,L"Offsets from the build's bounds centre",9*scale,0xff929fab);
  }
 }
@@ -51,7 +51,7 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* host,An
 }
 extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace anybalance;auto services=AnyAPI_Services();if(!services)return;
  balance_api=(const AnyCreationBalanceV1*)services->query("anyapi.creation_balance",1);gpu=(const AnyGpuDrawV1*)services->query("anyapi.gpu_draw",1);ui=(const AnyUiStateV1*)services->query("anyapi.ui_state",1);
- if(!balance_api||balance_api->struct_size!=sizeof(*balance_api)||balance_api->version!=1||!balance_api->copy||!gpu||gpu->struct_size!=sizeof(*gpu)||gpu->version!=1||!gpu->register_renderer||!gpu->emit||!ui||ui->struct_size!=sizeof(*ui)||ui->version!=1||!ui->copy){if(host.log)host.log(2,"anybalance","AnyBalance is inactive: install the AnyAPI 0.33.0 test build with the creation-balance service. The public 0.32.0 graphics build does not include it.");return;}
+ if(!balance_api||balance_api->struct_size!=sizeof(*balance_api)||balance_api->version!=1||!balance_api->copy||!gpu||gpu->struct_size!=sizeof(*gpu)||gpu->version!=1||!gpu->register_renderer||!gpu->emit||!ui||ui->struct_size!=sizeof(*ui)||ui->version!=1||!ui->copy){if(host.log)host.log(2,"anybalance","AnyBalance is inactive: install AnyAPI 0.33.0 or newer from the manager.");return;}
  settings=(const AnyHelpersSettingsV1*)services->query("anyhelpers.settings",1);
  if(settings&&settings->struct_size==sizeof(*settings)&&settings->version==1&&settings->register_setting&&settings->get&&settings->revision){
   const char* ids[]={"enabled","marker_size","bounds","axes","height_guide","summary","opacity"};

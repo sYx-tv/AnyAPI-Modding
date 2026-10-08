@@ -8,12 +8,14 @@
 #include "anyapi_equipment_v1.h"
 #include "../balance_contract.h"
 #include "../balance_assembly_contract.h"
+#include "../balance_fluid_contract.h"
 static uintptr_t g_p34_frontend;static unsigned memory_reads;namespace platform {static HWND game_window;}
 static constexpr int ANY_LOG_INFO=0,ANY_LOG_WARN=1;
 static void log_line(int,const char*,const char*){}
 static bool safe_read_memory(uintptr_t p,void* out,size_t n){++memory_reads;if(!p)return false;memcpy(out,(void*)p,n);return true;}
 static bool safe_read_native(uintptr_t p,void* out,size_t n){return safe_read_memory(p,out,n);}
-static bool p34_cell(uintptr_t,size_t,uintptr_t&){return false;}
+static void tank_tick(){}static void tank_in_scene(bool* out,void* physics);
+static bool p34_cell(uintptr_t owner,size_t offset,uintptr_t& target){if(owner==uintptr_t(tank_tick)&&offset==balance_fluid_contract::LIQUID_TANK_ADDED_CELL){target=uintptr_t(tank_in_scene);return true;}return false;}
 static std::vector<uintptr_t> scan_exact(const unsigned char*,size_t){return {};}
 static bool valid_state=true,valid_target=true,valid_transform=true;static unsigned original_calls,lookup_calls,bounds_calls,mass_calls;
 static unsigned char scene[13440]{},vehicle[2448]{},vehicle_b[2448]{},tool[80]{},state[16]{};
@@ -22,8 +24,10 @@ static void get_transform(double* out,void* self){assert(self==vehicle||self==ve
 static void get_bounds(void* out,void* self){++bounds_calls;assert(self==vehicle||self==vehicle_b);double bounds[6]={-2,0,-3,2,4,3};memcpy(out,bounds,sizeof(bounds));}
 static void overlay_original(void*,void*,void*,void*,const bool*,const int32_t*,void*){++original_calls;}
 static void state_overlay(){}
-static unsigned char server_component[600]{};
+static unsigned char server_component[600]{},tank_component[900]{};static bool tank_added_to_scene=true;
+static void tank_in_scene(bool* out,void* physics){assert(physics==tank_component+balance_fluid_contract::FLUID_PHYSICS);*out=tank_added_to_scene;}
 static bool p34_virtual(uintptr_t object,uintptr_t slot,uintptr_t& fn){
+ if(object==uintptr_t(tank_component)&&slot==balance_fluid_contract::LIQUID_TANK_TICK_SLOT*8){fn=uintptr_t(tank_tick);return true;}
  if(object==uintptr_t(server_component)&&slot==78*8){fn=uintptr_t(balance_assembly_contract::LINK_2);return true;}
  if(object==uintptr_t(state)){fn=uintptr_t(state_overlay);return valid_state;}
  if(object==uintptr_t(scene)+0xa0){assert(slot==16);fn=uintptr_t(lookup_vehicle);return true;}
@@ -32,7 +36,7 @@ static bool p34_virtual(uintptr_t object,uintptr_t slot,uintptr_t& fn){
  return false;
 }
 template<size_t N>static bool p34_body(uintptr_t fn,const unsigned char(&expected)[N]){using namespace balance_contract;
- return (fn==uintptr_t(state_overlay)&&+expected==+HOVER_OVERLAY)||(fn==uintptr_t(lookup_vehicle)&&+expected==+VEHICLE_LOOKUP)||(fn==uintptr_t(get_transform)&&+expected==+TRANSFORM)||(fn==uintptr_t(get_bounds)&&+expected==+BOUNDS)||(fn==uintptr_t(overlay_original)&&+expected==+PROPERTY_OVERLAY);
+ return (fn==uintptr_t(tank_tick)&&+expected==+balance_fluid_contract::LIQUID_TANK_TICK)||(fn==uintptr_t(state_overlay)&&+expected==+HOVER_OVERLAY)||(fn==uintptr_t(lookup_vehicle)&&+expected==+VEHICLE_LOOKUP)||(fn==uintptr_t(get_transform)&&+expected==+TRANSFORM)||(fn==uintptr_t(get_bounds)&&+expected==+BOUNDS)||(fn==uintptr_t(overlay_original)&&+expected==+PROPERTY_OVERLAY);
 }
 namespace equipment_runtime {
  using Lookup=void(*)(uintptr_t*,void*,const int32_t*);static uintptr_t lookup;
@@ -40,7 +44,8 @@ namespace equipment_runtime {
  static const AnyEquipmentV1 api{sizeof(AnyEquipmentV1),1,copy,nullptr,nullptr};
 }
 #include "../anyapi_creation_balance.inc"
-static void mass(double* out,void* object){++mass_calls;*out=object==vehicle+0x4d0?100.:25.;}
+static void mass(double* out,void* object){if(object==tank_component+balance_fluid_contract::FLUID_PHYSICS){*out=40;return;}++mass_calls;*out=object==vehicle+0x4d0?100.:25.;}
+static void fluid_transform(double* out,void* object){assert(object==tank_component+balance_fluid_contract::FLUID_PHYSICS);double m[12]={1,0,0,0,1,0,0,0,1,20,22,29};memcpy(out,m,sizeof(m));}
 static void project(AnyBalanceScreenV1* out,void*,const AnyBalancePointV1* world,const double* aspect){assert(*aspect>0);*out={world->x*.01,world->y*.01,world->z*.01};}
 static unsigned char camera[720]{};
 static unsigned char actor[2048]{},klass[256]{};static uintptr_t table[20]{};
@@ -61,7 +66,16 @@ int main(){using namespace balance_runtime;
  memcpy(server_vehicle+96,&grid_vector,sizeof(grid_vector));memcpy(server_grid+96,&component_vector,sizeof(component_vector));
  uintptr_t other_component_ptr=uintptr_t(other_component),other_parent_ptr=uintptr_t(server_other);
  memcpy(server_component+528,&other_component_ptr,8);memcpy(other_component+320,&other_parent_ptr,8);
- requested={7};allowed_item=1;sample_links(server_vehicle,scene);assert(links[7].ids==std::vector<int32_t>{8});
+ requested={7};allowed_item=1;sample_links(server_vehicle,scene);assert(links[7].ids==std::vector<int32_t>{8}&&links[7].fluids.empty());
+ // A liquid tank's server-only fluid body is copied as mass plus world position,
+ // only when the native getters resolve and the body is in the physics scene.
+ uintptr_t tank_refs[4]={0,uintptr_t(server_component),0,uintptr_t(tank_component)};NativeVector tank_vector{uintptr_t(tank_refs),0,2,2,16,0,0};
+ memcpy(server_grid+96,&tank_vector,sizeof(tank_vector));uintptr_t fluid_body=1;memcpy(tank_component+balance_fluid_contract::FLUID_PHYSICS+8,&fluid_body,8);
+ links.clear();sample_links(server_vehicle,scene);assert(links[7].fluids.empty()); // getters unresolved
+ mass_fn=uintptr_t(mass);fluid_transform_fn=uintptr_t(fluid_transform);links.clear();sample_links(server_vehicle,scene);
+ assert(links[7].ids==std::vector<int32_t>{8}&&links[7].fluids.size()==1&&links[7].fluids[0].mass==40&&links[7].fluids[0].world.x==20);
+ tank_added_to_scene=false;links.clear();sample_links(server_vehicle,scene);assert(links[7].fluids.empty());tank_added_to_scene=true;
+ mass_fn=0;fluid_transform_fn=0;memcpy(server_grid+96,&component_vector,sizeof(component_vector));
  int32_t unrelated=99;memcpy(server_other+64,&unrelated,4);auto reads=memory_reads;sample_links(server_other,scene);assert(memory_reads==reads+1);
  links.clear();allowed_item=0;
  // A hover on a bare body has no component target, but still resolves the creation.
@@ -99,6 +113,14 @@ int main(){using namespace balance_runtime;
  for(int frame=0;frame<100;++frame)assert(capture_inner(tool,camera,scene,client));
  assert(store.copy(&out,GetTickCount64())&&out.centre_world.x==world.x&&out.centre.x!=previous.x&&bounds_calls==calls&&mass_calls==weights);
  shifted=0;memcpy(camera+8+72,&shifted,8);
+ // Fluid from fresh server samples moves the centre and adds to the total mass.
+ assert(!(out.valid_fields&ANY_BALANCE_FLUID_MASS));fluid_transform_fn=uintptr_t(fluid_transform);now=GetTickCount64();
+ links[7]={now,{8},{{40,{20,22,29}}}};links[8]={now,{}};
+ assert(capture_inner(tool,camera,scene,client)&&store.copy(&out,GetTickCount64()));
+ assert((out.valid_fields&ANY_BALANCE_FLUID_MASS)&&out.body_mass_kg==165&&std::abs(out.centre_world.x-(1100.+375+800)/165)<1e-9&&out.centre_world.z==world.z);
+ // A stale server sample for any body leaves fluid out rather than adding part of it.
+ links[8].tick=now-1500;links[8].ids={7};std::vector<FluidMass> partial;assert(!assembly_fluids({7,8},partial)&&partial.size()<=1);
+ links[7]={now,{8}};links[8]={now,{}};fluid_transform_fn=0;
  client[3748]=0;assert(capture_inner(tool,camera,scene,client)&&store.copy(&out,GetTickCount64())&&out.body_count==1&&!(out.valid_fields&ANY_BALANCE_CONNECTED_CREATION));
  links[8].tick=now-2000;client[3748]=1;assert(assembly_ids(7,true).empty());assembly_ready=false;links.clear();body_properties.clear();mass_fn=0;memcpy(state+8,&id,4);
  // A disconnected creation is not grouped just because its bounding box is nearby.
