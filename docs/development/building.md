@@ -6,7 +6,7 @@
 - Visual Studio with **Desktop development with C++**, the Windows SDK and CMake.
 - Python 3 for local road-cache generation.
 
-The current native profile (API 0.33.0, including AnyBalance) targets Anymaker 0.1.23 / Steam build 25755694.
+The current native profile (API 0.34.0, including AnyBalance) targets Anymaker 0.1.23 / Steam build 25755694.
 Run these commands from the repository root in a developer PowerShell. Adjust
 the game folder to match your installation.
 
@@ -42,6 +42,7 @@ powershell -File manager/build.ps1
 ```
 
 The manager uses the Windows .NET Framework C# compiler and checked-in release
-resources. This builds the published manager profile with bundled API 0.27.0;
+resources. This builds the published manager profile with the API release named in
+`manager/publishing/catalog.json` (currently 0.33.0);
 publishing native or manager updates still requires release validation.
 See [Manager source](../../manager/README.md) and [Publishing](publishing.md).

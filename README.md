@@ -42,21 +42,21 @@ installation is needed to build and test game-dependent features.
 
 | Package | Stable download | Requires |
 | --- | --- | --- |
-| AnyAPI | **0.33.0** | Anymaker 0.1.23 |
+| AnyAPI | **0.34.0** | Anymaker 0.1.23 |
 | AnyHelpers, AnyInventory, AnyStorage | 0.27.0 | API 0.27.0 |
 | AnyMap | 0.27.2 | API 0.27.0 |
 | AnyGraphics | 0.29.3 | API 0.32.0 |
 | AnyClock | 1.0.0 | API 0.30.0 |
 | AnyQuickWheel | 1.1.0 | API 0.31.0 |
-| AnyBalance | 1.0.0 | API 0.33.0 |
-| AnyAPI Manager | 1.3.1 | Windows x64 |
+| AnyBalance | 1.1.0 | API 0.33.0 (fluid mass: 0.34.0) |
+| AnyAPI Manager | 1.3.2 | Windows x64 |
 
-[`catalog.json`](catalog.json) is the source of truth for these numbers. Manager 1.3.1
-bundles API 0.27.0 and downloads the newer API through its update check; optional
+[`catalog.json`](catalog.json) is the source of truth for these numbers. Manager 1.3.2
+bundles API 0.33.0 and downloads newer API releases through its update check; optional
 mods download individually. See the [release notes](docs/releases/README.md).
 
-AnyAPI 0.33.0 and [AnyBalance 1.0.0](docs/mods/balance.md) were released on 8 October 2026
-after 51 native checks and an in-world targeting check.
+AnyAPI 0.34.0 and [AnyBalance 1.1.0](docs/mods/balance.md) add tank fluid mass to the
+centre-of-mass display; both were confirmed in game before release on 8 October 2026.
 
 ## Compatibility
 

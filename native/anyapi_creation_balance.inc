@@ -93,6 +93,10 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
   }
  }
  if(bodies.size()>1&&!complete_mass)return false; // Never label a partial/unweighted assembly as its centre of mass.
+ std::vector<FluidMass> fluids;
+ if(local&&complete_mass&&assembly_fluids(ids,fluids)){sample.valid_fields|=ANY_BALANCE_FLUID_MASS;
+  for(auto& fluid:fluids){auto relative=balance::inverse_transform(transform,fluid.world);sample.body_mass_kg+=fluid.mass;
+   weighted.x+=relative.x*fluid.mass;weighted.y+=relative.y*fluid.mass;weighted.z+=relative.z*fluid.mass;}}
  sample.centre_local={weighted.x/sample.body_mass_kg,weighted.y/sample.body_mass_kg,weighted.z/sample.body_mass_kg};
  if(complete_mass)sample.valid_fields|=ANY_BALANCE_BODY_MASS;else sample.body_mass_kg=0;
  if(local&&ids.size()>1)sample.valid_fields|=ANY_BALANCE_CONNECTED_CREATION;

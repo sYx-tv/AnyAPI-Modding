@@ -1,42 +1,76 @@
-name: Publish verified AnyAPI packages
+name: Publish a release
+# Publishes one prepared draft release and points the catalog (or the manager
+# feed) at it. Build, test and package on Windows first, then upload the files
+# to a draft release. See docs/development/publishing.md.
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag for the prepared packages
+        description: Draft release tag (vX.Y.Z, mods-YYYY.MM.DD[.N] or manager-vX.Y.Z)
         required: true
-        default: v0.25.0
+      dry_run:
+        description: Only check the draft and show the catalog change
+        type: boolean
+        default: true
 permissions:
   contents: write
+  pull-requests: write
+concurrency:
+  group: publish
+  cancel-in-progress: false
 jobs:
   publish:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
     steps:
-      - uses: actions/checkout@v7
-      - name: Prepare catalog and manager
-        shell: pwsh
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: ./manager/publish.ps1 -Repository $env:GITHUB_REPOSITORY -Tag $env:RELEASE_TAG
-      - name: Publish assets first
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - name: Download the draft release
         run: |
-          $exe = (Resolve-Path 'manager/ready-to-upload/AnyAPI Manager.exe').Path
-          $results = Join-Path $env:RUNNER_TEMP 'AnyAPI-manager-tests.json'
-          Start-Process -FilePath $exe -ArgumentList @('--self-test', ('"'+$results+'"')) -WindowStyle Hidden -Wait
-          if (!(Get-Content -LiteralPath $results -Raw | ConvertFrom-Json).Success) { throw 'Manager checks failed. Nothing published.' }
-          $assets = Get-ChildItem manager/ready-to-upload -File | Where-Object { $_.Extension -in '.zip','.exe' } | ForEach-Object { $_.FullName }
-          gh release create $env:RELEASE_TAG @assets --title "AnyAPI $env:RELEASE_TAG" --notes "Verified API and optional mod downloads. Download AnyAPI Manager.exe to get started."
-          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed. Catalog not changed.' }
-      - name: Publish catalog
-        shell: pwsh
+          echo "ASSETS=$RUNNER_TEMP/assets" >> "$GITHUB_ENV"
+          echo "PLAN=$RUNNER_TEMP/plan.json" >> "$GITHUB_ENV"
+          ASSETS="$RUNNER_TEMP/assets"
+          if ! draft=$(gh release view "$TAG" --json isDraft --jq .isDraft); then
+            echo "::error::No release named $TAG. Create it as a draft with its assets first."; exit 1
+          fi
+          if [ "$draft" != true ]; then
+            echo "::error::$TAG is already published. Published assets are immutable; use a new tag."; exit 1
+          fi
+          gh release download "$TAG" --dir "$ASSETS"
+      - name: Check the assets and update the catalog
+        run: python3 .github/scripts/publish_release.py prepare --tag "$TAG" --assets "$ASSETS" --plan "$PLAN" --summary "$GITHUB_STEP_SUMMARY"
+      - name: Repository checks
         run: |
-          Copy-Item manager/ready-to-upload/catalog.json catalog.json
+          python3 .github/scripts/check_repo.py
+          git diff --stat
+          git diff
+      - name: Publish the release
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx release.json; then
+            gh release delete-asset "$TAG" release.json --yes
+          fi
+          # The manager release stays "latest" so the direct download link finds it.
+          case "$TAG" in manager-v*) latest=true ;; *) latest=false ;; esac
+          gh release edit "$TAG" --draft=false --latest="$latest"
+      - name: Check the public downloads
+        if: ${{ !inputs.dry_run }}
+        run: python3 .github/scripts/publish_release.py verify --plan "$PLAN"
+      - name: Commit the catalog
+        if: ${{ !inputs.dry_run }}
+        run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add catalog.json manager/publishing/catalog.json
-          git commit -m 'Update verified AnyAPI catalog'
-          git push
+          git add catalog.json manager-update.json
+          git commit -m "Publish $TAG"
+          git pull --rebase origin main
+          if ! git push origin HEAD:main; then
+            branch="publish/$TAG"
+            git push origin "HEAD:refs/heads/$branch"
+            gh pr create --base main --head "$branch" --title "Publish $TAG" \
+              --body "The $TAG release is public and its downloads were verified. main could not be updated directly; merge this to list it."
+            echo "::warning::main is protected; opened a pull request for the catalog change."
+          fi

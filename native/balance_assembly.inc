@@ -1,14 +1,20 @@
 // Read connection records only on their owning server tick. Client rendering
 // consumes IDs from a locked copy, never server object pointers.
 #include "balance_assembly_contract.h"
+#include "balance_fluid_contract.h"
 #include <unordered_map>
 namespace balance_runtime {
-struct AssemblyLinks {uint64_t tick{};std::vector<int32_t> ids;};
+// Liquid tanks simulate their contents as a separate server-only physics box
+// tied to the tank; its native mass is the fluid mass. Copy mass and position.
+struct FluidMass {double mass{};AnyBalancePointV1 world{};};
+struct AssemblyLinks {uint64_t tick{};std::vector<int32_t> ids;std::vector<FluidMass> fluids;};
 static std::mutex links_mutex;static uintptr_t links_scene{};
 static std::unordered_map<int32_t,AssemblyLinks> links;
 static std::vector<int32_t> requested;
 static std::unordered_map<uintptr_t,uintptr_t> connection_offsets;
 static anyapi_runtime::CallCellHook server_hook;static std::atomic<bool> assembly_ready{};
+static std::unordered_map<uintptr_t,uintptr_t> tank_added;static uintptr_t fluid_transform_fn{};
+using FluidQuery=void(*)(void*,void*);
 using ServerTick=void(*)(void*,void*,const bool*);
 struct NativeVector {uintptr_t buffer;int32_t offset,count,capacity,size;uintptr_t ctor,dtor;};
 static bool vector_items(uintptr_t address,int expected,std::vector<uintptr_t>& out){
@@ -17,6 +23,19 @@ static bool vector_items(uintptr_t address,int expected,std::vector<uintptr_t>& 
   if(!safe_read_memory(slot,&object,8))return false;if(object)out.push_back(object);}
  return true;
 }
+static void sample_fluid(uintptr_t component,std::vector<FluidMass>& out){using namespace balance_fluid_contract;
+ uintptr_t fn{};if(!mass_fn||!fluid_transform_fn||!p34_virtual(component,LIQUID_TANK_TICK_SLOT*8,fn))return;
+ auto known=tank_added.find(fn);uintptr_t added{};
+ if(known==tank_added.end()){if(p34_body(fn,LIQUID_TANK_TICK)&&!p34_cell(fn,LIQUID_TANK_ADDED_CELL,added))added=0;tank_added[fn]=added;}
+ else added=known->second;
+ auto physics=component+FLUID_PHYSICS;uintptr_t object{};bool in_scene=false;
+ if(!added||!safe_read_memory(physics+8,&object,8)||!object)return;
+ ((FluidQuery)added)(&in_scene,(void*)physics);if(!in_scene)return;
+ double mass{},transform[12]{};((FluidQuery)mass_fn)(&mass,(void*)physics);
+ if(!std::isfinite(mass)||mass<=0||mass>=1e9)return;
+ ((FluidQuery)fluid_transform_fn)(transform,(void*)physics);
+ FluidMass fluid{mass,{transform[9],transform[10],transform[11]}};if(balance::finite(fluid.world))out.push_back(fluid);
+}
 static void sample_links(void* self,void* scene){
  int32_t id=-1;if(!safe_read_native(uintptr_t(self)+64,&id,4)||id<0)return;
  {std::lock_guard lock(links_mutex);auto it=links.find(id);if(std::find(requested.begin(),requested.end(),id)==requested.end())return;
@@ -24,7 +43,7 @@ static void sample_links(void* self,void* scene){
  std::vector<uintptr_t> grids;if(!vector_items(uintptr_t(self)+96,16,grids))return;
  AssemblyLinks entry;entry.tick=GetTickCount64();
  for(auto grid:grids){std::vector<uintptr_t> components;if(!vector_items(grid+96,16,components))return;
-  for(auto component:components){uintptr_t fn{};if(!p34_virtual(component,78*8,fn))continue;
+  for(auto component:components){sample_fluid(component,entry.fluids);uintptr_t fn{};if(!p34_virtual(component,78*8,fn))continue;
    auto cached=connection_offsets.find(fn);uintptr_t offset{};
    if(cached==connection_offsets.end()){unsigned char bytes[96]{};
     if(safe_read_memory(fn,bytes,sizeof(bytes)))for(auto& contract:balance_assembly_contract::LINKS)if(!memcmp(bytes,contract.bytes,contract.size)){offset=contract.offset;break;}
@@ -48,10 +67,22 @@ static void server_observe(void* self,void* scene,const bool* split){
 }
 static bool attach_assembly(){using namespace balance_assembly_contract;
  auto hits=scan_exact(SERVER_CTOR,sizeof(SERVER_CTOR));if(hits.size()!=1)return false;
+ // Optional: without the transform getter, fluid stays out and the display says so.
+ auto owner=scan_exact(balance_fluid_contract::TRANSFORM_OWNER,sizeof(balance_fluid_contract::TRANSFORM_OWNER));
+ if(owner.size()!=1||!p34_cell(owner[0],balance_fluid_contract::TRANSFORM_OWNER_CELL,fluid_transform_fn))fluid_transform_fn=0;
  uintptr_t klass{},table{},cell{},fn{};
  if(!safe_read_memory(hits[0]+sizeof(SERVER_CTOR)+8,&klass,8)||!klass||!safe_read_memory(klass+0x80,&table,8)||!table||!safe_read_memory(table+9*8,&cell,8)||!cell||!safe_read_memory(cell,&fn,8)||!p34_body(fn,SERVER_TICK))return false;
  if(!server_hook.install((void**)cell,(void*)server_observe))return false;
- assembly_ready=true;log_line(ANY_LOG_INFO,"framework","BALANCE connections=1 source=OWNING_SERVER_TICK copied_ids_only=1");return true;
+ assembly_ready=true;log_line(ANY_LOG_INFO,"framework",(std::string("BALANCE connections=1 source=OWNING_SERVER_TICK copied_ids_only=1 fluid_mass=")+(fluid_transform_fn&&mass_fn?"1":"0")).c_str());return true;
+}
+// Fluid masses copied on the owning server tick for these bodies; false when any
+// body's server sample is missing or stale, so callers never show a partial sum.
+static bool assembly_fluids(const std::vector<int32_t>& ids,std::vector<FluidMass>& out){
+ if(!assembly_ready||!mass_fn||!fluid_transform_fn)return false;
+ std::lock_guard lock(links_mutex);const auto now=GetTickCount64();
+ for(auto id:ids){auto it=links.find(id);if(it==links.end()||now<it->second.tick||now-it->second.tick>1000)return false;
+  out.insert(out.end(),it->second.fluids.begin(),it->second.fluids.end());}
+ return true;
 }
 static std::vector<int32_t> assembly_ids(int32_t id,bool local){
  std::vector<int32_t> result{id};if(!local)return result;
