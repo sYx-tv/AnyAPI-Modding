@@ -1,5 +1,5 @@
-// EngineSound (prototype): extra engine sound presets and a Custom slider panel for the Properties
-// tool's engine window. Co-op: the choice rides on the engine's existing replicated sound index, so the
+// EngineSound (prototype): extra engine sound presets and a deep Custom tuner (engine type, layers, cam
+// lope, turbo/supercharger, lift-off crackle, throttle response) in the Properties tool's engine window. Co-op: the choice rides on the engine's existing replicated sound index, so the
 // host stores it, saves it with the vehicle and replicates it; every player with the mod hears the same.
 //
 // EXPERIMENTAL. This mod hooks game functions directly through the experimental SDK (see
@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <mutex>
 #include <thread>
 
@@ -27,22 +28,25 @@ constexpr const char* kModId = "enginesound";
 // Field offsets from the reference layouts (metadata). Client objects are main-thread only.
 namespace off {
 constexpr ptrdiff_t engine_factor_speed = 464 + 8;   // replication.slave.property_f64_compressed_u8 _m_value
+constexpr ptrdiff_t engine_factor_power = 488 + 8;   // replication.slave.property_f64_compressed_u8 _m_value
 constexpr ptrdiff_t engine_sound_index = 512 + 8;    // replication.slave.property_s32 _m_value
+constexpr ptrdiff_t engine_is_damage = 528 + 8;      // replication.slave.property_bool _m_value
 constexpr ptrdiff_t voice_operate = 576, voice_power = 592, voice_knock = 608, voice_leak = 624;
 constexpr ptrdiff_t client_peer_data = 40 + 104;     // client.m_peers (client_peer_container).m_data
 // client_scene.peer.property_data.property_s32_range
 constexpr ptrdiff_t row_id = 8, row_name = 16 + 8, row_value = 32 + 8, row_prev = 48, row_edit = 52;
-constexpr ptrdiff_t row_max = 80 + 8;
+constexpr ptrdiff_t row_min = 64 + 8, row_max = 80 + 8;
 // Server side (server thread only)
 constexpr ptrdiff_t server_engine_sound = 576;       // replication.master.property_s32
 constexpr ptrdiff_t pd_elements = 72 + 24;           // property_data._m_properties._m_elements (vector<ref<property_base>>)
 // server_scene.peer.property_data.property_replication_s32_range (168 bytes)
-constexpr ptrdiff_t srow_name = 32 + 24, srow_value_ptr = 96, srow_min = 104 + 24;
+constexpr ptrdiff_t srow_name = 32 + 24, srow_value_ptr = 96, srow_min_modified = 104 + 16, srow_min = 104 + 24;
 constexpr ptrdiff_t srow_max_modified = 136 + 16, srow_max = 136 + 24;
 constexpr size_t srow_size = 168;
 }  // namespace off
 constexpr int32_t kSoundLabel = 324;             // e_localization_string.property_sound_effect (static)
-constexpr int32_t kServerMax = 0x7fffffff;       // marks a modded row to clients and accepts packed values
+constexpr int32_t kServerMax = INT32_MAX;        // marks a modded row to clients
+constexpr int32_t kServerMin = INT32_MIN;        // accepts packed (negative) Custom tunes
 
 AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
@@ -73,8 +77,13 @@ void** g_push_cell;
 thread_local uint8_t* t_engine;   // engine whose client tick is running on this thread
 thread_local double t_dt;
 
-// Per-engine smoothing state (main thread). Keyed by pointer; stale entries are simply reused.
-struct EngineState { uint8_t* engine; double speed; uint64_t used; };
+// Per-engine sound state (main thread). Keyed by pointer; stale entries are simply reused.
+struct EngineState {
+    uint8_t* engine; uint64_t used;
+    double speed = NAN, spool = 0, time = 0, load_peak = 0, power_peak = 0, power_volume = 0;
+    double crackle_until = -1, blowoff_ready = 0, prev_load = 0;
+    double pos[3]{}; bool has_pos = false; int32_t group = 4; uint32_t rng = 0x9e3779b9u;
+};
 EngineState g_states[64];
 uint64_t g_state_clock;
 EngineState& state_for(uint8_t* e) {
@@ -83,8 +92,21 @@ EngineState& state_for(uint8_t* e) {
         if (s.engine == e) { s.used = ++g_state_clock; return s; }
         if (s.used < oldest->used) oldest = &s;
     }
-    *oldest = {e, NAN, ++g_state_clock};
+    *oldest = EngineState{};
+    oldest->engine = e; oldest->used = ++g_state_clock; oldest->rng ^= uint32_t(uintptr_t(e) >> 4);
     return *oldest;
+}
+double random01(EngineState& st) { st.rng ^= st.rng << 13; st.rng ^= st.rng >> 17; st.rng ^= st.rng << 5; return (st.rng & 0xffffff) / double(0x1000000); }
+
+std::atomic<void*> g_audio_manager{nullptr};
+std::atomic<int> g_oneshot_logs{8};
+void play_oneshot(EngineState& st, int32_t effect) {
+    void* manager = g_audio_manager.load();
+    if (!manager || !st.has_pos || !h_play.original) return;
+    double vel[3]{};
+    int32_t group = st.group;
+    reinterpret_cast<play_t>(h_play.original)(manager, &effect, &group, st.pos, vel);
+    if (g_oneshot_logs.fetch_sub(1) > 0) log(0, "one-shot effect %d group %d", effect, group);
 }
 
 // Diagnostics: what each sound index maps to and how each voice is driven.
@@ -117,7 +139,7 @@ void hk_selected(int32_t* ret, uint8_t* engine) {
     if (index >= 0 && index < 16 && !g_index_logged[index]) { g_index_logged[index] = true; log(0, "sound index %d -> vanilla effect %d", index, *ret); }
     static bool packed_logged; if (is_packed(index) && !packed_logged) { packed_logged = true; log(0, "sound index packed 0x%08x -> vanilla effect %d", unsigned(index), *ret); }
     Choice c = decode(index);
-    if (c.mode != Mode::Vanilla) *ret = base_effect(c.params);
+    if (c.mode != Mode::Vanilla) *ret = main_effect(c.params);
 }
 
 void hk_tick(uint8_t* engine, void* client, void* vehicle, void* scene, const double* dt) {
@@ -136,31 +158,60 @@ void hk_vol_speed(uint8_t* single, const double* volume_in, const double* speed_
     if (slot < 0) return original(single, volume_in, speed_in, effect, group, pos);
     int32_t index = rd<int32_t>(e, off::engine_sound_index);
     Choice c = decode(index);
-    if (c.mode == Mode::Vanilla || slot > 1) {
+    bool damaged = rd<uint8_t>(e, off::engine_is_damage) != 0;
+    if (c.mode == Mode::Vanilla || slot == 3 || (slot == 2 && (damaged || induction(c.params) == 0))) {
         diag_voice(slot, index, *volume_in, *speed_in, *volume_in, *speed_in, effect ? *effect : -1, group ? *group : -1);
         return original(single, volume_in, speed_in, effect, group, pos);
     }
+    const Params& p = c.params;
+    double rpm = clamp01(rd<double>(e, off::engine_factor_speed)), load = clamp01(rd<double>(e, off::engine_factor_power));
+    auto& st = state_for(e);
     double volume_out = *volume_in, speed_out = *speed_in;
+    int32_t effect_out = effect ? *effect : 0;
     if (slot == 1) {
-        double rpm = rd<double>(e, off::engine_factor_speed);
-        auto& st = state_for(e);
-        st.speed = smooth(st.speed, *speed_in * pitch_multiplier(c.params, rpm), smoothing_seconds(c.params), t_dt);
+        // Main voice. Also advances per-engine time and fires one-shots, once per engine tick.
+        double dt = std::isfinite(t_dt) ? std::clamp(t_dt, 0.0, 0.25) : 0.0;
+        st.time += dt;
+        if (pos) { std::memcpy(st.pos, pos, sizeof st.pos); st.has_pos = true; }
+        if (group) st.group = *group;
+        st.power_volume = *volume_in; st.power_peak = std::max(st.power_peak * (1 - 0.02 * dt), *volume_in);
+        int kind = induction(p);
+        st.spool = smooth(st.spool, kind ? spool_target(rpm, load) : 0, spool_seconds(kind), dt);
+        Lope l = lope(p, rpm, st.time);
+        st.speed = smooth(st.speed, *speed_in * pitch_multiplier(p, rpm, load) * l.pitch, smoothing_seconds(p), dt);
         speed_out = clamp_speed(st.speed);
-        volume_out = clamp_volume(*volume_in * enginesound::volume(c.params));
+        volume_out = clamp_volume(*volume_in * volume(p) * load_gain(p, load) * l.volume);
+        effect_out = main_effect(p);
+        bool running = *volume_in > 0.001;
+        // Lift-off: load falls away after being high. Starts a crackle window and (turbo) a blow-off.
+        st.load_peak = std::max(load, st.load_peak - 1.5 * dt);
+        if (running && load < 0.15 && st.load_peak > 0.5 && rpm > 0.3) {
+            if (crackle_rate(p) > 0 && st.crackle_until < st.time) st.crackle_until = st.time + 1.5;
+            if ((kind == 1 || kind == 3) && st.spool > 0.45 && st.time >= st.blowoff_ready) { play_oneshot(st, kFluidGasVent); st.blowoff_ready = st.time + 1.2; }
+            st.load_peak = 0;
+        }
+        if (running && st.time < st.crackle_until && random01(st) < crackle_rate(p) * rpm * dt) play_oneshot(st, kEnginePop);
+        st.prev_load = load;
+    } else if (slot == 0) {
+        Lope l = lope(p, rpm, st.time);
+        speed_out = clamp_speed(*speed_in * body_pitch_multiplier(p, rpm));
+        volume_out = clamp_volume(*volume_in * body_layer(p) * l.volume * std::sqrt(load_gain(p, load)));
+        effect_out = low_effect(p);
     } else {
-        speed_out = clamp_speed(*speed_in * idle_pitch(c.params));
-        volume_out = clamp_volume(*volume_in * idle_layer(c.params));
+        // Spare knock voice carries the induction layer while the engine is healthy.
+        Layer layer;
+        induction_layer(p, rpm, load, st.spool, layer);
+        double on = st.power_peak > 1e-6 ? clamp01(st.power_volume / st.power_peak) : 0.0;
+        effect_out = layer.effect;
+        speed_out = clamp_speed(layer.speed);
+        volume_out = clamp_volume(layer.volume * on);
     }
-    diag_voice(slot, index, *volume_in, *speed_in, volume_out, speed_out, effect ? *effect : -1, group ? *group : -1);
-    original(single, &volume_out, &speed_out, effect, group, pos);
+    diag_voice(slot, index, *volume_in, *speed_in, volume_out, speed_out, effect_out, group ? *group : -1);
+    original(single, &volume_out, &speed_out, &effect_out, group, pos);
 }
 
 void hk_play(void* manager, const int32_t* effect, const int32_t* group, const void* pos, const void* vel) {
-    uint8_t* e = t_engine;
-    if (e && effect && *effect == kEnginePop) {
-        Choice c = decode(rd<int32_t>(e, off::engine_sound_index));
-        if (c.mode != Mode::Vanilla && !pops(c.params)) return;
-    }
+    if (manager && !g_audio_manager.load()) g_audio_manager.store(manager);
     reinterpret_cast<play_t>(h_play.original)(manager, effect, group, pos, vel);
 }
 
@@ -181,6 +232,8 @@ void hk_props(uint8_t* engine, uint8_t* pd) {
             log(1, "engine sound row differs from the expected %d..%d (label %d); leaving it vanilla", kVanillaMin, kVanillaMax, kSoundLabel);
             return;
         }
+        wr<int32_t>(row, off::srow_min, kServerMin);
+        wr<uint8_t>(row, off::srow_min_modified, 1);
         wr<int32_t>(row, off::srow_max, kServerMax);
         wr<uint8_t>(row, off::srow_max_modified, 1);
         return;
@@ -197,8 +250,19 @@ struct Panel {
     uint64_t last_commit = 0;
     bool has_pending = false; int32_t pending = 0, pending_row = 0;
     float x = 0, y = 0, w = 0, row_h = 0, scale = 1, track_x = 0, track_w = 0; // last layout, for input
+    float button_x = 0, button_y = 0, button_w = 0, button_h = 0;              // "Customize" (preset/stock only)
     bool visible = false;
 } g_panel;
+
+// Slider values a sound index starts from: a preset's own values, a stock sound as its engine type, or the tune.
+Params starting_params(int32_t value) {
+    Choice c = decode(value);
+    if (c.mode == Mode::Vanilla && value >= kVanillaMin && value <= kVanillaMax) c.params.v[kType] = uint8_t(value - kVanillaMin);
+    return c.params;
+}
+void queue_send(int32_t value) {
+    g_panel.pending = value; g_panel.pending_row = g_panel.row_id; g_panel.has_pending = true; g_panel.last_commit = GetTickCount64();
+}
 
 void hk_row(uint8_t* row, void* fui, uint8_t* client, const int32_t* a, const int32_t* b) {
     auto original = reinterpret_cast<row_ui_t>(h_row.original);
@@ -211,7 +275,7 @@ void hk_row(uint8_t* row, void* fui, uint8_t* client, const int32_t* a, const in
         uint64_t now = GetTickCount64();
         if (g_panel.row_id != id || now - g_panel.seen > 1000) { g_panel.dragging = -1; g_panel.has_pending = false; }
         g_panel.seen = now; g_panel.row_id = id;
-        if (g_panel.value != value && g_panel.dragging < 0 && now - g_panel.last_commit > 1000) g_panel.draft = decode(value).params;
+        if (g_panel.value != value && g_panel.dragging < 0 && now - g_panel.last_commit > 1000) g_panel.draft = starting_params(value);
         g_panel.value = value;
         if (g_panel.has_pending && g_panel.pending_row == id) { send = true; to_send = g_panel.pending; g_panel.has_pending = false; }
     }
@@ -222,9 +286,12 @@ void hk_row(uint8_t* row, void* fui, uint8_t* client, const int32_t* a, const in
     const ptrdiff_t fields[] = {off::row_value, off::row_prev, off::row_edit};
     bool swapped[3]{};
     for (int i = 0; i < 3; ++i) if (is_packed(value) && rd<int32_t>(row, fields[i]) == value) { wr<int32_t>(row, fields[i], shown); swapped[i] = true; }
+    int32_t real_min = rd<int32_t>(row, off::row_min);
+    wr<int32_t>(row, off::row_min, kVanillaMin);
     wr<int32_t>(row, off::row_max, kCustomIndex);
     original(row, fui, client, a, b);
     if (rd<int32_t>(row, off::row_max) == kCustomIndex) wr<int32_t>(row, off::row_max, kServerMax);
+    if (rd<int32_t>(row, off::row_min) == kVanillaMin) wr<int32_t>(row, off::row_min, real_min);
     for (int i = 0; i < 3; ++i) if (swapped[i] && rd<int32_t>(row, fields[i]) == shown) wr<int32_t>(row, fields[i], value);
 }
 
@@ -247,12 +314,14 @@ void install_hooks() {
             continue;
         }
         g_push_cell = push;
+        if (void* manager = global(anymaker::sym::g_audio_manager)) g_audio_manager.store(manager);
+        else log(1, "g_audio_manager not resolved yet; crackle and blow-off start after the game plays its first engine pop");
         bool ok = h_selected.install(selected, (void*)&hk_selected) && h_tick.install(tick, (void*)&hk_tick) &&
                   h_vol_speed.install(vol, (void*)&hk_vol_speed) && h_play.install(play, (void*)&hk_play) &&
                   h_props.install(props, (void*)&hk_props) && h_row.install(row, (void*)&hk_row);
         if (!ok) { log(2, "a hook cell was already taken or not writable; EngineSound is off"); return; }
         g_ready = true;
-        log(0, "Ready after %d s: presets %d..%d, Custom %d (diagnostic logging on)", attempt, kFirstPreset, kCustomIndex - 1, kCustomIndex);
+        log(0, "Ready after %d s: presets %d..%d, Custom %d, audio manager %s (diagnostic logging on)", attempt, kFirstPreset, kCustomIndex - 1, kCustomIndex, g_audio_manager.load() ? "found" : "pending");
         return;
     }
 }
@@ -262,26 +331,26 @@ void remove_hooks() {
 }
 
 // ------------------------------------------------------------------ panel drawing and input
-const wchar_t* utf16_label(int slider) {
-    static const wchar_t* labels[kSliderCount] = {L"Base sound", L"Idle pitch", L"Rev range", L"Rev curve", L"Volume", L"Idle layer", L"Smoothing", L"Backfire pops"};
-    return labels[slider];
-}
 const wchar_t* mode_name(const Choice& c, wchar_t* buf, size_t n, int32_t value) {
     if (c.mode == Mode::Preset) swprintf(buf, n, L"Preset: %hs", kPresets[c.preset].name);
-    else if (c.mode == Mode::Custom) swprintf(buf, n, L"Custom");
+    else if (c.mode == Mode::Custom) swprintf(buf, n, L"Custom: %hs", engine_type(c.params).name);
     else swprintf(buf, n, L"Stock sound %d", int(value - kVanillaMin + 1));
     return buf;
 }
 void value_text(int s, const Params& p, wchar_t* buf, size_t n) {
     switch (s) {
-    case kBase: swprintf(buf, n, L"%hs", kBaseNames[p.v[kBase] & 7]); break;
+    case kType: swprintf(buf, n, L"%hs", engine_type(p).name); break;
     case kPitch: swprintf(buf, n, L"%.2fx", idle_pitch(p)); break;
     case kRange: swprintf(buf, n, L"%.1fx", rev_range(p)); break;
-    case kCurve: swprintf(buf, n, L"%.2f", rev_curve(p)); break;
+    case kCurve: { static const wchar_t* c[4] = {L"Early", L"Linear", L"Late", L"Very late"}; swprintf(buf, n, L"%ls", c[p.v[kCurve] & 3]); break; }
     case kVolume: swprintf(buf, n, L"%d%%", int(std::lround(enginesound::volume(p) * 100))); break;
-    case kIdleLayer: swprintf(buf, n, L"%d%%", int(std::lround(idle_layer(p) * 100))); break;
-    case kSmoothing: swprintf(buf, n, L"%.2f s", smoothing_seconds(p)); break;
-    default: swprintf(buf, n, L"%ls", pops(p) ? L"On" : L"Off"); break;
+    case kLow: swprintf(buf, n, L"%d%%", int(std::lround(body_layer(p) * 100))); break;
+    case kLope: swprintf(buf, n, p.v[kLope] ? L"%d / 7" : L"Off", int(p.v[kLope])); break;
+    case kInduction: swprintf(buf, n, L"%hs", kInductionNames[induction(p)]); break;
+    case kBoost: swprintf(buf, n, L"%hs", induction(p) ? kLevelNames[p.v[kBoost] & 3] : "(no induction)"); break;
+    case kCrackle: swprintf(buf, n, L"%hs", kLevelNames[p.v[kCrackle] & 3]); break;
+    case kLoad: swprintf(buf, n, L"%hs", kLevelNames[p.v[kLoad] & 3]); break;
+    default: swprintf(buf, n, L"%ls", p.v[kSmoothing] ? L"On" : L"Off"); break;
     }
 }
 
@@ -295,10 +364,11 @@ void draw(const AnyFrameV1* frame, void*) {
     Choice c = decode(g_panel.value);
     bool custom = c.mode == Mode::Custom;
     float s = std::clamp(float(frame->height) / 1080.f, .7f, 1.8f);
-    float w = 330 * s, row_h = 30 * s, head = 56 * s, h = head + (custom ? row_h * kSliderCount + 12 * s : 10 * s);
-    float x = std::max(0.f, float(frame->width) - w - 24 * s), y = float(frame->height) * .22f;
+    float w = 360 * s, row_h = 26 * s, head = 56 * s, h = head + (custom ? row_h * kSliderCount + 12 * s : 44 * s);
+    float x = std::max(0.f, float(frame->width) - w - 24 * s), y = std::max(8 * s, float(frame->height) * .5f - h * .5f);
     g_panel.x = x; g_panel.y = y + head; g_panel.w = w; g_panel.row_h = row_h; g_panel.scale = s;
     g_panel.track_x = x + 150 * s; g_panel.track_w = w - 165 * s;
+    g_panel.button_x = x + 14 * s; g_panel.button_y = y + head; g_panel.button_w = w - 28 * s; g_panel.button_h = custom ? 0 : 30 * s;
     auto rect = [&](uint32_t kind, float rx, float ry, float rw, float rh, uint32_t color, float radius = 0) {
         AnyGpuCommandV1 cmd; cmd.kind = kind; cmd.rect[0] = rx; cmd.rect[1] = ry; cmd.rect[2] = rw; cmd.rect[3] = rh; cmd.color = color; cmd.radius = radius; gpu->emit(&cmd); };
     auto text = [&](float tx, float ty, float tw, float th, const wchar_t* t, float size, uint32_t color, uint32_t flags = 0) {
@@ -308,17 +378,23 @@ void draw(const AnyFrameV1* frame, void*) {
     text(x + 14 * s, y + 8 * s, w - 28 * s, 18 * s, L"ENGINE SOUND", 11 * s, 0xffaeb7c2, ANY_GPU_BOLD);
     wchar_t buf[96];
     text(x + 14 * s, y + 26 * s, w - 28 * s, 24 * s, mode_name(c, buf, 96, g_panel.value), 17 * s, 0xfff5f7fa);
-    if (!custom) return;
+    if (!custom) {
+        // Copies this preset or stock sound into Custom so it can be tuned from there.
+        rect(ANY_GPU_ROUND_RECT, g_panel.button_x, g_panel.button_y, g_panel.button_w, g_panel.button_h, 0xff3a4048, 4 * s);
+        text(g_panel.button_x, g_panel.button_y, g_panel.button_w, g_panel.button_h, L"Customize this sound", 13 * s, 0xffedc56c, ANY_GPU_CENTER | ANY_GPU_BOLD);
+        return;
+    }
     const Params& p = g_panel.draft;
     for (int i = 0; i < kSliderCount; ++i) {
         float ry = y + head + i * row_h;
-        text(x + 14 * s, ry, 130 * s, row_h, utf16_label(i), 12 * s, 0xffdfe4ea);
-        rect(ANY_GPU_ROUND_RECT, g_panel.track_x, ry + row_h * .5f - 2 * s, g_panel.track_w, 4 * s, 0xff3a4048, 2 * s);
+        swprintf(buf, 96, L"%hs", kSliders[i].label);
+        text(x + 14 * s, ry, 130 * s, row_h, buf, 12 * s, 0xffdfe4ea);
+        rect(ANY_GPU_ROUND_RECT, g_panel.track_x, ry + row_h * .6f - 2 * s, g_panel.track_w, 4 * s, 0xff3a4048, 2 * s);
         float t = float(p.v[i]) / float(max_step(i));
-        rect(ANY_GPU_ROUND_RECT, g_panel.track_x, ry + row_h * .5f - 2 * s, g_panel.track_w * t, 4 * s, 0xffedc56c, 2 * s);
-        rect(ANY_GPU_ELLIPSE, g_panel.track_x + g_panel.track_w * t - 6 * s, ry + row_h * .5f - 6 * s, 12 * s, 12 * s, g_panel.dragging == i ? 0xffffffff : 0xffedc56c);
+        rect(ANY_GPU_ROUND_RECT, g_panel.track_x, ry + row_h * .6f - 2 * s, g_panel.track_w * t, 4 * s, 0xffedc56c, 2 * s);
+        rect(ANY_GPU_ELLIPSE, g_panel.track_x + g_panel.track_w * t - 6 * s, ry + row_h * .6f - 6 * s, 12 * s, 12 * s, g_panel.dragging == i ? 0xffffffff : 0xffedc56c);
         value_text(i, p, buf, 96);
-        text(g_panel.track_x, ry - 9 * s, g_panel.track_w, 14 * s, buf, 10 * s, 0xffaeb7c2, ANY_GPU_CENTER);
+        text(g_panel.track_x, ry - 1 * s, g_panel.track_w, 12 * s, buf, 10 * s, 0xffaeb7c2, ANY_GPU_CENTER);
     }
 }
 
@@ -327,18 +403,27 @@ void set_from_mouse(int slider, int32_t mx) {
     int step = int(std::lround(t * max_step(slider)));
     if (g_panel.draft.v[slider] == step) return;
     g_panel.draft.v[slider] = uint8_t(step);
-    uint64_t now = GetTickCount64();
-    if (now - g_panel.last_commit >= 150) { g_panel.pending = pack(g_panel.draft); g_panel.pending_row = g_panel.row_id; g_panel.has_pending = true; g_panel.last_commit = now; }
+    if (GetTickCount64() - g_panel.last_commit >= 150) queue_send(pack(g_panel.draft));
 }
 
 uint32_t input(const AnyInputV1* e, void*) {
     if (!e) return 0;
     std::lock_guard lock(g_mutex);
     if (e->kind == ANY_FOCUS_LOST) { g_panel.dragging = -1; return 0; }
-    if (!g_panel.visible || decode(g_panel.value).mode != Mode::Custom) return 0;
+    if (!g_panel.visible) return 0;
     static int click_logs = 6;
-    if (e->kind == ANY_MOUSE_DOWN && click_logs > 0) { --click_logs; log(0, "panel click button=%u at %d,%d; panel x %.0f..%.0f y %.0f..%.0f",
-        e->button, e->x, e->y, g_panel.x, g_panel.x + g_panel.w, g_panel.y, g_panel.y + g_panel.row_h * kSliderCount); }
+    if (e->kind == ANY_MOUSE_DOWN && click_logs > 0) { --click_logs; log(0, "panel click button=%u at %d,%d; panel x %.0f..%.0f y %.0f",
+        e->button, e->x, e->y, g_panel.x, g_panel.x + g_panel.w, g_panel.y); }
+    if (decode(g_panel.value).mode != Mode::Custom) {
+        bool on_button = e->x >= g_panel.button_x && e->x < g_panel.button_x + g_panel.button_w && e->y >= g_panel.button_y && e->y < g_panel.button_y + g_panel.button_h;
+        if (e->kind == ANY_MOUSE_DOWN && e->button == 1 && on_button) {
+            g_panel.draft = starting_params(g_panel.value);
+            queue_send(pack(g_panel.draft));
+            log(0, "Customize: value %d -> tune %d", g_panel.value, g_panel.pending);
+            return 1;
+        }
+        return (e->kind == ANY_MOUSE_DOWN || e->kind == ANY_MOUSE_UP) && on_button;
+    }
     bool inside = e->x >= g_panel.x && e->x < g_panel.x + g_panel.w && e->y >= g_panel.y && e->y < g_panel.y + g_panel.row_h * kSliderCount;
     if (e->kind == ANY_MOUSE_DOWN && e->button == 1 && inside) {
         g_panel.dragging = std::clamp(int((e->y - g_panel.y) / g_panel.row_h), 0, kSliderCount - 1);
@@ -348,7 +433,7 @@ uint32_t input(const AnyInputV1* e, void*) {
     if (e->kind == ANY_MOUSE_MOVE && g_panel.dragging >= 0) { set_from_mouse(g_panel.dragging, e->x); return 1; }
     if (e->kind == ANY_MOUSE_UP && g_panel.dragging >= 0) {
         g_panel.dragging = -1;
-        g_panel.pending = pack(g_panel.draft); g_panel.pending_row = g_panel.row_id; g_panel.has_pending = true; g_panel.last_commit = GetTickCount64();
+        queue_send(pack(g_panel.draft));
         return 1;
     }
     return (e->kind == ANY_MOUSE_DOWN || e->kind == ANY_MOUSE_UP || e->kind == ANY_MOUSE_WHEEL) && inside;
