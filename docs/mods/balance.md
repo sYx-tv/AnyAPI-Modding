@@ -16,7 +16,9 @@ Height and offsets use the build's local axes, including when the build is tilte
 
 The summary shows **Creation mass** for a verified connected assembly, or **Body mass** for one body. Static or kinematic bodies may not provide a useful mass, so that row is omitted. Assemblies wait for complete positive body masses rather than displaying a partial or unweighted result.
 
-Connection topology is currently captured from the locally hosted server. A remote multiplayer server does not expose that topology to this client service, so the display describes the targeted body there. Server-only fluid and cargo mass remain outside this calculation.
+Connection topology is currently captured from the locally hosted server. A remote multiplayer server does not expose that topology to this client service, so the display describes the targeted body there.
+
+**Fluid and cargo.** The game does simulate fluid weight, but not inside the part itself. Each liquid tank creates a separate server-side physics box, linked to the tank by a distance constraint, and sets that box's mass to the current fluid mass every tick (`server_scene.vehicle_component.liquid_tank._rebuild_fluid_physics` and `.tick`). That box exists only on the server, so the client body masses AnyBalance reads do not include tank contents. No code path was found that adds stored item (cargo) mass to a vehicle body. This comes from the build 25755694 call graph, not a runtime measurement; a quick check is to fill a large tank and see whether the shown creation mass changes.
 
 ## Manual test
 

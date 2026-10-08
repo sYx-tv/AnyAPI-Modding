@@ -4,7 +4,7 @@ Updated 8 October 2026. The repository contains the API, optional mods, manager 
 
 ## Current state
 
-- Stable downloads: API 0.33.0, AnyBalance 1.0.0, AnyMap 0.27.2, AnyGraphics 0.29.3, AnyClock 1.0.0, AnyQuickWheel 1.1.0, and Helpers/Inventory/Storage 0.27.0. Manager 1.3.1 has its own update channel.
+- Stable downloads: API 0.33.0, AnyBalance 1.0.0, AnyMap 0.27.2, AnyGraphics 0.29.3, AnyClock 1.0.0, AnyQuickWheel 1.1.0, and Helpers/Inventory/Storage 0.27.0. Manager 1.3.2 has its own update channel.
 - **API 0.33.0 and AnyBalance 1.0.0** were released on 8 October 2026 ([v0.33.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.33.0)). The bare-body targeting correction (zero unset Properties target ID) was confirmed in game before release.
 - The release build passed **51 native checks** on Windows. Eight experimental SDK examples also compile. Tests using game assets require the matching installed game; GPU tests require a working graphics environment.
 - AnyMap's orientation correction is user-confirmed. AnyGraphics includes native scene controls, scene-only AA before the HUD, volumetric fog, and configurable sun/local-light beams. The latest submission-retry correction passed fixtures, not a new visual acceptance session.
@@ -38,7 +38,7 @@ Generate the road cache **before configuring** so the embedded map and asset che
 
 DLLs are in `build/Release`. With the game closed, the API loader `dinput8.dll` belongs next to `game.exe`; mod DLLs belong under `AnyAPI and Modding/mods`. Back up existing DLLs and the manager receipt before installing a candidate. Keep receipt hashes consistent with installed files. Do not replace the stable catalog with development binaries just to transfer a workspace.
 
-Manager build: `powershell -File manager/build.ps1`. The manager's embedded API/starter guide is the older 0.27 profile; current API and mod downloads come from the catalog. Building the EXE does not automatically update its embedded resources. See [manager documentation](../../manager/README.md).
+Manager build: `powershell -File manager/build.ps1`. Manager 1.3.2 embeds API 0.33.0 and the matching guide and starter SDK; newer API and mod downloads come from the catalog. Building the EXE does not refresh its embedded resources; see the [manager documentation](../../manager/README.md) for the refresh steps. See [manager documentation](../../manager/README.md).
 
 ## Research downloads
 
