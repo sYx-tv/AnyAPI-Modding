@@ -1,0 +1,4852 @@
+{
+  "archive": "Anymaker-Decompile-Reference-v2.zip",
+  "bytes": 25547870,
+  "sha256": "846d47eb611c9c0edff26ad40ae24785e976165a754e2a17185d5d0e9e2dfdba",
+  "files": [
+    {
+      "path": "sdk/docs/capability_matrix.md",
+      "bytes": 6218,
+      "sha256": "9e0abf13c3103b386f21ba7f83231ee083c939e371eaa5b747e45c55e3933bc6"
+    },
+    {
+      "path": "sdk/docs/examples.md",
+      "bytes": 3482,
+      "sha256": "bdc220ff963cf526e032c4adeee671124a96d526c0b9030a5e7eed65f78b1efb"
+    },
+    {
+      "path": "sdk/docs/guides/api-design.md",
+      "bytes": 4482,
+      "sha256": "ec2ff93721a8c333b4a07678ec3e8f7d1b3834a871e25382c66ae46b4f21c75c"
+    },
+    {
+      "path": "sdk/docs/guides/calling-into-the-game.md",
+      "bytes": 16370,
+      "sha256": "9cc8166541e76f6c50ce6f4a6319e5b8fd7ebe8afefd495a1ef78a83bd13ed6d"
+    },
+    {
+      "path": "sdk/docs/guides/extending-systems.md",
+      "bytes": 3921,
+      "sha256": "169bc21482304eb0a39e2371f38ebef4744bc524eebd19e626ee6920cf11bc5a"
+    },
+    {
+      "path": "sdk/docs/guides/regeneration.md",
+      "bytes": 3453,
+      "sha256": "b0c672c7504e8e50beb9edc6aedf29c48fef6657e62dd2d74f86130b5911f48b"
+    },
+    {
+      "path": "sdk/docs/known-gaps.md",
+      "bytes": 5459,
+      "sha256": "cfc4b833236a86e269330522feebabc6ff6e55ba7fe200f50e211c722562db59"
+    },
+    {
+      "path": "sdk/docs/reference/enums.md",
+      "bytes": 56413,
+      "sha256": "f59d4f08bced0b13e6133d3ecf6708f1b0a585edcbd0fcda2ae96811cae93d13"
+    },
+    {
+      "path": "sdk/docs/reference/globals.md",
+      "bytes": 306164,
+      "sha256": "8a7712fce7a64fb8b00176ffb2abef9741dca93462fc03383c22fff9fb5590dc"
+    },
+    {
+      "path": "sdk/docs/reference/hook_points.md",
+      "bytes": 1641623,
+      "sha256": "34869d11710c76f6f87e1b08a1d7aac2be2c9adfab9bd3a5b45fd98df8777e15"
+    },
+    {
+      "path": "sdk/docs/reference/index.md",
+      "bytes": 65334,
+      "sha256": "fc8f4cd80f31620b4ec068c9f668dd427b96b12a946f41529ed0dc107990708c"
+    },
+    {
+      "path": "sdk/docs/reference/natives.md",
+      "bytes": 223928,
+      "sha256": "fa03d453b2ebcde1c28e5e32fe4ec983fcb27da27b1cab8954ceae01ca0d4241"
+    },
+    {
+      "path": "sdk/docs/reference/ns/_convex_hull_2d_clockwise.md",
+      "bytes": 804,
+      "sha256": "c034270759e2f28c6a78da421a85fd7d617ab9003e38290398c395604ac7b56d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/_convex_hull_2d_indices.md",
+      "bytes": 796,
+      "sha256": "53bfa7fbcf2df7f3ab4985bc00dd3717c29b9291b1f702838bc7e745645be2bd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/_generic.md",
+      "bytes": 4788603,
+      "sha256": "9b8c6cdbd12aec35bdd497b737a199c7543091c7d1d23e3298d38be2cd231bfc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/acid_vignette_animator.md",
+      "bytes": 1890,
+      "sha256": "81552f6075c6c68f3c9594326a3eac00669643e798f4abf7e507fdf146f189b6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/actor_character.md",
+      "bytes": 692,
+      "sha256": "f3710e94c5f45c9f98ce236364eb70b7f1a6f2bdf59de5aaa86f723ac7f3fb4b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/actor_creature.md",
+      "bytes": 725,
+      "sha256": "b8ac2363386bf6b20fe70f7941bcbc84c0b739aca34294cef0d1ed852438ffaa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/actor_spawn_edit_panel.md",
+      "bytes": 3793,
+      "sha256": "3de7ded45438c885456761b32ad523167068be6fffd9816f44f95844bfed006c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/actor_zombie.md",
+      "bytes": 701,
+      "sha256": "a41d19226c19da25ada0cf835451ec05f67f4fab8f7ecc74392e1d62b531a1bf"
+    },
+    {
+      "path": "sdk/docs/reference/ns/app.md",
+      "bytes": 1021,
+      "sha256": "7248b44461c6eb33d550fb2644c063c684cff11ab05445fee36994c02c20dcae"
+    },
+    {
+      "path": "sdk/docs/reference/ns/application.md",
+      "bytes": 221888,
+      "sha256": "7a189bafcbc58d2c39dd79436253693cb3b5497cbf078cc45d3a89b5e7e680b7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/application_physics_user_data.md",
+      "bytes": 7233,
+      "sha256": "26792aebd6596bf52da012f3b355ae08811f8559a0baad8533391c4dbdcf0e4b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/audio_effect_container.md",
+      "bytes": 1147,
+      "sha256": "e64a18323a5a4273bea82bb0ffb529c26c170fbcafbad4907c242ba985016a54"
+    },
+    {
+      "path": "sdk/docs/reference/ns/audio_effect_single.md",
+      "bytes": 3385,
+      "sha256": "76f0c81256da8225c3dc4803ec3901a68a880c1c650c6f81bbee3c3e1df282f0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/audio_manager.md",
+      "bytes": 4784,
+      "sha256": "8dac772637467f26e2643165e9954a66210f4672e1abbe11d395094311d59485"
+    },
+    {
+      "path": "sdk/docs/reference/ns/audio_music.md",
+      "bytes": 1676,
+      "sha256": "c29f1578684613a2770a380bf146bf7b76c29242927f32e068791730d857f03a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/audio_voice.md",
+      "bytes": 1963,
+      "sha256": "6f633d0ecbb4e68f25b528c5a6ec52ebd01d25e73ac5cdd3b366e0504fd02151"
+    },
+    {
+      "path": "sdk/docs/reference/ns/binary.md",
+      "bytes": 111207,
+      "sha256": "b3eca41467b801326332d37aca6a50455b1667762e32594dc5c4bfd782366106"
+    },
+    {
+      "path": "sdk/docs/reference/ns/biome_manager.md",
+      "bytes": 5899,
+      "sha256": "acc96daaea08af2e5a9c44265a0c4d394f823f7bc57f70345f434376f663e0dc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/bitset.md",
+      "bytes": 3432,
+      "sha256": "295e2bbb0d688d3d46f2b0e291679e1fed266ffec04580856be492897fa72b11"
+    },
+    {
+      "path": "sdk/docs/reference/ns/bitwise.md",
+      "bytes": 1658,
+      "sha256": "e195ad736401f0c53d5c78310e2df8af2f759723a9df0a89e2dc2b92ad8e6fc9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/body_temperature.md",
+      "bytes": 1419,
+      "sha256": "7dd4f372781423dd0cba49e8f63ea10d6e16c6503e690e6a607e825f7045b776"
+    },
+    {
+      "path": "sdk/docs/reference/ns/build_capsule_transforms.md",
+      "bytes": 832,
+      "sha256": "f4f44da343c3cdd9c21a7fa4616daca6ed688699371c9a29e98f065fd44e69c2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/build_line_axis_transform.md",
+      "bytes": 786,
+      "sha256": "9ed3c294988d780daac7360fd5d8e9ba9d8de7ad4d28aa80188cd07f7f18b717"
+    },
+    {
+      "path": "sdk/docs/reference/ns/build_palette_coordinate.md",
+      "bytes": 857,
+      "sha256": "a77a77d8f346142fafa30a4f036f4464dab886d5022f241cc6a1f44f3659a0cf"
+    },
+    {
+      "path": "sdk/docs/reference/ns/camera_actor.md",
+      "bytes": 3544,
+      "sha256": "912a9c4d49b709dd4a284054da13ea732e716d864573dc30e516516715586d37"
+    },
+    {
+      "path": "sdk/docs/reference/ns/camera_handheld.md",
+      "bytes": 2378,
+      "sha256": "059fc29be2642be3a4f7e244faa4e5beb84e5e44024126ea683166e742efa208"
+    },
+    {
+      "path": "sdk/docs/reference/ns/camera_noclip.md",
+      "bytes": 3830,
+      "sha256": "681609fb74ebeb3578f3022001ecdbd315ddba7f19819e98e82ec791733e23dd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/camera_shaker.md",
+      "bytes": 2409,
+      "sha256": "d2fceb1174c5e83559948635c7acb046610e1860997f8a275e1383885159422e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/character_definition.md",
+      "bytes": 3056,
+      "sha256": "1239c930d3c4f1c250446aa12167006d419d073ecb4898b2a5839d4351974f21"
+    },
+    {
+      "path": "sdk/docs/reference/ns/chunk_edit_panel.md",
+      "bytes": 4655,
+      "sha256": "5b8737ee3b64e20b20f51ab5e79fff450b6697799b1398f1941aa5c8cfbf3cab"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client.md",
+      "bytes": 64262,
+      "sha256": "ce05d0041930df7cfaabad7b15874defa961d2c2b04d86c41cf2326cb52d79ce"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_chat_message.md",
+      "bytes": 912,
+      "sha256": "dc624c6eec532a33aa6a57c1be3094b614aa25c2d029ed199455e590c70db95b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_peer.md",
+      "bytes": 321118,
+      "sha256": "6c69951da9fa2baee72d469a7efb2ab0d22439d2e46e8a2df738acce46b0dd13"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_peer_container.md",
+      "bytes": 2711,
+      "sha256": "b29e86a4d74fd67644dd059b7163f55ce2e6b4122aff9c0d8c109986c5004405"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_scene.md",
+      "bytes": 12059790,
+      "sha256": "5a751acac0e43f79ec3f7f590fdc51320c1edd02c39cf6e7d8edf7a631bba5d9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_tutorial.md",
+      "bytes": 19154,
+      "sha256": "2f44f83b6645a9d7f4104097cebbcacd7932f768fbd3841f7b0590486bf86e9e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_tutorial_data.md",
+      "bytes": 772,
+      "sha256": "9ed3c78fc8c0d8fc1c0c1045d143a85b9c63a52818b0245da0bd42ef11ce278c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_ui.md",
+      "bytes": 137837,
+      "sha256": "c96a07aea9fecd05787bdf8f52001949d89a57ff0d0e73e9388e1dc6c0338e48"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_ui_element.md",
+      "bytes": 348869,
+      "sha256": "3945a3b4f6e2fe0b419d9ea888df96973efaacb7b2db9e749b192dac8a3ffd16"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_ui_element_container.md",
+      "bytes": 10898,
+      "sha256": "40b9eca17fc21cb9de016927e7b9c56688323cb3cf7cc29a3172179761e4e09b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_ui_renderer.md",
+      "bytes": 6461,
+      "sha256": "c68f2fd25a720a07fdc9bcfd9c5a99c6152be0c0b926dd34f146b069416fd318"
+    },
+    {
+      "path": "sdk/docs/reference/ns/client_ui_text_editor.md",
+      "bytes": 15208,
+      "sha256": "a2bf51a0a6e51f821a44b6ba3d20c915c7908cf79d6c63d71e91099ecbce8182"
+    },
+    {
+      "path": "sdk/docs/reference/ns/clothing_decal_data.md",
+      "bytes": 802,
+      "sha256": "524187444160ac71c6f77265ccb693602e4dca967760a141b3ffd6db64a6c7ea"
+    },
+    {
+      "path": "sdk/docs/reference/ns/collision.md",
+      "bytes": 19185,
+      "sha256": "8c01d89dd283cbdd2b646b0d5ac49adf40713bb14d2391226ed926d1d441b3de"
+    },
+    {
+      "path": "sdk/docs/reference/ns/color8.md",
+      "bytes": 2637,
+      "sha256": "cf10e38f8eae11ba448028e13453f6527c78bd6617cc2fff67f3b05b38418958"
+    },
+    {
+      "path": "sdk/docs/reference/ns/color_palette.md",
+      "bytes": 2197,
+      "sha256": "eaf56e6d20105f970d3863d51228dd08dc671b17ebbdd9d3d942f6bff2b9d022"
+    },
+    {
+      "path": "sdk/docs/reference/ns/compare_color8_threshold_rgb.md",
+      "bytes": 828,
+      "sha256": "96cac819cd7e5a762fb767dc374b95a5afdff395ada0f48e7ccfc666530a98f8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/console_diag.md",
+      "bytes": 710,
+      "sha256": "a3414b59c306e69e5ef413556d69047d87f294cf95fc2c390a75e67e8fd6b458"
+    },
+    {
+      "path": "sdk/docs/reference/ns/creature_animator.md",
+      "bytes": 51290,
+      "sha256": "c6579b545107541cd9b035662545e4250bc56c04f1bc5bcd676737c8f62de2fe"
+    },
+    {
+      "path": "sdk/docs/reference/ns/creature_definition.md",
+      "bytes": 8209,
+      "sha256": "441ad5cdc7e4657a3dd2d6f3facba402873bbddefc6bdd98549c40ec43a201fd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/creature_definition_container.md",
+      "bytes": 6031,
+      "sha256": "c95c62a08bc678199bd522b7b8c7bf8ed9a9e1040505837760c3466b220f5d1b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/creature_definition_file.md",
+      "bytes": 2584,
+      "sha256": "8e81bf5fe87b0c5f7bf68479d8407df94b001742b20494d5ff0ca6c3ffe1c150"
+    },
+    {
+      "path": "sdk/docs/reference/ns/creature_instance.md",
+      "bytes": 1415,
+      "sha256": "156d46b31030e3241ca922d282ebd397d84e575b78fb1045f688c5c9236c0368"
+    },
+    {
+      "path": "sdk/docs/reference/ns/damage_vignette_animator.md",
+      "bytes": 1946,
+      "sha256": "e2046d37e40b2b75d748352c4f48259ade9e79961f52de6f79f667a909774c43"
+    },
+    {
+      "path": "sdk/docs/reference/ns/debug.md",
+      "bytes": 739,
+      "sha256": "7b90f9df705a818a5ffa20bd94b341163d1ca277b80c0b6a96a11fd907b17c79"
+    },
+    {
+      "path": "sdk/docs/reference/ns/definition_util.md",
+      "bytes": 1160,
+      "sha256": "64781358c8dc979fa0941d4c8b543aca61145753880080c3a64c106558e8c747"
+    },
+    {
+      "path": "sdk/docs/reference/ns/desaturate_color.md",
+      "bytes": 755,
+      "sha256": "0fc3b1eecb5defc413443a9bd16cc17e19765e2cd15f48e222d2635136140935"
+    },
+    {
+      "path": "sdk/docs/reference/ns/drain_network_diagnostics.md",
+      "bytes": 734,
+      "sha256": "f9f887ce6c13c62b04194b79f9bddb832481a02d484e31bbbdfe27be54f83631"
+    },
+    {
+      "path": "sdk/docs/reference/ns/dungeon_tile_definition.md",
+      "bytes": 12764,
+      "sha256": "e91b71e29102c95e0fb84db19a8d8cfb79974200bb2250b2603859424503007c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/dungeon_tile_definition_container.md",
+      "bytes": 5490,
+      "sha256": "2e512bac13a7316b15f842c4114c43d90a44313a370c3f1bd4a57d4a3618f544"
+    },
+    {
+      "path": "sdk/docs/reference/ns/dungeon_tile_definition_file.md",
+      "bytes": 2701,
+      "sha256": "f8b8662d990e731ec7aa9a1fcae610e58f541fd5bb75ad61a0e2a90aedc86482"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_actor_condition_index.md",
+      "bytes": 957,
+      "sha256": "f61d96bf29262ea9920a4530976ee23a219336d1321fd51c6d2af08131bbcdee"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_actor_damage_type.md",
+      "bytes": 695,
+      "sha256": "aa071de3808e33c39028bfac4a7abd11523e344e63aff08cc62c7e2333439521"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_actor_damage_zone.md",
+      "bytes": 610,
+      "sha256": "f27137ef70523c1b3a1f09c738e3289315fce54a58eb4b995cff795fa76a5167"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_actor_type.md",
+      "bytes": 923,
+      "sha256": "4ef6598a1d24c869b579e200345ff1ffa945239712547e36c4e9141bb029a8a8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_align.md",
+      "bytes": 604,
+      "sha256": "aa84f4910ea463a11831446df9609e63c8f4a31149ad014254a8d2e1e4266b6b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_audio_effect.md",
+      "bytes": 11640,
+      "sha256": "b38223401eac79d69f4669d3c2306c5ece5cc88a996f3c2bdc58565bf3b66762"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_audio_group.md",
+      "bytes": 663,
+      "sha256": "6d4d2b50f90747f71922edae7898f95eae61722d350d66e736203a98647eccfb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_bullet_casing_audio_surface.md",
+      "bytes": 655,
+      "sha256": "14babc5022e86328f8e54e94772373313ae146f8819343ee4f4c3182e143c38b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_bullet_casing_audio_type.md",
+      "bytes": 682,
+      "sha256": "e3e845e15d21212c8a0bf1515218c82c39e5fcf992c7d0e32cdaa3ab581df05b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_bullet_casing_physics_shape.md",
+      "bytes": 664,
+      "sha256": "8e7e4ae92bc502aff2451156bc416876840f11bc040710e5b4cec499621c3b86"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_bullet_casing_type.md",
+      "bytes": 799,
+      "sha256": "fa7263565accac26398918e5b404ca87178b73361b614b00345a928e04b8977e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_character_gender.md",
+      "bytes": 598,
+      "sha256": "dba9a2448b366f89c2325e50fc265cdcf480e0462a273f6188c758657b0c9ee1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_character_hair.md",
+      "bytes": 674,
+      "sha256": "6d69617026585ada1d91b28fce8107e60ab88313fdf8b749d4ec69c66156f818"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_character_hair_color.md",
+      "bytes": 709,
+      "sha256": "ec12ca243042c275cee07c5522b9e964ec653e49dd1ae5dc78d28316284c7b2c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_character_skin_color.md",
+      "bytes": 696,
+      "sha256": "cee837a2bf05b21169b0cdc82e187ff533e958f6f05dabca03fa29eaff206997"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_client_network_state.md",
+      "bytes": 707,
+      "sha256": "4d55cab33bc3a9d55047f2f9e6b9ed8b4b4a653e5107941ce5fb736d6cbb6607"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_clutch_state.md",
+      "bytes": 620,
+      "sha256": "5951fabbeab4a59ef10f08ed90d01a395ef9fb3ce82b6a571f5316326ff9fbd0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_component_property_data_type.md",
+      "bytes": 842,
+      "sha256": "21b81f6073591da3f395e64f9f550033358e13700275debbab31c634fbab5c67"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_constraint_tier.md",
+      "bytes": 604,
+      "sha256": "52d0caee656d82b6c8d858585f0b38ca27fc6a28c4ff486815edce739601b23b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_dungeon_actor_variety.md",
+      "bytes": 666,
+      "sha256": "7f72cb457119f7b3ef22465f0e979da28b9f7e84cb27f3837793cc4f54fc5d9d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_entity_door_controller_state.md",
+      "bytes": 675,
+      "sha256": "1e7b5c063acc83c32fb38d7077d02253a79c581baa7a81ad611e10e82bb6cc73"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_entity_type.md",
+      "bytes": 949,
+      "sha256": "8235097e3440b77a0f14b0a3aabe692c3c734176152880cd18232e85449761db"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_explosion_type.md",
+      "bytes": 640,
+      "sha256": "a55dc420366a13a5cccdc1fc311eee4a88d3d3a883c3851fdbfa5fc6fb2a15b8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_gamemode.md",
+      "bytes": 585,
+      "sha256": "100ebc9a73b5e5858831e91e6e2175cbb34e409a24ec0a0e677e9cda68ad57ac"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_insignia_ui_tab.md",
+      "bytes": 597,
+      "sha256": "951667660e17945db42cfe648c4e058563bfcafa2e991972423be756952bb3c2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_inventory_ui_column.md",
+      "bytes": 638,
+      "sha256": "78df9315dc6dd909b1f9f3d770bf7a5961e354566870287afb7b74e7939aaffa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_inventory_ui_row.md",
+      "bytes": 616,
+      "sha256": "b53a826772aeb9c5a333bef0c00bfbdc787a40fc7b2cef072a4597eac2cc8a09"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_join_refused_reason.md",
+      "bytes": 689,
+      "sha256": "afcbf96f9652529df78cf1f3301ecb5fe9ef03f1edb42a48507527218b6ee058"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_load_game_ui_tab.md",
+      "bytes": 602,
+      "sha256": "4236c041b29b236a6b0d21d558dceb6de028d0cac050128f1ddf28f9b652e067"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_localization_language.md",
+      "bytes": 1069,
+      "sha256": "73f626a7d92ba2a04cc0591e38ef38122939cba4145963bbb027b1a8c1ebaf8a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_localization_string.md",
+      "bytes": 12670,
+      "sha256": "eed8964c76041d44704c4eb2e4df4ae3cebd597293fc48c7a5bf37cb5d8f3069"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_loot_edit_panel_mode.md",
+      "bytes": 631,
+      "sha256": "f882177297aa7f356aa6153a40179d2fc65bfa3a764929c9e0ae8d6ad794f25f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_loot_group.md",
+      "bytes": 703,
+      "sha256": "dffaf08e63167f9a726756f96146d1a001dae08822dcc9d9209009e04185cf26"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_loot_mask.md",
+      "bytes": 732,
+      "sha256": "3b5fbe32b2045fe4d914a6946ab9fd6f51e1e37e65757f08abd9e4335d2c97d3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_melee_hit_type.md",
+      "bytes": 653,
+      "sha256": "4ccb0374aea68f8af35eeb0495bc388bf5d62cd2cec8404f5bca431050452f2d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_microcontroller_ui_tab.md",
+      "bytes": 678,
+      "sha256": "edd832e7d602c875274fcb7948b81f09d1880d248668aafdbda9fe86c89578aa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_options_ui_button.md",
+      "bytes": 612,
+      "sha256": "41658f61305146b4d6d51b091c2bc60ef53b403c11b399a48fa4618b89743e74"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_options_ui_tab.md",
+      "bytes": 620,
+      "sha256": "84ce7a040e2f63c2552e2b79207053e5e8ff3478c20a62f79b77b7cf24c858f2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_parse_mode.md",
+      "bytes": 573,
+      "sha256": "ff3f979099d4ae7a3c1a394df21f42ce1043728833e656884876b543028c85c4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_peer_connection_problem.md",
+      "bytes": 691,
+      "sha256": "6e66a78cd3ec8d06abdc2767157485fe2f46274ac8f08aff5587996f49e5d2e4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_peer_connection_quality.md",
+      "bytes": 657,
+      "sha256": "31061300521ba15297ce4de9153a2ed697b2c32d39c6639dae5c47663a64b8ae"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_peer_inspection_mode.md",
+      "bytes": 682,
+      "sha256": "809a527dfbb1dcfc019f775afb7ee01d58de10a02425dc0f9e79eca04b885fb1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_physics_group.md",
+      "bytes": 704,
+      "sha256": "22fa03159c4650510d3de598bc29e96212b9f4c72d6dc8a159f7b11cdb919f63"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_projectile_hit_type.md",
+      "bytes": 674,
+      "sha256": "b33d2a373418d88d8ab058815494303b29121d53abcbf36dd2cf7d608ff43906"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_projectile_type.md",
+      "bytes": 836,
+      "sha256": "e01061bf39fbd6ee8b1ec1666465b4f43d7c672ec7ab11fb5c6a4568f020791d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_pseudo_object_type.md",
+      "bytes": 634,
+      "sha256": "36f22bbd8c4796f2ae87370efece16e379b1bd62d3f83b6d8ba3f97b8e232aa0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_resolve_context_mode.md",
+      "bytes": 639,
+      "sha256": "971a48b3d5d2ccc8fe79cf4ec6601df2892af5cff05eb57ae8065537a086006d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_data_type.md",
+      "bytes": 697,
+      "sha256": "a4e84d688b478103d8df2273af18ca202001f8a0ca5cb03cb4b0f372d146dcea"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_binary_operation.md",
+      "bytes": 840,
+      "sha256": "a23ec5ea46baf12849b8e46f65814c60641af602369da0c612fca084acc84856"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_condition.md",
+      "bytes": 664,
+      "sha256": "cba2b4795cf9a4477df51813aa196f0d7d69079e893c6732408954a15f38be8d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_condition_else_if_mode.md",
+      "bytes": 689,
+      "sha256": "2a13e026558b5c51e486dd56b2d348cf34e0324ded4b1a7ea97865504192f05a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_condition_foreach_mode.md",
+      "bytes": 690,
+      "sha256": "2f74ac700426588bd7403acc60e5892d8e0ebd6f36c2398460cdb9c960665520"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_condition_if_mode.md",
+      "bytes": 751,
+      "sha256": "30ebb7e91f47a10c4453e59d6cc9817129fe9c56c1e6bc352381fdcf3a4f5725"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_condition_repeat_mode.md",
+      "bytes": 685,
+      "sha256": "72a7b884ad8c826340cdcf5f067c6dafa3096ac4a99305fb270bca95e9a3d3f3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_const_value_mode.md",
+      "bytes": 657,
+      "sha256": "def2f4325ee4e01425c1ef52065c3fbee739dbb3d786c5f0f0f782cd882ea5b2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_create_component_input_mode.md",
+      "bytes": 760,
+      "sha256": "ec14fd78ffc9a82fcc97ab5a288026668c21626b93715d64126582be3599ff14"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_create_component_output_mode.md",
+      "bytes": 764,
+      "sha256": "376388eb9575f2b6d26af1908f72ca275f19f80d8d7f034f39d938cc87bc71b7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_create_list_mode.md",
+      "bytes": 784,
+      "sha256": "4435299173daaffe58f37ab96cebfcef897862f4b6621787d54dde2e455da5c9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_create_parameter_mode.md",
+      "bytes": 774,
+      "sha256": "fe6a55ffa0c6815cfc78446d13ed8f2ad7275ef6599932847f366917da11398e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_create_variable_mode.md",
+      "bytes": 770,
+      "sha256": "c1f4fe818dc9c71ebc28e9741e1fb974de523d1e13ccd0e58885feb8ba992632"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_execute_function_mode.md",
+      "bytes": 688,
+      "sha256": "11edbaea760e9e0d3820e00513cd0cc7a9db81a5ce29f48dca31d9c6d6187184"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_list_access_mode.md",
+      "bytes": 658,
+      "sha256": "13f9aa8f4d78ca4e5ae6de43e2510e1cd750416dfc9a13360b47fa52daeca3a4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_list_add_mode.md",
+      "bytes": 742,
+      "sha256": "13246ed400106aa1e988d968e204beaa5002e8be726241cb47bd991e1bf2c835"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_list_clear_mode.md",
+      "bytes": 653,
+      "sha256": "269b21b26e54b5368a6d09bb627ec83099494d09606fb0e52490d912dd085ad0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_list_insert_mode.md",
+      "bytes": 754,
+      "sha256": "0cac7f8908162cd6c868620784da96fc9edb40040d833e0ed20559e4473abbd5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_list_remove_mode.md",
+      "bytes": 657,
+      "sha256": "12e83bb6bb05b88cf587cf89c39ad2bc30b38c25e7022d41cf94a9558d03e821"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_abs_mode.md",
+      "bytes": 702,
+      "sha256": "8f9616d1f54c67e00f8a123ea39384ee51fd2c8bfb35a9522501194bfa78395e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_acos_mode.md",
+      "bytes": 672,
+      "sha256": "5c271a47fb93240d3b91089eb24e42a3d53e6a78d1f1018d2776d8eb52d4a64a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_add_mode.md",
+      "bytes": 688,
+      "sha256": "4760511d9ed66c50f00e5abbc82164835e181b3b89d095868bb6be213565f176"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_and_mode.md",
+      "bytes": 681,
+      "sha256": "83a63838c0d50d62803fcf87d493fd16a1fb7c90b5c7f08f15df4ce59e53d486"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_asin_mode.md",
+      "bytes": 672,
+      "sha256": "cdda74ecec2b417eccbb12dfb598127287387ad9ddbbb0765c7dc188cfd04dab"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_atan_mode.md",
+      "bytes": 672,
+      "sha256": "06a6e55f681b4dc640d155e1a7aa1c37b5bd559e480b2568a7d1e2ccd8204cfa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_ceil_mode.md",
+      "bytes": 686,
+      "sha256": "b5a6e7481acf24db3db8f5fc329d0169b9c8a29b617e9ef0bdeb801e2b73be55"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_contains_mode.md",
+      "bytes": 860,
+      "sha256": "07da3d2fc88860d5e43541c592d8b8f6768c65a981d8128ddf4ab3117b5c5c80"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_cos_mode.md",
+      "bytes": 667,
+      "sha256": "432dd1374c697063cc7696152876f2ea8555aa4149fe34b8dbcca528d366441c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_divide_mode.md",
+      "bytes": 706,
+      "sha256": "9875d1a664518a38ea635e89baa872d988e4badb26553861a483dacf67ccc6ea"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_equal_mode.md",
+      "bytes": 800,
+      "sha256": "0241e4dce6ad9eee8a232a16311dedcee9fb384a9416c0130295514d403bca6a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_euler_power_mode.md",
+      "bytes": 712,
+      "sha256": "f1c612c89fb3c35fcd929926d1827460d8d7fa9ed4b8aef89f5202de10bf1701"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_floor_mode.md",
+      "bytes": 692,
+      "sha256": "5a89199de46e001b241bf6a3b3e8553f80351027fffedd0acc3cf8679c74774a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_greater_than_equal_mode.md",
+      "bytes": 778,
+      "sha256": "80f1be85d836da66a9071041a3ceeb362bafff5076add85b1f35cdb26276f27e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_greater_than_mode.md",
+      "bytes": 742,
+      "sha256": "ef0a4369b01c8f34ca43136bd54f94896d1a17b32a83cf3cda61a3cb4d88e557"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_length_mode.md",
+      "bytes": 702,
+      "sha256": "b204eeb1a3b0866f76e4232d82d1493799bda6ba470a11d215be0f826f3373b4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_less_than_equal_mode.md",
+      "bytes": 760,
+      "sha256": "60395097207502f984b29461c589e5b615e860cd97b2613e213b737134e43fe0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_less_than_mode.md",
+      "bytes": 724,
+      "sha256": "5cd019a9dacda493ced615adfbdeb26266e063aa52e72dcefb5f0c2793374206"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_log_base_2_mode.md",
+      "bytes": 712,
+      "sha256": "3f6fc127553ca80cf58b999946afe4ecd6fe2295948981b2203614fa81aaac59"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_modulo_mode.md",
+      "bytes": 686,
+      "sha256": "e7dd3f9092623d89dd3d5d0f9fc3e937819589cdaf91af68dc69bb1351e084e8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_multiply_mode.md",
+      "bytes": 718,
+      "sha256": "ee014f8bb01e1e3a9586c6b3d275e7a3c5ab5f6706ed0d2973d13507d01578b7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_natural_log_mode.md",
+      "bytes": 710,
+      "sha256": "b92c206fb7fe8464911ca0af2624ec92e3ad47d813433ce42d27d0fd8dcd23a9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_not_mode.md",
+      "bytes": 671,
+      "sha256": "c39f53a1f4236569b99d63a80d88253a7ee8574f7b8028731de5899e0fc7f501"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_or_mode.md",
+      "bytes": 676,
+      "sha256": "324dde46b2286c27d294d007e9c32e6404351e218dc41ad7660d497c9fd59fba"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_power_mode.md",
+      "bytes": 700,
+      "sha256": "393d44a47833abbbe3b92549e7ffe1a43a0ed1e1c479d578a901e6fbcccbcac7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_random_mode.md",
+      "bytes": 706,
+      "sha256": "0619591049bb1a609a47dd760cfc39ba850345362588a9728f25d8361105d863"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_round_mode.md",
+      "bytes": 692,
+      "sha256": "356905fbaecbebac35ec121cc53c347e3c9ad75a3f0dd4b4740c9eed77d7994a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_sin_mode.md",
+      "bytes": 667,
+      "sha256": "c6ebea70cba60e31ead89962016e7dc2b133b9e2eefa61971c9719dab50087ac"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_sqrt_mode.md",
+      "bytes": 686,
+      "sha256": "0dc746933dea251f7d8cfe438462d98cfc8eebea14088dda17ac2e6d107fa884"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_subtract_mode.md",
+      "bytes": 718,
+      "sha256": "bab4b99056a78ff986e9f1fad16be8c2c237e905291ebc3d6bd57b7106a8f931"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_tan_mode.md",
+      "bytes": 667,
+      "sha256": "80a6ff10535edc5afee2866eb3ac01eb63353ea1b7f3124d23a2ad66f5e4c9d6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_to_float.md",
+      "bytes": 671,
+      "sha256": "223e385f8f52f0b7297b9c9176eba27af770f34d2a270c9087d4b55ca14af9a7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_operation_to_int.md",
+      "bytes": 663,
+      "sha256": "5a6810b38fd57f67fe91519571548b98769ae0326c42bbd2dec155aab45587de"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_type.md",
+      "bytes": 1524,
+      "sha256": "6242ab00b1977cc0cc997d43475144be6a1c1cad3113197da711921f01dd0bc3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_unary_operation.md",
+      "bytes": 833,
+      "sha256": "61ef3b9c79e4951bc4debe3257a6c6b44b791ed46c146ce9112034eb1154f0f1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_value_component_mode.md",
+      "bytes": 689,
+      "sha256": "87855fe0a88b3ce3cb67c0ec342f227d9bfc0317af9d851acec1a3d765e05817"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_value_parameter_member_mode.md",
+      "bytes": 701,
+      "sha256": "447b95d7825e73ec6e16e3d8c05493880f008a661051e2dd5a75f617f53380fe"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_value_parameter_mode.md",
+      "bytes": 673,
+      "sha256": "5ab89da015e4ab5658c39728145ec62b0ea5e695d3844d62f708548d5c33a3d3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_value_type_mode.md",
+      "bytes": 680,
+      "sha256": "29ca8f4e8ff426de51cc06fae978ed7ae81f05fa101993be1c9f35caaf350e71"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_value_variable_member_mode.md",
+      "bytes": 697,
+      "sha256": "3fcebb68f417d5034be03bfed371e265d804c7922eed9e439f63a733d2913f37"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_value_variable_mode.md",
+      "bytes": 669,
+      "sha256": "f16bc1cdd21bf83d438b50f819ed8ddc48818e3bd6cba3770d28ebcaed3a54ac"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_element_variable_set_mode.md",
+      "bytes": 794,
+      "sha256": "97f0800ca27c49e7ffa958b581317f1c43856ed605f18a1bd81426598ab8f9b4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_script_error_type.md",
+      "bytes": 1639,
+      "sha256": "8eac950976922c1dea9cb7f4e75a0f727c242a1e73889a1445420cf8c5edc649"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_server_network_state.md",
+      "bytes": 642,
+      "sha256": "b083a6e279d0e6896064aaf0d5bf98258df1ea0065e0cb7c3593b4fe6ff0966e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_ui_input_action_type.md",
+      "bytes": 653,
+      "sha256": "387c62e1b271db3493d3c5aba5411f120f31ecfa6a21fb07b4ab9c224737c6e5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_ui_layout_mode.md",
+      "bytes": 608,
+      "sha256": "1aa4868bf5b7ae6f494a3b2e769578f36140c9edf10940013b1f8f4fa24c2141"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_ui_screen_scale.md",
+      "bytes": 647,
+      "sha256": "c9ee0463dcb138980934a7a86670c3ae90fd06ab84429b2dd016f6e83ac980cf"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_unbind_mode.md",
+      "bytes": 710,
+      "sha256": "e7c6f3a579df8d4e3185dc562886a42180cb471ca2905dc8b879086fc4df8152"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_vehicle_component_array_mode.md",
+      "bytes": 657,
+      "sha256": "7c04facf95e8546c714c5440ad7aa4554c81656a4e9bdb1cef01903cc4dbc741"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_vehicle_component_surface_dir.md",
+      "bytes": 694,
+      "sha256": "a7b3933712b156135fa50bd3628e8f2546b69744804c5d7955708333f4e7379b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_vehicle_component_surface_gender.md",
+      "bytes": 672,
+      "sha256": "cfea1a066136c0c45effc1675fc867c05e1ac94afcf97ef3ae5c08094720ad34"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_vehicle_component_surface_rotation_mode.md",
+      "bytes": 689,
+      "sha256": "cab6095ae64ad0ca40e72e0669227648924d5964653a51d2ec2575477cf7d82f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_vehicle_glass_state.md",
+      "bytes": 627,
+      "sha256": "77e3c8dd9c189f9f467923b3de95647fa0baa665f424ace647b1fc30b79c2cb5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/e_wearable_slot.md",
+      "bytes": 697,
+      "sha256": "da50c9b500afa74f4a555f49803882b3e16cb66c6790bc132922f2543d954df9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/environment_data.md",
+      "bytes": 933,
+      "sha256": "10b5ee76524c5b62700d9e326ade15a830bec32adb34df001e09298fc9c2cbd8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/environment_tile.md",
+      "bytes": 8484,
+      "sha256": "8cef7b0c6f42380be6c5d63d6b396b3a4474edc88a0cdad80d821530cb9b9c13"
+    },
+    {
+      "path": "sdk/docs/reference/ns/environment_tile_definition.md",
+      "bytes": 5519,
+      "sha256": "64d3ebed02bcd7c682600dcc8b0f58b5127dc77f185f0522091e5d3ab78fd8dc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/environment_tile_definition_container.md",
+      "bytes": 3572,
+      "sha256": "8716c689661db2f957bfd08f87627d0d45e7f668c7aad3bfa1a539c11651c34a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/environment_tile_junction_definition_container.md",
+      "bytes": 6509,
+      "sha256": "99dd7e10885b8e9ab600a18f7957e72a4ca58720eccd7eabee5d4a767f26d3ba"
+    },
+    {
+      "path": "sdk/docs/reference/ns/error.md",
+      "bytes": 686,
+      "sha256": "b65bf7d4c3f9e37c81e57f6020c82c78f6eb71b012ea4f2d80e423392f1ccbb9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/events_client_to_server.md",
+      "bytes": 5391,
+      "sha256": "3de327927fad1b2146385deeac61875daf7a13e11c3a0316be3d902a16320f63"
+    },
+    {
+      "path": "sdk/docs/reference/ns/events_server_to_client.md",
+      "bytes": 1345,
+      "sha256": "e0f7aa7fa9e4eac3180a8fbd1e713b7f0481cdb2f7b50d9f6a98d1a0a44ebb99"
+    },
+    {
+      "path": "sdk/docs/reference/ns/file.md",
+      "bytes": 5288,
+      "sha256": "fea52bb37f93494bf418d54f8f2d9e50569c115f9847e6a6214cb4ff4fa334ef"
+    },
+    {
+      "path": "sdk/docs/reference/ns/flash_vignette_animator.md",
+      "bytes": 1906,
+      "sha256": "afe35c9b04ac2cbd44e9f235d966952c37ac7bb565e955e105c16e401e47b2aa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui.md",
+      "bytes": 78233,
+      "sha256": "6b90d7064fc8c5ec5305149607432d176ea05f61d8aed96d29099b46ecce4a78"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_container_descriptor.md",
+      "bytes": 3592,
+      "sha256": "d43b75abd772b24bc7d298e010bfe1dacb433009329162c39a5563f9e955c77a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_container_grid_descriptor.md",
+      "bytes": 1113,
+      "sha256": "ed5cbaef21da7cfe5f25327982f26e3bfd2e927dc37298a958412144acdb28c8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_duplicate.md",
+      "bytes": 14492,
+      "sha256": "cb817dffe10baff4906e61fa8ec8aab644fed11f1bb1d669f3def2e3f2d86dee"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_insignia.md",
+      "bytes": 39277,
+      "sha256": "92d1cf13c8d2bc9cfe993142be3eeeb04c90c4571642213a76c33d8d7f35f854"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_inventory.md",
+      "bytes": 128551,
+      "sha256": "51b9822de44acdb3c695346d7219b2dd98eeffaf1e3ce8e55a76e02ddf9a35a8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_inventory_atlas.md",
+      "bytes": 2405,
+      "sha256": "67b8f352cc7ce60a0e9772274ffe9c483f33fb8d36d0906b49c234fe35b95e9c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_item_descriptor.md",
+      "bytes": 1340,
+      "sha256": "2b1c4d4afcae8a1d7ac2055060a98aa9b2e8d829f0807fb7fddc95a843bbf336"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_item_icon.md",
+      "bytes": 1089,
+      "sha256": "ee145fc7c78338220929ea8c1188cf1968e67ae466bce25f1cd17b29af1e2bad"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_item_icon_target.md",
+      "bytes": 3881,
+      "sha256": "acfd5dd0c80fc1a22b6562931e16dc1e40950ff14a7669374f766dca9c1a8d51"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_microcontroller.md",
+      "bytes": 290763,
+      "sha256": "03e3ce5902751bf5a1433f984161650c93bea6fe0265d1e7f64673c0d858ee99"
+    },
+    {
+      "path": "sdk/docs/reference/ns/frontend_ui_stored_item_descriptor.md",
+      "bytes": 1016,
+      "sha256": "9bae6d569255b47880cdb0d1c1a89619b194d06b8410fe354f8a72fc1a494505"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_crouch_time.md",
+      "bytes": 865,
+      "sha256": "0ef57e146e446162154d2b63c48d8386e3fa8361df9062c122f4cf5c4de0e81c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_item_transition_speed.md",
+      "bytes": 924,
+      "sha256": "93e17ce2310199affaa7827f588a242536a33b1b5b7ba9febde3eafdbbd71970"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_lying_body_dir.md",
+      "bytes": 889,
+      "sha256": "dddbb441efdd82a67ed5ab0966077136eab93ede678e2e8733eed38d6ff20b80"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_lying_capsule_ray_offset.md",
+      "bytes": 930,
+      "sha256": "8853d19db694b245929a30c741e4e25f8c6e0a13c1d8e5f948ceea9f0ea7fbbd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_lying_compression.md",
+      "bytes": 895,
+      "sha256": "87a09b93fdaf113c7c43379204705f087a7a6852672d1cd9241273d2e1d1b3e8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_lying_impact_speed.md",
+      "bytes": 900,
+      "sha256": "f2550caaaa25226aa89e4ab537b12f052118d9f85f30ce7f790e38dc7815a545"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_lying_min_seconds.md",
+      "bytes": 895,
+      "sha256": "3aa1b62076b372b3c08ed36655a8ada020e7abd710d473188e5ecd76fbbf3f6a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_lying_stand_crouch_seconds.md",
+      "bytes": 940,
+      "sha256": "3258754cabecb3c907e6fff892b310c8788e6be22730efecf7bba1c8234b7e69"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_max_facing_angle.md",
+      "bytes": 899,
+      "sha256": "5c8e50e60f7967a35f5b08ca7055099983b3a3a608560c7d64f6ad19874b5442"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_sprint_time.md",
+      "bytes": 865,
+      "sha256": "5abfcd60f102f7b5c7836f1babf74bccfc27e2bd87a4e8bd8ac0c5bfa5eb750e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_character_submergence_factor_swim_threshold.md",
+      "bytes": 975,
+      "sha256": "837f5554599823876e3a5aacbf097180453f5484f7399f26f8af479ff7178ef7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_separation_bucket_count.md",
+      "bytes": 884,
+      "sha256": "f87b18c808a647fcd70bf5eeea43776d3cd00b1df9edfb6c568a0f02a157496a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_separation_cell_size.md",
+      "bytes": 869,
+      "sha256": "89c50c25cfc487aa877d661df9a82c64976f525935b284499b6894fd7fa6c161"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_separation_cell_size_inv.md",
+      "bytes": 880,
+      "sha256": "60883ea40a460414c484ee9c2d01227af3c47ea83814a9d885c031a39dc25900"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_separation_dist.md",
+      "bytes": 835,
+      "sha256": "c1c8fe56ff055848723187580655f4de373abb65dfd2ef33bdcd039ee321a276"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_separation_grid_cells.md",
+      "bytes": 865,
+      "sha256": "053bcea3c81c1737f63b64ea65139eddf4cd228dd0a8511bb6dbcad7f772ea8b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_actor_separation_height.md",
+      "bytes": 845,
+      "sha256": "c22bf5c51e572356e452204b75adf3670832408328e006e962455048d96c37ff"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_audio_manager.md",
+      "bytes": 795,
+      "sha256": "193c28b4e51757eb6135b58bebe866b865f4e33332c3cbf6fda6b1037974066c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_audio_music.md",
+      "bytes": 785,
+      "sha256": "f7888a547ca3ec8207067b3607d77a5e42c457c1ea015d06d9013af0805050db"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_authority_update_interval.md",
+      "bytes": 864,
+      "sha256": "8da94931ff8313c4d6a72d08bdfb77dcf3c399b8dd81c7f93e9e8e6c5712b196"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_body_comfort_temperature_max.md",
+      "bytes": 870,
+      "sha256": "60f297d93caf96d0e06ab8d09566033a1aa1dcb9e7d91c226d0c7b049b8007b3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_body_comfort_temperature_min.md",
+      "bytes": 870,
+      "sha256": "4f301d118304d1102e683b3e468868490209ff613a1feaf2af30c15c40a7b776"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_body_water_chill_degrees.md",
+      "bytes": 850,
+      "sha256": "c1931bd36d1cd67801ad48da3da3f0f5ec6f58dfd6d5d9bc2a3e67c9473cfefc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_bullet_casing_audio_effects.md",
+      "bytes": 874,
+      "sha256": "bcde7ba262ebd1147cd9ba57a1ff0459c2d79aa5affd37295493bfa45181377e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client.md",
+      "bytes": 760,
+      "sha256": "e12e4db5125ec78a9197fec48e9a06fc0175df5eb589ae5bf8d573e4ec38a9b6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_authority_update_interval.md",
+      "bytes": 899,
+      "sha256": "0827220280c45917250cec827e697a812ae71263ee1ad06d88b60d9eb4ad79f5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_item_world_gun_anim_bone_chest.md",
+      "bytes": 915,
+      "sha256": "2f64ae78ba7d1fbf68ca8feec8628cf59e54095e8ccbd28358d39e949a15f49d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_item_world_gun_anim_bone_hip.md",
+      "bytes": 905,
+      "sha256": "50d07ed5453c9f9fbd445169762acc105e4c428604a0d97cb31191fc57b88e3b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_item_world_gun_belt_magazine_transform_drop.md",
+      "bytes": 989,
+      "sha256": "9d5a2c08cd232e4d218ca5c8104f6e348cbd4118dd7c5d37fa006f57cd54d457"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_item_world_gun_bolt_action_magazine_transform_drop.md",
+      "bytes": 1024,
+      "sha256": "a478abe28ca5795ff5947d7eefe13ee73a57e266fbc754dcfd01c716d86017a9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_item_world_gun_bullpup_magazine_transform_drop.md",
+      "bytes": 995,
+      "sha256": "574fbd041538995c3927d9745bdf2179863f47d8ea7547119ddc0c3d982afb9f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_item_world_gun_hand_transform_l_inventory.md",
+      "bytes": 979,
+      "sha256": "20501220da6a3049aab5604ad89cbb839388b5446e57901308d8c370fe91a66e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_item_world_gun_magazine_transform_drop.md",
+      "bytes": 964,
+      "sha256": "d10b021dae925ea5600fe3f84e69075043fc1453182254772574b78920fda114"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_item_world_gun_rifle_magazine_transform_drop.md",
+      "bytes": 985,
+      "sha256": "f0d734812f278fc80531936cec1c1365e3a37ff3651b33c0e6834bc8c2391eb2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_client_item_world_gun_submachine_magazine_transform_drop.md",
+      "bytes": 1010,
+      "sha256": "8e1ed34f86a04edb406a393a0cb7e78e6b5f751c3f2207704898048d21a4f70d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cloud_grid_size.md",
+      "bytes": 805,
+      "sha256": "8905fff8ce29e62ab2757526f8f44cc404306884acb71a12cf7c498cff6ae57f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cloud_grid_update_interval.md",
+      "bytes": 860,
+      "sha256": "c5b2b96abbd032434fadd8169c826a626c855614282cfe7d000cc01bca5d1d23"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cloud_grid_width.md",
+      "bytes": 819,
+      "sha256": "a2694cce14b14be2e5f9601a0823b75f25191ee972687ce928ac2d2c28f38dff"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cloud_light_count.md",
+      "bytes": 824,
+      "sha256": "028e7a3416c2d0b11fea36c1258a30ac29dd9a36d61ee7e24b5371c4ceb686f8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cloud_light_grid_size_xz.md",
+      "bytes": 850,
+      "sha256": "c8a0d88c84bee792feb34309bcc2ed6ac1ddd4dd7d0cf59363c5a82037860922"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cloud_light_grid_size_y.md",
+      "bytes": 845,
+      "sha256": "25b57605c7d5432048597b83778045de7e327105c1c96732035e1236d37483c6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cloud_light_update_interval.md",
+      "bytes": 865,
+      "sha256": "f63e78378f0ed64e321228e62727b4729d119b6325811f2fafbf17536e2dba61"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cloud_particle_count.md",
+      "bytes": 839,
+      "sha256": "b28ce506881f3e7cc825b9ddb9dc4d315a4aaa75954dba58daf771e113a0d591"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_color_palette.md",
+      "bytes": 795,
+      "sha256": "1648768013e6f46b5d909ee28bb96d0020cf2b9ca89d363480d1b4533261609f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_constraint_break_force.md",
+      "bytes": 849,
+      "sha256": "1499d5db5e0b2d30dc9f0efb1c00038dbf566b1a7d257aeb0158338d8bc79e96"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_creature_spawn_subdivisions.md",
+      "bytes": 865,
+      "sha256": "7a62b19c3f979a8063d0c39f50ea5654fab341a947aee9ff1b926ddbf9673061"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cull_frustum_mask_large.md",
+      "bytes": 845,
+      "sha256": "1ffb6b5dc9f0733d1bd7867b9d17ea413d9f45d98783d5c95529d31a24e700a8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cull_frustum_mask_medium.md",
+      "bytes": 850,
+      "sha256": "728897ef27ae18c2fcc2417f450c206b34974add5edfdf2d1eba30a55d72d90e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cull_frustum_mask_small.md",
+      "bytes": 845,
+      "sha256": "9a4230d5b37874d565b49db0116c497cb05792e03509deeb28c3838f8c06236b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cull_frustum_mask_very_small.md",
+      "bytes": 870,
+      "sha256": "ce4e7847d02257930c117e80aee4653b51888d7d84e751a40e911851378bb217"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_cull_screen_size_threshold_default.md",
+      "bytes": 909,
+      "sha256": "37e316d41455b641c09cb2cd7889996e0e8cfeabcba32cdbb69c0dfe13802664"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_day_night_cycle_ticks.md",
+      "bytes": 844,
+      "sha256": "c722133268add6cafcf8fa7cf903ec13eecd8f48f9683202f5c77cff72c36e33"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_debug_render_client_tick.md",
+      "bytes": 850,
+      "sha256": "90007c1ef6469f8b1ca5048abee1ceeb98b9bfb38abaedbedead057de4ca8647"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_debug_render_server_mutex.md",
+      "bytes": 855,
+      "sha256": "197b3d8788b41950433d3a5795fe2eba380d9071fd26a45274bc0562614facc3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_debug_render_server_tick.md",
+      "bytes": 850,
+      "sha256": "666d487ff714511840cf1e4e22431dd678de9ff4b545dbe30c0a9a975b892ea3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_debug_render_server_tick_buffered.md",
+      "bytes": 895,
+      "sha256": "d5d221754bc2116947d67dd986a27172c1d5f7c770146fd9d1c0e07848d40e3f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_debug_server_camera.md",
+      "bytes": 825,
+      "sha256": "301fa208449f997f1b4923e3fbc2d9b9c682d98389f1c4d75fda6639de4f9787"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_debug_voice_hear_local_audio_voice.md",
+      "bytes": 900,
+      "sha256": "cb641b688a59ef894a90d817b22c3d22eef3f2d72e93b49adc1f2cb79a0f2010"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_degree_celcius_per_joule_water.md",
+      "bytes": 889,
+      "sha256": "d673fd68bb9a4dfed5c59e5cc2b6b7a6db9719c6c5dd29272d7872539f769fff"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_dungeon_layer_activate_margin.md",
+      "bytes": 875,
+      "sha256": "fb4b1447fa047f0b1ff1cd2af420a6470f8151a28833eca163f00e4d103fa0b7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_dungeon_layer_unload_delay_ticks.md",
+      "bytes": 899,
+      "sha256": "4623364b7479da27ec5bfe07867ecef44f150aedd5f8424bda5e97662afc63ef"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_fluid_color_water.md",
+      "bytes": 824,
+      "sha256": "eb115486a0ec9864311675422c2a5f6bdeff70c4f457bea58b552ee3bd2204fd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_frontend_ui.md",
+      "bytes": 785,
+      "sha256": "17d6080e8544960968ff49c6ab4def8846715c69760018918d9cd0fb866fc601"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_grass_subdivisions.md",
+      "bytes": 820,
+      "sha256": "6c57023ccbce4d4ee8540b24e8873df6f016678ddf0f1b1f981a090d92346215"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_grid_triangle_height.md",
+      "bytes": 830,
+      "sha256": "a13301f73129410c6ede6f07fcf0bf173b6ba1fd9f11f66edd72ffda02ab8f5c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_grid_triangle_height_factor.md",
+      "bytes": 865,
+      "sha256": "5ec6d6f895414be727f5e53613952e2affa3f381bacefaf37fbff229396e149a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_grid_triangle_orientations.md",
+      "bytes": 869,
+      "sha256": "ed9375abb583c5d4f0ee3757f8ac7ed618030aaf7f3892ac94bfd9143f14fe3f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_grid_triangle_size.md",
+      "bytes": 829,
+      "sha256": "20bc837b999842388500e7e418e09679d113c6eeaf2c584f6eb2a8c28e5d2249"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_input.md",
+      "bytes": 755,
+      "sha256": "8548a543ba3a0f1cbf8dbe3fe6f78891d07e6c1a0e4fb8df3774b406589c8ed0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_inspection_max_temperature.md",
+      "bytes": 860,
+      "sha256": "f1ae2487238e961f81564d5355660c005d70bb341e77af19785eee0cbee062a9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_inspection_min_temperature.md",
+      "bytes": 869,
+      "sha256": "edf0d1f00636bba1e584d2f6e10cde6ec5e5a7ff84c4cde9ad722b8474dac6b0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_inventory_icon_texture_size.md",
+      "bytes": 865,
+      "sha256": "ff666c0d800d10afa694d7f5f203a9ada3d9ac87f16fd9d9f811e85ed5a3c2b7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_chunk_edit_window.md",
+      "bytes": 830,
+      "sha256": "14c4f247ea6b66d2fd5b8218d0ad53df5a8ac6e759b11db12da97991a626ebe9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_debug_client_scene_tile.md",
+      "bytes": 860,
+      "sha256": "042d05aea463937db500bce2e25d4f5454b3502b36017f4e6d618eb8f3ba2bf9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_debug_disable_creature_spawning.md",
+      "bytes": 900,
+      "sha256": "4f9383441844e56afebc3e9ce6da66cf2af1401cdbdf9876b4f57deb8ac350f3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_debug_disable_zombie_spawning.md",
+      "bytes": 890,
+      "sha256": "d5e22ff220a65435958cac76748b4f9609bfc86245aa5d7cfd1dceb87ba215c6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_debug_inputs_menu.md",
+      "bytes": 830,
+      "sha256": "a566001bb3f82dd2600c4331bb1951e4ad8e35d3b76beb7e7b5f6d103459406a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_debug_mouse_capture_requested.md",
+      "bytes": 899,
+      "sha256": "f06d00fbada47a1a9e143284d174c635459e49754c0731b5048c4d918e3eda11"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_debug_server_scene_island.md",
+      "bytes": 870,
+      "sha256": "3514ac9dc7eb59301a1891dcd5d09ded943c755b4b15d99a1146dfbef6513b42"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_debug_voice_hear_local_peer.md",
+      "bytes": 880,
+      "sha256": "785dc874f23c94418941dd07fca7ad15e2952718ce2dd426aa53a58d992ead2a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_disable_ui.md",
+      "bytes": 795,
+      "sha256": "ac8dab5e11abbf8c63940f415d60b26dbb850a13ee478186297e329f6904ea97"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_hide_stats.md",
+      "bytes": 795,
+      "sha256": "a5e029673d8f7de62a9e8cf331e6fa549f16ed5b5c9dab11162d45777fec459d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_loot_edit_window.md",
+      "bytes": 825,
+      "sha256": "6f4bb3d86cef9ebfd4723ece52dd6597ca9d1a1cf3882eee57f65c1f3fc38acb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_map_render_request.md",
+      "bytes": 835,
+      "sha256": "fd1d1f447c758c4ee71cb2aeefd43ba4f4221fd1dae9bd4525c4e0cf4dcabc7b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_map_screenshot_window.md",
+      "bytes": 850,
+      "sha256": "c24c63c0fc9b4f0b910b2b959262cba18c3578d94c0fd3d6532e948054b46cd6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_metrics_menu.md",
+      "bytes": 805,
+      "sha256": "9d1a8fc73ca5f9d44893e04c59d1987e7ba5056fb8de7cadac2ab8d0f83c7ce6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_prefab_window.md",
+      "bytes": 810,
+      "sha256": "21e064643d8a9862f3a997b539c8f3cb57fd2f4049779ac3334a1c39f1176547"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_prop_edit_window.md",
+      "bytes": 825,
+      "sha256": "7daf1b460d88f56f7a96be9e5847f631175f6f568e7f1e3bd1b35cb4267a8e89"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_server_client_window.md",
+      "bytes": 845,
+      "sha256": "3511a43fa4800b6a83f6c01d0e6b7d5a2e654708760276652f1ecb6a4b2c0fea"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_tile_actor_spawn_edit_window.md",
+      "bytes": 885,
+      "sha256": "ee85021bc076cfe16e2449711dc0e64a879e6e1b2d201bce711fd95e7b22cd8b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_tile_dead_drop_edit_window.md",
+      "bytes": 875,
+      "sha256": "4bc24f6ef7638e5e94b40293059c2083530511c310b5987dfbc64ae3a1fbb26d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_tile_edit_window.md",
+      "bytes": 825,
+      "sha256": "8b7090931a7178c15bf31647b971bb8a84a132f59e89f44c05de221a331e62ae"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_is_tile_loot_edit_window.md",
+      "bytes": 850,
+      "sha256": "7fa7923cec1af84d02e86599b069de9468f831cc7e07db6ee0be35903da5b20c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun.md",
+      "bytes": 795,
+      "sha256": "fe18ccae60c0502c1e6a0f40bb239ae76a9c7255cf71517c2c42fbd9efe4f787"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_107.md",
+      "bytes": 815,
+      "sha256": "d14c739314b05d506c2a88266f0b3021fca4f1c1e7c7ca90690a741f4c8f1eec"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_battle_rifle.md",
+      "bytes": 860,
+      "sha256": "9e3cbc41cb104076e805445643639209d88d45cd71060189c01bb8f206757c3c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_belt.md",
+      "bytes": 820,
+      "sha256": "906338e58ce43685a06285ef87596d6c5b0732de539eb8005f9d9886b2dac76f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_bolt_action.md",
+      "bytes": 855,
+      "sha256": "62ff8e2f0b3457e19f4f8da139fd0562031e36b79bec3057e118e6532e7bfc2c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_bolt_action_rifle.md",
+      "bytes": 885,
+      "sha256": "de30ff6a3ead107c9d4f9253ffb47c484dc82b270fabf8e137bb1ea1b021d218"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_bullpup.md",
+      "bytes": 835,
+      "sha256": "6085e59fc1fc6fa742206be0eb8b4c41bf75cd656a184d74c87a29c80b2565e6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_pump_action_shotgun.md",
+      "bytes": 895,
+      "sha256": "0786cbe34d85f26f8f05910dcd89e9197814cb379e404911af87e5dd6c4932fc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_revolver.md",
+      "bytes": 840,
+      "sha256": "066d93f9f9516549c655195f9cbdce4e6755b403611b016d5e02c443a9e46d31"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_rifle.md",
+      "bytes": 825,
+      "sha256": "dd601503f0ff10f44d684259f3ea69f515d1a424fb05b489ed0fe82edf495c12"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_single_shot_shotgun.md",
+      "bytes": 895,
+      "sha256": "f6067470e82018f21bf1c3feeb212044b0732cea8895bad6aac14802280c4b0e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_item_anim_gun_submachine.md",
+      "bytes": 850,
+      "sha256": "028b5933d7f792d89d049cb6d6dd2fcaccfd0a9c606b266e7aefae695b1568ba"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_journal_chapter_radius.md",
+      "bytes": 849,
+      "sha256": "2394e59ec71468573e05d0fce157c22aeed159f760a4ccb60f35012f4ad28767"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_junction_lod_count.md",
+      "bytes": 820,
+      "sha256": "0f8ffa3f9afcf850529403fec6d88ba8701cd4cbed62e6df1b24b2e1a2d08557"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_liquid_inspection_stamp.md",
+      "bytes": 845,
+      "sha256": "14b287174e9ff465c6e70020dd3d9909a5bf9efe76cbf2d062e570354d27aef2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_litres_per_voxel.md",
+      "bytes": 810,
+      "sha256": "dbc06fca37d5df2c77f587dc2b05db0b37d47f8bea30217d3e5c49e1cccae432"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_localization.md",
+      "bytes": 790,
+      "sha256": "f1241cb98d369ad5386911d4908470f0ab3df14f84512d662c13f85eadf23b8c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_localization_component_descriptions.md",
+      "bytes": 905,
+      "sha256": "a442a25c97f39c9088737f25a3b290a1ea08db7a4a167e776ed753943ae61b37"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_localization_components.md",
+      "bytes": 845,
+      "sha256": "e5623fb684033db0532fba01a82b338998adc2fcb63c4ce0fe727e00df514a7c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_localization_item_descriptions.md",
+      "bytes": 880,
+      "sha256": "68e288ad8ebe9c87c16574c0c103f69a5108d5658981fc72c11f7c0a5451ef8e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_localization_items.md",
+      "bytes": 820,
+      "sha256": "961ce6dab47577325e82124aa967a28434803931b17adfda3dced17ab7e3336c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_localization_journal.md",
+      "bytes": 830,
+      "sha256": "7a12339ddc080b704af41f631e763ab5f642f5f3b5384da401841af8ed1e6eb9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_localization_manual.md",
+      "bytes": 825,
+      "sha256": "cfc60203cf4de6eabc85c7f5f508f4da16297d2bb26267187b851493272578de"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_loot_random_loot_capacity.md",
+      "bytes": 855,
+      "sha256": "9a0d5b4ca9f9b3a6c14a8116b36de9085b8f005caefa60070de61779ac07e71d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_main_menu.md",
+      "bytes": 775,
+      "sha256": "f9747c559b4f55bcb2e79c549b9877307ffc21e70d21576c7e59a7d6c958e568"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_main_menu_camera_origin.md",
+      "bytes": 854,
+      "sha256": "a74dad952d968287d79203bf28d3ec82960e063681e24b303c8a8a7d95eb47aa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_main_menu_scene_origin.md",
+      "bytes": 849,
+      "sha256": "7084ee7d3c5c454d3497d39f0e783bb161fd70fe260f00d3f86944ec4c93a8e2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_max_angular_velocity.md",
+      "bytes": 830,
+      "sha256": "71b3baeafaf06844162780d441a56b719891f9e73d86bdf9498916e9646caeab"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_max_linear_velocity.md",
+      "bytes": 834,
+      "sha256": "a7fdd70b7d091d58aec13020b65085f670475171bb406bcbb7066c4d9c8c7098"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_max_spawned_actors.md",
+      "bytes": 820,
+      "sha256": "d9a1285fff136fdf52c956e50a9f0b70eab1ca9304f477f2517d12903175da15"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_ocean_magnitude.md",
+      "bytes": 805,
+      "sha256": "d58d1aa80d2e38c7d9b3319fafcb2eb9de92396d592638835c1153bc01e2289f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_physics_character_capsule_height.md",
+      "bytes": 890,
+      "sha256": "d5d05a5b6e911d9f8e41a71a5b345a43e79c9ef86292fcf039e06569f61b7187"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_physics_character_capsule_radius.md",
+      "bytes": 890,
+      "sha256": "4bfe3a51dbb294eb98a60b0c9ba6d8390f1606271ed01ddc465a9f2ff86d39f8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_physics_character_friction_default.md",
+      "bytes": 900,
+      "sha256": "1cf4c0785359fe3108ffd06854f1879ffd1d748061e3f82180984b3fce1bc30f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_physics_character_friction_lying.md",
+      "bytes": 890,
+      "sha256": "695d689e3dad17f9ce3ba1b0eec3a9130a52646a0c806bd72d3a57a053910c84"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_physics_player_character_capsule_height.md",
+      "bytes": 934,
+      "sha256": "f43133a30d7e91b4e6196d0b962c94162c3863a46bf3c299cd05a03548433773"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_physics_player_character_capsule_offset_y.md",
+      "bytes": 944,
+      "sha256": "793c755b9f53b5938d50005fd86f341cba8d32b24b860d7bda5e89542ba037d3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_physics_player_character_crouch_capsule_height.md",
+      "bytes": 969,
+      "sha256": "cac1e20ae7a9f9562fbc6164aa1c69fc67036dbc828df5ef6d0858bdb9cd0751"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_physics_player_character_crouch_capsule_offset_y.md",
+      "bytes": 979,
+      "sha256": "eb660f01d3b1b99330755b5052fb1e65f9d320033a3c48f9f19e1ae549db77ab"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_pointer_pos.md",
+      "bytes": 785,
+      "sha256": "9fb1dc5d7fe9e82c40321c28129ac7eb0ca0e1991fae64c2f0ca2050bac8aff2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_prop_physics_inset.md",
+      "bytes": 820,
+      "sha256": "9110716f3337b734a68aa2afc74d4224ef52e38ccdb5a4908f206a91dc68db0e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_renderer.md",
+      "bytes": 770,
+      "sha256": "1ea9ca16f105ef2b09b3f63febfb622c9316dc3365b42394a46fd91769edd280"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_replication_float_threshold.md",
+      "bytes": 874,
+      "sha256": "319eddce0a09fc2a088071e9142463e954596206435960724db50328e03e9322"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_sandbox_cycle_factor.md",
+      "bytes": 830,
+      "sha256": "8505661cc55bf91292fd00b471e0ee80286411fc85b4523473216ab8008d103f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_sandbox_weather_offset_a.md",
+      "bytes": 859,
+      "sha256": "59d3f7c3a3b9ee61f6b8698deeb36b6fa7471d702b26b2ecafc0fffbe86788f5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_sandbox_weather_offset_b.md",
+      "bytes": 859,
+      "sha256": "47050fad011530e7d2299c5c975d436928a931ba7afae6c54664ef59c2431608"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_seat_axis_rate_base.md",
+      "bytes": 825,
+      "sha256": "362d7b3963cbaa216665eac7c6dd5a82b66810e98bbc89e20cd3576530c6a941"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_server.md",
+      "bytes": 760,
+      "sha256": "4d102ebb1905d36ee6771c56e2bb2ff2b485ad08b3d04a1d6c5edc0bb64518d3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_server_delta_time.md",
+      "bytes": 815,
+      "sha256": "1f371b8e68dff0ba4967b46e99df393feabf7b7cf74c2621fe29b5e229424b0a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_server_peer_lost_body_time.md",
+      "bytes": 860,
+      "sha256": "adadba2cdb8da0e412fbba42b11f2a78a60228d93ffabeb4c6525ccdcdd3c568"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_server_peer_refused_timeout.md",
+      "bytes": 865,
+      "sha256": "de9a8f46a518ce373996f1e2f2e3492923482e64ab7dd4c61dac18509a1ab5ad"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_server_peer_timeout.md",
+      "bytes": 825,
+      "sha256": "93219a5bea5c304a6cf7ad7c3f71d25da816556b24c7ae98482b546f136b0086"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_server_tick_rate.md",
+      "bytes": 819,
+      "sha256": "7a1e954c40ddcadf894528aea3fbd818ce89c06ec7c37d175d5a2a04fe1fc0eb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_server_tick_rate_s32.md",
+      "bytes": 839,
+      "sha256": "1292bbe61cb889b7d5a9b612612eaa71277056ab820b48f2ab089cf7b625703b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_server_tick_time_prev.md",
+      "bytes": 835,
+      "sha256": "24b27a8fdd3e5a87dc5664172e8edccc2360381b8dab52a2b8391ef338db3c64"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_settings.md",
+      "bytes": 770,
+      "sha256": "cddd59164655946869393e95e65ee90c666da28bcb87558e68b550c7b5a2f437"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_shadow_cascade_count.md",
+      "bytes": 830,
+      "sha256": "1748f849748029278714a6f6067c8262fd8f199f891457016c54fcfaf4d5f201"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_shadow_renderer_count.md",
+      "bytes": 835,
+      "sha256": "95fa064a591166ef217cd1240d1a966b18fb5edcc2d95f68518021f26b773045"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_shadow_renderer_count_max.md",
+      "bytes": 855,
+      "sha256": "4a0bb0c6ebded3a2b31928e292be5428c67c7b3c982ab6d41cb5caf2f7dd7cc4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_spawn_creature_exclusion_range.md",
+      "bytes": 889,
+      "sha256": "af8ae5a3ab374fa542d97db1077e5d62363ddd20c39cae8cabd350c5cb3527ab"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_spawn_position_creative.md",
+      "bytes": 854,
+      "sha256": "05610c0ddc36b42975c3dfe7876662e4796b272b836d60c212b8075415af68e8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_spawn_position_survival.md",
+      "bytes": 854,
+      "sha256": "bccf1377d5e1fde91c68c81c709f225f65d7e578f20a483498d244d63f102284"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_standard_acceleration_of_gravity.md",
+      "bytes": 899,
+      "sha256": "1101492bf8a522735ee1608cdf6c3cd243a763ff61c4ed446aac6da610159a63"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_state_manager.md",
+      "bytes": 795,
+      "sha256": "fb2ed3d585b0baa4f7a0457d106894e5438895d96bb4d6ceb3cb3b9d62723da9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_target_gbuffer_dimensions.md",
+      "bytes": 864,
+      "sha256": "26f518b812b46fd36ee7f3272265ede9bae225ab0535df14facc36a7406ee2ad"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_target_rain_dimensions.md",
+      "bytes": 849,
+      "sha256": "c1725b45de6b5a57a36081fd493671a026438ce90c9289b44ae67c2047584a5f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_target_shadow_dimensions.md",
+      "bytes": 859,
+      "sha256": "b335b30d2b96fbee45d8a2bfa5aa0e5d2099e35affd664b4e7a7352ed916b2a2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_temperature_degrees_max.md",
+      "bytes": 854,
+      "sha256": "07352d92583519dda28dc2f30ce1b866a515acd9722cfcf69c18c777f91ff950"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_temperature_degrees_min.md",
+      "bytes": 854,
+      "sha256": "d123a6e4e41dfcf2497f817dbe2c8f82150e45856b02cc79b8d2ff53181c2990"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_temperature_east_island_offset_degrees.md",
+      "bytes": 929,
+      "sha256": "918ece4ad21e63a2aef46ede179bd06922be7cbd50db03104b52dafe85eca7c1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_terrain_heightmap_radius.md",
+      "bytes": 859,
+      "sha256": "f2512b63a90bb9f2497c8ef4df2a0d4333dc0778cffa3cab7c4549ccbcb33757"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tick_rate_time_prev_client.md",
+      "bytes": 860,
+      "sha256": "f6c4eeeba32710c824a3d12c0c3fe3eba792f80a4a602c9fffcac256a3aee0c5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tick_rate_time_prev_server.md",
+      "bytes": 860,
+      "sha256": "545bf9b4af7df8d9a4bfcacf8dc89fda56b5768e1eab839c8177de444b1faa37"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_grid_world_size.md",
+      "bytes": 830,
+      "sha256": "f92da3e25c60cd12ef9609454e08558b6ec5448f5d385eb31d0514a92c320480"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_grid_x_dir.md",
+      "bytes": 814,
+      "sha256": "524118806a3dca7aec580630a7113dc8a0ea581447f528966d42417f5eb8ea63"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_grid_y_dir.md",
+      "bytes": 814,
+      "sha256": "389f430b16727d9e47caf2120eb52218dacfb70509806c7b1c1ed328fec98aa7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_height_increment.md",
+      "bytes": 835,
+      "sha256": "e72066e1d6377db74b8a803aa31a8d90f10d49bef5028b031810da07302ea5d5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_load_max_height.md",
+      "bytes": 839,
+      "sha256": "b78c2403c29aa2530f416559da7da32d4a22a7ab53a2db99dc01e79c31d19ffe"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_load_radius_client.md",
+      "bytes": 854,
+      "sha256": "42b21687181cc9bbbaf7c4f7afd8f07ccaa146c661c2b8aac0eee51ff2774d6a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_load_radius_level_1.md",
+      "bytes": 859,
+      "sha256": "5af67598386e494083b1c3e7c7f09737268e4c7d07aeebc95b8292916deed2d0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_load_radius_level_2.md",
+      "bytes": 859,
+      "sha256": "1f78ffb6cead11d3fb2042f856d48f05c2b68641febcbf35322c9d60b21849cc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_load_radius_level_3.md",
+      "bytes": 859,
+      "sha256": "07cba13d8ae1c7890969ad0301845bd7315c245a3e20d61b0e66eb1fb644d53c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_load_radius_physics_local.md",
+      "bytes": 889,
+      "sha256": "82575e2ef749e291685b6f7699a9443ba09f168aa53623405c6631a370c83263"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_lod_count.md",
+      "bytes": 800,
+      "sha256": "ac90026416f2e574734cec5efac5da1512e651ac12fb3b5d90cfaf8725c6fcf6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_offset_0.md",
+      "bytes": 804,
+      "sha256": "4ec14f91e94e2236c857f41d13036fbe6a4628a188bb7fc6aba3d0249d87919d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tile_offset_1.md",
+      "bytes": 804,
+      "sha256": "024e5b3b143afac073efbbbb32e1a3b8233970f950ec7585332f62cb4cef0cb7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_time_dawn.md",
+      "bytes": 775,
+      "sha256": "87fa6f25a869d42120106856e0ca1b3da888428327b4ead4f984b7fb6c46d1e7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_time_dusk.md",
+      "bytes": 775,
+      "sha256": "a4b27f03fcd51f7226ae7f22e2645ee2c3d5da1b91dfd6d23a2f056bd8c9eadc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_time_of_day_shadow_steps.md",
+      "bytes": 859,
+      "sha256": "efe40f9ca2cd0d26d878fb59706c9dc8b1dbfd6f04ec1c90b5a8d9b8dad2c865"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_time_start_offset.md",
+      "bytes": 824,
+      "sha256": "a324223009fcb840b44c2e4c76cf9379fc9573b672e41bdfe77df5154ab2d767"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_torque_system_newtons_per_joule.md",
+      "bytes": 885,
+      "sha256": "312f73922a6a03188d87c921f864318fdd791ae43c152db9644223067a906542"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tps_client.md",
+      "bytes": 780,
+      "sha256": "069e1b26d39294a5a4c0751b41e3e9f6e641e89134204e3c9a130d5d9f73c86c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tps_counter_client.md",
+      "bytes": 820,
+      "sha256": "129bbed6a159152cdec9de2cb7bac78cd3d3a3e8d8de28553edbfb07853b9c18"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tps_counter_server.md",
+      "bytes": 820,
+      "sha256": "e06f0f709f7113d45e47d6b23d62e5c23e344bc9cbc251b7f15500b520035a8d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tps_server.md",
+      "bytes": 780,
+      "sha256": "3a5177c10788896d440e646b942de7ca3a67a2d4ab1397fb085f9ffd53a57f1b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tri_grid_height_factor.md",
+      "bytes": 840,
+      "sha256": "33ddb78c7cbac04e54b44613f898b8ad1be9f7a745413c58ede79f368f5fb801"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tri_grid_inner_radius_factor.md",
+      "bytes": 879,
+      "sha256": "02cf6a584bece0e84ce74d2620906be79aeeb5a18b413b62c1c757c68a971831"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tri_grid_outer_radius_factor.md",
+      "bytes": 879,
+      "sha256": "e7e4d65079ba52ad11f48b72439bfd06fbc7a63e809afe09265692c200ea2bb1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_tyre_data_container.md",
+      "bytes": 825,
+      "sha256": "1a1944b765dbfb1c69f03a747b2e9404af7c4fc5de80627a6742f5f1af65cf6f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_ui.md",
+      "bytes": 740,
+      "sha256": "1ed811097db9c288cdfd3cb654749ecfaa5202e7e1a0820a9847c682ed982ebd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_BUTTON_HEIGHT.md",
+      "bytes": 810,
+      "sha256": "9ae8ace0e2bdfefc8b909704a8397d484126a011d08bad8e291f1a529413b5a6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_CONTENT.md",
+      "bytes": 819,
+      "sha256": "a07dff7c6c86bf8cbb5b18b936d9149ecda8c4ecfdf4427d5773688892b92042"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_ELEMENT_BACKGROUND.md",
+      "bytes": 865,
+      "sha256": "acad217f982f8c2f3f2dfe683a35a164dd7cb804572c6125745a9c3bff2873e1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_ELEMENT_BACKGROUND_ACTION.md",
+      "bytes": 909,
+      "sha256": "4f71c9a8b1d7857522b5eb5e3b4ad7a89f3b588fc19d0cfde3364b883af52737"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_ELEMENT_BACKGROUND_HOVER.md",
+      "bytes": 904,
+      "sha256": "a9bffb797f0965d2efd283bcae8bd0833b9850c7bb5daa90d9a23e045f03254e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_ELEMENT_TEXT.md",
+      "bytes": 835,
+      "sha256": "939d41ed1d8959fb0cf240088a529e7d3c1a755ce2121f701f5101e18211912a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_ELEMENT_TEXT_DISABLED.md",
+      "bytes": 889,
+      "sha256": "9a5a1805619a6e09085a209a82095ed7bd398ffdf963fa2631b845200f4ad273"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_ELEMENT_WIDGET.md",
+      "bytes": 854,
+      "sha256": "f7edcbe6d4525644e22390c5442aded145f4d59623fad95fd2ead2170f57a610"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_ERROR.md",
+      "bytes": 800,
+      "sha256": "048367cdc513564449fd3b501e398424ac7609eddda99fe2a8dd2e14da98a09c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_SELECTED.md",
+      "bytes": 824,
+      "sha256": "1302ec501fe8cee57929e254e2aee3b8aeb0396a71d57cb62f3d6e907c7bc36e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_SEPARATOR.md",
+      "bytes": 829,
+      "sha256": "ffc3478a60de9d1d88a6368fa9700a5dd04933dc2139e106aa7b0c0dc6491159"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_TAB_INACTIVE_BACKGROUND.md",
+      "bytes": 899,
+      "sha256": "14aa7bd909a11f4f73274c57fef38825ba737d0841c315874fd28a4fff5bc98a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_TAB_INACTIVE_TEXT.md",
+      "bytes": 869,
+      "sha256": "f5ef1d437a48b9bb0c9b950c3a235c3404b050ccc8f4d91cc355acaec943b10d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_COLOR_WARNING.md",
+      "bytes": 819,
+      "sha256": "55fee5cdbedd827e4ad2ac149ea9227a829f4cf35861a7f6d64b905e16b0f1fe"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_CONTENT_PADDING.md",
+      "bytes": 820,
+      "sha256": "dc0d0b46f7bfbec8ac99e95612529df24766eb3b6499aea44a9db7a8b4689b5b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_CONTENT_SPACING.md",
+      "bytes": 820,
+      "sha256": "e765387a3a0f95b1188529916d563ebe4cf80cb4726743be4bcddc185682f52e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_FILL.md",
+      "bytes": 765,
+      "sha256": "726f498301856f8e1f2d759dbc56330abe238a86f10bab707a09c7982b74a397"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_FONT_LINE_HEIGHT.md",
+      "bytes": 825,
+      "sha256": "3f11a9c78cec9543446372bfae132743c529e3301462894b77ff59cc43f66177"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_INNER_PADDING.md",
+      "bytes": 810,
+      "sha256": "8ad1730d82ec6907a1eaf2d50a5a71b3d9c24b36b173043a5b63babfdee4ac8d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_IS_RENDER_DROP_SHADOWS.md",
+      "bytes": 855,
+      "sha256": "c4381025e647756cefb7e5c89af24e14be2d73e63d6b768fb993cfb634beb6b0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_MENU_BAR_HEIGHT.md",
+      "bytes": 820,
+      "sha256": "bba2ae065af11b771b883d3509d906ba6545df91b208e51bf8fb67e107c21655"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_MENU_BAR_ITEM_PADDING.md",
+      "bytes": 850,
+      "sha256": "9cfe169c8a840bfcf4bf27655d76d6abda71cabc917fe03e6cfe72adbe72deac"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_MENU_ITEM_MARGIN.md",
+      "bytes": 825,
+      "sha256": "4c38a6619a0ad6946c350a7abdb6fefac94d0eff7d7305d3062beffde01fb45c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_MINIMUM_SCROLL_HEIGHT.md",
+      "bytes": 850,
+      "sha256": "1ba55a5dc9d2569fd4a18ddb709c219bea666fece8156ccba68033d3697e8e54"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_RESIZE_BAR_THICKNESS.md",
+      "bytes": 845,
+      "sha256": "a18883a29b4e2701a14d14a5e4a47ef4b82d32ff0e49a2a4e45087e4ba1557ae"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_ROUNDING.md",
+      "bytes": 785,
+      "sha256": "d8112e5514848c6295472879f0ece3383989f5de1575a2b67ffdb9a65ce3194a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_SCROLL_PADDING.md",
+      "bytes": 815,
+      "sha256": "cbefaff614bbd853e62c7443ef29ed97cd2b18a2ee73a246f4b1291900e9ca16"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_SCROLL_SPEED.md",
+      "bytes": 814,
+      "sha256": "a450b05c916899cfb7cb953302dee7595afab17ed5d6ceac673e528500a4472b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_SCROLL_TRACK_WIDTH.md",
+      "bytes": 835,
+      "sha256": "282a207013f550f50a2c01234610f767e8ab7f6e401bb1b0938928513112bab9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_TOOLTIP_PADDING.md",
+      "bytes": 820,
+      "sha256": "f5e1243439f0ac144ebbf52c3e88a02ebc2226b68dbf72bf3cb346b1a271e07f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_TOOLTIP_SPACING.md",
+      "bytes": 820,
+      "sha256": "128d78dba4372974e74b4429aa19e136854f2e2dd11950c862b332392d88b211"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_UI_TREE_INDENT.md",
+      "bytes": 800,
+      "sha256": "78b6e9e028115d9f1f3220a5e65ac016e52bdde7b4e47413582e2c0eb67522fa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_underwater_ocean_height_threshold.md",
+      "bytes": 895,
+      "sha256": "b90d57ba38334b4c6dfdc29b203edf5e605426c85e3a79e1d0ec0b7bc9c338a2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_update_time_prev.md",
+      "bytes": 810,
+      "sha256": "6683566fc3251812d7e1c0a7052de1a3abe3838e036992df55dd8e8c61d56486"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_vegetation_subdivisions.md",
+      "bytes": 845,
+      "sha256": "cc9c9a8f012d8f19ae458120d440f2b613d39e1b5174f1dbac7533c380d32b49"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_BUILDING_GRID_SNAP.md",
+      "bytes": 860,
+      "sha256": "abb69cf1325b50bb3763ebd60f431513e55ce20e66abdb91178a551374c68bb9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_EDGE_DENSITY.md",
+      "bytes": 839,
+      "sha256": "2b9ef3ec7c0f519bb787761b94953316d6e5b7f375cd30586c449a8641e1e763"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_GLASS_BRIGHTNESS.md",
+      "bytes": 850,
+      "sha256": "23ff16e77ab5eda56436d28ca03a974972fcebda5244e246a3ea709cc2ec7834"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_GLASS_CRACK_DECAL_SIZE.md",
+      "bytes": 880,
+      "sha256": "9a10635cc35c07e1f373068f74919dcdc6f4b8fb11e640f29963a7a73e898936"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_GLASS_IMPACTS_MAX.md",
+      "bytes": 855,
+      "sha256": "07dc198d6838678efe8263da3ad46c60ae839596522f3677fc24be9ab993eea9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_GRID_SIZE.md",
+      "bytes": 815,
+      "sha256": "f30405a1c68c97fa5fdf3ecb5ec9dec528267af4025a8e1daec7cc44183cc0f5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_vehicle_icon_texture_size.md",
+      "bytes": 855,
+      "sha256": "cc6acecdc5b6150a4dfa00b17ae45855bd5dc0321c1922c38dfbc00ccdeabc17"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_LOGIC_NODE_RADIUS.md",
+      "bytes": 855,
+      "sha256": "7c68e73668a3c9a408240613c794aab8758baaa392a2c00eb51e688cd4682aaa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_DENSITY.md",
+      "bytes": 844,
+      "sha256": "2c6c3adc27e4235a9df718674dfe5d86dcf6640d856bd815f83c39447b16310f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_HATCH_BORDER_INSET.md",
+      "bytes": 890,
+      "sha256": "7b41ee21133366411368aa7a477496693ee96b3aaaf55be9863decf2f011a5e0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_HATCH_BORDER_THICKNESS.md",
+      "bytes": 910,
+      "sha256": "a56d078a4c81bc1146f700e3ecc95cb183afbaae599099bbfe9e6e1310651145"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_HATCH_BORDER_WIDTH.md",
+      "bytes": 890,
+      "sha256": "fb5a2d19f6602b10456d57f6eb93a4ffafd07106202e0e3c08f7c07bceb9e5ff"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_OPENING_BORDER_INSET.md",
+      "bytes": 900,
+      "sha256": "aae15053a673ac234b37ad08cb84f429e2a5a4c9f2962f6ffbd9f95c1b7512fb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_OPENING_BORDER_THICKNESS.md",
+      "bytes": 920,
+      "sha256": "327bcb3573fbc6ded824d696b38fbce2eb395cd35000a36ec41c855ad5eb4fe7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_OPENING_BORDER_WIDTH.md",
+      "bytes": 900,
+      "sha256": "5074597f02575b45ced2671d8dff148c11b8b344f9314bdd5345fa6557a675cd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_THICKNESS.md",
+      "bytes": 845,
+      "sha256": "ddf970ff97c4258d9e8729acca7bd33aac1f0269a0d645e69f0e1e3f91e8f228"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_WINDOW_FRAME_WIDTH.md",
+      "bytes": 890,
+      "sha256": "93ca84e09d33c2e20045d63a4d027a6d502615ef4beedfa1d97a0ef28c15e9a2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/G_VEHICLE_PLATE_WINDOW_INSET.md",
+      "bytes": 860,
+      "sha256": "f986bb9ce8964adda095125ffe562ed9e2ce9544bf3b07a9579e60e6d75a4e3d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_view_distance_max.md",
+      "bytes": 824,
+      "sha256": "134ee79a3b9dd2e7c6bc8f978ed8a75dd3dd8dbda0d9b91403d62ed3e7f81043"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_view_distance_min.md",
+      "bytes": 815,
+      "sha256": "7c97b1fdbb44e2d5364d44f366729a338129731542a2bd09fa946bd0838787d2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_vital_warning_threshold.md",
+      "bytes": 845,
+      "sha256": "20fbff80f8aca59575eb44d4e508867ead57d0c54d32ef9f3c77977037c39bf6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_weather_particle_count_rain.md",
+      "bytes": 865,
+      "sha256": "acf90437f83a882e0465af74b4378a420ca7f7ec47062bf3a2f8ac5dc9c3c455"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_weather_particle_count_snow.md",
+      "bytes": 865,
+      "sha256": "d4930cc41cd0f997fdf99538766d2910ba5a0ddb1b2061b516de14825b22a864"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_weather_particle_grid_size.md",
+      "bytes": 860,
+      "sha256": "d0c9b40e1424e9afae7956bb251f005e7c176fd406c1a119397f6c81c1c2ff8c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_weather_world_size.md",
+      "bytes": 829,
+      "sha256": "f58720f28b911d3eaf799768798070d0d05a0eb9fc61aaa7fceff93790c48e1e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_landing_gear.md",
+      "bytes": 875,
+      "sha256": "abde17082381dd26e9030f7f6b1d1c112ef5e6665d9facac0e8baec3b17be66c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_landing_gear_dual_a.md",
+      "bytes": 910,
+      "sha256": "49e7c54937808a59ed0a4e09c69be402568fcac4d84719a4a4b5391bfd451d23"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_landing_gear_dual_b.md",
+      "bytes": 910,
+      "sha256": "3d582acd05d109362c2a55efee78c163a1e05f0617b8b463d3b149ff2a3ab574"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_retractable_landing_gear_front_a.md",
+      "bytes": 975,
+      "sha256": "afedeb9b985d03b593919456002cb54eebea88e4ff96c85d2c69b005c59d14f3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_retractable_landing_gear_front_b.md",
+      "bytes": 975,
+      "sha256": "5fe8ae4eac32c128f46d7d58a0310d656927409deb6a79367cef3894fbbaaa74"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_retractable_landing_gear_side_a.md",
+      "bytes": 970,
+      "sha256": "cb6a0199cc130d765cfcb18b91c4ed9e735f6f7a63b3c41912af6425996e6bd8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_retractable_landing_gear_side_b.md",
+      "bytes": 970,
+      "sha256": "308fd9d2ab693f926ca49d1fb4394e52892c2edcdfba00656453078b81d31837"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_tyre_mount.md",
+      "bytes": 865,
+      "sha256": "37b3ed3ef6f70b0925ced924021e4ae21a3e86189733ae5bcd0645b226be746f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_tyre_mount_b.md",
+      "bytes": 875,
+      "sha256": "bbcaa27f1a37fea51ab8576a427d48ac1c754c3491fd9175eaccad4486d7b289"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_wheel.md",
+      "bytes": 840,
+      "sha256": "5f5761e2b41f8ab99e2aff44edad5ef58c43ae4f210266320cf60e0507f116e9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_wheel_b.md",
+      "bytes": 850,
+      "sha256": "109ac9669004806288cd100b3f145966af0e06ff62adaca232e1c3c4e3ae031e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_wheel_definition_wheel_c.md",
+      "bytes": 850,
+      "sha256": "7fbe67aa949bb07a5c0da6516e1ca3bb15326e2aea4f8d951cb9e054f1104b41"
+    },
+    {
+      "path": "sdk/docs/reference/ns/g_zombie_horde_size.md",
+      "bytes": 824,
+      "sha256": "fb21bf338108b46eba9866562c33ebae508bb34d8fde4a94fbf1f76b186f8261"
+    },
+    {
+      "path": "sdk/docs/reference/ns/get_transforms_run_cycle.md",
+      "bytes": 945,
+      "sha256": "46b9436800eeb0c81c4aa4fc380401168ab36c311624e109661111f45671ece5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/gpu_omni_light.md",
+      "bytes": 1538,
+      "sha256": "0c8ea6f26ba86ea003f63d79970096305376aff5d7251af3e631d997fadaf6d4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/gpu_spot_light.md",
+      "bytes": 1509,
+      "sha256": "f715caa5ba17a6214ef419a3705f3acdf9c867b4bfa556f60ea48970aee36a0a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/graphics_cull.md",
+      "bytes": 1054,
+      "sha256": "2f9838343508e057fc4790e372d764843cd31bee1a7abaacfde4ded0fc2ea3af"
+    },
+    {
+      "path": "sdk/docs/reference/ns/graphics_cull_by_distance.md",
+      "bytes": 813,
+      "sha256": "8b4b5d51cd540c3c0570d17760803a59300a8e45f8c623adfbcf084425dccd2c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/graphics_cull_by_distance_radius.md",
+      "bytes": 855,
+      "sha256": "115b50278622e5861454e4f176212d43d07346ad24bb084eff6bd65d1a29c0b7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/graphics_cull_by_frustum.md",
+      "bytes": 1411,
+      "sha256": "eed30172eca7003431d62c20e7c894b04a3ca4d46183ec50202be813c31e3249"
+    },
+    {
+      "path": "sdk/docs/reference/ns/graphics_cull_by_screen_size.md",
+      "bytes": 1128,
+      "sha256": "8bff3fee07c7649f2367ca7e62072bd56f62b3d7e2ff2be7d0c0a4dca47be6f3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/host_new_game.md",
+      "bytes": 710,
+      "sha256": "073685d2deb3c7e59246a3f2fd7b8a79ba5424adb14f31946a51585e627988ee"
+    },
+    {
+      "path": "sdk/docs/reference/ns/host_saved_game.md",
+      "bytes": 708,
+      "sha256": "d39b9a062f8f6dba48550150edee0a169ebff90d8a4f25afd778676ed39362b1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/ik_hinged_2_bone.md",
+      "bytes": 858,
+      "sha256": "c9c8b75254fd7c16af3e249642d7db567b9f5510fab8ec7db12afe7c20c86a0e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/ik_slider_2_bone_pivot.md",
+      "bytes": 850,
+      "sha256": "ead1844ca1af28e401babcc545771f1066da9609c153e1a0a851ce7641b9ee67"
+    },
+    {
+      "path": "sdk/docs/reference/ns/ik_slider_2_bone_pivot_pitch.md",
+      "bytes": 862,
+      "sha256": "bd8445f95b2579a754b14a82992463b696fcdaa9f734ac340a8198adf4d7eed6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/imposter_bake.md",
+      "bytes": 2440,
+      "sha256": "7d62d811439460e3cbd3fc4f26664aac750014b3b3409f4f56ddc812ee226d70"
+    },
+    {
+      "path": "sdk/docs/reference/ns/imposter_bake_vegetation.md",
+      "bytes": 2304,
+      "sha256": "54b02e20aa2459cc7a7333293f0f93fd1dc9f5f2ebeecc28888d9b7955d7d4b9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/imposter_data.md",
+      "bytes": 1929,
+      "sha256": "6ea3969ebf5f6824c87a666ec4d8ef52f5a73b4022ce8be8a08e63e5e83400e0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/input.md",
+      "bytes": 19374,
+      "sha256": "20d90609990011eedd157ecfbbe9c7f734792f59b54544a8a153c90135ba4875"
+    },
+    {
+      "path": "sdk/docs/reference/ns/insignia_patch.md",
+      "bytes": 1886,
+      "sha256": "5e6fbaa72538ee6cb07113bad161a3334ca2e2a702601dc847aa0325bd3a0dc0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/insignia_patch_util.md",
+      "bytes": 1263,
+      "sha256": "c1b62cf9f1a758e6a23ba4b0ebe2517ce1ff1034008652b4f50ac3cb964f3fc0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/inspection_util.md",
+      "bytes": 15538,
+      "sha256": "121ade772345f0762bf769013e0377897648d3b2518c9b4efe3ef5a16cb11f51"
+    },
+    {
+      "path": "sdk/docs/reference/ns/inventory_definition.md",
+      "bytes": 34121,
+      "sha256": "2a3f3561e754d6cae23a080860a22f08b638c5ce529fbc2b4e7c97e286af00eb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/inventory_definition_container.md",
+      "bytes": 10005,
+      "sha256": "fcbbc961448212a0a0d25879fb5c0fd54641cc1f0c56163646c0e6c6c945ba3f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/inventory_definition_file.md",
+      "bytes": 2291,
+      "sha256": "46f463988308b1c398a378bdc36f0c88f6cf3797a09199a6fb3ca9339fb00e41"
+    },
+    {
+      "path": "sdk/docs/reference/ns/inventory_definition_mesh.md",
+      "bytes": 2076,
+      "sha256": "8e11eb86b49799d833c5d87ef3529d326b108e394fab20ccb241b1ddea0e756a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/inventory_item_filter.md",
+      "bytes": 2207,
+      "sha256": "ef078c49edb26d8fb3b9005aee6f01beb79ac193a2f056f947a212f240daf4bc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/inventory_item_util.md",
+      "bytes": 4828,
+      "sha256": "9d0d0af91fd38eb04b97d599f0992aab3baae1a7417ee83c9eb111573770382a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/inventory_util.md",
+      "bytes": 1216,
+      "sha256": "d3f273212450ac1c39412c7487ce38b4ef5fed00dc0fc6cb9fbd56fb5938e2e2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/is_loot_group_in_mask.md",
+      "bytes": 820,
+      "sha256": "c60902cd6e919383411e272b079c3f896a2ed5b307da2f89e66f40ffb33ec108"
+    },
+    {
+      "path": "sdk/docs/reference/ns/item_floor_util.md",
+      "bytes": 835,
+      "sha256": "650d7a38059952d873e8fa06dbad18f139031c76d65b83d6717ab3f27b22dcfe"
+    },
+    {
+      "path": "sdk/docs/reference/ns/item_util.md",
+      "bytes": 1992,
+      "sha256": "2480e8ae83bfce762cadd21e1dba38dee8a8398ed32ca88d86160db63855b8bb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/item_world_util.md",
+      "bytes": 1622,
+      "sha256": "508eb6bac816822377c3cef35b480802f8baeb1ba4b00e5b27acd8bef7492371"
+    },
+    {
+      "path": "sdk/docs/reference/ns/join_game.md",
+      "bytes": 844,
+      "sha256": "f86cd03a62a9586155705923f5dc1b383865b985688a41b2c3950eaee6936267"
+    },
+    {
+      "path": "sdk/docs/reference/ns/join_game_invite_code.md",
+      "bytes": 725,
+      "sha256": "0ea61edd9c347d29161e1a79ef5c31c447d01f317fe9b38c8d74b546fa5b3bee"
+    },
+    {
+      "path": "sdk/docs/reference/ns/join_game_rich_presence.md",
+      "bytes": 731,
+      "sha256": "a4a93a237035b1b5b4d91dc5118cc67fc3d566716e11f0728e49628e8a050e22"
+    },
+    {
+      "path": "sdk/docs/reference/ns/json.md",
+      "bytes": 76797,
+      "sha256": "2bbf9e39d71c865c11840619b43883cab5dd314a9ad5e820e2559f5dc6ce6572"
+    },
+    {
+      "path": "sdk/docs/reference/ns/kelvin_to_rgb.md",
+      "bytes": 726,
+      "sha256": "e9ce785ef316b744dd5adf85a1d6660786a2203cf8df8b5b17b9ac0851a395dc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/localization.md",
+      "bytes": 7621,
+      "sha256": "e667e636d93213affcc954438e1605c4b91251d037c656ea5a56fdacc5ccb9ac"
+    },
+    {
+      "path": "sdk/docs/reference/ns/localization_row.md",
+      "bytes": 869,
+      "sha256": "9da56f81d69619baadb66f4ac465d80590df23cb3fb69a4b9d6dad294246582e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/localization_table.md",
+      "bytes": 1467,
+      "sha256": "0125537269a3502085489516c0b158e1f987a44fea4876de973c3cbbe0f170bb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/localization_table_util.md",
+      "bytes": 1389,
+      "sha256": "86fa89e65d46160b8600524fae05dfe586225ac2319f5e9878a31d15e71541c2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/log.md",
+      "bytes": 1103,
+      "sha256": "b6d348b7575c1bc7fc039ed749860b60b44e43154d0424e49cb9b266c60c09f7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/log_file.md",
+      "bytes": 688,
+      "sha256": "8f4ef5ea2ed6583b4e88e558205e452a77cd9ae1d143bde9a566c760be059c13"
+    },
+    {
+      "path": "sdk/docs/reference/ns/loot_edit_panel.md",
+      "bytes": 2553,
+      "sha256": "55d5f42a5a1a5ec47a1e64b79762c76c625acabe648170dc20c110bc56d6f4d8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/main_menu.md",
+      "bytes": 11556,
+      "sha256": "1d1cc38af93f17b5478c75d698c920e76d6895125e56dec685274d708e3b25b6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/main_menu_scene.md",
+      "bytes": 12578,
+      "sha256": "039c63aa12d0d2febfa6e26d2836da5e56fa244204672faedb76e5e9832af218"
+    },
+    {
+      "path": "sdk/docs/reference/ns/map_density_texture.md",
+      "bytes": 1413,
+      "sha256": "60d6fcf23bf6122c552e23fd2191e5509fcf05de23ad6c6fbd6b07b6ae628de0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/map_screenshot_panel.md",
+      "bytes": 8192,
+      "sha256": "4363c58a6fce91c0762f589d7940a0cc5a9f2819561c1b4396c7eb0d678d7a48"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mat33.md",
+      "bytes": 4202,
+      "sha256": "9d248f065778069305066c80263fc7a906798f36ab2e561bdedda8c4d0d99223"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mat33_s32.md",
+      "bytes": 3808,
+      "sha256": "0c3d3b1531df65c10563c8f3dfff3ae32ba533d067797512a1ff174215c2364d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mat34.md",
+      "bytes": 1486,
+      "sha256": "14671ce8817bf8eea81807f75ee73209a68a9618881725c61797eb2d094e46a1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mat44.md",
+      "bytes": 1400,
+      "sha256": "2e40009cf1eefb96b8db9e41aec4fa5f2b3860b5f7578d9b259a05a1245bc084"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mat44_f32.md",
+      "bytes": 1460,
+      "sha256": "22ec588d88e767fae2b1edf6f16a05bd48fcc47150ee417e2b77e87ab73d09b1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/matching_tile_data.md",
+      "bytes": 839,
+      "sha256": "1fe8de93f8f0654dae5e81a53b8ae33eec7f427807d1bf1c3140d5f39e79f503"
+    },
+    {
+      "path": "sdk/docs/reference/ns/math.md",
+      "bytes": 17023,
+      "sha256": "1b70ba8318c917679c39e7a02c7cb51332520d1067906d9f322207702c5a07d9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/messages_client_to_server.md",
+      "bytes": 18851,
+      "sha256": "4e1d175587acb4f2f5b0f9e6883228e656310fca129389071f080348ba8fa61a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/messages_server_to_client.md",
+      "bytes": 45070,
+      "sha256": "f52cf63862007e8ecf3ced4beeccfc87b331ce68c6df43e849218a1b858f0626"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_metrics.md",
+      "bytes": 1540,
+      "sha256": "595dc6ce1a81224f1d8519029fcb567550d0ff00f35c530c6cf53d7e4f91be1f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui.md",
+      "bytes": 41481,
+      "sha256": "00fe7cfc2dc0af109e30c5b9fdb828ada80b5de829d04beacc28ac3700a80c41"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element.md",
+      "bytes": 11878,
+      "sha256": "4968c000ab5dad96aeda0ff070aea48da0415ff425abe14148a8a4ee23aaf5f5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_button.md",
+      "bytes": 4836,
+      "sha256": "4c39f718397e160d808e79b889449c9c90cc5d590ab7dda289249ba469bfb4be"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_button_base.md",
+      "bytes": 6669,
+      "sha256": "12f8a2ad7d242d9aa786d5dff58e95cfe65d0a7362cadb7ba3310679eca3b39b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_button_color.md",
+      "bytes": 4563,
+      "sha256": "f5d5535f34018be7bacab0795f42ad0410c240e4defcf8fa9cc4a584e90bfcd1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_button_combo.md",
+      "bytes": 5271,
+      "sha256": "ee1bdde1b2f97811453e7a2d8b5e9eb8382adb25a5b36b56c8f63e2958cb732e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_button_icon.md",
+      "bytes": 5307,
+      "sha256": "6d2cd4a318c9ddce836553d2ea90c09f334f60fb9afd0dbddff42f7b139e4b25"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_button_list_item.md",
+      "bytes": 4996,
+      "sha256": "d882add6bcbd42d2e3e39aaabb379dad86a8086986b95da98a54aafa414f1d2a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_button_list_item_icon.md",
+      "bytes": 5283,
+      "sha256": "92cd24e49fc7c2f8393d51f9965486f105fd982b77c4f5e2e9ff926c86ceb295"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_button_list_item_texture_image.md",
+      "bytes": 5419,
+      "sha256": "3aab2709ee24e0b4a750f40bdb58eb88182c4c8466d44e6e703439a7d55befdf"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_chart_bar.md",
+      "bytes": 4649,
+      "sha256": "97e5d8c46f93d663855c5bba4cbbd207e57ea2de51d8f9a1961388f6e428bbb0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_checkbox.md",
+      "bytes": 7083,
+      "sha256": "60eab1922431d9e34f23300cdd5385f663b7ffdae697c505ec83699177eec2ca"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_color_picker.md",
+      "bytes": 8596,
+      "sha256": "66aff97f151660d5d745d918f3df97a7b230e3fb9f655463f1a432917df3a7a3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_container.md",
+      "bytes": 7079,
+      "sha256": "d5ea5a5d8fe37c52427958b81788a8c2e1d2d0916a7b1e5ffe530ca9bab6f9e9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_container_collapsible.md",
+      "bytes": 8728,
+      "sha256": "e96963bbc8886c500179eb97510f79489d8ecb69d2ff2a351567a8563e0fbfc4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_container_divide.md",
+      "bytes": 8362,
+      "sha256": "2867d373a1abeba2cd04ac6e216366d673cb5374924aa6b7dbe4738c089300d0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_container_divide_end.md",
+      "bytes": 3859,
+      "sha256": "8a7016e340bdf3d0ff53abe91c546e130cb3bd6b1a3fd81b92601b614f321030"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_container_equal_columns.md",
+      "bytes": 4636,
+      "sha256": "b1d91b8ad5676d1c920226a3aa1aa59e7e4171d65908a3e356f7bc0de4a3a17e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_container_fixed_columns.md",
+      "bytes": 4749,
+      "sha256": "9ed90da9991047c97dc0f93ca6fa0fb530152b6cbaeda6a7b2c28120442c817a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_container_fixed_pair.md",
+      "bytes": 4719,
+      "sha256": "cd3ed2af5809c4dcca5c2289425b0f7dd9932be5f631d46f7d6782acf3f986a7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_container_indent.md",
+      "bytes": 4995,
+      "sha256": "b00d6403bc2256e993a7025b6b0075ca641fc895e051a2275a0316e2ef24157b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_container_label_widget.md",
+      "bytes": 4626,
+      "sha256": "e5272827243d47254caf379e11f059b9626d965fec05a3f96b756c5efd4edff2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_func.md",
+      "bytes": 7243,
+      "sha256": "d5512653082c3bfe1a3d936f28b6552e1dfede51efc4f79fb480f9bda53d3cf8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_icon.md",
+      "bytes": 4606,
+      "sha256": "58fff4e3498ff0ce1aca8d55390660bc3827e528528fe9b11b4fdf6bd3f8b884"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_icon_text.md",
+      "bytes": 4824,
+      "sha256": "24fb844e4acff5a5ff6628bd636c12a4b9f9ca9061a2e21ce8c99e633e36ed40"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_input_text.md",
+      "bytes": 9729,
+      "sha256": "d356685d82ffd7e034e565cf0af14907d717459dcfad645a2849b6f3c0133ebc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_menu_bar.md",
+      "bytes": 4742,
+      "sha256": "8f41b787303286ca71ae4ecb11a014cdc202b80985216bcd9acb82b5530f2fd4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_menu_bar_item.md",
+      "bytes": 6960,
+      "sha256": "48a5801098960d8b17428e79ff230fbaed5bbace9b26fc68a7d71f657122bc44"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_menu_item.md",
+      "bytes": 4989,
+      "sha256": "4e9ad68acc969d553d7648a40ed80e244eca2fbe9423f199d263f50d1a432112"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_menu_item_base.md",
+      "bytes": 6883,
+      "sha256": "ec74e9e2687dd99d00478eeb68e5585aa13d4b7784eed5a0d5c7b2cfcc76df42"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_menu_item_group.md",
+      "bytes": 6931,
+      "sha256": "78423634df0719cb03204d2fe7c5fdfc3e6d668ecacdbecfe081fee3cfd46baa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_menu_item_icon.md",
+      "bytes": 4717,
+      "sha256": "3bf0207f074acfae8128dcc10e1ccfc30f3fb5baa419ed8d844a5b0fed5f615a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_menu_title.md",
+      "bytes": 4798,
+      "sha256": "9feb643c4c51abad5ee76a7d62a6297185afa689b21a30d4afe99105e600b654"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_overlay.md",
+      "bytes": 5621,
+      "sha256": "f0252244867c871cd9dc4d7c36d965a4303c6f64707c87debfa4534b7e7de179"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_profiler.md",
+      "bytes": 13686,
+      "sha256": "187c6aef3c71e53aa0fcfbff410252592b3a119442738c0a7a618e17bc127644"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_profiler_bar.md",
+      "bytes": 11507,
+      "sha256": "aef5bfcfb3c351724fa1aa70db06ffeba8c4b2e1049978b706806207925ee761"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_profiler_expand_button.md",
+      "bytes": 5403,
+      "sha256": "0bdab9bc6eade1315294ae68cf8d0e99f27ecc2a4794840b778c78178fb7b349"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_progress_bar.md",
+      "bytes": 4785,
+      "sha256": "3156698884849e4339a6ccc968434a8e3fc2c55743c2a1123e1304e4906146b6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_scene.md",
+      "bytes": 7992,
+      "sha256": "4c1cc882690e40ee1d3628fa4e7d5bbd6ae771c9e1dc2a456a28c735a1edca2b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_scroll.md",
+      "bytes": 8361,
+      "sha256": "ab6b01219c9e330fb8917bc72b8eff0618911a0f7cd1d6dcccf200ba7a780333"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_separator.md",
+      "bytes": 4504,
+      "sha256": "252d9b15186c683c55d1617d1074b3ff1e85de78d0c1731fb63ef7f77b404403"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_slider.md",
+      "bytes": 10490,
+      "sha256": "939c5bdffeda2fd6c107fc2abfbed6186cab8bc9277ddf6f81568d7178b9e3d4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_tab_bar.md",
+      "bytes": 6186,
+      "sha256": "b1984b58789c0aa9241388b1b6a7f7b945eb14e9e178e024691e02b3f45179be"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_tab_bar_dropdown.md",
+      "bytes": 5793,
+      "sha256": "36c18bc5ae898ddb1f3e1c7c32a0894491f2597e817f7d65f410933a47e33904"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_tab_bar_item.md",
+      "bytes": 5077,
+      "sha256": "3d5aaafaf30604272974d5c3b0089fb8de7e8f9d16b78a46f2f1c573979ac642"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_target.md",
+      "bytes": 4611,
+      "sha256": "fe13833b5a315a45aab4917390b27389690f55e6209dd2a02ec83cda0177c12e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_text.md",
+      "bytes": 4582,
+      "sha256": "0eb7add31a8f53129d7612cf80f2911a3e16cb9a2391d7769879131e362ada22"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_text_label.md",
+      "bytes": 5057,
+      "sha256": "6bdab2dd5587de80fe393f2d67e5cb4a0c89d081f7d681e47115ae61ef9a62df"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_texture.md",
+      "bytes": 4627,
+      "sha256": "9b74a264220bb0a006bf17ac258da95601205e6ea5923effe3234dd22abc9b9e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_texture_asset.md",
+      "bytes": 4714,
+      "sha256": "ecf4fae314a7705638b3b0eccb1750bd9523759145ab4849a5df01fff2a3fd5f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_tooltip.md",
+      "bytes": 4864,
+      "sha256": "08083a69c12da4720f964d388e318a4bb826e70fbfd04eab809e72961b40a463"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_element_widget_label.md",
+      "bytes": 5213,
+      "sha256": "6ff64dde2e4c9efd5154b23a49f5f5c5c29d9420b797df3c12caaea1a33f9a5f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_input_action.md",
+      "bytes": 1098,
+      "sha256": "dd3c0712b6a08828e57bfbf9a53565b826d733cb4d4a3a5a57b8309db799e77b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_input_text_result.md",
+      "bytes": 982,
+      "sha256": "ad0ba023a0bb09daacf410abb5e5e1709b9a375a228f27cbfa73f79f48fe112e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_popup.md",
+      "bytes": 796,
+      "sha256": "c469fa511f6e6129e34c3362db4b2dccf0ac8ccccf88903a178d25a4610cfd01"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_rectangle.md",
+      "bytes": 864,
+      "sha256": "6ec6f5b2e83782ebc2c03976b74e2c512956580d47b204cecc6a09e1013fe14c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_renderer.md",
+      "bytes": 4486,
+      "sha256": "e028d24f380583031fa4d4e123a966a08ef5e4664c883e8117236a297c342d85"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_resources.md",
+      "bytes": 7943,
+      "sha256": "63c141e4567597ca984432baa862d20b1429bedb54f13209b3f566e6808172ab"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_scene.md",
+      "bytes": 5288,
+      "sha256": "8f0b3ffc188e38b498d4a165b677a38e3a08f7fc7b840b2df5bf4ce4ab253bf8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_text_editor.md",
+      "bytes": 16326,
+      "sha256": "8c5b6b477207c6cd8ffc21aeda8994cfba097ad4c1b7ebe77d5feaf0582eb32b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/mm_ui_tooltip_group.md",
+      "bytes": 845,
+      "sha256": "db41f693475f3462397b2065126ad48c0b9c6c8d43cd348831bf36fee52fccf0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/navigation.md",
+      "bytes": 16897,
+      "sha256": "36c37e188d19f6d0abe4f9e50d6333a796c268b19514a714afaeb49f936e8c58"
+    },
+    {
+      "path": "sdk/docs/reference/ns/network_diagnostics.md",
+      "bytes": 6609,
+      "sha256": "cf718f7ae31a780729475068701345289a4fda0fd63496735ea4ceb7a92368ef"
+    },
+    {
+      "path": "sdk/docs/reference/ns/ocean_data.md",
+      "bytes": 7269,
+      "sha256": "0a6847926f0fb561fc3d4aef68c967ac1ab1296bc20016653bda39f9dc1b2ce8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/on_action_axis.md",
+      "bytes": 718,
+      "sha256": "63e838c3f8ead8be3cc3e2277a3031f6d9261525124616e0a5a3d36936d4887e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/on_action_digital.md",
+      "bytes": 729,
+      "sha256": "172e7c19df8ffdb542ede9e8e968a5c72ac1dcabdc64505684a52b2b42ae87ee"
+    },
+    {
+      "path": "sdk/docs/reference/ns/on_create.md",
+      "bytes": 672,
+      "sha256": "2f92601e81e199f1085325fe09628e3a6de854637c67c5a09f490be9bb3c7c5e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/on_destroy.md",
+      "bytes": 676,
+      "sha256": "d5732dbe4e0a058e6515404b9eae31044963e37d4ebf7317430c68f81587ff8a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/on_input_character.md",
+      "bytes": 709,
+      "sha256": "774506cc5dcdcb11ba95bfc5cc7af06d6a2de03e283e2e45c9cade9e2c06f5fc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/on_input_character_action.md",
+      "bytes": 798,
+      "sha256": "6f3cc714dbe74517ebc4d485a58dc3483f6b67deb2176ae92049788061327590"
+    },
+    {
+      "path": "sdk/docs/reference/ns/on_input_pointer.md",
+      "bytes": 831,
+      "sha256": "48f644a69b5f746eaa5df1ebd2decc8dca46ece379d8c52724aecc66f7cdd6c0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/on_render.md",
+      "bytes": 664,
+      "sha256": "99fa2a663123bbdcd0dc40089eeb687ff485ee1cc1d647b8fa736e522b6615be"
+    },
+    {
+      "path": "sdk/docs/reference/ns/on_update.md",
+      "bytes": 673,
+      "sha256": "2f7f0b304ed8f9d3eedf45376e0e3dfc965692c4b60fe0bc42d38182fef49304"
+    },
+    {
+      "path": "sdk/docs/reference/ns/outfit.md",
+      "bytes": 9785,
+      "sha256": "8f9d5ae27a4e3cbe6fede1e33d5b559b09ab948b8368049a296cc11ecb46dc71"
+    },
+    {
+      "path": "sdk/docs/reference/ns/outfit_pattern_data.md",
+      "bytes": 1745,
+      "sha256": "189c8a7b1cb559b6154bc5516566547d9e68d9ce516782c2e4900a89bd6a13e9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/outfit_resources.md",
+      "bytes": 5784,
+      "sha256": "0f5c1c34eaac8aa383e447f04addd77099eb639a81c862b37b89441fb8f76874"
+    },
+    {
+      "path": "sdk/docs/reference/ns/path_link_definition.md",
+      "bytes": 2178,
+      "sha256": "39978d4f6b0f11a33f8bb774f5a7d6c7a2a09ad09adf272c1234c1d7b02e6ba7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/physics.md",
+      "bytes": 195344,
+      "sha256": "884077b84ff0101fba64604435dd6ed5d9cb3b9760a088fb5e883c4a2f693644"
+    },
+    {
+      "path": "sdk/docs/reference/ns/physics_actor.md",
+      "bytes": 1198,
+      "sha256": "916f57b8fae197a992981c0474ca2cd7ff538bba1644ea54b6d6bef3571540f0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/physics_util.md",
+      "bytes": 4281,
+      "sha256": "7b248e21a35344f1a0dea5731c1bc4a0ff8f4bddd67f4dc9daf97e01c78c9937"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_additive.md",
+      "bytes": 4658,
+      "sha256": "81bb0a853b6c58b5f0915a86e7319e613508417089aa72006b49546039735c45"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_additive_sight.md",
+      "bytes": 4884,
+      "sha256": "3d8d678091d62c806063d5153cab2d633c21c41881c22e3da1d433e80b6b5cb6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_binoculars_vignette.md",
+      "bytes": 4572,
+      "sha256": "c5d3c86315113b3f1dbdf2e7142ed90f829a6f4f22f68333cdc6fe24db6cbebc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing.md",
+      "bytes": 5715,
+      "sha256": "5125f740de5188e9a30a39560ad5cad1a609c26d27a83d3fb81431c9b8b1fa8f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_anim.md",
+      "bytes": 5952,
+      "sha256": "3b2970dd6489f80c22ba715b04f865755fc9f1b09be2a8355743aef38575187d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_anim_additive.md",
+      "bytes": 5728,
+      "sha256": "c2ad974e40d1d9f75b02b8859e194e9e34230f01e7ae4ff96b677d3566e8f025"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_anim_depth.md",
+      "bytes": 5945,
+      "sha256": "037ccc754d74518fbe51ff55567c20ea593061ae6f5881ac6d68ec6b7e882271"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_anim_glass.md",
+      "bytes": 5599,
+      "sha256": "dabfed72caff041d9e77c7b915a9f01108d774c19d20ae824dfc969618d4c144"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_anim_glass_depth.md",
+      "bytes": 5682,
+      "sha256": "ae681dba83cff7196197f6c64926016d4089923de2d44088a636a6990879eb23"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_anim_thermal.md",
+      "bytes": 5673,
+      "sha256": "c81352f986cabe32030f579cc34fd3b388ae6cd50ae101c2f8c547bc405ed2fa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_decal.md",
+      "bytes": 4716,
+      "sha256": "f09fc6acfa15d67eaffb92f7abacb0ee38c0bfc74deb2514827af6ca7fae9876"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_depth.md",
+      "bytes": 5247,
+      "sha256": "bfcecdcdb7da20441a391e7854c223d914f8ad0358f9b73061e555a74c982775"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_glass.md",
+      "bytes": 4906,
+      "sha256": "43cac8172d46c3682104f707135d1debe45e8f8530994e72337786c4b53131d0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_glass_depth.md",
+      "bytes": 4988,
+      "sha256": "28dbb94eb6a25fb80aba2147001540dbdaf7ba893b69af04643684d38b2f2cb4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_portrait.md",
+      "bytes": 6265,
+      "sha256": "73280193618111965afa5b5421e3c6f3bba18c11ccd3324139bce7a12eac89f9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_portrait_anim.md",
+      "bytes": 6535,
+      "sha256": "dc3d868f5928d246952eb267e41017bf39212badc925041833c952b8a6cd8d55"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_portrait_anim_depth.md",
+      "bytes": 6297,
+      "sha256": "67c75c3c06133b4f9e8c64e3f8686bf2fec6e3a46e531f428095fe2045472f41"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_portrait_anim_glass.md",
+      "bytes": 6182,
+      "sha256": "4d13754148c79216d6bc9963daad5ecf732a8c3603847d2b0cc5f4d359c173da"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_portrait_depth.md",
+      "bytes": 5600,
+      "sha256": "616aed51cb55a5d7a3447d24de1db412742f2e8f59ca37b1a60ca7f428635ec9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clothing_portrait_glass.md",
+      "bytes": 5485,
+      "sha256": "d4953ccb348134a7dec0b7cea22c25fef140a10327ca1074b3dbd8c606858c49"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_cloud_composite.md",
+      "bytes": 4380,
+      "sha256": "a947ecd9ec84c5425a5b04692b23f130a7610c03d9c8c9a79dbcf967acf1cc21"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_clouds.md",
+      "bytes": 4956,
+      "sha256": "332bb90cb76bde0463a6f9574f39b94c10b43c4dc72e05f2120ab2cac96d160f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_cluster_build_lights_planes.md",
+      "bytes": 5923,
+      "sha256": "7b43229f690a02fd014c620166715db383dc98cd9c162970723f9cd520fc9902"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_cluster_build_volumes_planes.md",
+      "bytes": 6132,
+      "sha256": "ae5d86622f40daac7cdfd550c7e94230739cac86d99f84bd173c559f472e75fe"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_cluster_clear_count.md",
+      "bytes": 4103,
+      "sha256": "83504e2a1e331ae8ab9e8b8eae91492c31a9823c0a77163da323350e88aca5f1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_cluster_draw.md",
+      "bytes": 5051,
+      "sha256": "3199463306fd5fa28ec45f2523e25e041b61a2d4e8200e2763b4068548607514"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_cluster_volume.md",
+      "bytes": 5258,
+      "sha256": "81cff51730126407a886d59038bc30f0b5b56b48b4f56d22c6199e10979ba3df"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_composite.md",
+      "bytes": 4832,
+      "sha256": "7473854d0dcccbaf44b6ed51512c562794a0f7e43be97864925e99dd7b7eadb2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_creative_dome_blur.md",
+      "bytes": 5466,
+      "sha256": "400ec13f8d01c363614ee3cb0ed5796ecaa383ef6ffc7826f99db5d7464ecccc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_creative_dome_light.md",
+      "bytes": 5695,
+      "sha256": "ef326d824d9779ac7388507fba1c8c5e87f29f8eb77fb01eb34290f8629f0508"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_creature_anim.md",
+      "bytes": 5151,
+      "sha256": "983210eb0a124b2c90b6fa2ac9186d17195327a84f9d31466a0a1fe1b94aff23"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_creature_anim_depth.md",
+      "bytes": 5213,
+      "sha256": "29a18b92906681305e4c6afdbd6f4a96e3243354d4ff40fd2776cab637bd7909"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_creature_anim_thermal.md",
+      "bytes": 5449,
+      "sha256": "89cd12a57dd17c66c5eef130ef8603d0fb3df0396a50479948580ead5c69eff2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_creature_eye_shine_additive.md",
+      "bytes": 6173,
+      "sha256": "bcb11edd39faebf9b109e2a90d034981a0b7eacc44575f844ed8a9c74b4869cc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_editor_overlay.md",
+      "bytes": 5270,
+      "sha256": "7c17b1f13258e22b779ca76f1e6d6fdf5184a01d1aa77f541f60318f7852224c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_editor_overlay_composite.md",
+      "bytes": 5313,
+      "sha256": "deb4cce028610f1d8245334384c64f9ee2e628bb0bfd4e421a18fe8c952a6d65"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_editor_overlay_composite_unclipped.md",
+      "bytes": 5693,
+      "sha256": "3693949ccbea42936bf68156fc6da90a1e15143fc590a525ab94419da4a02359"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_editor_overlay_fluid_gradient.md",
+      "bytes": 5884,
+      "sha256": "9a68b191b863cb60634c95e24109bc20e1811e7dd655ff31e83b73958d55c8d3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_editor_overlay_fluid_gradient_volume.md",
+      "bytes": 6285,
+      "sha256": "cba3c02b13508470aa7a4a1bf7f385f1b8ae7f7af4f3116aaa1bd4fff602682f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_editor_overlay_grid.md",
+      "bytes": 5522,
+      "sha256": "991f5662710430ec75df4eab1200853b7637fcfab6308f961375ad2088b3d156"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_editor_overlay_text.md",
+      "bytes": 5601,
+      "sha256": "b223e4d3792f566b404315a9cf704e58d1b9a301fd13066eeb81e5869d94c2dd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_editor_overlay_text_background.md",
+      "bytes": 5545,
+      "sha256": "3ca093e68184f3171b29b402e1b7e78cc00f0e9b9a14a7d27448e76e304d9b1a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_fog_blur.md",
+      "bytes": 4387,
+      "sha256": "7f2c91797f5677e45a7d9f422dc35eb7c1cc2bed92b5f8ebc295fd1085e4987c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_fog_blur_downsample.md",
+      "bytes": 4827,
+      "sha256": "e86b51d6ad246a96ac3540d2c34ac4678a3c0a0e42b041ac132055fe57d0f595"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_fog_regather.md",
+      "bytes": 4440,
+      "sha256": "c083627b80a631756a6ae0473ec177a1976e4e703b26830a6c51c8d365f5116d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_graphics_visualiser.md",
+      "bytes": 5426,
+      "sha256": "cdd0bffe1f56278fde9621dbab168aedb8b752625bfacaa70399bf02100b5318"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_grass.md",
+      "bytes": 5329,
+      "sha256": "59b3d57b9decd040561659b3749e4392eab4c7331cecf9d79cc32f08bbe59ecf"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_grass_billboard.md",
+      "bytes": 5701,
+      "sha256": "6756d5aedac339fce4c8d78f5a4e10596935f8018390177d193cf740893d045e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_horizon_map_a.md",
+      "bytes": 4712,
+      "sha256": "b3a6495b86aae1790864d463023fa956fbd273b2e1ca79b807e157e7f0ba5326"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_horizon_map_b.md",
+      "bytes": 4712,
+      "sha256": "bd843ca8a0bd7481c242b6f926a2763dee94bb6a13f579d7d8dc54d3b70aaaa4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_imposter_bake_mipmap.md",
+      "bytes": 4911,
+      "sha256": "511050fa25a2209c9d51c565b20a22801ef7bb473fbe35a846effab94487467d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_infrared_missile_launcher_vignette.md",
+      "bytes": 5610,
+      "sha256": "1e97727adcfe7a4c000e1fcaf21a2cab81ab5fb14ece72ae826a7d2f6900c713"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_insignia.md",
+      "bytes": 5233,
+      "sha256": "146c6fb00a21fc42b80d5bb1b34261d9f8c39cdffeaf0a062032ac982dfe2859"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_inventory_clothing.md",
+      "bytes": 5498,
+      "sha256": "f35ff6071754aa3bae1745f2dd3d4146aab49f6838811c476912e27fc031bb94"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_inventory_clothing_glass.md",
+      "bytes": 5131,
+      "sha256": "dc8463ca5edea70cce5ace028924957359a01353eb59af40843c26bc9073fb45"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_inventory_component.md",
+      "bytes": 4926,
+      "sha256": "4f32eccaeb122eb9b81814723c3e19fb68f5b9994cdf413324bcae99dd0215b2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_inventory_component_glass.md",
+      "bytes": 5147,
+      "sha256": "82897ee8ee104c0943a11594cf43eacdec8bf241a9bcb84145ce8ea978db3ba9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_inventory_item_page.md",
+      "bytes": 5098,
+      "sha256": "0bf5a6b35c03bed558cfb0d0499b67d79a45bda40cef71372ae8c3c40c78856b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_inventory_item_text.md",
+      "bytes": 5614,
+      "sha256": "fcdc7b81cc5dfd440213fe6d2458cf0fd8f8fdf5d47136b494dfc4d487b56998"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_laser.md",
+      "bytes": 4582,
+      "sha256": "d178eca71aed266e60756f78115cfbc0106ed54047917bca01ea4172ccd0486a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_light_clouds.md",
+      "bytes": 4344,
+      "sha256": "15f1e2851f54f109fbf9cb44d1eba2c3175c92bedbc3373f5bf763ea2d5b4ad9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_light_flare.md",
+      "bytes": 5731,
+      "sha256": "889d8ac0646b56fa6a8124b7f771185650dcc3080d9533fae7c3c4ac13b30913"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_logo.md",
+      "bytes": 4448,
+      "sha256": "142c76364583887c471ae052450fbaed2f3a5c9581e820aa45dac79b2fc3dcb9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_map_background.md",
+      "bytes": 4773,
+      "sha256": "22986e6ba185ec53a20c531eb621741dbf0a3230cba509e276bfa9df4cf0a423"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_map_contours.md",
+      "bytes": 4774,
+      "sha256": "4a44a0aaf2f27b6927c39bcbdd06aef964de98c8530ec29e3900ef0b6ceb3a37"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_map_downsample.md",
+      "bytes": 4754,
+      "sha256": "52b4b809384bd995d6e0d73c3cb371dac0b64dc67f6dbf06afd36257a7bfcebb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_map_features.md",
+      "bytes": 4738,
+      "sha256": "6b447e7ef56ebe1f13597bb8d84b3644d53f829505ea92d653e537708097500c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_map_page.md",
+      "bytes": 5340,
+      "sha256": "3711cfe0191a9ba670f04431e2df85ee3bddd9143e3c22e17540cb23c91201bd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_map_trees.md",
+      "bytes": 4612,
+      "sha256": "de78200b947616d37c2d7018f713020202f9cd88b6cbcbd9ff589723f939858e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_nightvision_accumulate.md",
+      "bytes": 5153,
+      "sha256": "9f3bda168be98b05a6a23ccba07393fdb9971997e69b8765b66ec5bef40cc820"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_ocean.md",
+      "bytes": 5010,
+      "sha256": "d6478b779436041f2bcb52af1c28d716cf7223ba2662edb72ce13d9406f444f9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_ocean_below.md",
+      "bytes": 5065,
+      "sha256": "f9a79cd01ba8e81c17749bb9bdb29661c9510e14d8c1cba960470ae97b50d138"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_ocean_blur.md",
+      "bytes": 5211,
+      "sha256": "e5013fa56610ca3dff2d91e278143039e6e04de7b012fd882de48e9cf7ec9248"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_ocean_foam.md",
+      "bytes": 4697,
+      "sha256": "1883953c85318fabdb1344d7b8258997829a22d4d61f891d8e3c2bcce1e8a417"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_ocean_gbuffer.md",
+      "bytes": 5136,
+      "sha256": "b39d831d6509c3010656d2f7237407741e5046da02f7d96441beb30f7df77f40"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_ocean_gbuffer_below.md",
+      "bytes": 5356,
+      "sha256": "a2700efca272169a9937ad51c44f9cf03bce3d92a5362b889877ae3db1fb1cb1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_ocean_stencil.md",
+      "bytes": 5018,
+      "sha256": "e894cb861419023c21bd4a206c6fd489daa297e5920211469d475d2e830b386a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_acid_burst.md",
+      "bytes": 5243,
+      "sha256": "870d0aacc41302e48315fd75b2c3e7a5b425abe53bb91a85ede0f26dfc3caec7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_bullet_casing.md",
+      "bytes": 5206,
+      "sha256": "4544445f70cafd7c834aebf820e45bb969d210b37ade4a6b8ba21db0e998f8ca"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_dirt_cloud.md",
+      "bytes": 5487,
+      "sha256": "caa306df9cb68327baeab6e9be2d2f67d030c3d64361082a4a263026c395fe11"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_drip_cuboid.md",
+      "bytes": 4928,
+      "sha256": "eb84e76bb4eb2745e240bc416dcd2ef8c64272353982a8d96c52e00196bd3e72"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_explosion.md",
+      "bytes": 5447,
+      "sha256": "384e94e47e3b82081fc39068930462549d17fd45e6ac393ff2c02982f3ef0928"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_explosion_additive.md",
+      "bytes": 5821,
+      "sha256": "b8826c784b3129aaccb378d6e29797dd3c618ee45bf6562cfbb8e9eedc75abbc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_glass_shards.md",
+      "bytes": 5584,
+      "sha256": "0964dae074699cd096a9c9fa9fcd7eceaf909791c15b67d57e7554f904a5b21c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_impact_bark.md",
+      "bytes": 5531,
+      "sha256": "516bb24a1337e4154718195e9aec1fe06e750c2bad329d77840323134eea74f1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_impact_blood.md",
+      "bytes": 5572,
+      "sha256": "a77900b9fd5ccc279c70a4b19bbe562b60ffacc362920fce58a1cd91baafdff8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_impact_dirt.md",
+      "bytes": 5531,
+      "sha256": "4c84b998b59f83c4740e6eef874b3d2b99fe3991c667daa7801aac744cf36f7d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_impact_metal.md",
+      "bytes": 5585,
+      "sha256": "eea23fc5402d4a49860bf61cff3a9c63314a932dadc34c5c0d478013fff82f12"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_impact_smoke.md",
+      "bytes": 5544,
+      "sha256": "ce2bfca38d1b8fbcc659c28065cef2a28b2c8100181cc7c7179f705c6c9156c0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_impact_spark.md",
+      "bytes": 5558,
+      "sha256": "9e07e785afef09eea8e9e9592c60940906689d1e4198050e1ffe691805620899"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_impact_splash.md",
+      "bytes": 5613,
+      "sha256": "95a1f15be473903d339a8a8945bee652b89e93583efa1f57374abcfbeb10e061"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_liquid_burst.md",
+      "bytes": 5333,
+      "sha256": "5d000f2226399a9e6a3ab2bf3ccc9ee9e66456bae30e778fd2be0e15a0ca605a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_liquid_strip.md",
+      "bytes": 5557,
+      "sha256": "c783cc659046980925e1491cc9cddf6efd3cc3f986285ca348b3a84ff5711b41"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_smoke_contact.md",
+      "bytes": 4948,
+      "sha256": "6b4fe84226eea8c4df1329890404e98722a0610a8957d29dc5525bcfd752b656"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_smoke_grenade.md",
+      "bytes": 5360,
+      "sha256": "9f7c9509a63893f831c50816aae9136a8efd2b87fa19a5b361bdc9b0fcee0ac6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_particle_smoke_strip.md",
+      "bytes": 5504,
+      "sha256": "a48a4868aa2e5d924417bf1124f3cd6a9210362293dbae9c0e9226693e41d5d3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_post_atmospherics.md",
+      "bytes": 5592,
+      "sha256": "d64c8c53d6fc7aef80438d054a85e79df4a8bcea562fa0226de99c762faab8e5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_post_bloom_brightpass_resample.md",
+      "bytes": 5248,
+      "sha256": "37a609586c99a12efac29a75ebc72411bbcd27d9c06a228049006628907b59e7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_post_bloom_downsample.md",
+      "bytes": 4892,
+      "sha256": "51e846fccc8420907a47be4aa3a4f178b08242def4b3ce7ce96f1a671f6d8bc5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_post_bloom_upsample.md",
+      "bytes": 4812,
+      "sha256": "1b965d454c9c1cb4521c099d584cb10b4bfab1d467fd4fad261ad335f441c2a2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_postprocess.md",
+      "bytes": 4861,
+      "sha256": "42b461377ee38eb35f2f84fdf1725a64bcb4bc662c8f88ac32da12cc8c808ad2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_prop.md",
+      "bytes": 4336,
+      "sha256": "d6e6b61377f9a078a124325269f7697a5c7e7b7c5fc4b8ba3e12143fd29eac55"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_prop_depth.md",
+      "bytes": 4406,
+      "sha256": "33fc9098842508940e58339a37fc74bc67120ed7b256f274117c4f8a8220d513"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_rope.md",
+      "bytes": 4047,
+      "sha256": "bc7d2e377cb4f472562a9086369996cd3c809ab772841634818c779f6ff2c970"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_scope_vignette.md",
+      "bytes": 4752,
+      "sha256": "f7d28b03683dd6b76e2655c06eb14244f618c410073d02b3f9fbff54a3e492ca"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_shockwave_blur.md",
+      "bytes": 5290,
+      "sha256": "96540dae0625de1c6fe8422e1b03f46628cf5cf76dd37492724d4e3fe0e423d1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_ssao.md",
+      "bytes": 5115,
+      "sha256": "7eea773e5a5b9d574d16aa5b8b3fa4d1bdb1cb67da384d556480a743b77710b2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_terrain.md",
+      "bytes": 5568,
+      "sha256": "985622402cf0538e97b51ae1d66d3a1537b30f7603c316e20384caba1d0633fa"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_terrain_depth.md",
+      "bytes": 5134,
+      "sha256": "f402cc794957cfcc6d357a4a28c0902c77f4206ce41f4d144e9aa0197e7249be"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_terrain_heightmap.md",
+      "bytes": 5483,
+      "sha256": "8de248e208f389c5c4d4ce88917fb1a786844df53f3a2faacf4ac90629f404e3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_terrain_map_height.md",
+      "bytes": 5002,
+      "sha256": "170cda1e7ff4575673b80be48124ba4f98ffcd29aa54845eac56533e2071c8a8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_terrain_paths.md",
+      "bytes": 5792,
+      "sha256": "ac1425e9df4ccabeac990da3a3743eb46ea3a02543329e62c476043b56c52409"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_terrain_solid.md",
+      "bytes": 4846,
+      "sha256": "62f221ebab6872adc815c6f54b4a5e6041794d795fa35478ee1de83d08eb2bac"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_terrain_solid_depth.md",
+      "bytes": 4914,
+      "sha256": "5d24615e59ad2d079a1fed7e908f897e3b2c42e2a5ee756fab298dfb31fc3e6f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_thermal_accumulate.md",
+      "bytes": 5572,
+      "sha256": "750f876dfc62466c91c8fcc21cae26efece2383cdde9b9433c407273c5625f15"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_thermal_composite.md",
+      "bytes": 4977,
+      "sha256": "b6e5e0a5b05ea5b4cb2842bb9f97831df851ae609afe1602c0940c32d3547f39"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_tracer.md",
+      "bytes": 3965,
+      "sha256": "d2f3bff9b02d44953810e25623d1da370325b608696a574c1ea430b0b1baf833"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_update_clouds.md",
+      "bytes": 4772,
+      "sha256": "87c54a3ecb42634b383194af1762358b640e28b54ef79c45b4e4e5cb61560959"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vegetation.md",
+      "bytes": 5503,
+      "sha256": "a147ea55301c0f61e731e4e72153297dd3e2fd280ddb6b9897f9df637fb328dd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vegetation_cutout.md",
+      "bytes": 6323,
+      "sha256": "e12ddfb8ab83cafff9dc73ae29bae79888d23c3765687aaad30b9856868a34ec"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vegetation_cutout_depth.md",
+      "bytes": 6394,
+      "sha256": "b5f4efa3c2e2c5e4e8d9f6646cc16ae3242d5b25cd4ebb7b1cb86d22df6ace60"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vegetation_cutout_imposter_bake.md",
+      "bytes": 5867,
+      "sha256": "8befcaa04435b5a96826f53517cbbf841ee2b49fa56b4331a91889a209ebf60d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vegetation_depth.md",
+      "bytes": 5593,
+      "sha256": "08e21f6d12e22a987f7ec9de60eda918f69a663e355084be06ad98efd6b03d91"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vegetation_imposter.md",
+      "bytes": 6248,
+      "sha256": "748e6af212d6ff2d3f53a6c3ed7bc3393784c38e1f1dbe8292bc1e54c5cfacd5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vegetation_imposter_bake.md",
+      "bytes": 5099,
+      "sha256": "c8912522e61b344195716b692eefd0644bf377ed738ba9857ed92266ed3c690c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vegetation_imposter_depth.md",
+      "bytes": 5824,
+      "sha256": "65fa28cdfef6838e28a8795e6c5522ea76ab11ccf5bc19d91cc9ec86ef1ad664"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle.md",
+      "bytes": 4618,
+      "sha256": "a0a28977335abe6b213fde7bbefa212bed07d89d47e23a316442600519ebb88f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_belt.md",
+      "bytes": 5187,
+      "sha256": "9dcc271e3bfd6e4c070d49ddf8008dd3ae225925ea58b2f5cfec8a05b1c15e0f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_belt_depth.md",
+      "bytes": 4885,
+      "sha256": "791bede2a78a113ce7816ef0e6c34462b9283b329fd8bb77203ebca6e5d0274f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_belt_track.md",
+      "bytes": 4409,
+      "sha256": "df434b4eb8e1964d1fcec08862aa130ecfcdd24a29a96158b72c8eb8711a38d8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_belt_track_depth.md",
+      "bytes": 4470,
+      "sha256": "4dfd22804022068984303424d2b203615fd341df24bb8294e458455ab1af3f82"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component.md",
+      "bytes": 5162,
+      "sha256": "b014f1398cd8caceba0af747148baf53cf075395b87e99c83c4554eb73e3d168"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_additive.md",
+      "bytes": 5406,
+      "sha256": "d283d5029531e865597a62e940572c67f388d38ecbb5e9a5752ed7cc871138e1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_additive_heat.md",
+      "bytes": 6007,
+      "sha256": "462df0a893eeb165ebec29b2b94164a4fe50bba03edce3e340c701eb70d84cf2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_atlas.md",
+      "bytes": 5099,
+      "sha256": "03808c817b4a72ed8b4c79fbe74676b73f25b8af1db379a0d9012709fb9af153"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_depth.md",
+      "bytes": 5109,
+      "sha256": "55da23acb5c71974847091849c2207210f74ec8f3b643459328fc55eaad2a2b1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_glass.md",
+      "bytes": 5387,
+      "sha256": "dccbce3cec1b9d312d07fa0d38f533a08fc9c4e11f1820f317ba7161fa72533f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_glass_atlas.md",
+      "bytes": 5299,
+      "sha256": "a50df5c957da9e75fd155d3e6a7537e84fef21b2e4ddceedf34469aff800761f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_glass_depth.md",
+      "bytes": 5337,
+      "sha256": "0bd2af8bc8fd31d0cfdc3b183b0de540456894e3a808c32dbd9eb8b93373e0ee"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_portrait.md",
+      "bytes": 5714,
+      "sha256": "8f497c397f41e2d10e2017aad36dfbdd45cd4eca97bb7460d9a8698b56341cf1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_portrait_depth.md",
+      "bytes": 5532,
+      "sha256": "2cb3d5ffe93e269522edb8743562a2a3a026ed9f3c6c0590822f768a14f49737"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_component_thermal.md",
+      "bytes": 5463,
+      "sha256": "2801f0dc34c45728390493e77a2b37fe5d744bc8f5d343de9cb3a6d9738735ba"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_depth.md",
+      "bytes": 4700,
+      "sha256": "059fc1ececb03c43c8e04b2f29cce1d6444aac463efd3b074b70b0f2455da879"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_glass.md",
+      "bytes": 4844,
+      "sha256": "a3b67ddd6de9a8d7570eb8746ec145893b4773cf642266058bba7cf3d486cfb6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_glass_crack.md",
+      "bytes": 5588,
+      "sha256": "b8ccca4f413ac24952e99d326daf1d40dc31b03e57e1a9e2264fb4259a518c79"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon.md",
+      "bytes": 4792,
+      "sha256": "36c9e10d6d1de66ac156db00e79e3cfb83b2ec33a9f5e92f3d86f3760965cfbe"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_belt.md",
+      "bytes": 5206,
+      "sha256": "e5ee949c13c9cb9f8ba41f2d61695d54840eaaeec3e9ec7430eb733dd505d354"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_belt_track.md",
+      "bytes": 4421,
+      "sha256": "687e9e0f86bfe0a8c763fe8383990390271d8bb6a1114eee35ca0cd15a177101"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_clothing.md",
+      "bytes": 6075,
+      "sha256": "89ba17b96b9ed41a234285203a497b4f55c61794d110dbb0113a9b89cda1003f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_clothing_glass.md",
+      "bytes": 5245,
+      "sha256": "f7d690ce348ee4aad9ec7542e17c1882432d5c3303e17a9f9eb7c8ecb5a29a1d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_component.md",
+      "bytes": 5178,
+      "sha256": "ccbaf705a20ba0eca2f8750b063af0e83ed2386ac46af73a16a02e0f5bfc36ad"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_component_glass.md",
+      "bytes": 5393,
+      "sha256": "e54f15aecc4826b9b2d9cf1ca6454fdc5382bf0c0e4fd1ee3477cfc4c250642a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_glass.md",
+      "bytes": 5004,
+      "sha256": "9c76c87dfe45b85d168d5c01511d38b6e765a6ac13bbbf7fc4e4471bb7c34a99"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_paint.md",
+      "bytes": 5057,
+      "sha256": "71870e6716127a9caa8cbf3c7af6df17f769996fabca473bc3fb238c99beddf4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_pipe.md",
+      "bytes": 5336,
+      "sha256": "b7a5543f5b93824496b75ac872bdcb59a157014a01f67774f5b1e253ae42ed9f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_icon_plates_edges.md",
+      "bytes": 5670,
+      "sha256": "8cf51f8e8a49fe8aab45a06c7ca415b6cb1f8ed6d9b15d9a1a7314bfe9020380"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_internal_volume_stencil.md",
+      "bytes": 5362,
+      "sha256": "aef7d0a22b233a514d8cce6383d20cfb7bafcbcc34c801f29b348c150223c4d0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_internal_volume_water.md",
+      "bytes": 5941,
+      "sha256": "c85dca80df1ac2e5f97a9c51dcef1a1fe165a8de11b550848e2d7f19d5e1158a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_paint.md",
+      "bytes": 5015,
+      "sha256": "7b76bad0d3e0da0e4abba65f1a1f87ebc49734547ac88554073dd4f10b0a87f9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_pipe.md",
+      "bytes": 5303,
+      "sha256": "550dabed290f73cad11f7c1553c4161f07599bacdfdfcf533b5b56ef79cdd8d9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_pipe_depth.md",
+      "bytes": 4874,
+      "sha256": "d170dedffa75c7b10725da1fada4f053474bc8ad90b7757cd23f114d4afdcc43"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_plates_edges.md",
+      "bytes": 5642,
+      "sha256": "7f1be41d3c0c62d7b0b80aec462a846c4572ada959f6b2907d911154cc27a1f3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_plates_edges_depth.md",
+      "bytes": 5198,
+      "sha256": "208a7c8edc4a3369e236cfe8edaca3c2e2547e5e848023b97f2533e08958a3e3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_plates_edges_thermal.md",
+      "bytes": 5432,
+      "sha256": "ca2ed7b175753f9fa74113c808c2dc69ab140b4c0d15b12dce19c69e100bced4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_rotor.md",
+      "bytes": 5355,
+      "sha256": "4fbd620bdb5cab4db1f549e46ef93693a74c00c2fa6c1f5ffc7413d1de5af45d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_vehicle_thermal.md",
+      "bytes": 4924,
+      "sha256": "73154d7c198a7f478920a5cdbc486db70fe997e7b2a39bb083721d6ba945f784"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_weather_particles_rain.md",
+      "bytes": 5405,
+      "sha256": "f1ab72da261bb2381a6bf227cbaba1754f0249da96ded3d14d2f2eafa607a8e5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_weather_particles_rain_splash.md",
+      "bytes": 5747,
+      "sha256": "af91d209f8271f4e71c082caa51a04596a56d0e20701fe5f049716257c55fa04"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_weather_particles_snow.md",
+      "bytes": 5392,
+      "sha256": "7ec4c22ee1bcab5dcd6d7ed44e74341db7731aff57ba06f5f80004cea2dc0d44"
+    },
+    {
+      "path": "sdk/docs/reference/ns/pipeline_weld_flame.md",
+      "bytes": 4794,
+      "sha256": "3e7aec685bb4854c12e4d3e0e7d55ba85b49923a01a119d5a3ab48b737140300"
+    },
+    {
+      "path": "sdk/docs/reference/ns/plane_to_graphics.md",
+      "bytes": 767,
+      "sha256": "eaf6ab8b3beecb0e7150d4b88fd51428ba077ee218300a12e0287d8b20d37870"
+    },
+    {
+      "path": "sdk/docs/reference/ns/position_to_graphics.md",
+      "bytes": 776,
+      "sha256": "188ed7e2e725b8cb905d3f22b9109f1e167c85689f2ee966e7cdcd9a597e81bf"
+    },
+    {
+      "path": "sdk/docs/reference/ns/prefab_panel.md",
+      "bytes": 5389,
+      "sha256": "534a1dc645ca4103a8666cf39a486a37b825926cf2802157f84b8f1341a491b7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/projectile_util.md",
+      "bytes": 5163,
+      "sha256": "bc4f9dfc65269a3aae42290610e65ae08e58172960901b180909564a07b3147c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/prop_definition.md",
+      "bytes": 6371,
+      "sha256": "1b2a8f25d692a840cf07b2208bd031d4e3d8344a6801cd04c4bdac843ac6e173"
+    },
+    {
+      "path": "sdk/docs/reference/ns/prop_definition_container.md",
+      "bytes": 6040,
+      "sha256": "9ebe08a4de5d2f58bb4ae370d793c1047c4a477ffc238bfcb2e687c44836d225"
+    },
+    {
+      "path": "sdk/docs/reference/ns/prop_definition_file.md",
+      "bytes": 2440,
+      "sha256": "a90cb6bc3c6ff28de577ac4d26a9a3d5ce5123b0f41bc1c97e272527289ee2ca"
+    },
+    {
+      "path": "sdk/docs/reference/ns/prop_edit_panel.md",
+      "bytes": 4054,
+      "sha256": "59e4563653d867db687eb0a2e45f76b3bfb2870676aeb628618f81fd8cb5fd57"
+    },
+    {
+      "path": "sdk/docs/reference/ns/prop_instance.md",
+      "bytes": 1576,
+      "sha256": "afbd42219519c971bc0b2f8fb07aa8bd6d9ae3e77826259a17431ac263d8a388"
+    },
+    {
+      "path": "sdk/docs/reference/ns/quat.md",
+      "bytes": 1958,
+      "sha256": "0047bcb4a450f03ed28f6145cb7eee1417ace135b1c5c7b7b7fed9cb3b9e97a9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/render_util.md",
+      "bytes": 18940,
+      "sha256": "67e9277648784c2145f934e3cfd6bec325791a6311e95f41525bb2dc4e76db8e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/renderer.md",
+      "bytes": 24868,
+      "sha256": "79d29d680a8db477b4a5188022e09e956560a8142286f6f7d0ef83173b9d7106"
+    },
+    {
+      "path": "sdk/docs/reference/ns/renderer_clusters.md",
+      "bytes": 1949,
+      "sha256": "7a51c8d25bbfaf07eae717ada503cd9594683fbdeda7f86b1f93e6f3fc87be7b"
+    },
+    {
+      "path": "sdk/docs/reference/ns/renderer_indirect_arguments.md",
+      "bytes": 1128,
+      "sha256": "e8a7e67338fc8ac867cdd943a614bee04987e74d2820b5c3be69ff17697d7c79"
+    },
+    {
+      "path": "sdk/docs/reference/ns/renderer_tile_subdivision_data.md",
+      "bytes": 1089,
+      "sha256": "218679e5096a7640cc5d89526682bee2e815921a3ee1b35f77520fe90cc94a90"
+    },
+    {
+      "path": "sdk/docs/reference/ns/replication.md",
+      "bytes": 2306279,
+      "sha256": "1615aff09b6ae58ef7a7a321b96edd962f8df7704d3d1bb944c70a9ebbc6983e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/replication_stream.md",
+      "bytes": 8567,
+      "sha256": "9f45619973ecd9b54b68065cf00308dfa836d0647151a842fb1e486b906fc239"
+    },
+    {
+      "path": "sdk/docs/reference/ns/rope_instance.md",
+      "bytes": 1508,
+      "sha256": "a5f217b4589cc37aedb866c48e5a0a581773af1533629d08237ef72475e8d88c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/scene.md",
+      "bytes": 43594,
+      "sha256": "bd7f40bf95959313aece268db8d42e2667fe1e150bd5f7ee44a2abd6f0a542cd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/scene_editor.md",
+      "bytes": 19241,
+      "sha256": "c705d8f5d5306bdcaa15e5a28bcbceed22b89ba7df3b095413db3ed8c6e96672"
+    },
+    {
+      "path": "sdk/docs/reference/ns/scene_instance.md",
+      "bytes": 1512,
+      "sha256": "6d6d581d676fe378ad9b3cd0a48d2efe93f75ced90a9569c0d2dbc8c4935d1d1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/scene_renderer.md",
+      "bytes": 23635,
+      "sha256": "5859560c6ba5e999873540eaf3f702a47e9739e0ba49b46f77dc3729b4be55d7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server.md",
+      "bytes": 74649,
+      "sha256": "17d60f5603a28f42717ff7b736fcef95bcc6e8b5b08e471cfeb14c209462034a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_inventory_util.md",
+      "bytes": 1597,
+      "sha256": "a0e6c3a5f8a83be18e0169db91f603fedc66dbe138614da92d0b75f6c8d1883a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_peer.md",
+      "bytes": 22228,
+      "sha256": "605a0e523229145629bb20bbccac25973727ee9df27fd8eef4ead9a256964247"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_peer_container.md",
+      "bytes": 4248,
+      "sha256": "fe9625ca5362c6708e8bff1674c2b031aa1cf8d72863ba1014ea11bfd69d431e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_scene.md",
+      "bytes": 11063441,
+      "sha256": "d09608884db899a236d5ee51f655c977f86621dfb101808d9d45da8cc9187323"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_scene_inventory.md",
+      "bytes": 926,
+      "sha256": "a3ddb252c0e433f70d3e14a1c0b100ccf216f187b3d1cd5bef6e849c9a112f83"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_scene_script.md",
+      "bytes": 1039308,
+      "sha256": "38f37241fbf298bf6006a62ad3616fab525d48c0aaa2e3b4f0d33d58b56725a9"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_scene_script_util.md",
+      "bytes": 3070,
+      "sha256": "a3c898c6445b14e5eba7746c532ce6e8e2935f2301ce27135a70905568986645"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_tick.md",
+      "bytes": 681,
+      "sha256": "878e2d95fb3f9e1fb43fd1e364e4c70fc5a4b29f8e6073f838150c5e621a7275"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_tile_load_objects.md",
+      "bytes": 3314,
+      "sha256": "5f210e5ea61edd1a0ca3e63838fee5bbb98e2eb46bd646f60d7a6353674524de"
+    },
+    {
+      "path": "sdk/docs/reference/ns/server_vehicle_component_util.md",
+      "bytes": 12045,
+      "sha256": "2568376ce2b333a04147e80c9c1adcb3086677277b21863c9b0f7aa0d0f869c2"
+    },
+    {
+      "path": "sdk/docs/reference/ns/settings.md",
+      "bytes": 18708,
+      "sha256": "070d2ce5791427e38f39f36ce56e00e719816b677255fcb8c1d4266e2d88a7c5"
+    },
+    {
+      "path": "sdk/docs/reference/ns/settings_character_util.md",
+      "bytes": 1123,
+      "sha256": "b09af9a5137ed63c99715078809b6adcde9b24b4c24bae23e660200c28194fbb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/shadow_cascade.md",
+      "bytes": 901,
+      "sha256": "cb3c99d0661f6ebeeb4d71053c78ee483241333b44a97f26b946babfcd0ab669"
+    },
+    {
+      "path": "sdk/docs/reference/ns/spawn_zone_foundation_definition.md",
+      "bytes": 2021,
+      "sha256": "0cafb74822d0b2731db1560290aca4b48ae471d57a7dd6b7f87bf97d80a80de8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/srgb_to_linear.md",
+      "bytes": 752,
+      "sha256": "62dc681d86e1686174d61e016c93d09cb7c2a141a3e86e1365554e4aac6f42bd"
+    },
+    {
+      "path": "sdk/docs/reference/ns/state_manager.md",
+      "bytes": 51264,
+      "sha256": "41c18fc8e69b7c136c7d73dfeb32adc32749a7013937a16b2afaf9eb4f8d3420"
+    },
+    {
+      "path": "sdk/docs/reference/ns/string.md",
+      "bytes": 4809,
+      "sha256": "9cc4f16d0f2b0ec229a9e9f8b9bf1f3612dc23d355222799069f6addadc5f4c3"
+    },
+    {
+      "path": "sdk/docs/reference/ns/studio_logo.md",
+      "bytes": 4467,
+      "sha256": "9f01d90691bb82b9bc15b0b1391e460bfe976423d4e7c021e55475c56ad63654"
+    },
+    {
+      "path": "sdk/docs/reference/ns/system.md",
+      "bytes": 7129,
+      "sha256": "c6b2be9a8522926d1a774167dc90f42c856231063cfeaa0b72f55f6d2d0a28f4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_dead_drop_edit_panel.md",
+      "bytes": 3627,
+      "sha256": "a8a533c0f555c93d237db003027555c739b4c3b5e8e1a7505cc987fca5ed8134"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_edit_panel.md",
+      "bytes": 5783,
+      "sha256": "1a7408f4c5a0555c2f50c9616ab7fc89ffd7b9fec5fead023bb863deaa7351d7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_loot_edit_panel.md",
+      "bytes": 3873,
+      "sha256": "2dffa448bff21b4dc9ec9f8f0d0019606661666bcc290d4c2afcb6786d9a3452"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_mesh_builder.md",
+      "bytes": 4832,
+      "sha256": "755d1d9e50f551b9404dba8ecd65a66ea42b2f10ad783c1671e4c93e4ab19f3e"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_path_definition.md",
+      "bytes": 2233,
+      "sha256": "7f80c056580f5eff88f48a3796c386bbf0ed0f9083534915a046769012f29136"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_pathway_junction.md",
+      "bytes": 2035,
+      "sha256": "663e8708e444ec042719eb8ea70b0e29b3a1c0d7be7023eafc282f6270ab9318"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_pathway_junction_definition.md",
+      "bytes": 3085,
+      "sha256": "64245ed522081dedee09ed5a9d32c59ea847c6a28e91680ad337a7a503063ad6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_pathway_junction_definition_link.md",
+      "bytes": 1959,
+      "sha256": "91dfb6416f4c63c2e46d7a2182fa046350aa254014e6e5a4f8c18c2a0b009d23"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_pathway_junction_definition_point.md",
+      "bytes": 1649,
+      "sha256": "5a945544308ba3a6fdfa8377d3b588fe5366ad6f67e8f5b48c981cb358a4ede6"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tile_pathway_junction_route.md",
+      "bytes": 1432,
+      "sha256": "ebc9f8bfb873cd18dbd6682d5054d7176794dd9530d7aac0244f217d7c912478"
+    },
+    {
+      "path": "sdk/docs/reference/ns/time.md",
+      "bytes": 855,
+      "sha256": "d369483b0e0cab3b4466340cbbd472871210f17a944475c5e3ce956d90189087"
+    },
+    {
+      "path": "sdk/docs/reference/ns/track_instance.md",
+      "bytes": 979,
+      "sha256": "987a8a63aeedf16e04568f4fe232752d23f106726a6350facd3110026e259460"
+    },
+    {
+      "path": "sdk/docs/reference/ns/transform_to_graphics.md",
+      "bytes": 783,
+      "sha256": "8978f87d54fb64c92e896af47f292ed0ef699749d6b65778de53c572cf817a44"
+    },
+    {
+      "path": "sdk/docs/reference/ns/tri_grid.md",
+      "bytes": 1595,
+      "sha256": "63df0eace2b6657e324b2dce1fc6bb1ce4c02429a20f61146812c7fef00e8712"
+    },
+    {
+      "path": "sdk/docs/reference/ns/ui_data.md",
+      "bytes": 4622,
+      "sha256": "6eb9b7f48bb54042582c4051ecefb023c65659711f65362b6af3c78d4248533a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/ui_data_util.md",
+      "bytes": 7951,
+      "sha256": "ac52aa0e942aea8b6c57f6f0c3237ea81d2f36e60366130aebc22f96ac2e904c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/ui_metrics.md",
+      "bytes": 682,
+      "sha256": "869f5b08eb1e56c4a8d95d7f499ef0ea7182d17c6c408b36619f5bb8d88a0026"
+    },
+    {
+      "path": "sdk/docs/reference/ns/units.md",
+      "bytes": 5546,
+      "sha256": "3be22dd71f28cc852667dfba643acf337fd85b2283139c97ee2b23f4ba7b2d4c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/unlocked_item.md",
+      "bytes": 3310,
+      "sha256": "a659885e0e9320e4e3a13c9f0349f66868043e6c92ea5ad473b6300ef5945a9a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/update_ui.md",
+      "bytes": 670,
+      "sha256": "a220bf88dc801ab3b80f41e9506922fba900827cf4873ffe3f953d802a39bc4a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/update_ui_menu_bar.md",
+      "bytes": 710,
+      "sha256": "d7ebb56f10ea71be67cdfc5fee38bf768b0a738142d27c1779ad9ee768337f4f"
+    },
+    {
+      "path": "sdk/docs/reference/ns/util.md",
+      "bytes": 2276,
+      "sha256": "6cb6bff807ebbba46cb11c2b9132e4092f447d5f588f6f5a1a861153654dfad1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vec2.md",
+      "bytes": 3053,
+      "sha256": "9940f33906545a4855512fb787b6ab294779e486afbc44972531de16ca4a568d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vec2_s32.md",
+      "bytes": 2085,
+      "sha256": "b7410a084608574807a11ee3d37d84b4a5b8ecebb3c06a29f279738051642a25"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vec3.md",
+      "bytes": 5029,
+      "sha256": "8f181b749dbdba453e501a0c830a063b2c022ed2e1cfe129ee038f27a080480d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vec3_s32.md",
+      "bytes": 2808,
+      "sha256": "c2493097667fae2a4fba3dc6e21f502af4507b5b94e21a3fbdb907e75a464f67"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vec4.md",
+      "bytes": 1279,
+      "sha256": "2deb834229d9188ba746a4996835d0299716a657047bc322e0f72cbeae8d4e27"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vector.md",
+      "bytes": 3056,
+      "sha256": "8e18cae08c7ce29c64a18efe166c6efce3bca954ce837fda299a996c3d6d5743"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vegetation.md",
+      "bytes": 7224,
+      "sha256": "573d41540deb3d057aa1fdfd921f97f9ed39f6ede8a3a7fe0f727192d5697fe1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_buoyancy.md",
+      "bytes": 57095,
+      "sha256": "059e216fd5b07f787cf4da3220a54fbc4c14b8c279f39f3636c9f209f1f96200"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_component.md",
+      "bytes": 5276,
+      "sha256": "5829fc405bd87d969313a01c9629a6ae1f5cb6f0db1586a8499f35f6d03ca010"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_component_definition.md",
+      "bytes": 40807,
+      "sha256": "cbfa0933ecd8352b4e1f00319295a2f97d1327af4647bcfa5e1f99fae951f585"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_component_definition_container.md",
+      "bytes": 6882,
+      "sha256": "71780cf59839abf3db3fc51722a9b1ab6ecf362bc4333c7de560de5125ee4c0d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_component_definition_file.md",
+      "bytes": 2878,
+      "sha256": "1256bfa38b7ed75d401cdd18b55887c6ddb26164a53e189dcb22bc913cc32030"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_component_mesh_builder.md",
+      "bytes": 11404,
+      "sha256": "80d64a25bd83dcd7922f7c5a621aa9b174547defb163910246435aa461c6b1ad"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_component_util.md",
+      "bytes": 10201,
+      "sha256": "319114ee1747223fdd8e65c0bd875fce1deadee91d0bf8fd688819a001a95d78"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_edge_util.md",
+      "bytes": 3328,
+      "sha256": "57ef37834fb6ccc1ab0895732d7b34fbfdafbe7309114b851376ce3e205f36b8"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_element_definition.md",
+      "bytes": 31975,
+      "sha256": "6747e7c09f4ed6d3afa5a6cf4b0687e245e06ba5d25c52263d8893870f5350cf"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_geometry.md",
+      "bytes": 6203,
+      "sha256": "b79cb6f7d71a8ae462d31d5daad5499f4394f7cfc1eb9d2f6991d9b67109e253"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_glass_crack_add_triangle.md",
+      "bytes": 980,
+      "sha256": "02d1f4f972c2b8dc163392bb7b2e64dd4092d850eb70d72b0a7231e781e6fbc0"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_glass_crack_build_geometry_buffer.md",
+      "bytes": 958,
+      "sha256": "2e70bee4121aba82f15cd83af7dbd00a6e92f0158cec940e82ec8015065b62be"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_glass_crack_get_rotation.md",
+      "bytes": 834,
+      "sha256": "60e85ffc8c51ecf51ce43fdb055d39e23288d9e50cb04fd2f89be467e8e85301"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_glass_crack_get_uv.md",
+      "bytes": 885,
+      "sha256": "65d2c9ccfaefc1bd1cc8b7869b904c59753f959eac6f8bcb0b5897a660f7ea1a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_glass_crack_projection.md",
+      "bytes": 1074,
+      "sha256": "20db742b086c084055f769f38e7803bc797b1145f9f664181f63cca98f5cd80d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_glass_crack_projection_create.md",
+      "bytes": 952,
+      "sha256": "68286638ec5cbe5b7d9b308f9fd5edac222fcdf7db5378d5fb94ba153031fa22"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_glass_crack_triangle.md",
+      "bytes": 1133,
+      "sha256": "d1a5720bb7a6714a3fd17f55dbbf7d222feb7ceef3cfbb255ad530a0af012bdb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_grid_util.md",
+      "bytes": 2753,
+      "sha256": "e3ca1678a669aa4249d65ac2ab90cf345efa971fbe87693e4f860442aac94fc1"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_item_util.md",
+      "bytes": 1070,
+      "sha256": "889219ddbd133e2c1b0dbd7c18830d057e6454971936f85c7eb4afb20eb1e46a"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_link_descriptor.md",
+      "bytes": 2090,
+      "sha256": "e3c23f032dea7ff8d9ee03d7bf047dbdd69adb5ddf0889a55a6f6dbac59068dc"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_paint_builder.md",
+      "bytes": 2676,
+      "sha256": "2ac0bd213833fc1cdd8f539da4f9cec4557430ca747f8cc7b5eb2c8ba79ceba4"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_plate_util.md",
+      "bytes": 21644,
+      "sha256": "2ebb9e643d5cfc563876ab3e3f503e030b58e5be2486b50ce5dc7a0887037551"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_plates_edges_builder.md",
+      "bytes": 6027,
+      "sha256": "690aa98d40d996555598d49edae993cc5ce44cde5f5245a667b1760fbcf23864"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehicle_util.md",
+      "bytes": 68699,
+      "sha256": "cd484833c5491a285b125f905a1a5c73a1236057f899430a51a8871d84424f6d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vehiclie_component_definition.md",
+      "bytes": 933,
+      "sha256": "c3657334f1288ef4267c872d50fab22ce6f61ced9e86c562268da84a9ceef31c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/vignette_data.md",
+      "bytes": 946,
+      "sha256": "c70c55d7df045355ae002aa918611fd9760dca240013d2fdf8791564c291eba7"
+    },
+    {
+      "path": "sdk/docs/reference/ns/voxel_oct_tree.md",
+      "bytes": 2123,
+      "sha256": "84bf0a005ac1b4e3d6b32fac089d764573c6a64dcbfe8a9d5e4c2c001003137d"
+    },
+    {
+      "path": "sdk/docs/reference/ns/weather_data.md",
+      "bytes": 3998,
+      "sha256": "19107a34ed4cb3ee5894ad9ba77e5321d2c306b465cfbf91071dce8dff5fb123"
+    },
+    {
+      "path": "sdk/docs/reference/ns/weather_manager.md",
+      "bytes": 4299,
+      "sha256": "713737b98032ffc593f6a8a2ecec0486f5c4437c13ccfc155cc31004b73daafb"
+    },
+    {
+      "path": "sdk/docs/reference/ns/weather_map.md",
+      "bytes": 2309,
+      "sha256": "2c10a16c0d1ce62d81897bf315291f5ae477c752f71a58b0902afb0a78062559"
+    },
+    {
+      "path": "sdk/docs/reference/ns/zombie_animator.md",
+      "bytes": 16759,
+      "sha256": "a8f6a702cdbbd2acad45017a0071404f47ae98e6f25a6da4b3e1bef85c1b610c"
+    },
+    {
+      "path": "sdk/docs/reference/ns/zombie_definition.md",
+      "bytes": 5219,
+      "sha256": "57bd9ecfa9a7e5ff4b7ee7be9788d73c67a0734f2ead9b5c95e8b933b202cb70"
+    },
+    {
+      "path": "sdk/docs/reference/ns/zombie_definition_container.md",
+      "bytes": 5897,
+      "sha256": "6ccc47ccc72906aee021000c3b40670bf8963ca128e430dc886fb10fc0b12250"
+    },
+    {
+      "path": "sdk/docs/reference/ns/zombie_definition_file.md",
+      "bytes": 2522,
+      "sha256": "06d7cdd825dc4c79e88369a8a0ed6d179a4fb1323f8f3337fc116b9095405a77"
+    },
+    {
+      "path": "sdk/docs/reference/symbol_index.json",
+      "bytes": 10163626,
+      "sha256": "d661b3ddf9f2a959052836975a66a53a8f432a65ec310c446fabc65437fdfe34"
+    },
+    {
+      "path": "sdk/docs/systems/audio.md",
+      "bytes": 4659,
+      "sha256": "a61cea6285b70305dbe9d551dd08d55da0eb8cc0eb01908bd8b2f37064f61461"
+    },
+    {
+      "path": "sdk/docs/systems/definitions.md",
+      "bytes": 4836,
+      "sha256": "e7e0d8ccfa5159e6a8636c24103f63d83ca996f69d2dcdcc077e70f0dc0af2e8"
+    },
+    {
+      "path": "sdk/docs/systems/input.md",
+      "bytes": 3256,
+      "sha256": "aef47b0320b9fb99a5147aadddc72b5918104b7775a028971b872bf848056e1f"
+    },
+    {
+      "path": "sdk/docs/systems/items.md",
+      "bytes": 6885,
+      "sha256": "7f00bea16c888787d4a47eafbca7920f1ad5d7ca345d42c1e5a4a63cc6b6b11b"
+    },
+    {
+      "path": "sdk/docs/systems/network.md",
+      "bytes": 13759,
+      "sha256": "64e91acf157188efab0ae2e1711437e90ea8e670ba9ce3216dc6ea1bb4640208"
+    },
+    {
+      "path": "sdk/docs/systems/networks.md",
+      "bytes": 4295,
+      "sha256": "5e599bd46606f59f36da1b5c8dabe965b65e53ebd6de782b9ebbe54de208f287"
+    },
+    {
+      "path": "sdk/docs/systems/players.md",
+      "bytes": 13987,
+      "sha256": "e27533feb895cb3370a3b7f7ac69b8225698d0c0182aaaae459b413e6414b70e"
+    },
+    {
+      "path": "sdk/docs/systems/README.md",
+      "bytes": 2735,
+      "sha256": "3f7dd2865aa6b8de19845508dbbe5cb1c9e077de375986c57bdc494928f2773a"
+    },
+    {
+      "path": "sdk/docs/systems/rendering.md",
+      "bytes": 4058,
+      "sha256": "ef0c6d39517e1b771954054da90958a45fef5418f2dc05a68b9ff0ada265b941"
+    },
+    {
+      "path": "sdk/docs/systems/save.md",
+      "bytes": 4478,
+      "sha256": "6021868f8c8eae4d3f35b811d0c37b776e9c787501bf0278200c294129a7c671"
+    },
+    {
+      "path": "sdk/docs/systems/ticks.md",
+      "bytes": 3845,
+      "sha256": "a02a886e26c5c0b92fa7897b20ce6889aa9d7606528829ee9dc233c866583a97"
+    },
+    {
+      "path": "sdk/docs/systems/ui.md",
+      "bytes": 4259,
+      "sha256": "7ad4881f5e76620fa4cfb4a3568ddcc8d10372661f47f5a183134d7cf89a8e73"
+    },
+    {
+      "path": "sdk/docs/systems/vehicles.md",
+      "bytes": 5976,
+      "sha256": "9492a85baa66d308b3d4b891f41c948adbdf529f66ce4896d31d2ae5c3409278"
+    },
+    {
+      "path": "sdk/docs/systems/world.md",
+      "bytes": 10934,
+      "sha256": "26d34077d86c8f5a0fda153bfd18872e9c94bedf9d26fda09cedb3effc90455d"
+    },
+    {
+      "path": "sdk/examples/ex01_lookup_entity.cpp",
+      "bytes": 2184,
+      "sha256": "e03c517a4f1cc4f68c9a943e81a623d404595924da025c64d3619b59fb8249c4"
+    },
+    {
+      "path": "sdk/examples/ex02_transform_and_mutation.cpp",
+      "bytes": 3117,
+      "sha256": "4f9d3fbe63bbf8151a56be49b26219aac3ccb21dc6855a93af33478ff310ebff"
+    },
+    {
+      "path": "sdk/examples/ex03_lifecycle_hooks.cpp",
+      "bytes": 2682,
+      "sha256": "36169f5806d7af1b82bea689afc6885f5d3874c1ab031b74584c91c91d8792e4"
+    },
+    {
+      "path": "sdk/examples/ex04_schedule_work.cpp",
+      "bytes": 2378,
+      "sha256": "65cfa51e4b39cc64aeee898c90236f6736e2f95e4d262a144846ab2ce2f3919f"
+    },
+    {
+      "path": "sdk/examples/ex05_ui_menu_item.cpp",
+      "bytes": 1864,
+      "sha256": "7b62a68486665e56d339245559e6dc0871ee5053b228488dad750b25d787b387"
+    },
+    {
+      "path": "sdk/examples/ex06_server_damage.cpp",
+      "bytes": 2346,
+      "sha256": "7551ea1af183bfd6c491124b2a308a01ef7c9274a20c4b6c2fa33ee38b9ea9e8"
+    },
+    {
+      "path": "sdk/examples/ex07_register_items.cpp",
+      "bytes": 2862,
+      "sha256": "ca8bef372807f27919bd90ec6589c66a0a54d2cbd18416d2c1a6fdc411b021be"
+    },
+    {
+      "path": "sdk/examples/ex08_save_sidecar.cpp",
+      "bytes": 3120,
+      "sha256": "fa543bed9c51a52bd2caf31fd6c9e75a8683e6c32c2c6471979dd3943a6b8e75"
+    },
+    {
+      "path": "sdk/examples/example_common.hpp",
+      "bytes": 4398,
+      "sha256": "63c04bd5892fea1fecdd06c354ee9e4d73eda3c2e11ebb6183430709bcd289ba"
+    },
+    {
+      "path": "sdk/include/anymaker_sdk_runtime.hpp",
+      "bytes": 13462,
+      "sha256": "3d71d4e39260dd8883a11e49676cb8688d297e5092eca2c9f85935c192f17dff"
+    },
+    {
+      "path": "sdk/include/anymaker_sdk_symbols.hpp",
+      "bytes": 25206,
+      "sha256": "e07614c65e4137f1d1e83bde65216291c04cf577b226c42b0f6ff96c42e8111d"
+    },
+    {
+      "path": "sdk/include/anymaker_sdk_types.hpp",
+      "bytes": 6661267,
+      "sha256": "08ed557404733d0525368f45f145b6c1848e997b7950884b67e4fe39541420bf"
+    },
+    {
+      "path": "sdk/json/abi_facts.json",
+      "bytes": 765,
+      "sha256": "811684de4f7a17974cb6e74823c1e5ad0723e7e3af94c06ebc9e88455092d546"
+    },
+    {
+      "path": "sdk/json/anchors.json",
+      "bytes": 29335623,
+      "sha256": "2e3300bfb37ae40371fb9e79f71b670c9f6f3d5dea7b9c10c1f49d9738b6c0ae"
+    },
+    {
+      "path": "sdk/json/build_identity.json",
+      "bytes": 3397,
+      "sha256": "9f2fafee87030fa66e0a189fb92a58a56f6659ac9be9f9032469ec50480d7323"
+    },
+    {
+      "path": "sdk/json/capabilities.json",
+      "bytes": 42067,
+      "sha256": "c44149365bbb1716e9c50a8353c54208f28c0d620fd18bee69b360926c74e43e"
+    },
+    {
+      "path": "sdk/json/files.json",
+      "bytes": 111897,
+      "sha256": "627e4800a2f67dfa26b717a4819b9825227f055b3e5c79dcbf6c2f073c91fb1e"
+    },
+    {
+      "path": "sdk/json/functions.json",
+      "bytes": 164924880,
+      "sha256": "7aa2fb1a9b689b61118209af89027672f82c8f27876ece5066581afe32dd6534"
+    },
+    {
+      "path": "sdk/json/globals.json",
+      "bytes": 1190426,
+      "sha256": "b52fb8516d8d19b8c4ed620084872e9893bf286506df973e93d090b6a7c84ec1"
+    },
+    {
+      "path": "sdk/json/native_bindings.json",
+      "bytes": 5083364,
+      "sha256": "16f0756697a282e6d663a15b04499069cc63d4b4fdab28e0d2953a8ca423918a"
+    },
+    {
+      "path": "sdk/json/natives.json",
+      "bytes": 933986,
+      "sha256": "149f5274d4fe68f50b1f3dfbf2a37aabed2e8cd7acb8c79ed38a7d50683f37cc"
+    },
+    {
+      "path": "sdk/json/runtime_evidence.json",
+      "bytes": 8310,
+      "sha256": "ea9c9e9722c7a0f3ac14b4bcc07ca0d8c583efbe4e31498af00975a5bd34e1fe"
+    },
+    {
+      "path": "sdk/json/runtime_located.json",
+      "bytes": 3650357,
+      "sha256": "c24a7bd525c7df9d73974e6e03044b24c75d9932a1dfdbfa2072ee3a00e2845e"
+    },
+    {
+      "path": "sdk/json/symbols.json",
+      "bytes": 25434461,
+      "sha256": "8e06f166758338df3ad935bad28fd29e8ce9963ffbcf395947433f3e8e32d7b5"
+    },
+    {
+      "path": "sdk/json/systems.json",
+      "bytes": 229160,
+      "sha256": "f0cc68dba43465de76880fd40aaac14b5ed46d934f8b77d3b98f75698ce92bb7"
+    },
+    {
+      "path": "sdk/json/types.json",
+      "bytes": 42173419,
+      "sha256": "2f9772426281507069dc5a9110315e888b29c9928f01feb9c4e3f862d7b105f4"
+    },
+    {
+      "path": "sdk/README.md",
+      "bytes": 6498,
+      "sha256": "23d976450b18a1c0b9ef6fe1fe380419429213b5628112fafd49131e1a8d147f"
+    },
+    {
+      "path": "sdk/reports/diff-20260930-to-20261001/diff.json",
+      "bytes": 13139100,
+      "sha256": "99674d42fcccf4b0df8f2df82516780f80500e69db4d7de07800b036bc55746a"
+    },
+    {
+      "path": "sdk/reports/diff-20260930-to-20261001/README.md",
+      "bytes": 30140,
+      "sha256": "08e591186669d49ae437cb3b2a0913507062e044789d4d5401ea9e501664c23c"
+    },
+    {
+      "path": "sdk/reports/diff-20261001-to-prev-sdk/diff.json",
+      "bytes": 740111,
+      "sha256": "4c70ca66316e0d6d6a2c26c382693ccf17a683427385675cc080344c60dabeb7"
+    },
+    {
+      "path": "sdk/reports/diff-20261001-to-prev-sdk/README.md",
+      "bytes": 6169,
+      "sha256": "684ccb43963c31f9a39639400fe64fbd96450adcf6e102b4921023fb06b01ebb"
+    },
+    {
+      "path": "sdk/reports/diff-prev-sdk-to-installed/diff.json",
+      "bytes": 665263,
+      "sha256": "c8a01221bee0c20f6216f9e7dd7c852db0a46c68c7a54a9372f3957fac772e23"
+    },
+    {
+      "path": "sdk/reports/diff-prev-sdk-to-installed/README.md",
+      "bytes": 5738,
+      "sha256": "ffab680864779cef7268f139f687bcd3adaa4ad9aa0e6bc693089c972b07103b"
+    },
+    {
+      "path": "sdk/reports/README.md",
+      "bytes": 3410,
+      "sha256": "fdb4ff350e1bc3297d896502b6c9edae0f1e4928e991c22bad7e2db786b12406"
+    },
+    {
+      "path": "sdk/tools/abi_facts.py",
+      "bytes": 5339,
+      "sha256": "9157d6fc9a640927ed7a4ef06f4d0d093a08983f3ff290663cb4acf53968365e"
+    },
+    {
+      "path": "sdk/tools/common.py",
+      "bytes": 5679,
+      "sha256": "0e635be2410c2096f993b00dd13d734615242b88508791a50399169c60aa27a7"
+    },
+    {
+      "path": "sdk/tools/gcl.py",
+      "bytes": 4858,
+      "sha256": "e852b5a6a5a218e090e4816fa9109c28628e56c69faf6fda234b361c600d97bc"
+    },
+    {
+      "path": "sdk/tools/regenerate.py",
+      "bytes": 3269,
+      "sha256": "471611d21f0990c72f4cfb193eba2863d8d50ec35095dbb5fd768972d5a1befa"
+    },
+    {
+      "path": "sdk/tools/requirements.txt",
+      "bytes": 47,
+      "sha256": "c8cc7e0d4bfa050082bb1e610a306f55ecf9384337bbec7dceff77632eaf97b9"
+    },
+    {
+      "path": "sdk/tools/sdk_analyze.py",
+      "bytes": 42020,
+      "sha256": "50c18ec434fb7e549fa1f113884a6df090799973b82df1143c028c6f66e83083"
+    },
+    {
+      "path": "sdk/tools/sdk_codegen.py",
+      "bytes": 11508,
+      "sha256": "fa70a5260b02fb67329f7e698f7ad08d848ff1b1053572918ddd832e55a33152"
+    },
+    {
+      "path": "sdk/tools/sdk_diff.py",
+      "bytes": 21713,
+      "sha256": "c93fb696a194f813f27d527d8a26fedca788aebaafbd3e8984e1a382fb48f273"
+    },
+    {
+      "path": "sdk/tools/sdk_docs.py",
+      "bytes": 11209,
+      "sha256": "4700b6063e893f06249f195c1fcbc58f854bd8070d6ad5fce149aca4ec418de5"
+    },
+    {
+      "path": "sdk/tools/sdk_header.py",
+      "bytes": 10513,
+      "sha256": "1e709b20f6cac5715f644065f6f5552810001dd369bdd4dbae03e2817c446a72"
+    },
+    {
+      "path": "sdk/tools/sdk_query.py",
+      "bytes": 8917,
+      "sha256": "f272899f916a2eecb45d4772ac88a15e022a6cda03e69a2f867c714578fb9f2b"
+    },
+    {
+      "path": "sdk/tools/sdk_systems.py",
+      "bytes": 14106,
+      "sha256": "cd331ea493ace2a592f05b22181888b1f6d381ce73f08c41d54cd3ae708a41aa"
+    },
+    {
+      "path": "sdk/tools/systems_spec.py",
+      "bytes": 40464,
+      "sha256": "8a4428ee8af89522a5b3c47151deb90d503f35e03a833e183226bfc5007c83c4"
+    },
+    {
+      "path": "sdk/tools/validate_compile.py",
+      "bytes": 3624,
+      "sha256": "82111aa19c0a705b11dcf4f73b81b0dba5a9863df9db075587ffa633e8419ccd"
+    },
+    {
+      "path": "sdk/validation/calltest/build.cmd",
+      "bytes": 686,
+      "sha256": "c247d89161aa3bbd84dff1c6bda27d499f572031d106a67781c5d673ce89d64b"
+    },
+    {
+      "path": "sdk/validation/calltest/calltest.cpp",
+      "bytes": 10682,
+      "sha256": "78832ff011d1fa84fc8ae6a4b9c002f1d9c491139ae2e8fbea5e78d23feed967"
+    },
+    {
+      "path": "sdk/validation/calltest/calltest_symbols.h",
+      "bytes": 1853,
+      "sha256": "f05b16bf4cbc79d587ae981ab262b14fdcdacf2e52b98aa6181857e34368522a"
+    },
+    {
+      "path": "sdk/validation/calltest/gen_symbols.py",
+      "bytes": 2638,
+      "sha256": "f3994f9c8b96c3730f494309282c454b5c9b3334f5e382bd6e1a9159c1559cca"
+    },
+    {
+      "path": "sdk/validation/calltest/inject.py",
+      "bytes": 1848,
+      "sha256": "622e77313ca529f58fc72b8791b1609556174d7387d3b50d4859ea413246ce6c"
+    },
+    {
+      "path": "sdk/validation/calltest_result_menu.log",
+      "bytes": 988,
+      "sha256": "f454a13e71d351bfd37b31c86f47eba84ecd581bc0dc8345e33a117808dba6ed"
+    },
+    {
+      "path": "sdk/validation/compile_result.json",
+      "bytes": 2467,
+      "sha256": "3fce51cd49943e58cf717a59a37446f94093c7f177d6201f1adbb18eec7b7e8b"
+    },
+    {
+      "path": "sdk/validation/merge_runtime.py",
+      "bytes": 5707,
+      "sha256": "6f7cc8b9f020511cf6efb223c8ea0fb28c98c95cac67c8fd186aa62270b64ad1"
+    },
+    {
+      "path": "sdk/validation/probe.py",
+      "bytes": 28945,
+      "sha256": "e9215d68f61872ac6a32a1727a47696caffc7ab182c9fded182b14ed63de5584"
+    },
+    {
+      "path": "sdk/validation/README.md",
+      "bytes": 3406,
+      "sha256": "463b6506bdc617ec4ba24be4db28a010786373442b780f0178672825c658395c"
+    },
+    {
+      "path": "sdk/validation/runtime_menu.json",
+      "bytes": 3741387,
+      "sha256": "f31295f2cd34b775499617db3d409b8eeab358d2a30af02e12f98eff68c1a312"
+    },
+    {
+      "path": "sdk/validation/runtime_world_host.json",
+      "bytes": 7391145,
+      "sha256": "96d22e9a9dda47afed5f85df628432a065652bc33f4b6c09f4847dd592157566"
+    },
+    {
+      "path": "sdk/validation/world_host_observations.md",
+      "bytes": 1365,
+      "sha256": "a899e2c3a79845ac7cec6a59478b982eddaf504bc944764d3ea3aa18cd21556c"
+    }
+  ]
+}

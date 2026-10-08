@@ -74,3 +74,7 @@ Use the [experimental SDK](sdk/experimental/README.md) for discovered game types
 functions, globals and hook pathways beyond the supported API services. Download
 the [complete SDK and reference](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.08.1)
 for the generated bindings and machine-readable database.
+
+### Complete research reference downloads
+
+Both supplied reference bundles, including analysis tools and validation reports, are available from [Complete supplied SDK references](docs/sdk-reference/README.md).
