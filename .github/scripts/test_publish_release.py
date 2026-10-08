@@ -35,6 +35,17 @@ class PublishTests(unittest.TestCase):
         self.assets.mkdir()
         for name in ("catalog.json", "manager-update.json"):
             shutil.copy(REPO / name, self.root / name)
+        # Pin the versions the tests release against, so publishing a real
+        # release (which moves the live catalog forward) doesn't break them.
+        catalog = self.catalog()
+        pinned = {"AnyAPI": ("0.33.0", 33, 0), "AnyClock": ("1.0.0", 1, 30), "AnyBalance": ("1.0.0", 1, 33)}
+        for entry in catalog["Api"] + catalog["Mods"]:
+            if entry["Name"] in pinned:
+                entry["Version"], entry["Revision"], entry["MinimumApi"] = pinned[entry["Name"]]
+        pr.write_json(self.root / "catalog.json", catalog)
+        feed = json.loads((self.root / "manager-update.json").read_text(encoding="utf-8"))
+        feed["Version"] = "1.3.1"
+        pr.write_json(self.root / "manager-update.json", feed)
 
     def tearDown(self):
         shutil.rmtree(self.temp)
@@ -78,7 +89,7 @@ class PublishTests(unittest.TestCase):
 
     def test_unchanged_catalog_round_trips_byte_for_byte(self):
         original = (REPO / "catalog.json").read_bytes()
-        pr.write_json(self.root / "catalog.json", self.catalog())
+        pr.write_json(self.root / "catalog.json", json.loads(original.decode("utf-8")))
         self.assertEqual(original, (self.root / "catalog.json").read_bytes())
 
     def test_api_release_with_mod(self):
