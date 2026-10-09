@@ -35,13 +35,15 @@ static void draw(const AnyFrameV1* frame,void*){
   label(std::clamp(x-75*scale,0.f,std::max(0.f,float(frame->width)-150*scale)),y-size-27*scale,150*scale,21*scale,L"CENTRE OF MASS",11*scale,0xffffdf9b,ANY_GPU_CENTER);
  }
  if(values[5]){
-  float w=270*scale,h=(data.valid_fields&ANY_BALANCE_BODY_MASS?132.f:111.f)*scale;
+  float w=270*scale,h=(data.valid_fields&ANY_BALANCE_BODY_MASS?154.f:133.f)*scale;
   w=std::min(w,float(frame->width));h=std::min(h,float(frame->height));float px=std::max(0.f,float(frame->width)-w-20*scale),py=std::max(0.f,float(frame->height)-h-105*scale);
   AnyGpuCommandV1 c;c.kind=ANY_GPU_ROUND_RECT;c.rect[0]=px;c.rect[1]=py;c.rect[2]=w;c.rect[3]=h;c.radius=5*scale;c.color=0xff191f25;c.opacity=alpha*.9f;gpu->emit(&c);
   float inset=14*scale;label(px+inset,py+10*scale,w-inset*2,21*scale,L"AnyBalance",13*scale,0xffedf1f5,ANY_GPU_BOLD);
   wchar_t text[100];swprintf_s(text,L"Centre height  %.2f m",data.height_m);label(px+inset,py+37*scale,w-inset*2,21*scale,text,12*scale,0xffffd47c);
   swprintf_s(text,L"X offset  %+.2f m     Z  %+.2f m",data.offset_x_m,data.offset_z_m);label(px+inset,py+60*scale,w-inset*2,21*scale,text,11*scale,0xffced8e2);
   if(data.valid_fields&ANY_BALANCE_BODY_MASS){swprintf_s(text,data.valid_fields&ANY_BALANCE_FLUID_MASS?(data.body_count>1?L"Creation mass  %.1f kg  incl. fluid":L"Body mass  %.1f kg  incl. fluid"):(data.body_count>1?L"Creation mass  %.1f kg":L"Body mass  %.1f kg"),data.body_mass_kg);label(px+inset,py+82*scale,w-inset*2,21*scale,text,11*scale,0xffced8e2);}
+  swprintf_s(text,L"Size  %.2f x %.2f m, %.2f m high",data.bounds_max.x-data.bounds_min.x,data.bounds_max.z-data.bounds_min.z,data.bounds_max.y-data.bounds_min.y);
+  label(px+inset,py+(data.valid_fields&ANY_BALANCE_BODY_MASS?104.f:82.f)*scale,w-inset*2,21*scale,text,11*scale,0xffced8e2);
   label(px+inset,py+h-25*scale,w-inset*2,18*scale,L"Offsets from the build's bounds centre",9*scale,0xff929fab);
  }
 }
@@ -59,7 +61,7 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace anybalan
   double lo[]={0,60,0,0,0,0,25},hi[]={1,180,1,1,1,1,100};
   for(unsigned i=0;i<7;++i){AnyModSettingV1 d;d.mod_id="anybalance";d.mod_name="AnyBalance";d.setting_id=ids[i];d.label=labels[i];d.order=i;d.kind=(i==1||i==6)?ANY_SETTING_INTEGER:ANY_SETTING_BOOL;d.default_number=values[i];d.minimum=lo[i];d.maximum=hi[i];d.step=(i==1||i==6)?5:1;
    if(i==0)d.description="Appears only with Properties Tool equipped and aimed at a creation. Uses the native client physics-shape centre.";
-   if(i==5)d.description="Height above the build's local lower bounds and X/Z offsets from its bounds centre. These are not axle loads or server cargo totals.";
+   if(i==5)d.description="Height above the build's local lower bounds, X/Z offsets from its bounds centre, mass and size (X by Z, then height). These are not axle loads or server cargo totals.";
    tokens[i]=settings->register_setting(&d);
   }
  }else settings=nullptr;
