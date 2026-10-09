@@ -79,6 +79,8 @@ constexpr ptrdiff_t client_colour[kKindCount] = {336, 264, 288};      // m_color
 constexpr ptrdiff_t pd_vehicle = 8 + 8, pd_component = 24 + 8, pd_rows = 40 + 8;
 constexpr ptrdiff_t row_id = 8, row_name = 16 + 8, row_string = 32 + 8;
 constexpr ptrdiff_t client_peer_data = 40 + 104;                      // client.m_peers.m_data
+constexpr ptrdiff_t client_peers = 3920 + 64 + 8;                     // client.m_scene.m_peers._m_elements (vector<ref<peer>>)
+constexpr ptrdiff_t peer_property_data = 24 + 2848;                   // peer.m_private.m_property_data
 }  // namespace off
 constexpr int32_t kAliasLabel = 307;                                  // e_localization_string.property_component_alias
 
@@ -203,6 +205,8 @@ void hk_descriptors(const anymaker::gc_vector_raw** ret, uint8_t* component) {
     reinterpret_cast<descriptors_t>(h_descriptors.original)(ret, component);
     if (!ret || !*ret || !g_enabled.load() || !g_channels.load()) return;
     int kind = kind_of(component, g_server_types);
+    static std::atomic<int> calls{3};
+    if (calls.fetch_sub(1) > 0) log(0, "data descriptors requested (%s)", kind < 0 ? "not a light" : kKindNames[kind]);
     if (kind < 0) return;
     const anymaker::gc_vector_raw* source = *ret;
     if (!anymaker::readable(source, sizeof *source) || source->element_size != sizeof(DescriptorRecord) || source->count < 0 || source->count > 256) return;
@@ -310,8 +314,32 @@ anymaker::cell_hook h_property_ui;
 void** g_push_string_cell;
 std::atomic<int> g_panel_logs{6};
 
+void panel_update(uint8_t* pd, uint8_t* client);
 void hk_property_ui(uint8_t* pd, void* frontend, const void* request, uint8_t* client, void* ui_data) {
     reinterpret_cast<property_ui_t>(h_property_ui.original)(pd, frontend, request, client, ui_data);
+    panel_update(pd, client);
+}
+
+// Fallback when the window-level hook is unavailable: the name row's own update runs every frame the
+// Properties window shows it. Find the property data that owns the row among the client's peers.
+using string_row_t = void (*)(uint8_t* row, void* frontend, uint8_t* client, const int32_t* a, const int32_t* b);
+anymaker::cell_hook h_string_row;
+std::atomic<int> g_row_logs{3};
+void hk_string_row(uint8_t* row, void* frontend, uint8_t* client, const int32_t* a, const int32_t* b) {
+    reinterpret_cast<string_row_t>(h_string_row.original)(row, frontend, client, a, b);
+    if (!row || !client || !anymaker::readable(row, 64) || rd<int32_t>(row, off::row_name) != kAliasLabel) return;
+    uint8_t* owner = nullptr;
+    for_each_ref(client + off::client_peers, 256, [&](uint8_t* peer) {
+        uint8_t* pd = peer + off::peer_property_data;
+        if (!anymaker::readable(pd, 96)) return true;
+        for_each_ref(pd + off::pd_rows, 128, [&](uint8_t* r) { if (r == row) owner = pd; return !owner; });
+        return !owner;
+    });
+    if (g_row_logs.fetch_sub(1) > 0) log(0, "name row seen: owner property data %s", owner ? "found" : "not found");
+    if (owner) panel_update(owner, client);
+}
+
+void panel_update(uint8_t* pd, uint8_t* client) {
     if (!pd || !g_enabled.load() || !g_panel_enabled.load() || !anymaker::readable(pd, 96)) return;
     auto it = g_known.find(key_of(rd<int32_t>(pd, off::pd_vehicle), rd<int32_t>(pd, off::pd_component)));
     if (it == g_known.end() || GetTickCount64() - it->second.seen > 2000) return;
@@ -391,6 +419,7 @@ void install_hooks() {
             }
             continue;
         }
+        void** string_row = hook_cell(bind::client_property_string_row_ui);
         // The Properties window update has no SDK route to its cell: find it by its entry point near another client cell.
         if (!property_ui) {
             void* entry = function(bind::client_property_window_ui);
@@ -400,7 +429,11 @@ void install_hooks() {
         g_push_ability = push_ability; g_push_string_cell = push_string;
         bool ok = h_descriptors.install(descriptors, (void*)&hk_descriptors) && h_ability.install(ability, (void*)&hk_ability) &&
                   (!property_ui || h_property_ui.install(property_ui, (void*)&hk_property_ui));
-        if (!property_ui) log(1, "the Properties panel is unavailable; name tags and data channels still work");
+        if (!property_ui && string_row) {
+            ok = ok && h_string_row.install(string_row, (void*)&hk_string_row);
+            log(0, "Properties panel follows the light's name row instead");
+        }
+        if (!property_ui && !string_row) log(1, "the Properties panel is unavailable; name tags and data channels still work");
         for (int k = 0; k < kKindCount && ok; ++k)
             ok = h_server_tick[k].install(st[k], server_hooks[k]) && h_get_f64[k].install(gf[k], get_hooks[k]) &&
                  h_client_tick[k].install(ct[k], client_hooks[k]) && h_client_render[k].install(cr[k], render_hooks[k]);
@@ -419,7 +452,7 @@ void remove_hooks() {
         h_client_render[k].remove(render_hooks[k]); h_client_tick[k].remove(client_hooks[k]);
         h_get_f64[k].remove(get_hooks[k]); h_server_tick[k].remove(server_hooks[k]);
     }
-    h_property_ui.remove((void*)&hk_property_ui); h_ability.remove((void*)&hk_ability); h_descriptors.remove((void*)&hk_descriptors);
+    h_string_row.remove((void*)&hk_string_row); h_property_ui.remove((void*)&hk_property_ui); h_ability.remove((void*)&hk_ability); h_descriptors.remove((void*)&hk_descriptors);
 }
 
 // ================================================================== panel drawing and input (render / input threads)
