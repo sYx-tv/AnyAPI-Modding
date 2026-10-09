@@ -12,7 +12,6 @@ struct Tally { std::string name; int count = 0; };
 struct Stats {
     int32_t vehicle_id = -1;
     int components = 0, nodes = 0, edges = 0, plates = 0;
-    double motor_watts = 0, alternator_watts = 0;
     std::vector<Tally> categories;   // most common first
 };
 
@@ -58,17 +57,39 @@ inline std::string power_text(double watts) {
     return buf;
 }
 
+// Power that reaches the wheels, measured on the host: rated power of electric motors and the highest output
+// seen from combustion engines, counting only sources whose drivetrain reaches a wheel, track or train wheel.
+struct Drive {
+    bool known = false;          // false when this player is not the host (the drivetrain only exists there)
+    double motor_watts = 0;      // rated, connected electric motors
+    double engine_peak_watts = 0;  // highest output seen, connected combustion engines
+    int motors = 0, engines = 0;
+    double total() const { return motor_watts + engine_peak_watts; }
+};
+constexpr double kWattsPerHp = 745.69987158227022;   // mechanical horsepower
+inline double hp(double watts) { return watts / kWattsPerHp; }
+inline std::string hp_text(double watts) { return grouped(static_cast<long long>(hp(watts) + 0.5)) + " hp"; }
+// "633 hp · 442 hp/t" style line, or empty when nothing drives the wheels.
+inline std::string drive_text(const Drive& d, double mass_kg, bool mass_valid) {
+    if (!d.known || d.total() <= 0) return {};
+    std::string out = hp_text(d.total());
+    if (mass_valid && mass_kg > 0) { char buf[32]; snprintf(buf, sizeof buf, " · %.0f hp/t", hp(d.total()) / (mass_kg / 1000)); out += buf; }
+    return out;
+}
+
 // Plain-text spec sheet for the clipboard.
-inline std::string sheet(const Stats& s, double mass_kg, bool mass_valid, const double size_m[3], int bodies) {
+inline std::string sheet(const Stats& s, double mass_kg, bool mass_valid, const double size_m[3], int bodies, const Drive& drive = {}) {
     std::string out = "Build stats (AnyBuildStats)\n";
     char buf[160];
     if (mass_valid) { out += "Mass: " + grouped(static_cast<long long>(mass_kg + 0.5)) + " kg\n"; }
     snprintf(buf, sizeof buf, "Size: %.2f m (X) x %.2f m (Z) x %.2f m high\n", size_m[0], size_m[2], size_m[1]); out += buf;
     if (bodies > 1) { snprintf(buf, sizeof buf, "Bodies: %d (part counts are for the main body)\n", bodies); out += buf; }
     out += "Components: " + grouped(s.components) + ", edges: " + grouped(s.edges) + ", plates: " + grouped(s.plates) + ", nodes: " + grouped(s.nodes) + "\n";
-    if (s.motor_watts > 0) out += "Electric motors: " + power_text(s.motor_watts) + "\n";
-    if (s.alternator_watts > 0) out += "Alternators: " + power_text(s.alternator_watts) + "\n";
-    if (s.motor_watts > 0 && mass_valid && mass_kg > 0) { snprintf(buf, sizeof buf, "Motor power to weight: %.1f kW/t\n", s.motor_watts / mass_kg); out += buf; }
+    if (drive.known && drive.total() > 0) {
+        out += "Power to the wheels: " + drive_text(drive, mass_kg, mass_valid) + "\n";
+        if (drive.engine_peak_watts > 0) out += "  Engines (" + std::to_string(drive.engines) + ", peak seen): " + hp_text(drive.engine_peak_watts) + "\n";
+        if (drive.motor_watts > 0) out += "  Electric motors (" + std::to_string(drive.motors) + ", rated): " + hp_text(drive.motor_watts) + "\n";
+    } else if (drive.known) out += "Power to the wheels: none connected\n";
     for (auto& t : s.categories) out += "  " + t.name + ": " + grouped(t.count) + "\n";
     return out;
 }

@@ -26,6 +26,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 
 namespace anybuildstats {
 namespace {
@@ -94,9 +95,6 @@ void sample(const uint8_t* vehicle, int32_t id) {
         copy_string(def + off::def_class, klass, sizeof klass);
         count(s.categories, pretty(category[0] ? category : klass));
         count(classes, pretty(klass));
-        double motor = rd<double>(def, off::def_motor_wattage), alternator = rd<double>(def, off::def_alternator_wattage);
-        if (std::isfinite(motor) && motor > 0 && motor < 1e9) s.motor_watts += motor;
-        if (std::isfinite(alternator) && alternator > 0 && alternator < 1e9) s.alternator_watts += alternator;
     });
     sort_tallies(s.categories);
     if (g_sample_logs.fetch_sub(1) > 0) {
@@ -104,8 +102,8 @@ void sample(const uint8_t* vehicle, int32_t id) {
         std::string cats, cls;
         for (size_t i = 0; i < s.categories.size() && i < 8; ++i) cats += s.categories[i].name + "=" + std::to_string(s.categories[i].count) + " ";
         for (size_t i = 0; i < classes.size() && i < 8; ++i) cls += classes[i].name + "=" + std::to_string(classes[i].count) + " ";
-        log(0, "sampled vehicle %d: %d components, %d nodes, %d edges, %d plates, motors %.0f W, alternators %.0f W; categories %s; classes %s",
-            id, s.components, s.nodes, s.edges, s.plates, s.motor_watts, s.alternator_watts, cats.c_str(), cls.c_str());
+        log(0, "sampled vehicle %d: %d components, %d nodes, %d edges, %d plates; categories %s; classes %s",
+            id, s.components, s.nodes, s.edges, s.plates, cats.c_str(), cls.c_str());
     }
     std::lock_guard lock(g_mutex);
     g_stats = std::move(s);
@@ -124,6 +122,126 @@ void hk_tick(uint8_t* vehicle, void* client, void* scene, const double* a, const
     sample(vehicle, target);
 }
 
+// ------------------------------------------------------------------ power to the wheels (server thread, host only)
+// The drivetrain only exists on the host. Every combustion engine and electric motor reports from its own tick
+// whether its torque network reaches a wheel: an engine through the engine wheels (output shafts) it drives, a
+// motor through its own torque nodes. Torque nodes linked through gears share one island, so a source is
+// connected when one of its nodes' islands holds a node of a wheel, train wheel or track sprocket.
+namespace sv {
+constexpr ptrdiff_t component_definition = 312, component_vehicle = 320, vehicle_id = 64;
+constexpr ptrdiff_t engine_rps = 1424, engine_torque = 1536, engine_wheels = 1216;   // m_rps, m_display_torque, vector<ptr<engine_wheel>>
+constexpr ptrdiff_t engine_wheel_torque = 480, motor_torque = 528;                    // m_torque_data
+constexpr ptrdiff_t node_component = 0, node_island = 88, node_size = 104;
+}
+enum Wheel { kWheel, kWheelHydraulic, kTrainWheel, kSprocket, kWheelCount };
+const uint8_t* g_wheel_types[kWheelCount];
+struct Source { int32_t vehicle = 0; bool engine = false, connected = false; double rated = 0, peak = 0; uint64_t seen = 0, checked = 0; };
+std::unordered_map<const uint8_t*, Source> g_sources;   // keyed by server component
+std::mutex g_source_mutex;
+std::atomic<int> g_engine_logs{4}, g_connect_logs{6};
+
+bool is_wheel(const uint8_t* component) {
+    if (!component || !anymaker::readable(component, 8)) return false;
+    auto ti = anymaker::typeinfo_of(component);
+    for (auto* t : g_wheel_types) if (t && anymaker::typeinfo_is(ti, t)) return true;
+    return false;
+}
+template <class F> void for_each_ptr(const uint8_t* vector_address, int max_count, F&& visit) {
+    if (!anymaker::readable(vector_address, sizeof(anymaker::gc_vector_raw))) return;
+    anymaker::gc_vector_raw v; std::memcpy(&v, vector_address, sizeof v);
+    if (v.count <= 0 || v.count > max_count || v.element_size != 8 || !v.buffer || v.capacity < v.count || v.offset < 0 || v.offset >= v.capacity ||
+        !anymaker::readable(v.buffer, size_t(v.capacity) * 8)) return;
+    for (int32_t i = 0; i < v.count; ++i) if (auto* p = v.at<uint8_t*>(i); p && *p && !visit(*p)) return;
+}
+// torque_data = { array<node> m_nodes (buffer, count, element size), array<link> m_links }
+bool reaches_wheel(const uint8_t* torque_data) {
+    if (!anymaker::readable(torque_data, 16)) return false;
+    auto* nodes = rd<const uint8_t*>(torque_data, 0);
+    int32_t count = rd<int32_t>(torque_data, 8), size = rd<int32_t>(torque_data, 12);
+    if (!nodes || count <= 0 || count > 64 || size != sv::node_size || !anymaker::readable(nodes, size_t(count) * size)) return false;
+    for (int32_t i = 0; i < count; ++i) {
+        auto* island = rd<const uint8_t*>(nodes + i * size, sv::node_island);
+        if (!island || !anymaker::readable(island, 40)) continue;
+        bool found = false;
+        for_each_ptr(island, 4096, [&](uint8_t* node) {
+            found = anymaker::readable(node, sv::node_size) && is_wheel(rd<const uint8_t*>(node, sv::node_component));
+            return !found;
+        });
+        if (found) return true;
+    }
+    return false;
+}
+void report(uint8_t* component, uint8_t* vehicle, bool engine, double rated, double power_now, bool (*connected)(uint8_t*)) {
+    if (!component || !vehicle || !anymaker::readable(vehicle, sv::vehicle_id + 4)) return;
+    uint64_t now = GetTickCount64();
+    std::lock_guard lock(g_source_mutex);
+    auto& s = g_sources[component];
+    s.vehicle = rd<int32_t>(vehicle, sv::vehicle_id); s.engine = engine; s.rated = rated; s.seen = now;
+    if (now - s.checked > 500) {
+        bool was = s.connected;
+        s.connected = connected(component); s.checked = now;
+        if (s.connected != was && g_connect_logs.fetch_sub(1) > 0)
+            log(0, "%s on vehicle %d %s the wheels", engine ? "engine" : "motor", s.vehicle, s.connected ? "drives" : "no longer drives");
+    }
+    if (s.connected && std::isfinite(power_now) && power_now > s.peak && power_now < 1e8) s.peak = power_now;
+    if (g_sources.size() > 4096) for (auto it = g_sources.begin(); it != g_sources.end();) it = now - it->second.seen > 10000 ? g_sources.erase(it) : std::next(it);
+}
+
+using server_tick_t = void (*)(uint8_t* component, uint8_t* vehicle, void* scene);
+anymaker::cell_hook h_engine, h_motor;
+void hk_engine(uint8_t* engine, uint8_t* vehicle, void* scene) {
+    reinterpret_cast<server_tick_t>(h_engine.original)(engine, vehicle, scene);
+    if (!engine || !anymaker::readable(engine, sv::engine_torque + 8)) return;
+    double torque = rd<double>(engine, sv::engine_torque), rps = rd<double>(engine, sv::engine_rps);
+    double power = torque * rps * 6.283185307179586;   // N·m × rev/s × 2π = W
+    if (power > 1000 && g_engine_logs.fetch_sub(1) > 0) log(0, "engine output: torque %.1f, rps %.2f -> %.0f W (%.0f hp)", torque, rps, power, hp(power));
+    report(engine, vehicle, true, 0, power, [](uint8_t* e) {
+        bool any = false;
+        for_each_ptr(e + sv::engine_wheels, 16, [&](uint8_t* shaft) {
+            any = reaches_wheel(shaft + sv::engine_wheel_torque);
+            return !any;
+        });
+        return any;
+    });
+}
+void hk_motor(uint8_t* motor, uint8_t* vehicle, void* scene) {
+    reinterpret_cast<server_tick_t>(h_motor.original)(motor, vehicle, scene);
+    if (!motor || !anymaker::readable(motor, sv::motor_torque + 16)) return;
+    auto* def = rd<const uint8_t*>(motor, sv::component_definition);
+    double rated = def && anymaker::readable(def, off::def_motor_wattage + 8) ? rd<double>(def, off::def_motor_wattage) : 0;
+    if (!std::isfinite(rated) || rated < 0 || rated > 1e8) rated = 0;
+    report(motor, vehicle, false, rated, 0, [](uint8_t* m) { return reaches_wheel(m + sv::motor_torque); });
+}
+// Sum for one body, from sources seen in the last two seconds; unknown when nothing reported (not the host).
+Drive drive_for(int32_t vehicle) {
+    Drive d; uint64_t now = GetTickCount64();
+    std::lock_guard lock(g_source_mutex);
+    for (auto& [component, s] : g_sources) {
+        if (now - s.seen > 2000) continue;
+        d.known = true;
+        if (s.vehicle != vehicle || !s.connected) continue;
+        if (s.engine) { d.engine_peak_watts += s.peak; ++d.engines; }
+        else { d.motor_watts += s.rated; ++d.motors; }
+    }
+    return d;
+}
+const uint8_t* typeinfo_for(const anymaker::func_desc& d) {
+    if (!d.ti_anchor_sig || !*d.ti_anchor_sig) return nullptr;
+    uint8_t* anchor = anymaker::find_gcl_function(d.ti_anchor_sig);
+    auto* ti = anchor ? reinterpret_cast<const uint8_t*>(anymaker::read_slot(anchor, d.ti_slot_offset)) : nullptr;
+    return ti && anymaker::readable(ti, 0x88) ? ti : nullptr;
+}
+void install_drive_hooks() {
+    using namespace anymaker::experimental;
+    const anymaker::func_desc* wheels[kWheelCount] = {&bind::server_wheel_tick, &bind::server_wheel_hydraulic_tick, &bind::server_train_wheel_tick, &bind::server_sprocket_tick};
+    for (int i = 0; i < kWheelCount; ++i) g_wheel_types[i] = typeinfo_for(*wheels[i]);
+    void** engine = hook_cell(bind::server_engine_tick);
+    void** motor = hook_cell(bind::server_motor_tick);
+    bool ok = g_wheel_types[kWheel] && engine && motor && h_engine.install(engine, (void*)&hk_engine) && h_motor.install(motor, (void*)&hk_motor);
+    log(ok ? 0 : 1, "power to the wheels %s (wheel types %d/%d/%d/%d, engine %d, motor %d)", ok ? "ready (host only)" : "unavailable",
+        !!g_wheel_types[0], !!g_wheel_types[1], !!g_wheel_types[2], !!g_wheel_types[3], !!engine, !!motor);
+}
+
 void install_hooks() {
     using namespace anymaker::experimental;
     for (int attempt = 0; attempt < 180 && !g_stop; ++attempt) {
@@ -134,6 +252,7 @@ void install_hooks() {
         if (!h_tick.install(tick, (void*)&hk_tick)) { log(2, "vehicle tick hook cell was taken or not writable; part counts stay off"); return; }
         g_ready = true;
         log(0, "Ready after %d s: equip the Properties tool and aim at a creation.", attempt);
+        install_drive_hooks();
         return;
     }
 }
@@ -162,7 +281,8 @@ void draw(const AnyFrameV1* frame, void*) {
     g_visible = true; g_shown = data;
     bool have_parts = g_ready && g_stats.vehicle_id == data.vehicle_id && GetTickCount64() - g_stats_at < 2000;
     float s = std::clamp(float(frame->height) / 1080.f, .65f, 1.75f), alpha = float(g_values[kOpacity] / 100);
-    int rows = 3 + (have_parts ? 1 : 0) + (have_parts && (g_stats.motor_watts > 0 || g_stats.alternator_watts > 0) ? 1 : 0);
+    Drive drive = drive_for(data.vehicle_id);
+    int rows = 3 + (have_parts ? 1 : 0) + 1;
     int cat_rows = have_parts && g_values[kCategories] ? int(std::min<size_t>(g_stats.categories.size(), 8) + 1) / 2 : 0;
     float w = 300 * s, row = 20 * s, h = 34 * s + rows * row + cat_rows * 18 * s + (cat_rows ? 8 * s : 0) + 22 * s;
     w = std::min(w, float(frame->width)); h = std::min(h, float(frame->height));
@@ -197,13 +317,6 @@ void draw(const AnyFrameV1* frame, void*) {
     if (have_parts) {
         swprintf_s(buf, L"%hs parts · %hs edges · %hs plates", grouped(g_stats.components).c_str(), grouped(g_stats.edges).c_str(), grouped(g_stats.plates).c_str());
         pair(L"Built from", buf, 0xffced8e2);
-        if (g_stats.motor_watts > 0 || g_stats.alternator_watts > 0) {
-            if (g_stats.motor_watts > 0 && (data.valid_fields & ANY_BALANCE_BODY_MASS) && data.body_mass_kg > 0)
-                swprintf_s(buf, L"%hs motors · %.1f kW/t", power_text(g_stats.motor_watts).c_str(), g_stats.motor_watts / data.body_mass_kg);
-            else if (g_stats.motor_watts > 0) swprintf_s(buf, L"%hs motors", power_text(g_stats.motor_watts).c_str());
-            else swprintf_s(buf, L"%hs alternators", power_text(g_stats.alternator_watts).c_str());
-            pair(L"Electric", buf, 0xff7dd3fc);
-        }
         if (cat_rows) {
             cy += 4 * s;
             AnyGpuCommandV1 sep; sep.kind = ANY_GPU_LINE; sep.rect[0] = x + in; sep.rect[1] = cy; sep.rect[2] = x + w - in; sep.rect[3] = cy; sep.color = 0xff3a4048; sep.stroke = 1; sep.opacity = alpha; gpu->emit(&sep);
@@ -217,6 +330,11 @@ void draw(const AnyFrameV1* frame, void*) {
         }
     } else if (!g_ready) pair(L"Parts", L"counts unavailable on this game build", 0xff929fab);
     else pair(L"Parts", L"counting...", 0xff929fab);
+    std::string power = drive_text(drive, data.body_mass_kg, (data.valid_fields & ANY_BALANCE_BODY_MASS) != 0);
+    if (!power.empty()) {
+        swprintf_s(buf, L"%hs%ls", power.c_str(), drive.engines ? L" (engines: peak seen)" : L"");
+        pair(L"To wheels", buf, 0xff7dd3fc);
+    } else pair(L"To wheels", drive.known ? L"nothing connected" : L"host only", 0xff929fab);
     if (GetTickCount64() - g_copied_at < 1500) wcscpy_s(buf, L"Copied to clipboard");
     else key_label(buf, 160);
     text(x + in, y + h - 22 * s, w - in * 2, 18 * s, buf, 9 * s, 0xff929fab);
@@ -226,7 +344,7 @@ void draw(const AnyFrameV1* frame, void*) {
 void copy_sheet() {
     double size[3] = {g_shown.bounds_max.x - g_shown.bounds_min.x, g_shown.bounds_max.y - g_shown.bounds_min.y, g_shown.bounds_max.z - g_shown.bounds_min.z};
     Stats parts = g_stats.vehicle_id == g_shown.vehicle_id ? g_stats : Stats{};
-    std::string text = sheet(parts, g_shown.body_mass_kg, (g_shown.valid_fields & ANY_BALANCE_BODY_MASS) != 0, size, int(g_shown.body_count));
+    std::string text = sheet(parts, g_shown.body_mass_kg, (g_shown.valid_fields & ANY_BALANCE_BODY_MASS) != 0, size, int(g_shown.body_count), drive_for(g_shown.vehicle_id));
     int wide = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
     if (wide <= 0 || !OpenClipboard(nullptr)) return;
     EmptyClipboard();
@@ -260,7 +378,7 @@ using namespace anybuildstats;
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyModCallbacksV1* out) {
     if (!h || !out || h->struct_size != sizeof(*h) || h->abi != ANYAPI_MOD_ABI || out->struct_size != sizeof(*out)) return false;
     host = *h; out->id = kModId; out->input = input;
-    out->shutdown = [](void*) { g_stop = true; h_tick.remove((void*)&hk_tick); };
+    out->shutdown = [](void*) { h_motor.remove((void*)&hk_motor); h_engine.remove((void*)&hk_engine); g_stop = true; h_tick.remove((void*)&hk_tick); };
     return true;
 }
 extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
