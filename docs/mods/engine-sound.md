@@ -1,8 +1,8 @@
-# EngineSound (prototype)
+# EngineSound
 
-> **Prototype, not in the catalog.** EngineSound hooks game functions directly through the
-> [experimental SDK](../../sdk/experimental/README.md). It only activates on Anymaker 0.1.23 /
-> Steam build 25755694. Once tested, its hooks move into a reviewed AnyAPI service before release.
+> EngineSound hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
+> so it only activates on Anymaker 0.1.23 / Steam build 25755694 and turns itself off on any other build.
+> Its hooks are planned to move into a reviewed AnyAPI service.
 
 EngineSound adds seven engine sound presets and a **Custom** tuner. You choose them in the engine's
 **Properties Tool** window: left click an engine while holding the Properties Tool, then move the
@@ -67,8 +67,8 @@ accepted. Crackle timing is random per player, so pops land at slightly differen
 
 ## Test plan
 
-Build `EngineSound.dll` with the native CMake project and copy it to `AnyAPI and Modding/mods/`.
-Logging is verbose in this build. After each step, the lines tagged `enginesound` in
+Install EngineSound from the manager, or build `EngineSound.dll` with the native CMake project and copy it
+to `AnyAPI and Modding/mods/`. Logging is verbose in 0.2.0. After each step, the lines tagged `enginesound` in
 `anymaker_modding.log` (beside `game.exe`) are what we need.
 
 1. Load a world. Expect `Ready after N s ... audio manager found`.

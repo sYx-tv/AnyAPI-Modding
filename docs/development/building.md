@@ -27,7 +27,7 @@ not required for the normal C++ build.
 ## Output
 
 `build/Release` contains `dinput8.dll`, `AnyHelpers.dll`, `AnyInventory.dll`,
-`AnyStorage.dll`, `AnyMap.dll`, `AnyGraphics.dll`, `AnyClock.dll`, `AnyQuickWheel.dll` and `AnyBalance.dll`.
+`AnyStorage.dll`, `AnyMap.dll`, `AnyGraphics.dll`, `AnyClock.dll`, `AnyQuickWheel.dll`, `AnyBalance.dll` and `EngineSound.dll`.
 Close the game before replacing DLLs. The API loader belongs beside `game.exe`;
 mod DLLs belong in `AnyAPI and Modding/mods`. Prefer manager import for local mods
 so metadata, backups and receipts are maintained.

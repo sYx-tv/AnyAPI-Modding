@@ -30,6 +30,7 @@ discovered from the game's mods folder.
 | AnyQuickWheel | Automatic inventory construction-tool wheel | [Guide](docs/mods/quick-wheel.md) |
 | AnyClock | Configurable temporary game-time HUD | [Guide](docs/mods/clock.md) |
 | AnyBalance | Centre-of-mass overlay for creations with the Properties Tool | [Guide](docs/mods/balance.md) |
+| EngineSound | Engine sound presets and a co-op synced Custom sound tuner | [Guide](docs/mods/engine-sound.md) |
 
 ## Source and downloads
 
@@ -49,6 +50,7 @@ installation is needed to build and test game-dependent features.
 | AnyClock | 1.0.0 | API 0.30.0 |
 | AnyQuickWheel | 1.1.0 | API 0.31.0 |
 | AnyBalance | 1.1.0 | API 0.33.0 (fluid mass: 0.34.0) |
+| EngineSound | 0.2.0 | API 0.34.0 |
 | AnyAPI Manager | 1.3.2 | Windows x64 |
 
 [`catalog.json`](catalog.json) is the source of truth for these numbers. Manager 1.3.2
@@ -57,6 +59,8 @@ mods download individually. See the [release notes](docs/releases/README.md).
 
 AnyAPI 0.34.0 and [AnyBalance 1.1.0](docs/mods/balance.md) add tank fluid mass to the
 centre-of-mass display; both were confirmed in game before release on 8 October 2026.
+[EngineSound 0.2.0](docs/mods/engine-sound.md) adds engine sound presets and a Custom sound tuner
+to the Properties Tool, confirmed in game before release on 9 October 2026.
 
 ## Compatibility
 
