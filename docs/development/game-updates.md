@@ -131,7 +131,8 @@ At release (see [Publishing](publishing.md)):
   ```
 
   `--release-json` prints the `Packages` overrides for the releases above.
-- Rebuild the manager so it bundles the new API: copy the updated root `catalog.json`
-  to `manager/publishing/catalog.json`, put the API ZIP in `manager/publishing/assets/`,
-  run `python manager/prepare_guide.py`, then build and release the manager
-  ([manager README](../../manager/README.md)). Ship it together with the API and mods.
+- The manager downloads whatever API the live catalog lists, so it needs no release for
+  a game update. Its bundled API (the offline fallback) refreshes with the next manager
+  release: copy the root `catalog.json` to `manager/publishing/catalog.json`, put the API
+  ZIP in `manager/publishing/assets/` and run `python manager/prepare_guide.py`
+  ([manager README](../../manager/README.md)).
