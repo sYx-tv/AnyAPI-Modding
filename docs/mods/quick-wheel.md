@@ -10,7 +10,7 @@ Weapons, torches, clothing, empty hands and physical parts such as engines are e
 
 ## Equipping and the shared slot
 
-The game activates stored tools through hotbar references. A tool already on your hotbar uses its existing slot. An unassigned tool uses one empty slot; the wheel then reuses that same slot for subsequent tools. Keep one hotbar slot free when first equipping an unassigned tool. No existing weapon or manually assigned item is overwritten. Tools remain in their containers rather than being moved, spawned or dropped.
+The game activates stored tools through hotbar references. A tool already on your hotbar uses its existing slot. An unassigned tool uses one empty slot; the wheel then reuses that same slot for subsequent tools. Keep one hotbar slot free when first equipping an unassigned tool. If the hotbar is full (for example after reloading a world, which forgets the wheel's slot), the wheel reuses a slot that already holds a construction tool, the selected one first. Weapons, devices and other non-tool items are never overwritten. Tools remain in their containers rather than being moved, spawned or dropped.
 
 Assignments use the game's normal replicated hotbar event. Selection waits for the matching slot/item to appear locally. If the server rejects the assignment, the item disappears or confirmation times out, the request fails without selecting the previous slot item.
 
