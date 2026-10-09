@@ -6,6 +6,9 @@
 #include <cstring>
 namespace equipment_tools {
 inline bool tool_class(const char* s){return s&&strncmp(s,"vehicle_editor_",15)==0&&strcmp(s,"vehicle_editor_add_component")&&strcmp(s,"vehicle_editor_add_building_component");}
+// A world reload forgets which slot the wheel owns, so a full hotbar would block every equip.
+// Reclaim a slot that already holds a construction tool (the selected one first); other items stay protected.
+inline int32_t reclaim_slot(const bool* holds_tool,int32_t count,int32_t selected){if(!holds_tool||count<=0)return -1;if(selected>=0&&selected<count&&holds_tool[selected])return selected;for(int32_t slot=0;slot<count;++slot)if(holds_tool[slot])return slot;return -1;}
 struct Request {uint64_t ticket{},context{},queued_at{};int32_t item{-1};uint32_t state{ANY_EQUIPMENT_QUEUED};bool taken{};};
 class Store {
  std::mutex mutex_;AnyEquipmentToolsSnapshotV2 snapshot_;std::deque<Request> jobs_;uint64_t ticket_{};
