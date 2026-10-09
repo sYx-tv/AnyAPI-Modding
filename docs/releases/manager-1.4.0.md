@@ -17,6 +17,6 @@ A redesigned manager that updates itself. Bundles AnyAPI 0.34.1 for Anymaker 0.1
 ## Windows 10 and custom game folders
 
 - Settings has a Game folder box: Browse to `Anymaker.exe`, Find automatically, or type a folder. Steam libraries on other drives are found automatically.
-- The manager forces TLS 1.2 for downloads on older Windows 10 builds and writes a log to `%LOCALAPPDATA%\AnyAPI Manager\manager.log`. Settings has an Open log button.
+- Downloads let Windows pick TLS 1.2 or 1.3, with a TLS 1.2 fallback on older .NET installs. The manager writes a log to `%LOCALAPPDATA%\AnyAPI Manager\manager.log`. Settings has an Open log button.
 
 Users on 1.3.x can choose Check for updates in Settings, then Update & restart. From 1.4.0 on, updates are offered at launch.
