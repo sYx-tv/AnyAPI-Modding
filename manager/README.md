@@ -1,6 +1,6 @@
 # AnyAPI Manager
 
-A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.3.2 includes AnyAPI revision 33, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
+A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.3.3 includes AnyAPI revision 33, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
 
 The manager recognizes newer compatible installed API/mod receipts even when
 its cached catalog is older. The bundled API and offline guide match 0.33.0.
@@ -23,6 +23,17 @@ Disable/enable takes effect on the next game launch. Remove deletes the mod DLL 
 The last connected catalog is saved locally so the browser remains available while offline. New downloads and online update checks still require a connection.
 
 When a game update leaves active mods unverified, updating the API asks whether to temporarily disable those DLLs. Their data is preserved. Install matching mod releases to enable them again. Play with mods checks game compatibility, minimum API revisions and enabled mod DLLs before opening Steam. Play without mods remains available after a game update.
+
+## Windows 10 and 11
+
+One manager EXE runs on both Windows 10 and Windows 11 (64-bit). There is no separate
+Windows 10 build. It needs .NET Framework 4.7.2 or newer, which every supported
+Windows 10 release (1803 and later) and every Windows 11 release already include.
+
+If installing the API or a mod fails, the manager writes the reason to
+`%LOCALAPPDATA%\AnyAPI Manager\manager.log`: the Windows build, .NET Framework
+release, detected game folder, `game.exe`/`game.gcl` hashes and the full error. Paste
+that path into Explorer's address bar to open it, and attach the file to a bug report.
 
 Build: Windows with .NET Framework 4.7.2 or newer, `powershell -File manager/build.ps1`. No downloaded NuGet packages or standalone .NET installation is required on modern Windows. The source targets x64 and uses C#, Windows Forms and the Windows .NET Framework compiler.
 

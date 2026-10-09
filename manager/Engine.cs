@@ -16,7 +16,9 @@ namespace AnyApiManager {
  public static partial class Engine {
   public static readonly string Data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"AnyAPI Manager");
   static readonly HttpClient Http=CreateHttp();
-  static HttpClient CreateHttp(){ServicePointManager.SecurityProtocol=(SecurityProtocolType)0;var h=new HttpClient{Timeout=TimeSpan.FromMinutes(3)};h.DefaultRequestHeaders.UserAgent.ParseAdd("AnyAPI-Manager/"+ManagerUpdates.DisplayVersion);h.DefaultRequestHeaders.CacheControl=new System.Net.Http.Headers.CacheControlHeaderValue{NoCache=true};return h;}
+  static HttpClient CreateHttp(){ConfigureTls();var h=new HttpClient{Timeout=TimeSpan.FromMinutes(3)};h.DefaultRequestHeaders.UserAgent.ParseAdd("AnyAPI-Manager/"+ManagerUpdates.DisplayVersion);h.DefaultRequestHeaders.CacheControl=new System.Net.Http.Headers.CacheControlHeaderValue{NoCache=true};return h;}
+  // .NET 4.7+ lets Windows pick TLS 1.2/1.3. Older runtimes (early Windows 10 builds) start at TLS 1.0, which GitHub refuses, so ask for 1.2 explicitly there.
+  static void ConfigureTls(){int release=ManagerLog.NetFrameworkRelease();try{ServicePointManager.SecurityProtocol=release>=460798?(SecurityProtocolType)0:(SecurityProtocolType)(3072|768);}catch(Exception e){ManagerLog.Error("TLS setup",e);try{ServicePointManager.SecurityProtocol=(SecurityProtocolType)(3072|768);}catch{}}}
   public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream(name))using(var r=new StreamReader(s))return r.ReadToEnd();}
   public static Catalog Bundled(){var c=Json.Read<Catalog>(Resource("catalog.json"));Rules.Validate(c);return c;}
   public static string RepositoryUrl(string value){
@@ -65,7 +67,8 @@ namespace AnyApiManager {
     string file=Path.Combine(root,"steamapps/libraryfolders.vdf");if(!File.Exists(file))continue;
     foreach(Match m in Regex.Matches(File.ReadAllText(file),"\"path\"\\s+\"([^\"]+)\""))roots.Add(m.Groups[1].Value.Replace("\\\\","\\"));
    }
-   foreach(string root in roots){string path=Path.Combine(root,"steamapps/common/Anymaker");if(File.Exists(Path.Combine(path,"game.exe"))&&File.Exists(Path.Combine(path,"bin/game.gcl")))return path;}return "";
+   foreach(string root in roots){string path=Path.Combine(root,"steamapps/common/Anymaker");if(File.Exists(Path.Combine(path,"game.exe"))&&File.Exists(Path.Combine(path,"bin/game.gcl"))){ManagerLog.Write("Detected game folder "+path);return path;}}
+   ManagerLog.Write("No Anymaker folder found in Steam libraries: "+string.Join("; ",roots));return "";
   }
   public static bool Running(){foreach(var p in Process.GetProcessesByName("game"))using(p){return true;}return false;}
   public static string StateFile(string game){return Rules.Target(game,"AnyAPI and Modding/.manager/installed.json");}
@@ -117,7 +120,7 @@ namespace AnyApiManager {
   public static ApplyResult Apply(ApplyRequest r,Action<int> failAfter=null,bool test=false){
    try{string key;using(var hash=System.Security.Cryptography.SHA256.Create())key=Rules.Hex(hash.ComputeHash(Encoding.UTF8.GetBytes(Path.GetFullPath(r.GamePath).ToLowerInvariant())));
     using(var gate=new System.Threading.Mutex(false,"Local\\AnyAPI.Manager."+key)){bool owned=false;try{try{owned=gate.WaitOne(0);}catch(System.Threading.AbandonedMutexException){owned=true;}if(!owned)return new ApplyResult{Message="Another manager operation is running."};return ApplyCore(r,failAfter,test);}finally{if(owned)gate.ReleaseMutex();}}
-   }catch(Exception e){return new ApplyResult{Message=e.Message};}
+   }catch(Exception e){ManagerLog.Error("Apply "+r.Action,e);return new ApplyResult{Message=e.Message};}
   }
   static ApplyResult ApplyCore(ApplyRequest r,Action<int> failAfter,bool test){
    try{
@@ -164,8 +167,8 @@ namespace AnyApiManager {
     }
     changes.Add(StateFile(game),Encoding.UTF8.GetBytes(Json.Write(installed)));
     if(!test&&Running())throw new IOException("Anymaker started during preparation. Close it and try again.");
-    Commit(game,changes,failAfter);return new ApplyResult{Success=true,Message=p.Name+": "+(r.Action=="install"?"installed":r.Action=="remove"?"removed (settings kept)":r.Action=="enable"?"enabled":"disabled")+". Ready for the next game launch."};
-   }catch(Exception e){return new ApplyResult{Success=false,Message=e.Message};}
+    Commit(game,changes,failAfter);ManagerLog.Write(r.Action+" "+p.Id+" "+p.Version+" in "+game);return new ApplyResult{Success=true,Message=p.Name+": "+(r.Action=="install"?"installed":r.Action=="remove"?"removed (settings kept)":r.Action=="enable"?"enabled":"disabled")+". Ready for the next game launch."};
+   }catch(Exception e){ManagerLog.Error(r.Action+(r.Package==null?"":" "+r.Package.Id),e);return new ApplyResult{Success=false,Message=e.Message};}
   }
   static ApplyResult PrepareLaunch(ApplyRequest r,string game,Action<int> fault,bool test){
    string active=Rules.Target(game,"dinput8.dll"),paused=PausedApi(game);bool modded=r.Action=="prepare-modded";
@@ -205,10 +208,11 @@ namespace AnyApiManager {
   public static async Task<ApplyResult> Execute(ApplyRequest request){
    // Probe permissions before staging the operation. UAC is needed only for writes.
    string path=Rules.Target(request.GamePath,"AnyAPI and Modding/.manager/access-test-"+Guid.NewGuid().ToString("N"));bool elevation=false;
-   try{Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,"");File.Delete(path);}catch(UnauthorizedAccessException){elevation=true;}
+   try{Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,"");File.Delete(path);}catch(UnauthorizedAccessException e){elevation=true;ManagerLog.Write("Game folder needs administrator rights ("+e.Message+"); asking Windows to elevate "+request.Action);}
    if(!elevation)return await Task.Run(()=>Apply(request));
    Directory.CreateDirectory(Data);string req=Path.Combine(Data,Guid.NewGuid().ToString("N")+".request.json");File.WriteAllText(req,Json.Write(request));
-   try{var info=new ProcessStartInfo(Assembly.GetExecutingAssembly().Location,"--apply \""+req+"\""){UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden};using(var p=Process.Start(info)){await Task.Run(()=>p.WaitForExit());}return Json.Read<ApplyResult>(File.ReadAllText(req+".result"));}
+   try{var info=new ProcessStartInfo(Assembly.GetExecutingAssembly().Location,"--apply \""+req+"\""){UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden};using(var p=Process.Start(info)){await Task.Run(()=>p.WaitForExit());}
+    if(!File.Exists(req+".result"))throw new IOException("The administrator step closed without finishing. No game files were changed. Details: "+ManagerLog.LogFile);return Json.Read<ApplyResult>(File.ReadAllText(req+".result"));}
    finally{if(File.Exists(req))File.Delete(req);if(File.Exists(req+".result"))File.Delete(req+".result");}
   }
  }
