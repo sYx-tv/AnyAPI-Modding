@@ -75,6 +75,21 @@ inline std::string tag(const Config& c) {
     out += digits[c.speed < kSpeedCount ? c.speed : kDefaultSpeed];
     return out;
 }
+// Keeps a name safe to send back: drops control bytes and anything that is not valid UTF-8 (a misread name
+// must never be saved onto the light), and trims spaces at the ends.
+inline std::string clean_text(const std::string& in) {
+    std::string out;
+    for (size_t i = 0; i < in.size();) {
+        unsigned char c = static_cast<unsigned char>(in[i]);
+        size_t n = c < 0x80 ? 1 : (c & 0xe0) == 0xc0 ? 2 : (c & 0xf0) == 0xe0 ? 3 : (c & 0xf8) == 0xf0 ? 4 : 0;
+        bool ok = n && i + n <= in.size() && (n > 1 || (c >= 0x20 && c != 0x7f)) && !(n == 2 && c < 0xc2);
+        for (size_t k = 1; ok && k < n; ++k) ok = (static_cast<unsigned char>(in[i + k]) & 0xc0) == 0x80;
+        if (ok) out.append(in, i, n);
+        i += ok ? n : 1;
+    }
+    size_t a = out.find_first_not_of(' '), b = out.find_last_not_of(' ');
+    return a == std::string::npos ? std::string() : out.substr(a, b - a + 1);
+}
 // The name to save: the player's text plus the tag, or just their text when the light is back to stock.
 inline std::string join_name(const std::string& base, const Config& c) {
     if (!c.modded()) return base;

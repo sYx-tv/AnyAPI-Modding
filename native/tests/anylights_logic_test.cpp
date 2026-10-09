@@ -39,5 +39,8 @@ int main(){
  Colour out;assert(colour_at(c,1,out)&&out==c.colour&&!colour_at(Config{},1,out));
  Config cyc;cyc.pattern=kColourCycle;assert(colour_at(cyc,0,out)&&out==(Colour{255,0,0}));
  Colour g=hsv(1/3.0,1,1);assert(g.g==255&&g.r==0&&g.b==0);
+ // Misread names never go back to the game: control bytes and broken UTF-8 are dropped, real text is kept.
+ assert(clean_text("Left beacon")=="Left beacon"&&clean_text(" caf\xc3\xa9 ")=="caf\xc3\xa9");
+ assert(clean_text("\xd9\x8f,")==("\xd9\x8f,")&&clean_text("\x01\xff\x80P-")=="P-"&&clean_text("\xc0\x80")==""&&clean_text("\x7f")=="");
  return 0;
 }

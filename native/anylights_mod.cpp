@@ -77,7 +77,7 @@ constexpr ptrdiff_t client_factor = 224 + 8;                         // m_light_
 constexpr ptrdiff_t client_colour[kKindCount] = {336, 264, 288};      // m_color (color8)
 // client_scene.peer.property_data
 constexpr ptrdiff_t pd_vehicle = 8 + 8, pd_component = 24 + 8, pd_rows = 40 + 8;
-constexpr ptrdiff_t row_id = 8, row_name = 16 + 8, row_string = 32 + 8;
+constexpr ptrdiff_t row_id = 8, row_name = 16 + 8, row_value = 32, row_value_prev = 56;   // _m_value (replicated wrapper), _m_value_prev (string)
 constexpr ptrdiff_t client_peer_data = 40 + 104;                      // client.m_peers.m_data
 constexpr ptrdiff_t client_peers = 3920 + 64 + 8;                     // client.m_scene.m_peers._m_elements (vector<ref<peer>>)
 constexpr ptrdiff_t peer_property_data = 24 + 2848;                   // peer.m_private.m_property_data
@@ -149,6 +149,8 @@ void server_tick(int kind, uint8_t* light, void* vehicle, void* scene) {
     std::lock_guard lock(g_host_mutex);
     auto& h = g_host[light];
     if (!h.parsed || h.alias != alias) {
+        static std::atomic<int> alias_logs{8};
+        if (h.parsed && alias_logs.fetch_sub(1) > 0) log(0, "host %s light renamed to \"%s\"", kKindNames[kind], alias);
         h.alias = alias; h.parsed = true;
         std::string base;
         split_name(h.alias, base, h.chosen);
@@ -347,7 +349,14 @@ void panel_update(uint8_t* pd, uint8_t* client) {
     for_each_ref(pd + off::pd_rows, 128, [&](uint8_t* row) {
         if (!anymaker::readable(row, 96) || rd<int32_t>(row, off::row_name) != kAliasLabel) return true;
         row_id = rd<int32_t>(row, off::row_id);
-        copy_string(row + off::row_string, alias, sizeof alias);
+        // The replicated wrapper's layout is unverified; the plain previous-value string tracks it every frame.
+        copy_string(row + off::row_value_prev, alias, sizeof alias);
+        static std::atomic<int> dumps{2};
+        if (dumps.fetch_sub(1) > 0) {
+            char hex[3 * 24 + 1] = {};
+            for (int i = 0; i < 24; ++i) snprintf(hex + i * 3, 4, "%02x ", rd<uint8_t>(row, off::row_value + i));
+            log(0, "name row %d: value_prev \"%s\", value wrapper bytes %s", rd<int32_t>(row, off::row_id), alias, hex);
+        }
         found = true;
         return false;
     });
@@ -360,6 +369,7 @@ void panel_update(uint8_t* pd, uint8_t* client) {
         g_panel.seen = now; g_panel.row_id = row_id; g_panel.kind = it->second.kind;
         Config saved; std::string base;
         split_name(alias, base, saved);
+        base = clean_text(base);
         if (fresh || (!g_panel.pending && g_panel.dragging < 0 && now - g_panel.last_send > 1500)) { g_panel.draft = saved; }
         if (fresh) g_panel.pending = false;
         g_panel.base = base; g_panel.saved = saved;
