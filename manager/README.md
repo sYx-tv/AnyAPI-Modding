@@ -46,6 +46,11 @@ Validation: run the EXE with `--self-test <absolute output.json>`; run `--captur
 Version 1.4.0 has a frameless dark window: a slim title bar (drag to move, double-click
 to maximize, drag any edge to resize), a sidebar grouped into Game, Library, Build and
 Manager, and pages built from titled panels. Mods switch on and off from the list.
+Each mod has an illustrated tile, its category, latest and installed versions and a
+link to its release. **Install all** adds every compatible mod you don't have yet (and
+AnyAPI first if needed), **Update all** updates installed mods with newer releases,
+and **Update everything** (also on Overview) updates AnyAPI, every installed mod and
+then the manager itself. A failure is logged and skipped so the rest still install.
 Settings > Appearance picks the accent colour (Aqua, Violet, Rose, Amber or Mint).
 Everything is drawn with Windows Forms and GDI+, uses Segoe UI and Consolas, and scales
 with the Windows display setting, so Windows 10 and Windows 11 look the same. Shared

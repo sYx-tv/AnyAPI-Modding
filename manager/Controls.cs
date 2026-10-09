@@ -89,9 +89,8 @@ namespace AnyApiManager {
     if(i==selected){using(var b=new SolidBrush(Theme.Mix(Theme.Blue,Theme.Panel,.07f)))g.FillRectangle(b,r);using(var b=new SolidBrush(Theme.Blue))g.FillRectangle(b,0,y,Theme.S(2),RowHeight);}
     else if(i==hover)using(var b=new SolidBrush(Color.FromArgb(17,23,33)))g.FillRectangle(b,r);
     if(i<rows.Count-1)using(var p=new Pen(Theme.Line))g.DrawLine(p,0,y+RowHeight-1,Width,y+RowHeight-1);
-    int t=Theme.S(30),tx=Theme.S(14),ty=y+(RowHeight-t)/2;g.SmoothingMode=SmoothingMode.AntiAlias;
-    using(var p=Theme.Rounded(new RectangleF(tx,ty,t,t),Theme.S(6)))using(var b=new SolidBrush(Theme.Raised))g.FillPath(b,p);
-    TextRenderer.DrawText(g,Initials(row.Package.Name),tile,new Rectangle(tx,ty,t,t),row.Package.Local?Theme.Warn:Theme.Blue,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
+    int t=Theme.S(32),tx=Theme.S(14),ty=y+(RowHeight-t)/2;g.SmoothingMode=SmoothingMode.AntiAlias;
+    ModArt.Draw(g,new Rectangle(tx,ty,t,t),row.Package,tile);
     int right=Width-Theme.S(14);
     if(row.CanToggle){var sr=SwitchRect(i);ToggleSwitch.Draw(g,sr,row.On,Enabled,i==hover&&hoverSwitch,i==selected?Theme.Mix(Theme.Blue,Theme.Panel,.07f):i==hover?Color.FromArgb(17,23,33):Theme.Panel);right=sr.X-Theme.S(12);}
     else right-=Theme.Pill(g,row.State,pill,Theme.Muted,right,y+RowHeight/2)+Theme.S(12);
