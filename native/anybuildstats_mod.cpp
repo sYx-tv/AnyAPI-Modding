@@ -27,6 +27,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace anybuildstats {
 namespace {
@@ -154,30 +155,78 @@ template <class F> void for_each_ptr(const uint8_t* vector_address, int max_coun
     for (int32_t i = 0; i < v.count; ++i) if (auto* p = v.at<uint8_t*>(i); p && *p && !visit(*p)) return;
 }
 // torque_data = { array<node> m_nodes (buffer, count, element size), array<link> m_links }
-// What a source's torque network reaches: a wheel (drives the vehicle) and an engine output shaft.
-struct Reach { bool wheel = false, engine = false; };
+// What a source's drivetrain reaches: a wheel (drives the vehicle) and an engine output shaft. Torque nodes
+// coupled rigidly share an island, but a clutch, gearbox or differential keeps a node per side in separate
+// islands, and a torque interface hands over to its partner on another body. So walk components: from each
+// node to its island's nodes and adjacent node, from each node to its component, and from each component to
+// all of its own nodes and to the component it is mated or connected to.
+struct Reach { bool wheel = false, engine = false; int components = 0, islands = 0; };
 const uint8_t* g_engine_wheel_type;
+// m_torque_data offsets across server component types (engine_wheel/gearbox 480 ... wheel_hydraulic 2032)
+constexpr ptrdiff_t kTorqueOffsets[] = {480, 488, 496, 512, 528, 560, 576, 672, 688, 808, 1024, 1360, 2032};
+// ptr<component> links to another drivetrain part: engine_wheel.m_mated_component, interface_torque.m_connected_component
+constexpr ptrdiff_t kPartnerOffsets[] = {552, 624};
+bool torque_nodes(const uint8_t* torque_data, const uint8_t*& nodes, int32_t& count) {
+    if (!anymaker::readable(torque_data, 16)) return false;
+    nodes = rd<const uint8_t*>(torque_data, 0);
+    count = rd<int32_t>(torque_data, 8);
+    return nodes && count > 0 && count <= 64 && rd<int32_t>(torque_data, 12) == sv::node_size && anymaker::readable(nodes, size_t(count) * sv::node_size);
+}
+// A component's own torque data: the candidate whose first node points back at the component.
+const uint8_t* torque_data_of(const uint8_t* component) {
+    for (ptrdiff_t o : kTorqueOffsets) {
+        if (!anymaker::readable(component + o, 16)) break;
+        const uint8_t* nodes; int32_t count;
+        if (torque_nodes(component + o, nodes, count) && rd<const uint8_t*>(nodes, sv::node_component) == component) return component + o;
+    }
+    return nullptr;
+}
+bool is_type(const uint8_t* component, const uint8_t* type) {
+    return type && component && anymaker::readable(component, 8) && anymaker::typeinfo_is(anymaker::typeinfo_of(component), type);
+}
 Reach reach(const uint8_t* torque_data) {
     Reach r;
-    if (!anymaker::readable(torque_data, 16)) return r;
-    auto* nodes = rd<const uint8_t*>(torque_data, 0);
-    int32_t count = rd<int32_t>(torque_data, 8), size = rd<int32_t>(torque_data, 12);
-    if (!nodes || count <= 0 || count > 64 || size != sv::node_size || !anymaker::readable(nodes, size_t(count) * size)) return r;
-    for (int32_t i = 0; i < count; ++i) {
-        auto* island = rd<const uint8_t*>(nodes + i * size, sv::node_island);
-        if (!island || !anymaker::readable(island, 40)) continue;
-        for_each_ptr(island, 4096, [&](uint8_t* node) {
-            if (!anymaker::readable(node, sv::node_size)) return true;
-            auto* component = rd<const uint8_t*>(node, sv::node_component);
-            if (is_wheel(component)) r.wheel = true;
-            else if (g_engine_wheel_type && component && anymaker::readable(component, 8) &&
-                     anymaker::typeinfo_is(anymaker::typeinfo_of(component), g_engine_wheel_type)) r.engine = true;
-            return !(r.wheel && r.engine);
+    const uint8_t* first; int32_t first_count;
+    if (!torque_nodes(torque_data, first, first_count)) return r;
+    std::vector<const uint8_t*> queue, seen_components, seen_islands;
+    auto known = [](std::vector<const uint8_t*>& v, const uint8_t* p) { if (std::find(v.begin(), v.end(), p) != v.end()) return true; v.push_back(p); return false; };
+    auto add_component = [&](const uint8_t* c) { if (c && seen_components.size() < 512 && anymaker::readable(c, 8) && !known(seen_components, c)) queue.push_back(c); };
+    add_component(rd<const uint8_t*>(first, sv::node_component));
+    auto visit_node = [&](const uint8_t* node) {
+        if (!anymaker::readable(node, sv::node_size)) return;
+        add_component(rd<const uint8_t*>(node, sv::node_component));
+        if (auto* adjacent = rd<const uint8_t*>(node, 72); adjacent && anymaker::readable(adjacent, sv::node_size)) add_component(rd<const uint8_t*>(adjacent, sv::node_component));
+        auto* island = rd<const uint8_t*>(node, sv::node_island);
+        if (!island || !anymaker::readable(island, 40) || known(seen_islands, island)) return;
+        for_each_ptr(island, 4096, [&](uint8_t* other) {
+            if (anymaker::readable(other, sv::node_size)) add_component(rd<const uint8_t*>(other, sv::node_component));
+            return seen_components.size() < 512;
         });
+    };
+    for (size_t q = 0; q < queue.size() && !(r.wheel && r.engine); ++q) {
+        const uint8_t* c = queue[q];
+        if (is_wheel(c)) r.wheel = true;
+        if (is_type(c, g_engine_wheel_type)) r.engine = true;
+        const uint8_t* nodes; int32_t count;
+        auto* td = torque_data_of(c);
+        if (!td) continue;   // not a drivetrain part
+        if (torque_nodes(td, nodes, count)) for (int32_t i = 0; i < count; ++i) visit_node(nodes + i * sv::node_size);
+        for (ptrdiff_t o : kPartnerOffsets) {
+            if (!anymaker::readable(c + o, 8)) continue;
+            auto* partner = rd<const uint8_t*>(c, o);
+            if (partner && anymaker::readable(partner, 8) && torque_data_of(partner)) add_component(partner);
+        }
     }
+    r.components = int(seen_components.size()); r.islands = int(seen_islands.size());
     return r;
 }
-void report(uint8_t* component, uint8_t* vehicle, bool engine, double rated, double power_now, bool (*connected)(uint8_t*)) {
+std::atomic<int> g_reach_logs{6};
+void log_reach(const char* what, int32_t vehicle, const Reach& r) {
+    if (g_reach_logs.fetch_sub(1) > 0)
+        log(0, "%s on vehicle %d: drivetrain walk saw %d parts, %d islands; wheel %s, engine shaft %s", what, vehicle, r.components, r.islands,
+            r.wheel ? "yes" : "no", r.engine ? "yes" : "no");
+}
+void report(uint8_t* component, uint8_t* vehicle, bool engine, double rated, double power_now, bool (*connected)(uint8_t*, int32_t)) {
     if (!component || !vehicle || !anymaker::readable(vehicle, sv::vehicle_id + 4)) return;
     uint64_t now = GetTickCount64();
     std::lock_guard lock(g_source_mutex);
@@ -185,7 +234,7 @@ void report(uint8_t* component, uint8_t* vehicle, bool engine, double rated, dou
     s.vehicle = rd<int32_t>(vehicle, sv::vehicle_id); s.engine = engine; s.rated = rated; s.seen = now;
     if (now - s.checked > 500) {
         bool was = s.connected;
-        s.connected = connected(component); s.checked = now;
+        s.connected = connected(component, s.vehicle); s.checked = now;
         if (s.connected != was && g_connect_logs.fetch_sub(1) > 0)
             log(0, "%s on vehicle %d %s the wheels%s", engine ? "engine" : "motor", s.vehicle, s.connected ? "drives" : "does not drive",
                 engine || s.connected ? "" : " (or shares a drivetrain with an engine)");
@@ -202,12 +251,16 @@ void hk_engine(uint8_t* engine, uint8_t* vehicle, void* scene) {
     double torque = rd<double>(engine, sv::engine_torque), rps = rd<double>(engine, sv::engine_rps);
     double power = torque * rps * 6.283185307179586;   // N·m × rev/s × 2π = W
     if (power > 1000 && g_engine_logs.fetch_sub(1) > 0) log(0, "engine output: torque %.1f, rps %.2f -> %.0f W (%.0f hp)", torque, rps, power, hp(power));
-    report(engine, vehicle, true, 0, power, [](uint8_t* e) {
-        bool any = false;
+    report(engine, vehicle, true, 0, power, [](uint8_t* e, int32_t id) {
+        bool any = false; int shafts = 0;
         for_each_ptr(e + sv::engine_wheels, 16, [&](uint8_t* shaft) {
-            any = reach(shaft + sv::engine_wheel_torque).wheel;
+            ++shafts;
+            Reach r = reach(shaft + sv::engine_wheel_torque);
+            log_reach("engine shaft", id, r);
+            any = r.wheel;
             return !any;
         });
+        if (!shafts && g_reach_logs.fetch_sub(1) > 0) log(0, "engine on vehicle %d has no output shafts", id);
         return any;
     });
 }
@@ -219,7 +272,11 @@ void hk_motor(uint8_t* motor, uint8_t* vehicle, void* scene) {
     if (!std::isfinite(rated) || rated < 0 || rated > 1e8) rated = 0;
     // A motor sharing its drivetrain with an engine (a starter, or a hybrid assist) is not counted: the engine
     // is what drives the wheels there.
-    report(motor, vehicle, false, rated, 0, [](uint8_t* m) { Reach r = reach(m + sv::motor_torque); return r.wheel && !r.engine; });
+    report(motor, vehicle, false, rated, 0, [](uint8_t* m, int32_t id) {
+        Reach r = reach(m + sv::motor_torque);
+        log_reach("motor", id, r);
+        return r.wheel && !r.engine;
+    });
 }
 // Sum for one body, from sources seen in the last two seconds; unknown when nothing reported (not the host).
 Drive drive_for(int32_t vehicle) {

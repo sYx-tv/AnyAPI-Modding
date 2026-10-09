@@ -383,10 +383,20 @@ void panel_update(uint8_t* pd, uint8_t* client) {
         if (fresh && g_panel_logs.fetch_sub(1) > 0) log(0, "panel: %s light, name row %d \"%s\"", kKindNames[g_panel.kind], row_id, alias);
     }
     if (send && client && g_push_string_cell && *g_push_string_cell && g_string_ctor && g_string_dtor) {
-        anymaker::gc_string_view value{};
-        g_string_ctor(&value, send_text.c_str());
-        reinterpret_cast<push_string_t>(*g_push_string_cell)(client + off::client_peer_data, &row_id, &value);
-        g_string_dtor(&value);
+        // The push queues the event with the string's data and sends it later, so the string must outlive the
+        // call: keep the last few sent and free each only when its slot comes round again.
+        static anymaker::gc_string_view sent[32];
+        static uint64_t sent_at[32];
+        static int next;
+        uint64_t now = GetTickCount64();
+        int slot = next;
+        // A slot reused within 10 s (a long slider drag) is left to leak rather than freed under a pending send.
+        if (sent[slot].data && now - sent_at[slot] >= 10000) g_string_dtor(&sent[slot]);
+        sent[slot] = {};
+        next = (next + 1) % 32;
+        g_string_ctor(&sent[slot], send_text.c_str());
+        sent_at[slot] = now;
+        reinterpret_cast<push_string_t>(*g_push_string_cell)(client + off::client_peer_data, &row_id, &sent[slot]);
         log(0, "light name -> \"%s\"", send_text.c_str());
     }
 }
