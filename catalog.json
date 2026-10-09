@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.34.0",
-      "Revision": 34,
+      "Version": "0.34.1",
+      "Revision": 35,
       "MinimumApi": 0,
       "Description": "Native mod framework with creation balance snapshots including tank fluid mass.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.34.0/AnyAPI-0.34.0.zip",
-      "Sha256": "a0513c727c403479f69de09b912482861c93dde8e5307df3a0168485e07ddd68",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.34.1/AnyAPI-0.34.1.zip",
+      "Sha256": "3852f47c16b8728699fc487107fc140e3b7754750db3ff2df73519c60195b460",
       "FileHashes": {
-        "dinput8.dll": "07c0b15f3265e1197e8250e0ac7ee727d52a0e92137f026a12a43be451e8fb37"
+        "dinput8.dll": "6fe12f7a02c3201f8fb9a76f3eafab0915f80270a7622bf048352a7c5b8a109f"
       },
       "GameBuilds": [
         {
