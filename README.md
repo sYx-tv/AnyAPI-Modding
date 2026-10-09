@@ -51,10 +51,10 @@ installation is needed to build and test game-dependent features.
 | AnyQuickWheel | 1.1.0 | API 0.31.0 |
 | AnyBalance | 1.1.0 | API 0.33.0 (fluid mass: 0.34.0) |
 | EngineSound | 0.2.0 | API 0.34.0 |
-| AnyAPI Manager | 1.3.2 | Windows x64 |
+| AnyAPI Manager | 1.4.0 | Windows x64 |
 
-[`catalog.json`](catalog.json) is the source of truth for these numbers. Manager 1.3.2
-bundles API 0.33.0 and downloads newer API releases through its update check; optional
+[`catalog.json`](catalog.json) is the source of truth for these numbers. Manager 1.4.0
+bundles API 0.34.1 and downloads newer API releases through its update check; optional
 mods download individually. See the [release notes](docs/releases/README.md).
 
 AnyAPI 0.34.0 and [AnyBalance 1.1.0](docs/mods/balance.md) add tank fluid mass to the

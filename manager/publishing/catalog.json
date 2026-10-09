@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.33.0",
-      "Revision": 33,
+      "Version": "0.34.1",
+      "Revision": 35,
       "MinimumApi": 0,
-      "Description": "Native mod framework with Properties-tool creation balance snapshots.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.33.0/AnyAPI-0.33.0.zip",
-      "Sha256": "2a0b42d33dd7f1d46a828d4fe0e8f158ce8065504eaa9a1845d65a88a3de0578",
+      "Description": "Native mod framework with creation balance snapshots including tank fluid mass.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.34.1/AnyAPI-0.34.1.zip",
+      "Sha256": "3852f47c16b8728699fc487107fc140e3b7754750db3ff2df73519c60195b460",
       "FileHashes": {
-        "dinput8.dll": "258bf2629a64f5801e77d5d7fa815ef9bc98ecfc9c2280d73ff04e82283a2d9f"
+        "dinput8.dll": "6fe12f7a02c3201f8fb9a76f3eafab0915f80270a7622bf048352a7c5b8a109f"
       },
       "GameBuilds": [
         {
@@ -175,14 +175,35 @@
     {
       "Id": "anybalance",
       "Name": "AnyBalance",
-      "Version": "1.0.0",
-      "Revision": 1,
+      "Version": "1.1.0",
+      "Revision": 2,
       "MinimumApi": 33,
-      "Description": "Native centre of mass, local balance offsets and bounds with Properties Tool equipped.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.33.0/AnyBalance-1.0.0.zip",
-      "Sha256": "6a9f8b8113c7fdc7b882b3e6936ab3fe55bae232e02c02010a9ea3fe14d949e5",
+      "Description": "Native centre of mass, including tank fluid, with local balance offsets and bounds while the Properties Tool is equipped.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.34.0/AnyBalance-1.1.0.zip",
+      "Sha256": "8859b83f2246d55a91197dec754d194c19a30e3ada06e0fdcfb4fda0b88ac7f8",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyBalance.dll": "91b678dcd6cb46e9666ad1fde3a665b2b30de5cbaba6f7bf2d863cd313f39008"
+        "AnyAPI and Modding/mods/AnyBalance.dll": "30ac9715c499aab285eb5b795c4e1ad82cc54214a1a868fe494e4452e0b2ab76"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        }
+      ]
+    },
+    {
+      "Id": "enginesound",
+      "Name": "EngineSound",
+      "Version": "0.2.0",
+      "Revision": 1,
+      "MinimumApi": 34,
+      "Description": "Engine sound presets (Muscle V8, Built 2JZ, Powerstroke, Hemi and more) and a Custom sound tuner in the Properties Tool engine window, synced for every player in co-op. Uses the experimental SDK; Anymaker 0.1.23 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.09/EngineSound-0.2.0.zip",
+      "Sha256": "139defd5306ac4a1a7696aa5967704af9f58e050e76bcb93dd83673e57864cb6",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/EngineSound.dll": "a769527019003e96c3f92a19f9abb7480c1d20080a6b6a927238188de36f25b3"
       },
       "GameBuilds": [
         {
