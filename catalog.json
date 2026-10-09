@@ -192,6 +192,27 @@
           "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
         }
       ]
+    },
+    {
+      "Id": "enginesound",
+      "Name": "EngineSound",
+      "Version": "0.2.0",
+      "Revision": 1,
+      "MinimumApi": 34,
+      "Description": "Engine sound presets (Muscle V8, Built 2JZ, Powerstroke, Hemi and more) and a Custom sound tuner in the Properties Tool engine window, synced for every player in co-op. Uses the experimental SDK; Anymaker 0.1.23 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.09/EngineSound-0.2.0.zip",
+      "Sha256": "139defd5306ac4a1a7696aa5967704af9f58e050e76bcb93dd83673e57864cb6",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/EngineSound.dll": "a769527019003e96c3f92a19f9abb7480c1d20080a6b6a927238188de36f25b3"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.23",
+          "SteamBuild": 25755694,
+          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
+          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        }
+      ]
     }
   ]
 }
