@@ -6,7 +6,7 @@ The manager recognizes newer compatible installed API/mod receipts even when
 its cached catalog is older. The bundled API and offline guide match 0.33.0.
 Settings includes an independent manager EXE update check.
 
-Open **AnyAPI Manager.exe**. The Steam game folder is normally detected automatically. Install/update the API, then choose mods in Mods. The official mod library is built in; Settings selects another game folder if needed. Close the game before changing DLLs or switching launch modes.
+Open **AnyAPI Manager.exe**. The Steam game folder is normally detected automatically. Install/update the API, then choose mods in Mods. The official mod library is built in. If the game isn't found, or it lives in a custom location, open Settings and choose **Browse** to pick `game.exe`, paste the folder path and choose **Save folder**, or choose **Find automatically**. A Steam library folder also works; the manager finds `steamapps\common\Anymaker` inside it. Close the game before changing DLLs or switching launch modes.
 
 **Play with mods** restores the verified API loader and launches through Steam. **Play without mods** moves only that loader into the manager's backup area, leaving mod DLLs, individual enable/disable choices and saved data alone. The mode persists: normal Steam launches also run without AnyAPI until you choose Play with mods. The manager can be closed while playing. If Steam cannot open, the manager attempts to restore the preceding mode. Other third-party loaders are outside this manager's scope.
 

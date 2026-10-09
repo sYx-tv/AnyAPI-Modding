@@ -31,7 +31,7 @@ namespace AnyApiManager {
    status.Dock=DockStyle.Bottom;status.Height=44;status.Padding=new Padding(24,12,20,6);status.ForeColor=Muted;status.BackColor=Bg;status.AutoEllipsis=true;Controls.Add(status);status.BringToFront();
    foreach(var page in new[]{apiPage,modsPage,settingsPage,developerPage}){page.Dock=DockStyle.Fill;page.BackColor=Bg;content.Controls.Add(page);}
    developer=new DeveloperPanel(SetStatus);developerPage.Controls.Add(developer);BuildApi();BuildMods();BuildSettings();ShowPage(apiPage);
-   if(string.IsNullOrEmpty(preferences.GamePath))preferences.GamePath=Engine.DetectGame();preferences.Repository=bundled.Repository;gamePath.Text=preferences.GamePath;
+   if(!Engine.IsGameFolder(preferences.GamePath)){string found=Engine.DetectGame();if(found!=""||string.IsNullOrEmpty(preferences.GamePath))preferences.GamePath=found;}preferences.Repository=bundled.Repository;gamePath.Text=preferences.GamePath;
    if(!string.IsNullOrWhiteSpace(preferences.Repository))catalog=Engine.Cached(preferences.Repository)??catalog;
    Load+=async (s,e)=>{if(preview){PopulatePreview();return;}await Run(async()=>{await Scan();if(!string.IsNullOrWhiteSpace(preferences.Repository))await Connect();});};
   }
@@ -72,8 +72,8 @@ namespace AnyApiManager {
   }
   void BuildSettings(){
    settingsPage.Controls.Add(Label("Settings",24,0,0,600,48,true));settingsPage.Controls.Add(Label("Game folder",12,0,99,400,30,true));TextStyle(gamePath,0,139,650);settingsPage.Controls.Add(gamePath);
-   settingsPage.Controls.Add(Button("Browse",667,135,110,38,async()=>{using(var dialog=new FolderBrowserDialog{Description="Select Anymaker (the folder containing game.exe)",SelectedPath=gamePath.Text})if(dialog.ShowDialog(this)==DialogResult.OK){gamePath.Text=dialog.SelectedPath;await SaveSetup();}}));
-   settingsPage.Controls.Add(Button("Save folder",0,190,145,38,async()=>await SaveSetup()));settingsPage.Controls.Add(Label("Mod library",20,0,288,500,30,true));
+   settingsPage.Controls.Add(Button("Browse",667,135,110,38,async()=>{using(var dialog=new OpenFileDialog{Title="Select game.exe in your Anymaker folder",Filter="Anymaker (game.exe)|game.exe|Programs (*.exe)|*.exe",CheckFileExists=true,InitialDirectory=Directory.Exists(gamePath.Text.Trim())?gamePath.Text.Trim():""})if(dialog.ShowDialog(this)==DialogResult.OK){gamePath.Text=dialog.FileName;await SaveSetup();}}));
+   settingsPage.Controls.Add(Button("Save folder",0,190,145,38,async()=>await SaveSetup()));settingsPage.Controls.Add(Button("Find automatically",159,190,170,38,async()=>{string found=Engine.DetectGame();if(found==""){SetStatus("Anymaker wasn't found automatically. Choose Browse and select game.exe.");return;}gamePath.Text=found;await SaveSetup();}));settingsPage.Controls.Add(Label("Mod library",20,0,288,500,30,true));
    settingsPage.Controls.Add(Label("The official library is built in. No GitHub account or setup needed.",15,0,330,777,32,false,Muted));
    settingsPage.Controls.Add(Button("Refresh library",0,382,160,40,async()=>await Run(async()=>await Connect())));settingsPage.Controls.Add(Button("View on GitHub",174,382,160,40,()=>System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(bundled.Repository){UseShellExecute=true})));
    settingsPage.Controls.Add(Label("Manager",20,0,456,500,30,true));
@@ -89,7 +89,7 @@ namespace AnyApiManager {
    }
    SetStatus("Downloading and verifying the manager update...");string request=await ManagerUpdates.Stage(managerRelease);ManagerUpdates.StartHelper(request);restart=true;
   });if(restart)Application.Exit();}
-  async Task SaveSetup(){await Run(async()=>{preferences.GamePath=gamePath.Text.Trim();await Scan();Engine.SavePreferences(preferences);SetStatus("Game folder saved.");});}
+  async Task SaveSetup(){await Run(async()=>{preferences.GamePath=Engine.ResolveGameFolder(gamePath.Text);gamePath.Text=preferences.GamePath;await Scan();Engine.SavePreferences(preferences);SetStatus("Game folder saved.");});}
   async Task Scan(){
    if(string.IsNullOrWhiteSpace(preferences.GamePath)){exeHash=gclHash="";RefreshState();SetStatus("Choose your Anymaker folder in Settings.");return;}
    exeHash=gclHash="";var hashes=await Task.Run(()=>new[]{Rules.Hash(Rules.Target(preferences.GamePath,"game.exe")),Rules.Hash(Rules.Target(preferences.GamePath,"bin/game.gcl"))});exeHash=hashes[0];gclHash=hashes[1];ManagerLog.Write("Game folder "+preferences.GamePath+" game.exe "+exeHash+" game.gcl "+gclHash);RefreshState();

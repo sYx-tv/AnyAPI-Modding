@@ -59,15 +59,30 @@ namespace AnyApiManager {
   public static Catalog Cached(string repository){try{var cache=Json.Read<CatalogCache>(File.ReadAllText(Path.Combine(Data,"catalog-cache.json")));if(RepositoryUrl(cache.Repository)!=RepositoryUrl(repository))return null;Rules.Validate(cache.Catalog);return cache.Catalog;}catch{return null;}}
   public static void Cache(string repository,Catalog catalog){Directory.CreateDirectory(Data);File.WriteAllText(Path.Combine(Data,"catalog-cache.json"),Json.Write(new CatalogCache{Repository=repository,Catalog=catalog}));}
   public static void SavePreferences(Preferences p){Directory.CreateDirectory(Data);File.WriteAllText(Path.Combine(Data,"settings.json"),Json.Write(p));}
+  public static bool IsGameFolder(string path){try{return !string.IsNullOrEmpty(path)&&File.Exists(Path.Combine(path,"game.exe"))&&File.Exists(Path.Combine(path,"bin","game.gcl"));}catch(ArgumentException){return false;}}
+  // Accept what players actually pick: the Anymaker folder, its game.exe or bin folder, or a Steam / Steam library folder that contains it.
+  public static string ResolveGameFolder(string input){
+   if(string.IsNullOrWhiteSpace(input))return "";
+   string path;try{path=Path.GetFullPath(Environment.ExpandEnvironmentVariables(input.Trim().Trim('"')));}catch(Exception){throw new IOException("That isn't a valid folder path.");}
+   if(File.Exists(path))path=Path.GetDirectoryName(path);
+   foreach(string candidate in new[]{path,Path.GetDirectoryName(path)??"",Path.Combine(path,"Anymaker"),Path.Combine(path,"common","Anymaker"),Path.Combine(path,"steamapps","common","Anymaker")})if(IsGameFolder(candidate))return candidate;
+   throw new IOException("Anymaker wasn't found in "+path+". Choose the folder that contains game.exe (in Steam: right-click Anymaker, Manage, Browse local files).");
+  }
+  const string SteamAppId="4435340";
+  static string RegistryText(string key,string name){try{return Registry.GetValue(key,name,null) as string;}catch(System.Security.SecurityException){}catch(UnauthorizedAccessException){}catch(IOException){}return null;}
   public static string DetectGame(){
-   string nearby=AppDomain.CurrentDomain.BaseDirectory;if(File.Exists(Path.Combine(nearby,"game.exe"))&&File.Exists(Path.Combine(nearby,"bin/game.gcl")))return nearby;
-   var roots=new HashSet<string>(StringComparer.OrdinalIgnoreCase);string steam=null;try{steam=Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam","SteamPath",null) as string;}catch(System.Security.SecurityException){}catch(UnauthorizedAccessException){}
-   if(steam!=null)roots.Add(steam);roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"Steam"));
-   foreach(var root in roots.ToArray()){
-    string file=Path.Combine(root,"steamapps/libraryfolders.vdf");if(!File.Exists(file))continue;
-    foreach(Match m in Regex.Matches(File.ReadAllText(file),"\"path\"\\s+\"([^\"]+)\""))roots.Add(m.Groups[1].Value.Replace("\\\\","\\"));
+   string nearby=AppDomain.CurrentDomain.BaseDirectory;if(IsGameFolder(nearby))return nearby;
+   // Steam writes an uninstall entry with the exact install folder for each game.
+   foreach(string uninstall in new[]{@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App "+SteamAppId,@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App "+SteamAppId}){
+    string location=RegistryText(uninstall,"InstallLocation");if(IsGameFolder(location)){ManagerLog.Write("Detected game folder "+location+" from Steam's uninstall entry");return location;}
    }
-   foreach(string root in roots){string path=Path.Combine(root,"steamapps/common/Anymaker");if(File.Exists(Path.Combine(path,"game.exe"))&&File.Exists(Path.Combine(path,"bin/game.gcl"))){ManagerLog.Write("Detected game folder "+path);return path;}}
+   var roots=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+   foreach(string steam in new[]{RegistryText(@"HKEY_CURRENT_USER\Software\Valve\Steam","SteamPath"),RegistryText(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam","InstallPath"),RegistryText(@"HKEY_LOCAL_MACHINE\SOFTWARE\Valve\Steam","InstallPath")})if(!string.IsNullOrEmpty(steam))roots.Add(steam.Replace('/','\\'));
+   roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"Steam"));roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"Steam"));
+   foreach(var root in roots.ToArray())foreach(string vdf in new[]{"steamapps/libraryfolders.vdf","config/libraryfolders.vdf"}){
+    string file=Path.Combine(root,vdf);try{if(!File.Exists(file))continue;foreach(Match m in Regex.Matches(File.ReadAllText(file),"\"path\"\\s+\"([^\"]+)\""))roots.Add(m.Groups[1].Value.Replace("\\\\","\\"));}catch(IOException){}catch(UnauthorizedAccessException){}
+   }
+   foreach(string root in roots){string path=Path.Combine(root,"steamapps","common","Anymaker");if(IsGameFolder(path)){ManagerLog.Write("Detected game folder "+path);return path;}}
    ManagerLog.Write("No Anymaker folder found in Steam libraries: "+string.Join("; ",roots));return "";
   }
   public static bool Running(){foreach(var p in Process.GetProcessesByName("game"))using(p){return true;}return false;}
