@@ -27,7 +27,6 @@ Built from source only, not in the catalog yet. All three use the experimental S
 | Mod | Features | Optional integration |
 | --- | --- | --- |
 | [AnyMirror](mirror.md) | Mirrored edge building with either edge tool, a toggleable mirror wall and keybinds | AnyHelpers settings and controls |
-| [AnyBuildStats](build-stats.md) | Spec sheet with the Properties Tool, copied to the clipboard with F9 | AnyHelpers settings and controls |
 | [AnyLights](lights.md) | Light colours and flash patterns in the Properties Tool, with data port and microcontroller channels | AnyHelpers settings |
 
 See [validation status](../development/validation.md) for tested behavior and limits,

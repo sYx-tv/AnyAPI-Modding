@@ -2,7 +2,7 @@
 
 AnyBalance displays a creation's native client physics-shape centre while you equip the **Properties Tool** and aim at that creation. Switch tools, look away, open a menu or leave the game window to hide it.
 
-The gold marker identifies the centre of mass. Coloured X/Y/Z guides show the build's local axes. A dashed guide connects the centre to the build's local lower bounds. The summary shows centre height and X/Z offsets from the bounds centre. Optional wireframe bounds help you interpret those offsets.
+The gold marker identifies the centre of mass. Coloured X/Y/Z guides show the build's local axes. A dashed guide connects the centre to the build's local lower bounds. The summary shows centre height, X/Z offsets from the bounds centre, mass, and size (X by Z, then height, from the build's local bounds). Optional wireframe bounds help you interpret those offsets.
 
 Open **Mod Settings → AnyBalance** to change marker size and opacity, or toggle axes, bounds, the height guide and summary. It works without AnyHelpers using the default display.
 
