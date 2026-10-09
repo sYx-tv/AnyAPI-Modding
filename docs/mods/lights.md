@@ -1,7 +1,7 @@
 # AnyLights
 
 > AnyLights hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.23 / Steam build 25755694 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.24 / Steam build 25826614 and turns itself off on any other build.
 > Prototype: not in the catalog yet.
 
 AnyLights gives spot, omni and rotating lights a colour and a flash pattern.

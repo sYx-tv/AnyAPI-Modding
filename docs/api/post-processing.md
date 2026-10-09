@@ -1,6 +1,6 @@
 # GPU post-processing API v1
 
-Introduced in AnyAPI 0.26.0. Current target: Windows x64, Anymaker 0.1.23 / Steam build 25755694.
+Introduced in AnyAPI 0.26.0. Current target: Windows x64, Anymaker 0.1.24 / Steam build 25826614.
 Query `anyapi.post_process`, version 1, from `AnyAPI_ModReady`. The framework owns
 the generic shader pipeline; the calling mod owns effect policy and settings.
 Existing plugin ABI 1 layouts remain unchanged.

@@ -1,9 +1,9 @@
 """Regenerate the whole SDK for one game build (Windows or Linux).
 
     python tools/regenerate.py --game-dir "C:/Program Files (x86)/Steam/steamapps/common/Anymaker" --out .
-        [--previous-json ../previous/json] [--skip-compile] [--skip-index]
+        [--previous-json ../previous/json] [--manifest appmanifest_4435340.acf] [--skip-compile] [--skip-index]
 
-Runs, in order: analyze, abi facts, merge runtime evidence (validation/runtime_*.json that match the build),
+Runs, in order: analyze, (with --previous-json) carry runtime-only native RVAs whose code did not move, abi facts, merge runtime evidence (validation/runtime_*.json that match the build),
 layout header, symbols header, system map + capability matrix, reference docs, SQLite index, compile test,
 and (with --previous-json) the build comparison. Stops at the first failing step.
 """
@@ -33,6 +33,7 @@ def main():
     ap.add_argument('--out', required=True, help='SDK root to write json/, include/, docs/, reports/ into')
     ap.add_argument('--label', default=None)
     ap.add_argument('--previous-json', default=None)
+    ap.add_argument('--manifest', default=None, help='appmanifest_<appid>.acf when --game-dir is a copied build')
     ap.add_argument('--skip-compile', action='store_true')
     ap.add_argument('--skip-index', action='store_true')
     a = ap.parse_args()
@@ -43,7 +44,10 @@ def main():
     from common import find_game_files
     gf = find_game_files(a.game_dir)
     extra = ['--dll', gf['steam_api64.dll']] if gf.get('steam_api64.dll') else []
-    run([T('sdk_analyze.py'), '--game-dir', a.game_dir, '--out', J] + extra + (['--label', a.label] if a.label else []), 'analyze')
+    run([T('sdk_analyze.py'), '--game-dir', a.game_dir, '--out', J] + extra + (['--label', a.label] if a.label else []) +
+        (['--manifest', a.manifest] if a.manifest else []), 'analyze')
+    if a.previous_json:
+        run([T('carry_natives.py'), '--old', a.previous_json, '--new', J], 'carry unmoved native RVAs')
     run([T('abi_facts.py'), '--gcl', gf['game.gcl'], '--json', J], 'abi facts')
     rt = sorted(glob.glob(os.path.join(out, 'validation', 'runtime_*.json')))
     if rt:

@@ -19,7 +19,8 @@ keeps working defaults when it is absent.
 | [AnyMirror](mirror.md) | 1.0.0 | API 0.34.0 | Mirrored edge building with either edge tool, a toggleable mirror wall and keybinds | AnyHelpers settings and controls |
 
 All mods are in the published catalog ([`catalog.json`](../../catalog.json)).
-All versions target Anymaker 0.1.23 / Steam build 25755694.
+All versions target Anymaker 0.1.24 / Steam build 25826614. On that build every mod needs AnyAPI 0.35.0, the API release for 0.1.24;
+Anymaker 0.1.23 keeps AnyAPI 0.34.1.
 
 ## Prototypes
 

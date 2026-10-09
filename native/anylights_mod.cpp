@@ -13,8 +13,8 @@
 // every player with the game's component event, re-sending it every few seconds for late joiners. Players
 // with AnyLights see the colours and patterns; players without it see stock lights. The host needs the mod.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (anylights_bindings.h): Anymaker 0.1.23 /
-// Steam build 25755694 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (anylights_bindings.h): Anymaker 0.1.24 /
+// Steam build 25826614 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"

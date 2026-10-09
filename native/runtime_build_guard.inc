@@ -36,10 +36,10 @@ static bool p27_build_matches() {
     {
         std::lock_guard lock(build_runtime::mutex);
         auto& info = build_runtime::info;
-        info.api_revision = 35;
+        info.api_revision = 36;
         info.status = ok ? ANY_BUILD_MATCH : ANY_BUILD_MISMATCH;
-        strcpy_s(info.api_version, "0.34.1"); strcpy_s(info.game_version, "0.1.23");
-        strcpy_s(info.steam_build, "25755694");
+        strcpy_s(info.api_version, "0.35.0"); strcpy_s(info.game_version, "0.1.24");
+        strcpy_s(info.steam_build, "25826614");
         strcpy_s(info.executable_sha256, exe.c_str()); strcpy_s(info.game_data_sha256, gcl.c_str());
     }
     log_line(ok?ANY_LOG_INFO:ANY_LOG_ERROR,"framework",("PHASE27_BUILD_GUARD status="+std::string(ok?"MATCH":"MISMATCH_HOOKS_DISABLED")+" exe_sha256="+exe+" gcl_sha256="+gcl).c_str());return ok;

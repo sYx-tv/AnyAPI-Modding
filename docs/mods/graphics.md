@@ -1,6 +1,6 @@
 # AnyGraphics
 
-AnyGraphics is a native graphics mod for Anymaker 0.1.23. The current release is
+AnyGraphics is a native graphics mod for Anymaker 0.1.24. The current release is
 **0.29.3**, which requires **AnyAPI 0.32.0**. Its controls live inside
 Settings → Graphics, in the scrolling **AnyGraphics · Modded** section. It does
 not require AnyHelpers.

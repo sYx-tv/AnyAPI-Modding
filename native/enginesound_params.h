@@ -14,7 +14,7 @@ namespace enginesound {
 
 inline constexpr int32_t kVanillaMin = 0, kVanillaMax = 2;   // confirmed in game: 0/1/2 -> effects 41/47/48
 
-// e_audio_effect values (reference: Steam build 25755694, static enum values).
+// e_audio_effect values (reference: Steam build 25826614, static enum values).
 enum Effect : int32_t {
     kFluidGasVent = 20, kMotorA = 38, kMotorB = 39, kEngineBaseA = 40, kEngineHighA = 41, kEngineHighB = 47,
     kEngineHighC = 48, kEnginePop = 50, kEngineKnock = 51, kFluidGasSupercharger = 66,

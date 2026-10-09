@@ -10,6 +10,11 @@ These utilities support reviewed native contracts. The normal build needs only
 | `gcl_metadata.py` | Library for reading `bin/game.gcl` records, used by the other tools | Compatible game.gcl |
 | `parse_gcl.py` | Parse native code records | Compatible game.gcl and output path |
 | `inspect_native.py` | Decode selected native bodies | Game data and parsed records |
+| `game_update.py` | Port to a new game build in one run: SDK, pattern audit, legacy routes, mod bindings, build identity. See [game updates](../../docs/development/game-updates.md) | Game files, previous SDK root; Capstone, pefile |
+| `game_update_audit.py` | Sort every byte pattern into unchanged/refreshable/shifted/resized/changed/moved/stale/missing; `--apply` refreshes the safe ones | Game files, previous SDK JSON; Capstone, pefile |
+| `refresh_legacy_routes.py` | Regenerate the legacy event-route offsets and dispatcher bytes | game.gcl |
+| `rebind_mod_bindings.py` | Regenerate the experimental-SDK mod bindings from a new SDK | New SDK root |
+| `add_game_build.py` | Add a new game fingerprint to catalog mods whose DLL did not change; print `release.json` overrides | Catalog, new hashes |
 | `refresh_native_profile.py` | Audit recorded patterns against a new game build; `--apply` updates only unchanged-shape bodies | Previous SDK JSON, game.gcl, output path; Capstone |
 | `verify_menu_contracts.py` | Check menu dependency patterns | Game data, parsed records and `MENU_NATIVE_CONTRACTS.json` (see note) |
 | `verify_inventory_contracts.py` | Check inventory layouts and patterns | Game data and parsed records |

@@ -14,7 +14,8 @@ def generate(reference, matches, signatures):
     data = reference / 'json'
     functions = json.loads((data / 'functions.json').read_text(encoding='utf-8'))
     anchors = json.loads((data / 'anchors.json').read_text(encoding='utf-8'))
-    bindings = {b['sig']: b for b in json.loads((data / 'native_bindings.json').read_text(encoding='utf-8'))}
+    nb = data / 'native_bindings.json'   # written by validation/merge_runtime.py; absent before a probe
+    bindings = {b['sig']: b for b in json.loads(nb.read_text(encoding='utf-8'))} if nb.exists() else {}
     q = lambda value: json.dumps(value or '', ensure_ascii=True)
     lines = ['#pragma once', '#include "anymaker_sdk_runtime.hpp"',
              '// Experimental addresses, not gameplay-tested wrappers. Read the matching reference.',

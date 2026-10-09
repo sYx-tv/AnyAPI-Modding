@@ -4,7 +4,7 @@ This layer exposes discovered Anymaker internals for advanced mod development,
 including pathways that have not been exercised in a live game. It complements
 the versioned [AnyAPI services](../../docs/api/README.md).
 
-It targets **Anymaker 0.1.23, Steam build 25755694**. It is a reference and native
+It targets **Anymaker 0.1.24, Steam build 25826614**. It is a reference and native
 integration toolkit, not a claim that every declared operation works correctly.
 
 ## What mod authors can use

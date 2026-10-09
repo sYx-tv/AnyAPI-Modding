@@ -16,7 +16,7 @@ Choose **Apply** to save changes. Custom placement lets you keep the popup clear
 
 ## Time source and compatibility
 
-Requires **AnyAPI 0.30.0** on the reviewed Anymaker 0.1.23 build. The framework observes the game's native day/night-cycle getter and copies its result, including Sandbox and replicated time overrides. It does not change the world's time or use your computer clock. The normalized cycle is presented as a 24-hour day; there is no exposed calendar or day counter.
+Requires **AnyAPI 0.30.0** on the reviewed Anymaker 0.1.24 build. The framework observes the game's native day/night-cycle getter and copies its result, including Sandbox and replicated time overrides. It does not change the world's time or use your computer clock. The normalized cycle is presented as a 24-hour day; there is no exposed calendar or day counter.
 
 The popup uses the existing GPU HUD drawing service and has no separate window or executable. An unavailable or stale native sample displays **Time unavailable**, rather than inventing a time.
 

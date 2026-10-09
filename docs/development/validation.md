@@ -1,7 +1,7 @@
 # Compatibility and validation
 
-All current packages target Windows x64, Anymaker **0.1.23** / Steam build
-**25755694**. [`BUILD_MANIFEST.json`](../../native/BUILD_MANIFEST.json) records the
+All current packages target Windows x64, Anymaker **0.1.24** / Steam build
+**25826614**. [`BUILD_MANIFEST.json`](../../native/BUILD_MANIFEST.json) records the
 exact `game.exe` and `bin/game.gcl` hashes. The loader refuses to enable native
 hooks on any other build.
 

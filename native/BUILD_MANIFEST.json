@@ -1,12 +1,12 @@
 {
-  "revision": 35,
-  "date": "2026-10-08",
-  "game_version": "0.1.23",
-  "steam_build_id": 25755694,
+  "revision": 36,
+  "date": "2026-10-09",
+  "game_version": "0.1.24",
+  "steam_build_id": 25826614,
   "architecture": "Windows x64",
   "game_identity_sha256": {
-    "game.exe": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
-    "bin/game.gcl": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+    "game.exe": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+    "bin/game.gcl": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
   },
   "tests_passed": 52,
   "mods": [
@@ -35,8 +35,8 @@
   "graphics_version": "0.29.0",
   "helpers_sha256": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c",
   "graphics_settings_acceptance": "USER_CONFIRMED_NATIVE_GRAPHICS_MENU",
-  "api_version": "0.34.1",
-  "status": "RELEASED",
+  "api_version": "0.35.0",
+  "status": "CANDIDATE: laptop build, ctest and in-game acceptance pending",
   "new_services": [
     "anyapi.scene_controls v1/v2",
     "anyapi.scene_antialiasing v1",
@@ -45,8 +45,8 @@
     "anyapi.equipment v1/v2",
     "anyapi.creation_balance v1"
   ],
-  "native_patterns_audited": 112,
-  "native_patterns_refreshed": 17,
+  "native_patterns_audited": 448,
+  "native_patterns_refreshed": 23,
   "current_profile_gameplay_acceptance": "Existing mods user-confirmed; Enhanced SMAA Ultra observed live, residual aliasing remains",
   "previous_profile_acceptance": "Existing acceptance fields refer to earlier game profiles.",
   "mod_versions": {
@@ -68,5 +68,7 @@
   "hud_hint_gameplay_acceptance": "NOT_VISIBLE_IN_USER_TEST: experimental; user requested no further changes and approved release",
   "balance_version": "1.1.0",
   "balance_gameplay_acceptance": "USER_CONFIRMED: fluid mass (0.34.0); marker anchored; bare chassis, plate edge, door handle and tyre targeting; hides on look-away/tool switch; Properties actions and simulation speed unaffected; publication authorized",
-  "balance_mechanism": "Properties overlay plus copied local server connection IDs and tank fluid masses; mass-weighted connected body and fluid centres"
+  "balance_mechanism": "Properties overlay plus copied local server connection IDs and tank fluid masses; mass-weighted connected body and fluid centres",
+  "game_update_audit": "native/tools/game_update_audit.py: 408 unchanged after refresh, 33 stale legacy telemetry, 7 missing (6 legacy telemetry, 1 test fixture)",
+  "previous_profile": "API 0.34.1 (revision 35) stays the release for Anymaker 0.1.23 / Steam build 25755694"
 }

@@ -1,7 +1,7 @@
 # EngineSound
 
 > EngineSound hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.23 / Steam build 25755694 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.24 / Steam build 25826614 and turns itself off on any other build.
 > Its hooks are planned to move into a reviewed AnyAPI service.
 
 EngineSound adds seven engine sound presets and a **Custom** tuner. You choose them in the engine's

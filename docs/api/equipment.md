@@ -8,7 +8,7 @@ The snapshot contains copied local-player hotbar entries, their native slot/item
 
 ## Reviewed native contract
 
-The profile matches the exact Anymaker 0.1.23 executable/game-data hashes already checked by the loader. Anchors are in `native/equipment_contract.h`.
+The profile matches the exact Anymaker 0.1.24 executable/game-data hashes already checked by the loader. Anchors are in `native/equipment_contract.h`.
 
 - Local actor: scene actor-container pointers at scene + 0x188 / 0x190, compared with the actor receiving the native tick.
 - Inventory and hotbar: actor virtual getters recovered from `client_scene.actor.update_ui_overlay` dependency slots, requiring reviewed character getter bodies and corroborated actor offsets 0x5c8 / 0x658.

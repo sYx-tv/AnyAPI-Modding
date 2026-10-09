@@ -3,7 +3,7 @@
 // host stores it, saves it with the vehicle and replicates it; every player with the mod hears the same.
 //
 // EXPERIMENTAL. This mod hooks game functions directly through the experimental SDK (see
-// enginesound_bindings.h). The hooks resolve only on Anymaker 0.1.23 / Steam build 25755694 and are not
+// enginesound_bindings.h). The hooks resolve only on Anymaker 0.1.24 / Steam build 25826614 and are not
 // reviewed as an AnyAPI service yet. The first in-game runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>

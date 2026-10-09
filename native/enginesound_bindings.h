@@ -1,5 +1,5 @@
 #pragma once
-// EngineSound game bindings, generated for Anymaker 0.1.23 / Steam build 25755694 with
+// EngineSound game bindings, generated for Anymaker 0.1.24 / Steam build 25826614 with
 //   python tools/bind.py --reference reference --signature "<signature>" --out <file>.hpp
 // run from the extracted AnyAPI-Experimental-SDK sdk/experimental folder, one call per signature below.
 // Experimental: located by code signature or call-cell route, not reviewed as an AnyAPI service.
