@@ -1,15 +1,22 @@
-# AnyAPI 0.35.0 for Anymaker 0.1.24
+# AnyAPI 0.35.0 for Anymaker 0.1.24, with AnyMirror 1.0.0 and AnyBalance 1.2.0
 
 Anymaker 0.1.24 (Steam build 25826614) changed the game files, so AnyAPI 0.34.1 turns
 itself off on it. AnyAPI 0.35.0 is the same API ported to the new build. It adds no
 services and changes no service behaviour; existing mods keep working with it.
 
 Update AnyAPI in the manager, then restart the game. The manager installs the API that
-matches your game files: 0.35.0 on Anymaker 0.1.24, 0.34.1 on 0.1.23.
+matches your game files.
 
-EngineSound 0.2.1 and AnyMirror 1.0.0 are rebuilt for 0.1.24, because mods built on the
-experimental SDK only run on the exact build they were made for. The other mods are
-unchanged and work on both builds.
+This release also contains:
+
+- **AnyMirror 1.0.0**, a new mod: mirrored edge building with either edge tool, a
+  toggleable mirror wall and keybinds. Guide: [AnyMirror](../mods/mirror.md).
+- **AnyBalance 1.2.0** adds the creation's size (X by Z, then height) to its summary
+  card, under the mass. Guide: [AnyBalance](../mods/balance.md).
+- **EngineSound 0.2.1**, rebuilt for 0.1.24 with no other changes.
+
+AnyMirror and EngineSound use the experimental SDK, so they only run on the exact build
+they were made for. The other mods are unchanged and work on both game builds.
 
 What changed for the port: 23 native code patterns were refreshed after the update moved
 struct fields, stack slots and constants, the inventory container dependency offsets moved

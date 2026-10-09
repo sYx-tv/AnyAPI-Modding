@@ -14,8 +14,8 @@
 [AnyHelpers](mods/helpers.md) · [AnyInventory](mods/inventory.md) ·
 [AnyStorage](mods/storage.md) · [AnyMap](mods/map.md) ([rendering](mods/map-rendering.md)) ·
 [AnyGraphics](mods/graphics.md) · [AnyClock](mods/clock.md) ·
-[AnyQuickWheel](mods/quick-wheel.md) · [AnyBalance](mods/balance.md) · [EngineSound](mods/engine-sound.md) ·
-[AnyMirror](mods/mirror.md) · Prototype: [AnyLights](mods/lights.md)
+[AnyQuickWheel](mods/quick-wheel.md) · [AnyBalance](mods/balance.md) · [EngineSound](mods/engine-sound.md) · [AnyMirror](mods/mirror.md) ·
+Prototype: [AnyLights](mods/lights.md)
 
 ## Developer reference
 
