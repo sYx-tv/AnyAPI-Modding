@@ -154,22 +154,28 @@ template <class F> void for_each_ptr(const uint8_t* vector_address, int max_coun
     for (int32_t i = 0; i < v.count; ++i) if (auto* p = v.at<uint8_t*>(i); p && *p && !visit(*p)) return;
 }
 // torque_data = { array<node> m_nodes (buffer, count, element size), array<link> m_links }
-bool reaches_wheel(const uint8_t* torque_data) {
-    if (!anymaker::readable(torque_data, 16)) return false;
+// What a source's torque network reaches: a wheel (drives the vehicle) and an engine output shaft.
+struct Reach { bool wheel = false, engine = false; };
+const uint8_t* g_engine_wheel_type;
+Reach reach(const uint8_t* torque_data) {
+    Reach r;
+    if (!anymaker::readable(torque_data, 16)) return r;
     auto* nodes = rd<const uint8_t*>(torque_data, 0);
     int32_t count = rd<int32_t>(torque_data, 8), size = rd<int32_t>(torque_data, 12);
-    if (!nodes || count <= 0 || count > 64 || size != sv::node_size || !anymaker::readable(nodes, size_t(count) * size)) return false;
+    if (!nodes || count <= 0 || count > 64 || size != sv::node_size || !anymaker::readable(nodes, size_t(count) * size)) return r;
     for (int32_t i = 0; i < count; ++i) {
         auto* island = rd<const uint8_t*>(nodes + i * size, sv::node_island);
         if (!island || !anymaker::readable(island, 40)) continue;
-        bool found = false;
         for_each_ptr(island, 4096, [&](uint8_t* node) {
-            found = anymaker::readable(node, sv::node_size) && is_wheel(rd<const uint8_t*>(node, sv::node_component));
-            return !found;
+            if (!anymaker::readable(node, sv::node_size)) return true;
+            auto* component = rd<const uint8_t*>(node, sv::node_component);
+            if (is_wheel(component)) r.wheel = true;
+            else if (g_engine_wheel_type && component && anymaker::readable(component, 8) &&
+                     anymaker::typeinfo_is(anymaker::typeinfo_of(component), g_engine_wheel_type)) r.engine = true;
+            return !(r.wheel && r.engine);
         });
-        if (found) return true;
     }
-    return false;
+    return r;
 }
 void report(uint8_t* component, uint8_t* vehicle, bool engine, double rated, double power_now, bool (*connected)(uint8_t*)) {
     if (!component || !vehicle || !anymaker::readable(vehicle, sv::vehicle_id + 4)) return;
@@ -181,7 +187,8 @@ void report(uint8_t* component, uint8_t* vehicle, bool engine, double rated, dou
         bool was = s.connected;
         s.connected = connected(component); s.checked = now;
         if (s.connected != was && g_connect_logs.fetch_sub(1) > 0)
-            log(0, "%s on vehicle %d %s the wheels", engine ? "engine" : "motor", s.vehicle, s.connected ? "drives" : "no longer drives");
+            log(0, "%s on vehicle %d %s the wheels%s", engine ? "engine" : "motor", s.vehicle, s.connected ? "drives" : "does not drive",
+                engine || s.connected ? "" : " (or shares a drivetrain with an engine)");
     }
     if (s.connected && std::isfinite(power_now) && power_now > s.peak && power_now < 1e8) s.peak = power_now;
     if (g_sources.size() > 4096) for (auto it = g_sources.begin(); it != g_sources.end();) it = now - it->second.seen > 10000 ? g_sources.erase(it) : std::next(it);
@@ -198,7 +205,7 @@ void hk_engine(uint8_t* engine, uint8_t* vehicle, void* scene) {
     report(engine, vehicle, true, 0, power, [](uint8_t* e) {
         bool any = false;
         for_each_ptr(e + sv::engine_wheels, 16, [&](uint8_t* shaft) {
-            any = reaches_wheel(shaft + sv::engine_wheel_torque);
+            any = reach(shaft + sv::engine_wheel_torque).wheel;
             return !any;
         });
         return any;
@@ -210,7 +217,9 @@ void hk_motor(uint8_t* motor, uint8_t* vehicle, void* scene) {
     auto* def = rd<const uint8_t*>(motor, sv::component_definition);
     double rated = def && anymaker::readable(def, off::def_motor_wattage + 8) ? rd<double>(def, off::def_motor_wattage) : 0;
     if (!std::isfinite(rated) || rated < 0 || rated > 1e8) rated = 0;
-    report(motor, vehicle, false, rated, 0, [](uint8_t* m) { return reaches_wheel(m + sv::motor_torque); });
+    // A motor sharing its drivetrain with an engine (a starter, or a hybrid assist) is not counted: the engine
+    // is what drives the wheels there.
+    report(motor, vehicle, false, rated, 0, [](uint8_t* m) { Reach r = reach(m + sv::motor_torque); return r.wheel && !r.engine; });
 }
 // Sum for one body, from sources seen in the last two seconds; unknown when nothing reported (not the host).
 Drive drive_for(int32_t vehicle) {
@@ -235,11 +244,12 @@ void install_drive_hooks() {
     using namespace anymaker::experimental;
     const anymaker::func_desc* wheels[kWheelCount] = {&bind::server_wheel_tick, &bind::server_wheel_hydraulic_tick, &bind::server_train_wheel_tick, &bind::server_sprocket_tick};
     for (int i = 0; i < kWheelCount; ++i) g_wheel_types[i] = typeinfo_for(*wheels[i]);
+    g_engine_wheel_type = typeinfo_for(bind::server_engine_wheel_tick);
     void** engine = hook_cell(bind::server_engine_tick);
     void** motor = hook_cell(bind::server_motor_tick);
     bool ok = g_wheel_types[kWheel] && engine && motor && h_engine.install(engine, (void*)&hk_engine) && h_motor.install(motor, (void*)&hk_motor);
-    log(ok ? 0 : 1, "power to the wheels %s (wheel types %d/%d/%d/%d, engine %d, motor %d)", ok ? "ready (host only)" : "unavailable",
-        !!g_wheel_types[0], !!g_wheel_types[1], !!g_wheel_types[2], !!g_wheel_types[3], !!engine, !!motor);
+    log(ok ? 0 : 1, "power to the wheels %s (wheel types %d/%d/%d/%d, engine shaft type %d, engine %d, motor %d)", ok ? "ready (host only)" : "unavailable",
+        !!g_wheel_types[0], !!g_wheel_types[1], !!g_wheel_types[2], !!g_wheel_types[3], !!g_engine_wheel_type, !!engine, !!motor);
 }
 
 void install_hooks() {

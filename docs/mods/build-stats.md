@@ -17,7 +17,8 @@ to paste into chat or a post. For creations with several bodies, part counts are
 ### Power to the wheels
 
 Only engines and electric motors whose drivetrain reaches a wheel, train wheel or track sprocket count;
-alternators, pumps and anything else are left out. Electric motors count at their rated power. The game stores
+alternators, pumps and anything else are left out. Electric motors count at their rated power, except motors
+that share a drivetrain with a combustion engine (starters, hybrid assist), which are left out. The game stores
 no rated power for combustion engines, so each engine counts at the highest output it has made while
 connected (torque × speed), measured since the vehicle was loaded: rev or drive it once to fill it in. The
 card notes "engines: peak seen" when engines are included. Gearbox and friction losses are not subtracted.
