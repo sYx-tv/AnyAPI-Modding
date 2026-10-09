@@ -10,7 +10,6 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Contents | Evidence |
 | --- | --- | --- | --- | --- |
-| 2026-10-09 | [mods-2026.10.09.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.09.1) | [AnyMirror 1.0.0 and AnyBalance 1.2.0](mods-2026.10.09.1.md) | AnyMirror 1.0.0 mirrored edge building; AnyBalance 1.2.0 shows the creation's size | |
 | 2026-10-09 | [v0.34.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.34.1) | [0.34.1](release-0.34.1.md) | AnyAPI 0.34.1, quick wheel fix for full hotbars after a world reload | |
 | 2026-10-09 | [mods-2026.10.09](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.09) | [EngineSound 0.2.0](enginesound-0.2.0.md) | EngineSound 0.2.0, engine sound presets and Custom tuner | |
 | 2026-10-08 | [v0.34.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.34.0) | [0.34.0](release-0.34.0.md) | AnyAPI 0.34.0, AnyBalance 1.1.0 fluid mass | |
