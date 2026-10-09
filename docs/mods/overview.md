@@ -20,5 +20,15 @@ keeps working defaults when it is absent.
 All mods are in the published catalog ([`catalog.json`](../../catalog.json)).
 All versions target Anymaker 0.1.23 / Steam build 25755694.
 
+## Prototypes
+
+Built from source only, not in the catalog yet. All three use the experimental SDK.
+
+| Mod | Features | Optional integration |
+| --- | --- | --- |
+| [AnyMirror](mirror.md) | Mirrored edge building with either edge tool, a toggleable mirror wall and keybinds | AnyHelpers settings and controls |
+| [AnyBuildStats](build-stats.md) | Spec sheet with the Properties Tool, copied to the clipboard with F9 | AnyHelpers settings and controls |
+| [AnyLights](lights.md) | Light colours and flash patterns in the Properties Tool, with data port and microcontroller channels | AnyHelpers settings |
+
 See [validation status](../development/validation.md) for tested behavior and limits,
 including what has and has not been checked in multiplayer.
