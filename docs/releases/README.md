@@ -27,6 +27,7 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Evidence |
 | --- | --- | --- | --- |
+| 2026-10-09 | [manager-v1.4.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/manager-v1.4.0) | [1.4.0](manager-1.4.0.md) | |
 | 2026-10-08 | [manager-v1.3.2](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/manager-v1.3.2) | [1.3.2](manager-1.3.2.md) | [tests](manager-1.3.2-tests.json) |
 | 2026-10-06 | [manager-v1.3.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/manager-v1.3.1) | [1.3.1](manager-1.3.1.md) | [tests](manager-1.3.1-tests.json) |
 | 2026-10-06 | [manager-v1.3.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/manager-v1.3.0) | [1.3.0](manager-1.3.0.md) | |
