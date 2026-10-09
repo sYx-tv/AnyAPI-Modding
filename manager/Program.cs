@@ -15,7 +15,7 @@ namespace AnyApiManager {
    }
    if(args.Length==2&&args[0]=="--self-test")return SelfTests.Run(args[1]);
    Application.ThreadException+=(s,e)=>{ManagerLog.Error("Manager window",e.Exception);MessageBox.Show("Something went wrong in the manager. Details were saved to:\n"+ManagerLog.LogFile+"\n\n"+e.Exception.Message,"AnyAPI Manager",MessageBoxButtons.OK,MessageBoxIcon.Warning);};
-   SetProcessDPIAware();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+   SetProcessDPIAware();Theme.InitScale();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
    if(args.Length==2&&args[0]=="--capture"){try{using(var window=new MainWindow(true)){window.Show();Application.DoEvents();window.CapturePreview(args[1]);}return 0;}catch(Exception e){File.WriteAllText(args[1]+".error",e.ToString());return 1;}}
    Application.Run(new MainWindow());return 0;
   }

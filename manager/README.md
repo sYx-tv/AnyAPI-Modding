@@ -1,6 +1,6 @@
 # AnyAPI Manager
 
-A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.3.3 includes AnyAPI revision 33, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
+A Windows app with four pages: Overview, Mods, Develop, and Settings. Version 1.4.0 includes AnyAPI revision 33, catalog metadata, an offline developer guide, and a source-only starter SDK. It contains **no optional mod DLLs**. Mods are independent GitHub downloads.
 
 The manager recognizes newer compatible installed API/mod receipts even when
 its cached catalog is older. The bundled API and offline guide match 0.33.0.
@@ -32,8 +32,8 @@ Windows 10 release (1803 and later) and every Windows 11 release already include
 
 If installing the API or a mod fails, the manager writes the reason to
 `%LOCALAPPDATA%\AnyAPI Manager\manager.log`: the Windows build, .NET Framework
-release, detected game folder, `game.exe`/`game.gcl` hashes and the full error. Paste
-that path into Explorer's address bar to open it, and attach the file to a bug report.
+release, detected game folder, `game.exe`/`game.gcl` hashes and the full error. Choose
+**Open log** in Settings > Manager to open it, and attach the file to a bug report.
 
 Build: Windows with .NET Framework 4.7.2 or newer, `powershell -File manager/build.ps1`. No downloaded NuGet packages or standalone .NET installation is required on modern Windows. The source targets x64 and uses C#, Windows Forms and the Windows .NET Framework compiler.
 
@@ -41,12 +41,23 @@ To refresh the bundle for a new API release, copy the root `catalog.json` to `pu
 
 Validation: run the EXE with `--self-test <absolute output.json>`; run `--capture <absolute preview.png>` to render its own interface for review. These tests use disposable fixture folders, never the installed game. See CATALOG_FORMAT.md and GITHUB_SETUP.md for publishing.
 
+## Look and layout
+
+Version 1.4.0 has a frameless dark window: a slim title bar (drag to move, double-click
+to maximize, drag any edge to resize), a sidebar grouped into Game, Library, Build and
+Manager, and pages built from titled panels. Mods switch on and off from the list.
+Settings > Appearance picks the accent colour (Aqua, Violet, Rose, Amber or Mint).
+Everything is drawn with Windows Forms and GDI+, uses Segoe UI and Consolas, and scales
+with the Windows display setting, so Windows 10 and Windows 11 look the same. Shared
+styling lives in `Theme.cs`, `ModernButton.cs` and `Controls.cs`.
+
 ## Manager updates
 
 The manager checks for a newer version of itself each time it opens. The check is
-silent when offline or already up to date. When an update exists, an **Update to
-X.Y.Z** button appears above the version in the sidebar; one click downloads it
-(with progress), then the manager closes and reopens as the new version. Settings
+silent when offline or already up to date. When an update exists, **Manager X.Y.Z is
+ready** appears in the title bar with a **Restart to update** button; one click
+downloads it (with progress), then the manager closes and reopens as the new version.
+Settings > Manager has a switch to turn the launch check off. Settings
 also has **Check for updates** under Manager, which changes to **Update & restart**
 when one is available. No website download is needed.
 
@@ -66,7 +77,7 @@ For front ends: `ManagerUpdater` (`ManagerUpdater.cs`) holds the whole flow with
 UI code. Bind to its `Changed` event and read `State`, `Release`, `Progress`
 (0 to 1, or -1 when the size is unknown) and `Message`. Call `Check(true)` on
 launch, `Install()` when the user accepts, and close the app once `State` is
-`Restarting`. `ManagerUpdateBadge` is the default control for it.
+`Restarting`. `ManagerUpdateBadge` is the title-bar control for it.
 
 Manager releases use root `manager-update.json`, separately from the mod/API
 catalog. See [Publishing](../docs/development/publishing.md) for release steps.
