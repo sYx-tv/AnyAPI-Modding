@@ -77,7 +77,7 @@ constexpr ptrdiff_t client_factor = 224 + 8;                         // m_light_
 constexpr ptrdiff_t client_colour[kKindCount] = {336, 264, 288};      // m_color (color8)
 // client_scene.peer.property_data
 constexpr ptrdiff_t pd_vehicle = 8 + 8, pd_component = 24 + 8, pd_rows = 40 + 8;
-constexpr ptrdiff_t row_id = 8, row_name = 16 + 8, row_value = 32, row_value_prev = 56;   // _m_value (replicated wrapper), _m_value_prev (string)
+constexpr ptrdiff_t row_id = 8, row_name = 16 + 8, row_value = 32, row_value_prev = 56, row_value_edit = 72;   // _m_value (replicated wrapper), _m_value_prev, _m_value_edit (strings)
 constexpr ptrdiff_t client_peer_data = 40 + 104;                      // client.m_peers.m_data
 constexpr ptrdiff_t client_peers = 3920 + 64 + 8;                     // client.m_scene.m_peers._m_elements (vector<ref<peer>>)
 constexpr ptrdiff_t peer_property_data = 24 + 2848;                   // peer.m_private.m_property_data
@@ -345,10 +345,11 @@ void panel_update(uint8_t* pd, uint8_t* client) {
     if (!pd || !g_enabled.load() || !g_panel_enabled.load() || !anymaker::readable(pd, 96)) return;
     auto it = g_known.find(key_of(rd<int32_t>(pd, off::pd_vehicle), rd<int32_t>(pd, off::pd_component)));
     if (it == g_known.end() || GetTickCount64() - it->second.seen > 2000) return;
-    int32_t row_id = 0; char alias[300] = {}; bool found = false;
+    int32_t row_id = 0; char alias[300] = {}; bool found = false; const uint8_t* row_edit = nullptr;
     for_each_ref(pd + off::pd_rows, 128, [&](uint8_t* row) {
         if (!anymaker::readable(row, 96) || rd<int32_t>(row, off::row_name) != kAliasLabel) return true;
         row_id = rd<int32_t>(row, off::row_id);
+        row_edit = row + off::row_value_edit;
         // The replicated wrapper's layout is unverified; the plain previous-value string tracks it every frame.
         copy_string(row + off::row_value_prev, alias, sizeof alias);
         static std::atomic<int> dumps{2};
@@ -396,7 +397,37 @@ void panel_update(uint8_t* pd, uint8_t* client) {
         next = (next + 1) % 32;
         g_string_ctor(&sent[slot], send_text.c_str());
         sent_at[slot] = now;
-        reinterpret_cast<push_string_t>(*g_push_string_cell)(client + off::client_peer_data, &row_id, &sent[slot]);
+        // The event copies the string as a {char* data; s32 length} view, the same shape the name row's own strings
+        // read as. Check the built string reads back as our text; if it does not, hand the push a plain view of a
+        // kept copy instead (the event constructor assigns from it straight away).
+        char check[300] = {};
+        copy_string(reinterpret_cast<const uint8_t*>(&sent[slot]), check, sizeof check);
+        const anymaker::gc_string_view* value = &sent[slot];
+        static std::string kept[32];
+        static anymaker::gc_string_view plain[32];
+        bool built_ok = send_text == check;
+        if (!built_ok) {
+            kept[slot] = std::string(32, '\0') + send_text;   // zeroed room ahead of the text
+            plain[slot] = {};
+            plain[slot].data = kept[slot].c_str() + 32;
+            plain[slot].length = int32_t(send_text.size());
+            value = &plain[slot];
+        }
+        static std::atomic<int> string_dumps{3};
+        if (string_dumps.fetch_sub(1) > 0) {
+            auto hex = [](const void* p, int n) {
+                std::string out; char b[4];
+                for (int i = 0; i < n; ++i) { snprintf(b, sizeof b, "%02x ", anymaker::readable(static_cast<const uint8_t*>(p) + i, 1) ? static_cast<const uint8_t*>(p)[i] : 0); out += b; }
+                return out;
+            };
+            log(0, "built string reads \"%s\" (%s); struct %s; data %s", check, built_ok ? "ok" : "mismatch, sending a plain view",
+                hex(&sent[slot], 16).c_str(), sent[slot].data ? hex(sent[slot].data, 32).c_str() : "null");
+            if (row_edit && anymaker::readable(row_edit, 16)) {
+                auto* edit = reinterpret_cast<const anymaker::gc_string_view*>(row_edit);
+                log(0, "row edit string: struct %s; data %s", hex(row_edit, 16).c_str(), edit->data ? hex(edit->data, 32).c_str() : "null");
+            }
+        }
+        reinterpret_cast<push_string_t>(*g_push_string_cell)(client + off::client_peer_data, &row_id, value);
         log(0, "light name -> \"%s\"", send_text.c_str());
     }
 }
