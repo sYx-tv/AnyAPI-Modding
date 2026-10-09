@@ -21,7 +21,7 @@ The keys only work while an edge tool is equipped. Rebind them in AnyHelpers' Mo
 | \\ | Re-centre the plane on the build |
 
 When you first turn mirroring on, the plane goes through the middle of the build on the X axis. A small
-badge on screen shows whether mirroring is on, the axis and the plane position.
+badge at the top of the screen shows MIRROR ON or OFF, WALL ON or OFF, the axis and the plane position, with the keys underneath.
 
 Edges that are their own mirror image (lying in the plane, or crossing it symmetrically) are placed once.
 

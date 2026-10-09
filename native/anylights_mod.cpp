@@ -24,6 +24,7 @@
 #include "anyapi_experimental.hpp"
 #include "anylights_bindings.h"
 #include "anylights_logic.h"
+#include "cell_scan.h"
 #include "vehicle_reads.h"
 #include <algorithm>
 #include <atomic>
@@ -380,7 +381,7 @@ void install_hooks() {
         void* push_ability = function(bind::server_push_component_ability);
         g_string_ctor = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
         g_string_dtor = reinterpret_cast<string_dtor_t>(native(anymaker::sym::string_dtor_rva));
-        all = all && descriptors && ability && property_ui && push_string && push_ability && g_string_ctor && g_string_dtor;
+        all = all && descriptors && ability && push_string && push_ability && g_string_ctor && g_string_dtor;
         if (!all) {
             if (attempt == 179) {
                 log(2, "could not locate the light functions (descriptors=%d ability=%d property_ui=%d push_string=%d push_ability=%d strings=%d)",
@@ -390,9 +391,16 @@ void install_hooks() {
             }
             continue;
         }
+        // The Properties window update has no SDK route to its cell: find it by its entry point near another client cell.
+        if (!property_ui) {
+            void* entry = function(bind::client_property_window_ui);
+            property_ui = cell_scan::find_cell(entry, push_string);
+            log(property_ui ? 0 : 1, "Properties window hook: entry %s, cell %s", entry ? "found" : "missing", property_ui ? "found by scan" : "not found");
+        }
         g_push_ability = push_ability; g_push_string_cell = push_string;
         bool ok = h_descriptors.install(descriptors, (void*)&hk_descriptors) && h_ability.install(ability, (void*)&hk_ability) &&
-                  h_property_ui.install(property_ui, (void*)&hk_property_ui);
+                  (!property_ui || h_property_ui.install(property_ui, (void*)&hk_property_ui));
+        if (!property_ui) log(1, "the Properties panel is unavailable; name tags and data channels still work");
         for (int k = 0; k < kKindCount && ok; ++k)
             ok = h_server_tick[k].install(st[k], server_hooks[k]) && h_get_f64[k].install(gf[k], get_hooks[k]) &&
                  h_client_tick[k].install(ct[k], client_hooks[k]) && h_client_render[k].install(cr[k], render_hooks[k]);

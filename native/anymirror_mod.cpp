@@ -19,6 +19,7 @@
 #include "anymirror_bindings.h"
 #include "anymirror_logic.h"
 #include "vehicle_reads.h"
+#include "cell_scan.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -207,7 +208,15 @@ void install_hooks() {
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; AnyMirror stays off"); return; }
         void** push = hook_cell(bind::client_push_add_edge);
         void** cells[4]; bool all = push != nullptr;
-        for (int i = 0; i < 4; ++i) { cells[i] = hook_cell(*overlays[i]); all = all && cells[i]; }
+        for (int i = 0; i < 4; ++i) cells[i] = hook_cell(*overlays[i]);
+        // The hover states have no SDK route to their cell: find it by its entry point next to the drag state's.
+        for (int i : {0, 2}) {
+            if (cells[i] || !cells[i + 1]) continue;
+            void* entry = function(*overlays[i]);
+            cells[i] = cell_scan::find_cell(entry, cells[i + 1]);
+            log(cells[i] ? 0 : 1, "edge tool %d hover overlay: entry %s, cell %s", i / 2 + 1, entry ? "found" : "missing", cells[i] ? "found by scan" : "not found");
+        }
+        all = all && cells[1] && cells[3];   // hover overlays are optional: without them the wall and keys work while dragging only
         void* box = function(bind::overlay_add_vehicle_box);
         void* line = function(bind::overlay_add_vehicle_line);
         void* transform = function(bind::client_vehicle_render_transform);
@@ -219,7 +228,7 @@ void install_hooks() {
         g_grid_size_ptr = static_cast<const double*>(global(bind::g_vehicle_grid_size));
         if (!box || !line || !transform) log(1, "wall drawing unavailable (box=%d line=%d transform=%d); mirroring still works", !!box, !!line, !!transform);
         bool ok = h_push.install(push, (void*)&hk_push_edge);
-        for (int i = 0; i < 4 && ok; ++i) ok = h_overlay[i].install(cells[i], hooks[i]);
+        for (int i = 0; i < 4 && ok; ++i) ok = !cells[i] || h_overlay[i].install(cells[i], hooks[i]);
         if (!ok) { log(2, "a hook cell was already taken or not writable; AnyMirror is off"); return; }
         g_ready = true;
         log(0, "Ready after %d s: grid size %s, wall %s. Equip an edge tool and press the mirror key.", attempt,
@@ -249,8 +258,7 @@ void draw(const AnyFrameV1* frame, void*) {
     float s = std::clamp(float(frame->height) / 1080.f, .7f, 1.8f);
     wchar_t line1[128], line2[160];
     auto plane_text = [&]() -> double { auto it = g_vehicles.find(g_vehicle_id); return it != g_vehicles.end() && it->second.placed ? it->second.plane.twice * 0.5 : 0.0; };
-    if (g_enabled) swprintf_s(line1, L"MIRROR ON  ·  %hs axis  ·  plane %.1f  ·  wall %ls", kAxisNames[g_axis], plane_text(), g_wall ? L"shown" : L"hidden");
-    else swprintf_s(line1, L"MIRROR OFF");
+    swprintf_s(line1, L"MIRROR %ls  ·  WALL %ls  ·  %hs AXIS  ·  plane %.1f", g_enabled ? L"ON" : L"OFF", g_wall ? L"ON" : L"OFF", kAxisNames[g_axis], plane_text());
     char names[kActionCount][24];
     for (int i = 0; i < kActionCount; ++i) {
         names[i][0] = 0;
