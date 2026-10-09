@@ -2,7 +2,7 @@
 
 > AnyMirror hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.1.23 / Steam build 25755694 and turns itself off on any other build.
-> Prototype: not in the catalog yet.
+> AnyMirror 1.0.0 requires AnyAPI 0.34.0 or newer; install it from the manager.
 
 AnyMirror builds symmetric creations. With either **edge tool** equipped and mirroring on, every edge you
 place is placed a second time, mirrored across a plane through your build. The plane shows as a see-through
