@@ -119,8 +119,8 @@ At release (see [Publishing](publishing.md)):
 
 - Publish the ported API as `vX.Y.Z`. Its `release.json` must override `GameBuilds`
   with the new fingerprint only, or it inherits the old one. Players who have not
-  updated the game keep the previous API: the manager matches the API to the player's
-  files, and manager 1.4.0 bundles 0.34.1.
+  updated the game keep the previous API only through a manager that bundles it; the
+  catalog then lists the new API alone.
 - Publish the re-bound experimental-SDK mods in a `mods-` release with the same
   `GameBuilds` override.
 - Add the new fingerprint to every unchanged mod:
@@ -131,3 +131,7 @@ At release (see [Publishing](publishing.md)):
   ```
 
   `--release-json` prints the `Packages` overrides for the releases above.
+- Rebuild the manager so it bundles the new API: copy the updated root `catalog.json`
+  to `manager/publishing/catalog.json`, put the API ZIP in `manager/publishing/assets/`,
+  run `python manager/prepare_guide.py`, then build and release the manager
+  ([manager README](../../manager/README.md)). Ship it together with the API and mods.
