@@ -22,9 +22,14 @@ inline int scan_region(uint8_t* base, size_t size, uint64_t value, void**& hit) 
         size_t want = size - off < sizeof buf ? size - off : sizeof buf;
         SIZE_T got = 0;
         if (!ReadProcessMemory(GetCurrentProcess(), base + off, buf, want, &got)) continue;
+        ULONG_PTR stack_lo = 0, stack_hi = 0;
+        GetCurrentThreadStackLimits(&stack_lo, &stack_hi);
         for (size_t i = 0; i < got / 8; ++i) {
             if (buf[i] != value) continue;
-            hit = reinterpret_cast<void**>(base + off + i * 8);
+            uintptr_t at = uintptr_t(base + off + i * 8);
+            // Our own copies of the value (this buffer, this thread's stack) are not the cell.
+            if ((at >= uintptr_t(buf) && at < uintptr_t(buf) + sizeof buf) || (at >= stack_lo && at < stack_hi)) continue;
+            hit = reinterpret_cast<void**>(at);
             if (++found > 1) return found;
         }
     }
