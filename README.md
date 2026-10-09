@@ -43,7 +43,7 @@ installation is needed to build and test game-dependent features.
 
 | Package | Stable download | Requires |
 | --- | --- | --- |
-| AnyAPI | **0.34.0** | Anymaker 0.1.23 |
+| AnyAPI | **0.34.1** | Anymaker 0.1.23 |
 | AnyHelpers, AnyInventory, AnyStorage | 0.27.0 | API 0.27.0 |
 | AnyMap | 0.27.2 | API 0.27.0 |
 | AnyGraphics | 0.29.3 | API 0.32.0 |
@@ -61,6 +61,8 @@ AnyAPI 0.34.0 and [AnyBalance 1.1.0](docs/mods/balance.md) add tank fluid mass t
 centre-of-mass display; both were confirmed in game before release on 8 October 2026.
 [EngineSound 0.2.0](docs/mods/engine-sound.md) adds engine sound presets and a Custom sound tuner
 to the Properties Tool, confirmed in game before release on 9 October 2026.
+
+AnyAPI 0.34.1 fixes the [quick wheel](docs/mods/quick-wheel.md) refusing to equip tools after a world reload when every hotbar slot was full; confirmed in game before release on 9 October 2026.
 
 ## Compatibility
 

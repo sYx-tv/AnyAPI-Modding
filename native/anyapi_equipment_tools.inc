@@ -48,7 +48,11 @@ static bool tools_tick(void* client,void* scene,void* actor,uintptr_t inventory,
  if(target>=0){select_item((void*)bar,&inventory,&target);int32_t selected=-2;tools_store.finish(job->ticket,safe_read_memory(bar+0x58,&selected,4)&&selected==target);return true;}
  // Only replace the shared slot if it still contains the item we assigned.
  if(managed_slot>=0&&managed_slot<count){int32_t id=-1;get_item(&id,(void*)bar,&inventory,&managed_slot);if(id==managed_item||id<=0)target=managed_slot;else managed_slot=managed_item=-1;}
- if(target<0)target=empty;if(target<0){tools_store.finish(job->ticket,false);log_line(ANY_LOG_WARN,"framework","EQUIPMENT_TOOL_EQUIP needs_one_free_hotbar_slot=1 no_existing_slot_overwritten=1");return true;}
+ if(target<0)target=empty;
+ if(target<0){bool holds_tool[32]{};int32_t selected=-1;safe_read_memory(bar+0x58,&selected,4);
+  for(int32_t slot=0;slot<count&&slot<32;++slot){int32_t id=-1;get_item(&id,(void*)bar,&inventory,&slot);uintptr_t held{};AnyEquipmentToolV2 entry;if(id>0){((Lookup)lookup)(&held,(void*)inventory,&id);holds_tool[slot]=tool_entry(held,entry);}}
+  target=equipment_tools::reclaim_slot(holds_tool,count<32?count:32,selected);if(target>=0)log_line(ANY_LOG_INFO,"framework",("EQUIPMENT_TOOL_RECLAIM shared_slot="+std::to_string(target)+" reason=no_free_slot replaces_tool_only=1").c_str());}
+ if(target<0){tools_store.finish(job->ticket,false);log_line(ANY_LOG_WARN,"framework","EQUIPMENT_TOOL_EQUIP needs_free_or_tool_hotbar_slot=1 no_existing_slot_overwritten=1");return true;}
  InventoryId id;id.type=source;id.actor=actor_id;id.item=job->item;bool activate=false;
  assign_item((void*)(uintptr_t(client)+0x90),&target,&id,&activate);pending={job->ticket,context,now,target,job->item};
  log_line(ANY_LOG_INFO,"framework",("EQUIPMENT_TOOL_ASSIGN item="+std::to_string(job->item)+" shared_slot="+std::to_string(target)+" native_event=1").c_str());return true;
