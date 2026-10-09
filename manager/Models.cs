@@ -15,7 +15,7 @@ namespace AnyApiManager {
   public List<GameBuild> GameBuilds=new List<GameBuild>();
  }
  public sealed class Catalog { public int Schema=1;public string Repository="";public List<Package> Api=new List<Package>();public List<Package> Mods=new List<Package>(); }
- public sealed class Preferences { public string GamePath="",Repository=""; }
+ public sealed class Preferences { public string GamePath="",Repository="",Accent="Aqua"; public bool CheckManagerUpdates=true; }
  public sealed class CatalogCache { public string Repository; public Catalog Catalog; }
  public sealed class Receipt { public Package Package; public bool Disabled; }
  public sealed class Installed { public Dictionary<string,Receipt> Packages=new Dictionary<string,Receipt>(); }
