@@ -16,7 +16,7 @@ namespace AnyApiManager {
   readonly TextBox gamePath=new TextBox(),search=new TextBox();readonly CheckBox installedOnly=new CheckBox();
   readonly Button apiInstall=new ModernButton(),modInstall=new ModernButton(),toggle=new ModernButton(),remove=new ModernButton();
   readonly Button importMod=new ModernButton();
-  readonly Button managerUpdate=new ModernButton();readonly Label managerUpdateNote=new Label();ManagerRelease managerRelease;
+  readonly Button managerUpdate=new ModernButton();readonly Label managerUpdateNote=new Label();readonly ManagerUpdater updater;
   readonly DataGridView grid=new DataGridView();readonly ToolTip tips=new ToolTip();string exeHash="",gclHash="";bool busy;Package selectedApi;
   [DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern IntPtr SendMessage(IntPtr h,int msg,IntPtr w,string l);
   public MainWindow(bool preview=false){
@@ -27,13 +27,15 @@ namespace AnyApiManager {
    var pages=new[]{apiPage,modsPage,developerPage,settingsPage};var titles=new[]{"Overview","Mods","Develop","Settings"};var glyphs=new[]{"\u25c8","\u25a6","{ }","\u2699"};
    for(int i=0;i<pages.Length;i++){var page=pages[i];var nav=(ModernButton)Button(titles[i],16,140+i*54,164,44,()=>ShowPage(page));nav.AlignLeft=true;nav.Glyph=glyphs[i];sidebar.Controls.Add(nav);navigation.Add(page,nav);}
    var version=Label("VERSION "+ManagerUpdates.DisplayVersion,12,24,ClientSize.Height-44,150,22,false,Muted);version.Anchor=AnchorStyles.Left|AnchorStyles.Bottom;sidebar.Controls.Add(version);
+   updater=new ManagerUpdater();updater.Changed+=ShowManagerUpdate;var badge=new ManagerUpdateBadge(updater){Bounds=new Rectangle(16,ClientSize.Height-92,164,38),Anchor=AnchorStyles.Left|AnchorStyles.Bottom};badge.Install+=async()=>await InstallManagerUpdate();sidebar.Controls.Add(badge);
    content.Dock=DockStyle.None;content.Bounds=new Rectangle(196,0,ClientSize.Width-196,ClientSize.Height-44);content.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;content.Padding=new Padding(32);Controls.Add(content);content.BringToFront();
    status.Dock=DockStyle.Bottom;status.Height=44;status.Padding=new Padding(24,12,20,6);status.ForeColor=Muted;status.BackColor=Bg;status.AutoEllipsis=true;Controls.Add(status);status.BringToFront();
    foreach(var page in new[]{apiPage,modsPage,settingsPage,developerPage}){page.Dock=DockStyle.Fill;page.BackColor=Bg;content.Controls.Add(page);}
    developer=new DeveloperPanel(SetStatus);developerPage.Controls.Add(developer);BuildApi();BuildMods();BuildSettings();ShowPage(apiPage);
    if(string.IsNullOrEmpty(preferences.GamePath))preferences.GamePath=Engine.DetectGame();preferences.Repository=bundled.Repository;gamePath.Text=preferences.GamePath;
    if(!string.IsNullOrWhiteSpace(preferences.Repository))catalog=Engine.Cached(preferences.Repository)??catalog;
-   Load+=async (s,e)=>{if(preview){PopulatePreview();return;}await Run(async()=>{await Scan();if(!string.IsNullOrWhiteSpace(preferences.Repository))await Connect();});};
+   Load+=async (s,e)=>{if(preview){PopulatePreview();return;}await Run(async()=>{await Scan();if(!string.IsNullOrWhiteSpace(preferences.Repository))await Connect();});
+    string updated=null;try{updated=ManagerUpdater.FinishPrevious();}catch(Exception){}if(updated!=null)SetStatus(updated);await updater.Check(true);};
   }
   Label Label(string text,int size,int x,int y,int w,int h,bool bold=false,Color? color=null){return new Label{Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=Theme.Font(size,bold),ForeColor=color??Ink,AutoEllipsis=true};}
   Button Button(string text,int x,int y,int w,int h,Action action){var b=new ModernButton{Text=text,Location=new Point(x,y),Size=new Size(w,h),FlatStyle=FlatStyle.Flat,BackColor=Theme.Raised,ForeColor=Ink,Cursor=Cursors.Hand};b.FlatAppearance.BorderSize=0;b.Click+=(s,e)=>{if(!busy)action();};return b;}
@@ -82,13 +84,13 @@ namespace AnyApiManager {
    tips.SetToolTip(managerUpdate,"Updates the manager EXE. Your mods and settings stay in place.");
    settingsPage.Controls.Add(Button("Open backups",0,612,150,38,()=>{string path=Rules.Target(preferences.GamePath,"AnyAPI and Modding/.manager/backups");if(Directory.Exists(path))System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path){UseShellExecute=true});else SetStatus("No manager backups yet.");}));
   }
-  async Task UpdateManager(){bool restart=false;await Run(async()=>{
-   if(managerRelease==null){SetStatus("Checking for a manager update...");var release=await ManagerUpdates.Check();
-    if(ManagerUpdates.IsNewer(release,ManagerUpdates.CurrentVersion)){managerRelease=release;managerUpdate.Text="Update & restart";managerUpdateNote.Text="Version "+ManagerUpdates.DisplayVersion+" · "+release.Version+" available";SetStatus("Manager update ready. Choose Update & restart to install it.");}
-    else{managerUpdateNote.Text="Version "+ManagerUpdates.DisplayVersion+" · Up to date";SetStatus("Your manager is up to date.");}return;
-   }
-   SetStatus("Downloading and verifying the manager update...");string request=await ManagerUpdates.Stage(managerRelease);ManagerUpdates.StartHelper(request);restart=true;
-  });if(restart)Application.Exit();}
+  async Task UpdateManager(){if(updater.UpdateAvailable)await InstallManagerUpdate();else if(!busy)await updater.Check(false);}
+  async Task InstallManagerUpdate(){await Run(updater.Install);if(updater.State==ManagerUpdateState.Restarting)Application.Exit();}
+  void ShowManagerUpdate(){
+   managerUpdate.Text=updater.UpdateAvailable?"Update & restart":"Check for updates";
+   managerUpdateNote.Text="Version "+ManagerUpdates.DisplayVersion+(updater.UpdateAvailable?" · "+updater.Release.Version+" available":updater.State==ManagerUpdateState.UpToDate?" · Up to date":"");
+   if(updater.Message!=null)SetStatus(updater.State==ManagerUpdateState.Downloading&&updater.Progress>=0?updater.Message+" "+(int)(updater.Progress*100)+"%":updater.Message);
+  }
   async Task SaveSetup(){await Run(async()=>{preferences.GamePath=gamePath.Text.Trim();await Scan();Engine.SavePreferences(preferences);SetStatus("Game folder saved.");});}
   async Task Scan(){
    if(string.IsNullOrWhiteSpace(preferences.GamePath)){exeHash=gclHash="";RefreshState();SetStatus("Choose your Anymaker folder in Settings.");return;}

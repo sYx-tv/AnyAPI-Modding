@@ -24,10 +24,10 @@ namespace AnyApiManager {
    if(pe<64||pe>b.Length-26||BitConverter.ToUInt32(b,pe)!=0x4550||BitConverter.ToUInt16(b,pe+4)!=0x8664||(BitConverter.ToUInt16(b,pe+22)&0x2000)!=0||BitConverter.ToUInt16(b,pe+24)!=0x20b)throw new InvalidDataException("Manager update requires a Windows x64 EXE.");
    var identity=AssemblyName.GetAssemblyName(file);if(identity.Name!="AnyAPI Manager"||identity.Version!=VersionOf(r.Version))throw new InvalidDataException("Downloaded manager version differs from the update details.");
   }
-  public static async Task<string> Stage(ManagerRelease release){
+  public static async Task<string> Stage(ManagerRelease release,Action<long,long> progress=null){
    if(!IsNewer(release,CurrentVersion))throw new InvalidOperationException("Your manager is already up to date.");
    string dir=Path.Combine(Engine.Data,"manager-updates",Guid.NewGuid().ToString("N"));Directory.CreateDirectory(dir);
-   string staged=Path.Combine(dir,"manager-new.exe");File.WriteAllBytes(staged,await Engine.DownloadBytes(release.Url,67108864));ValidateBinary(staged,release);
+   string staged=Path.Combine(dir,"manager-new.exe");File.WriteAllBytes(staged,await Engine.DownloadBytes(release.Url,67108864,null,progress));ValidateBinary(staged,release);
    string target=Assembly.GetExecutingAssembly().Location;File.Copy(target,Path.Combine(dir,"update-helper.exe"));
    using(var parent=Process.GetCurrentProcess()){
     var request=new ManagerUpdateRequest{Target=target,Staged=staged,OriginalSha256=Rules.Hash(target),ParentId=parent.Id,ParentStarted=parent.StartTime.ToUniversalTime().Ticks,Release=release};
