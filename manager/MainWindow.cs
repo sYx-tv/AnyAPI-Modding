@@ -35,7 +35,7 @@ namespace AnyApiManager {
    if(string.IsNullOrEmpty(preferences.GamePath))preferences.GamePath=Engine.DetectGame();preferences.Repository=bundled.Repository;gamePath.Text=preferences.GamePath;
    if(!string.IsNullOrWhiteSpace(preferences.Repository))catalog=Engine.Cached(preferences.Repository)??catalog;
    Load+=async (s,e)=>{if(preview){PopulatePreview();return;}await Run(async()=>{await Scan();if(!string.IsNullOrWhiteSpace(preferences.Repository))await Connect();});
-    string updated=null;try{updated=ManagerUpdater.FinishPrevious();}catch(Exception){}if(updated!=null)SetStatus(updated);await updater.Check(true);};
+    string updated=null;try{updated=ManagerUpdater.FinishPrevious();}catch(Exception failure){ManagerLog.Error("Manager update cleanup",failure);}if(updated!=null){SetStatus(updated);ManagerLog.Write(updated);}await updater.Check(true);};
   }
   Label Label(string text,int size,int x,int y,int w,int h,bool bold=false,Color? color=null){return new Label{Text=text,Location=new Point(x,y),Size=new Size(w,h),Font=Theme.Font(size,bold),ForeColor=color??Ink,AutoEllipsis=true};}
   Button Button(string text,int x,int y,int w,int h,Action action){var b=new ModernButton{Text=text,Location=new Point(x,y),Size=new Size(w,h),FlatStyle=FlatStyle.Flat,BackColor=Theme.Raised,ForeColor=Ink,Cursor=Cursors.Hand};b.FlatAppearance.BorderSize=0;b.Click+=(s,e)=>{if(!busy)action();};return b;}

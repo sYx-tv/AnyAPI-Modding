@@ -34,7 +34,7 @@ namespace AnyApiManager {
     var release=await ManagerUpdates.Check();
     if(ManagerUpdates.IsNewer(release,ManagerUpdates.CurrentVersion)){Release=release;Set(ManagerUpdateState.Available,"Manager "+release.Version+" is available.");}
     else{Release=null;Set(quiet?ManagerUpdateState.Idle:ManagerUpdateState.UpToDate,quiet?null:"Your manager is up to date.");}
-   }catch(Exception e){Release=null;if(quiet)Set(ManagerUpdateState.Idle,null);else Set(ManagerUpdateState.Failed,Describe(e));}
+   }catch(Exception e){ManagerLog.Error("Manager update check",e);Release=null;if(quiet)Set(ManagerUpdateState.Idle,null);else Set(ManagerUpdateState.Failed,Describe(e));}
   }
   // Downloads, verifies and hands over to the helper. On success State becomes Restarting and the
   // caller must close the app so the helper can replace the EXE. Failures keep the current manager.
@@ -47,7 +47,7 @@ namespace AnyApiManager {
      double p=total>0?Math.Min(1.0,(double)done/total):-1;if(p<0||p-Progress>=0.01||p>=1)Set(ManagerUpdateState.Downloading,"Downloading manager "+release.Version+"...",p);
     });
     ManagerUpdates.StartHelper(request);Set(ManagerUpdateState.Restarting,"Restarting to finish the update...",1);
-   }catch(Exception e){Set(ManagerUpdateState.Failed,Describe(e));}
+   }catch(Exception e){ManagerLog.Error("Manager update install",e);Set(ManagerUpdateState.Failed,Describe(e));}
   }
   static string Describe(Exception e){
    if(e is System.Net.Http.HttpRequestException)return "Couldn't reach GitHub to update the manager. Check your connection and try again.";
@@ -73,7 +73,7 @@ namespace AnyApiManager {
       }
       Directory.Delete(dir,true);
      }else if(now-Directory.GetCreationTimeUtc(dir)>TimeSpan.FromDays(1))Directory.Delete(dir,true); // Abandoned before the helper finished.
-    }catch(Exception){} // Locked by a helper that is still exiting; try again next launch.
+    }catch(Exception e){ManagerLog.Error("Manager update cleanup",e);} // Usually a helper that is still exiting; retried next launch.
    }
    return note;
   }
