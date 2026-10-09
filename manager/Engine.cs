@@ -65,7 +65,7 @@ namespace AnyApiManager {
    if(string.IsNullOrWhiteSpace(input))return "";
    string path;try{path=Path.GetFullPath(Environment.ExpandEnvironmentVariables(input.Trim().Trim('"')));}catch(Exception){throw new IOException("That isn't a valid folder path.");}
    if(File.Exists(path))path=Path.GetDirectoryName(path);
-   foreach(string candidate in new[]{path,Path.GetDirectoryName(path)??"",Path.Combine(path,"Anymaker"),Path.Combine(path,"common","Anymaker"),Path.Combine(path,"steamapps","common","Anymaker")})if(IsGameFolder(candidate))return candidate;
+   foreach(string candidate in new[]{path,Path.Combine(path,"Anymaker"),Path.Combine(path,"common","Anymaker"),Path.Combine(path,"steamapps","common","Anymaker"),Path.GetDirectoryName(path)??""})if(IsGameFolder(candidate))return candidate;
    throw new IOException("Anymaker wasn't found in "+path+". Choose the folder that contains game.exe (in Steam: right-click Anymaker, Manage, Browse local files).");
   }
   const string SteamAppId="4435340";
