@@ -43,6 +43,6 @@ powershell -File manager/build.ps1
 
 The manager uses the Windows .NET Framework C# compiler and checked-in release
 resources. This builds the published manager profile with the API release named in
-`manager/publishing/catalog.json` (currently 0.33.0);
+`manager/publishing/catalog.json` (currently 0.34.1);
 publishing native or manager updates still requires release validation.
 See [Manager source](../../manager/README.md) and [Publishing](publishing.md).
