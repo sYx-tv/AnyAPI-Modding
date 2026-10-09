@@ -33,7 +33,7 @@ namespace AnyApiManager {
   public static async Task<Catalog> Fetch(string repository){
    byte[] bytes=await DownloadBytes(RepositoryUrl(repository),2097152);var c=Json.Read<Catalog>(Encoding.UTF8.GetString(bytes));Rules.Validate(c);return c;
   }
-  public static async Task<byte[]> DownloadBytes(string url,int limit,HttpClient transport=null){
+  public static async Task<byte[]> DownloadBytes(string url,int limit,HttpClient transport=null,Action<long,long> progress=null){
    Uri u;if(!Uri.TryCreate(url,UriKind.Absolute,out u)||u.Scheme!="https")throw new InvalidDataException("Downloads require HTTPS.");
    using(var response=await (transport??Http).GetAsync(u,HttpCompletionOption.ResponseHeadersRead)){
     if(response.StatusCode==HttpStatusCode.NotFound){
@@ -42,7 +42,7 @@ namespace AnyApiManager {
     response.EnsureSuccessStatusCode();if(response.RequestMessage.RequestUri.Scheme!="https")throw new InvalidDataException("Download redirected away from HTTPS.");
     if(response.Content.Headers.ContentLength>limit)throw new InvalidDataException("Download exceeds the package limit.");
     using(var input=await response.Content.ReadAsStreamAsync())using(var output=new MemoryStream()){
-     byte[] block=new byte[65536];int n;while((n=await input.ReadAsync(block,0,block.Length))>0){if(output.Length+n>limit)throw new InvalidDataException("Download exceeds the package limit.");await output.WriteAsync(block,0,n);}return output.ToArray();
+     byte[] block=new byte[65536];int n;long total=response.Content.Headers.ContentLength??-1;while((n=await input.ReadAsync(block,0,block.Length))>0){if(output.Length+n>limit)throw new InvalidDataException("Download exceeds the package limit.");await output.WriteAsync(block,0,n);if(progress!=null)progress(output.Length,total);}return output.ToArray();
     }
    }
   }

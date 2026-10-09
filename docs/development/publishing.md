@@ -142,7 +142,8 @@ manager separately if its bundled API and offline guide should change.
    `manager-update.json` (`Schema`, `Version`, `Url`, `Sha256`, `Size`).
 4. Commit the matching manager source and documentation.
 
-Settings reads this separate feed on demand. Publishing a manager update does not
+Managers from 1.4.0 read this separate feed on every launch and offer the
+update in one click; 1.3.x reads it from Settings. Publishing a manager update does not
 require changing `catalog.json` or replacing users' API/mod installations. Keep
 the bundled API package and guide consistent when rebuilding the EXE; the
 manager's embedded catalog is `manager/publishing/catalog.json`, which the

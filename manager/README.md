@@ -43,17 +43,30 @@ Validation: run the EXE with `--self-test <absolute output.json>`; run `--captur
 
 ## Manager updates
 
-In Settings, choose **Check for updates** under Manager. If a newer manager is
-available, the button changes to **Update & restart**. This downloads the official
-EXE, checks its size, SHA-256, x64 executable format and assembly version, then
-closes and replaces the manager and opens the new version. A separate helper waits
-for the current process to exit; it never terminates it forcibly.
+The manager checks for a newer version of itself each time it opens. The check is
+silent when offline or already up to date. When an update exists, an **Update to
+X.Y.Z** button appears above the version in the sidebar; one click downloads it
+(with progress), then the manager closes and reopens as the new version. Settings
+also has **Check for updates** under Manager, which changes to **Update & restart**
+when one is available. No website download is needed.
 
-The old EXE is kept beside the manager as a `.bak` file. Replacement or restart
-failure restores it. Mods, API DLLs, preferences and saved game data are untouched.
+Every update downloads the official EXE and checks its size, SHA-256, x64
+executable format and assembly version before anything is replaced. A separate
+helper waits for the current process to exit; it never terminates it forcibly.
+
+The old EXE is kept beside the manager as a `.bak` file until the new version has
+started; the new version then deletes that backup and its download folder.
+Replacement or restart failure restores the old EXE. Mods, API DLLs, preferences
+and saved game data are untouched.
 Windows asks for administrator approval only when the manager's own folder needs
-it. An offline check leaves the current EXE in place. Older managers without this
-button need a one-time download of version 1.3.0 or newer.
+it. An offline check leaves the current EXE in place. Managers 1.3.0 to 1.3.2 update
+through Settings once; older managers need a one-time download of a newer one.
+
+For front ends: `ManagerUpdater` (`ManagerUpdater.cs`) holds the whole flow with no
+UI code. Bind to its `Changed` event and read `State`, `Release`, `Progress`
+(0 to 1, or -1 when the size is unknown) and `Message`. Call `Check(true)` on
+launch, `Install()` when the user accepts, and close the app once `State` is
+`Restarting`. `ManagerUpdateBadge` is the default control for it.
 
 Manager releases use root `manager-update.json`, separately from the mod/API
 catalog. See [Publishing](../docs/development/publishing.md) for release steps.

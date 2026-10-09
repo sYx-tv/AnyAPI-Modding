@@ -40,6 +40,28 @@ namespace AnyApiManager {
    using(var self=Process.GetCurrentProcess()){
     var wrong=new ManagerUpdateRequest{Target=current,ParentId=self.Id,ParentStarted=self.StartTime.ToUniversalTime().Ticks+1};reject(()=>ManagerUpdates.WaitForParent(wrong),"Manager helper rejects a reused or mismatching parent process");
    }
+   FinishTests(dir,check);
+  }
+  static string FakeUpdate(string root,string target,string version,bool? success,string backup){
+   string dir=Path.Combine(root,Guid.NewGuid().ToString("N"));Directory.CreateDirectory(dir);
+   var release=new ManagerRelease{Schema=1,Version=version,Url="https://github.com/sYx-tv/AnyAPI-Modding/releases/download/manager-v"+version+"/AnyAPI.Manager.exe",Sha256=new string('0',64),Size=4096};
+   File.WriteAllText(Path.Combine(dir,"request.json"),Json.Write(new ManagerUpdateRequest{Target=target,Staged=Path.Combine(dir,"manager-new.exe"),Release=release}));
+   if(success!=null)File.WriteAllText(Path.Combine(dir,"request.json.result"),Json.Write(new ManagerUpdateResult{Success=success.Value,Backup=backup,Message=success.Value?null:"failed"}));
+   return dir;
+  }
+  static void FinishTests(string dir,Action<bool,string> check){
+   string root=Path.Combine(dir,"finish"),install=Path.Combine(dir,"install");Directory.CreateDirectory(root);Directory.CreateDirectory(install);
+   string target=Path.Combine(install,"AnyAPI Manager.exe"),backup=target+"."+Guid.NewGuid().ToString("N")+".bak",stranger=Path.Combine(install,"notes.bak");
+   File.WriteAllText(target,"new");File.WriteAllText(backup,"old");File.WriteAllText(stranger,"keep");
+   string done=FakeUpdate(root,target,"1.5.0",true,backup);string note=ManagerUpdater.FinishPrevious(root,new Version(1,5,0,0),DateTime.UtcNow);
+   check(note=="Manager updated to 1.5.0."&&!Directory.Exists(done)&&!File.Exists(backup)&&File.Exists(target),"Finished manager update reports itself and removes its folder and EXE backup");
+   File.WriteAllText(backup,"old");done=FakeUpdate(root,target,"1.5.0",true,backup);ManagerUpdater.FinishPrevious(root,new Version(1,4,0,0),DateTime.UtcNow);
+   check(Directory.Exists(done)&&File.Exists(backup),"An older running manager keeps the update backup");Directory.Delete(done,true);
+   string misplaced=FakeUpdate(root,target,"1.5.0",true,stranger);ManagerUpdater.FinishPrevious(root,new Version(1,5,0,0),DateTime.UtcNow);
+   check(!Directory.Exists(misplaced)&&File.Exists(stranger),"Update cleanup deletes only the backup the updater created");
+   string failed=FakeUpdate(root,target,"1.5.0",false,null),pending=FakeUpdate(root,target,"1.5.0",null,null);
+   check(ManagerUpdater.FinishPrevious(root,new Version(1,5,0,0),DateTime.UtcNow)==null&&!Directory.Exists(failed)&&Directory.Exists(pending),"Failed updates are cleared and in-progress updates are left alone");
+   ManagerUpdater.FinishPrevious(root,new Version(1,5,0,0),DateTime.UtcNow.AddDays(2));check(!Directory.Exists(pending),"Abandoned update folders are cleared after a day");
   }
  }
 }
