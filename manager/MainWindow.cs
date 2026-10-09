@@ -23,7 +23,7 @@ namespace AnyApiManager {
   readonly Segmented modTabs=new Segmented("Library","Installed","Local");readonly ModList modList=new ModList();
   readonly ModernButton apiInstall=new ModernButton(),modInstall=new ModernButton(),toggle=new ModernButton(),remove=new ModernButton(),importMod=new ModernButton();
   readonly ModernButton managerUpdate=new ModernButton();readonly Label managerUpdateNote=new Label();readonly ManagerUpdater updater;readonly ManagerUpdateBadge badge;
-  readonly ToggleSwitch checkAtLaunch=new ToggleSwitch();readonly ModTile modTile=new ModTile();readonly Label[] modKeys={new Label(),new Label(),new Label(),new Label()},modValues={new Label(),new Label(),new Label(),new Label()};readonly ModernButton installAll=new ModernButton(),updateAll=new ModernButton(),updateEverything=new ModernButton(),updateEverythingTop=new ModernButton();List<Package> installable=new List<Package>(),updatable=new List<Package>();int installedRevision;readonly ActivityLog activity=new ActivityLog();
+  readonly ToggleSwitch checkAtLaunch=new ToggleSwitch();readonly ModTile modTile=new ModTile();readonly Label[] modKeys={new Label(),new Label(),new Label(),new Label()},modValues={new Label(),new Label(),new Label(),new Label()};readonly ModernButton installAll=new ModernButton(),updateAll=new ModernButton(),updateEverythingTop=new ModernButton();readonly ModernButton enableAll=new ModernButton(),disableAll=new ModernButton();List<Package> installable=new List<Package>(),updatable=new List<Package>(),enableable=new List<Package>(),disableable=new List<Package>();int installedRevision;readonly ActivityLog activity=new ActivityLog();
   readonly Box playBox=new Box("Play"),apiBox=new Box("AnyAPI"),gameBox=new Box("Game build"),activityBox=new Box("Recent activity"),listBox=new Box("Library"),detailBox=new Box("Details"),folderBox=new Box("Game folder"),managerBox=new Box("Manager"),appearanceBox=new Box("Appearance"),libraryBox=new Box("Mod library");
   readonly WindowButton maximize=new WindowButton(WindowGlyph.Maximize);
   readonly ToolTip tips=new ToolTip();string exeHash="",gclHash="";bool busy;Package selectedApi;
@@ -179,12 +179,13 @@ namespace AnyApiManager {
    var folder=Button("Folder",ButtonKind.Ghost,()=>{string path=Rules.Target(preferences.GamePath,"AnyAPI and Modding/mods");if(Directory.Exists(path))System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path){UseShellExecute=true});else SetStatus("Install AnyAPI or import a mod first.");});folder.Size=new Size(S(72),S(30));
    var head=Header(modsPage,"Mods","",modTabs,searchField,refresh,folder,importMod);head.Resize+=(s,e)=>{modTabs.Left=((Control)head.Tag).Right+S(14);};
    tips.SetToolTip(refresh,"Rescan the mods folder.");tips.SetToolTip(folder,"Open the mods folder.");
-   Style(installAll,"Install all",ButtonKind.Secondary);Style(updateAll,"Update all",ButtonKind.Secondary);Style(updateEverything,"Update everything",ButtonKind.Primary);
-   installAll.Click+=async(s,e)=>{if(!busy)await Bulk("Install all",installable.ToList(),true,false);};updateAll.Click+=async(s,e)=>{if(!busy)await Bulk("Update all",updatable.ToList(),false,false);};updateEverything.Click+=async(s,e)=>{if(!busy)await UpdateEverything();};
-   tips.SetToolTip(installAll,"Installs every compatible library mod you don't have yet, and AnyAPI first if it's missing.");tips.SetToolTip(updateAll,"Updates every installed mod that has a newer release.");tips.SetToolTip(updateEverything,"Updates AnyAPI, every installed mod with a newer release, then the manager itself.");
-   var bulkLine=new Panel{BackColor=Theme.Line,Height=1};listBox.Controls.AddRange(new Control[]{modList,bulkLine,installAll,updateAll,updateEverything});
+   Style(enableAll,"Enable all",ButtonKind.Ghost);Style(disableAll,"Disable all",ButtonKind.Ghost);Style(installAll,"Install all",ButtonKind.Secondary);Style(updateAll,"Update all",ButtonKind.Primary);
+   enableAll.Click+=async(s,e)=>{if(!busy)await SwitchAll(true);};disableAll.Click+=async(s,e)=>{if(!busy)await SwitchAll(false);};
+   tips.SetToolTip(enableAll,"Turns on every installed mod that is switched off.");tips.SetToolTip(disableAll,"Turns off every installed mod. Their files and settings stay.");
+   installAll.Click+=async(s,e)=>{if(!busy)await Bulk("Install all",installable.ToList(),true,false);};updateAll.Click+=async(s,e)=>{if(!busy)await Bulk("Update all",updatable.ToList(),false,false);};   tips.SetToolTip(installAll,"Installs every compatible library mod you don't have yet, and AnyAPI first if it's missing.");tips.SetToolTip(updateAll,"Updates every installed mod that has a newer release.");
+   var bulkLine=new Panel{BackColor=Theme.Line,Height=1};listBox.Controls.AddRange(new Control[]{modList,bulkLine,enableAll,disableAll,installAll,updateAll});
    listBox.Resize+=(s,e)=>{int bar=S(52),by=listBox.Height-bar;modList.SetBounds(1,Box.HeaderHeight+1,listBox.Width-2,by-Box.HeaderHeight-1);bulkLine.SetBounds(1,by,listBox.Width-2,1);int y=by+(bar-S(32))/2;
-    updateEverything.SetBounds(listBox.Width-S(14)-S(150),y,S(150),S(32));updateAll.SetBounds(updateEverything.Left-S(8)-S(118),y,S(118),S(32));installAll.SetBounds(updateAll.Left-S(8)-S(118),y,S(118),S(32));};
+    var bulk=new[]{enableAll,disableAll,installAll,updateAll};int gap=S(8),w=(listBox.Width-S(28)-gap*3)/4;for(int i=0;i<bulk.Length;i++)bulk[i].SetBounds(S(14)+i*(w+gap),y,w,S(32));};
    modList.SelectionChanged+=Details;modList.ToggleRequested+=async row=>{if(!busy)await Change(row.Package,row.On?"disable":"enable");};
    modTitle.Font=Theme.Font(20,true);modId.Font=Theme.Mono(11.5f);modId.ForeColor=Theme.Dim;modDescription.ForeColor=Theme.Muted;modDescription.Font=Theme.Font(13);modDescription.AutoEllipsis=true;modNote.ForeColor=Theme.Muted;modNote.Font=Theme.Font(12.5f);
    modHint.Text="Changes apply the next time Anymaker starts.";modHint.ForeColor=Theme.Dim;modHint.Font=Theme.Font(12);
@@ -269,14 +270,15 @@ namespace AnyApiManager {
    Rows();
   }
   void Rows(){
-   var previous=Selected();List<Package> all;try{all=exeHash!=""&&Engine.IsGameFolder(preferences.GamePath)?Engine.Discover(preferences.GamePath,catalog):catalog.Mods.ToList();}catch(Exception e){ManagerLog.Error("Mod scan",e);all=catalog.Mods.ToList();}var rows=new List<ModRow>();int enabled=0,present=0;installable=new List<Package>();updatable=new List<Package>();
+   var previous=Selected();List<Package> all;try{all=exeHash!=""&&Engine.IsGameFolder(preferences.GamePath)?Engine.Discover(preferences.GamePath,catalog):catalog.Mods.ToList();}catch(Exception e){ManagerLog.Error("Mod scan",e);all=catalog.Mods.ToList();}var rows=new List<ModRow>();int enabled=0,present=0;installable=new List<Package>();updatable=new List<Package>();enableable=new List<Package>();disableable=new List<Package>();
    foreach(var p in all){
     string state="Not installed";try{if(exeHash!="")state=Engine.Status(preferences.GamePath,p);}catch{}
     bool on=state!="Not installed"&&state!="Disabled";if(state!="Not installed")present++;if(on)enabled++;
     bool available=!p.Local&&exeHash!=""&&Rules.Matches(p,exeHash,gclHash)&&!string.IsNullOrEmpty(p.Url);if(available&&state=="Not installed")installable.Add(p);if(available&&state=="Update / different build")updatable.Add(p);
+    bool can=exeHash!=""&&state!="Not installed";if(can&&p.Local&&state=="Disabled"){try{can=Engine.LocalProblem(preferences.GamePath,p,catalog)==null;}catch{can=false;}}
+    if(can&&state=="Disabled")enableable.Add(p);else if(can&&on)disableable.Add(p);
     if(modTabs.SelectedIndex==1&&state=="Not installed"||modTabs.SelectedIndex==2&&!p.Local)continue;
     if(p.Name.IndexOf(search.Text,StringComparison.OrdinalIgnoreCase)<0&&p.Description.IndexOf(search.Text,StringComparison.OrdinalIgnoreCase)<0)continue;
-    bool can=exeHash!=""&&state!="Not installed";if(can&&p.Local&&state=="Disabled"){try{can=Engine.LocalProblem(preferences.GamePath,p,catalog)==null;}catch{can=false;}}
     rows.Add(new ModRow{Package=p,State=state,On=on,CanToggle=can});
    }
    modList.EmptyText=modTabs.SelectedIndex==2?"No local mods. Import DLL adds one.":modTabs.SelectedIndex==1?"No mods installed yet.":"No mods match.";
@@ -284,7 +286,8 @@ namespace AnyApiManager {
    navigation[modsPage].Badge=all.Count.ToString();navigation[modsPage].Invalidate();
    bool apiWork=ApiNeedsUpdate();int everything=updatable.Count+(apiWork?1:0)+(updater.UpdateAvailable?1:0);
    installAll.Text=installable.Count>0?"Install all ("+installable.Count+")":"Install all";updateAll.Text=updatable.Count>0?"Update all ("+updatable.Count+")":"Update all";
-   installAll.Enabled=!busy&&installable.Count>0;updateAll.Enabled=!busy&&updatable.Count>0;updateEverything.Enabled=updateEverythingTop.Enabled=!busy&&everything>0;updateEverythingTop.Text=everything>0?"Update everything ("+everything+")":"Everything up to date";updateEverythingTop.Kind=everything>0?ButtonKind.Primary:ButtonKind.Ghost;
+   enableAll.Enabled=!busy&&enableable.Count>0;disableAll.Enabled=!busy&&disableable.Count>0;enableAll.Text=enableable.Count>0?"Enable all ("+enableable.Count+")":"Enable all";
+   installAll.Enabled=!busy&&installable.Count>0;updateAll.Enabled=!busy&&updatable.Count>0;updateEverythingTop.Enabled=!busy&&everything>0;updateEverythingTop.Text=everything>0?"Update everything ("+everything+")":"Everything up to date";updateEverythingTop.Kind=everything>0?ButtonKind.Primary:ButtonKind.Ghost;
    summary.Text=exeHash==""?catalog.Mods.Count+" mods available":present==0?"No mods installed yet · "+catalog.Mods.Count+" available":enabled+" of "+present+" mods enabled";
   }
   Package Selected(){var row=modList.Selected;return row==null?null:row.Package;}
@@ -326,13 +329,19 @@ namespace AnyApiManager {
    });
    if(manager&&updater.UpdateAvailable&&updater.State!=ManagerUpdateState.Failed)await InstallManagerUpdate();
   }
+  // Enables or disables every installed mod in one run; takes effect at the next game start.
+  async Task SwitchAll(bool enable){var targets=(enable?enableable:disableable).ToList();await Run(async()=>{
+    if(Engine.Running())throw new IOException("Close Anymaker before changing mods.");string action=enable?"enable":"disable";var failed=new List<string>();
+    foreach(var p in targets){var r=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Package=p,Catalog=catalog,Action=p.Local?action+"-local":action});if(!r.Success){ManagerLog.Write(action+" "+p.Name+" failed: "+r.Message);failed.Add(p.Name);}}
+    SetStatus(failed.Count==0?(enable?"Enabled ":"Disabled ")+targets.Count+(targets.Count==1?" mod":" mods")+". Takes effect next time Anymaker starts.":"Couldn't "+action+" "+string.Join(", ",failed)+". Details are in the log.");
+  });}
   async Task UpdateEverything(){if(!updater.UpdateAvailable){try{await updater.Check(true);}catch(Exception e){ManagerLog.Error("Manager update check",e);}}await Bulk("Update everything",updatable.ToList(),true,true);}
   async Task ImportLocal(){using(var dialog=new OpenFileDialog{Title="Import an AnyAPI mod",Filter="AnyAPI mod (*.dll)|*.dll",CheckFileExists=true}){if(dialog.ShowDialog(this)!=DialogResult.OK)return;string source=dialog.FileName;await Run(async()=>{
    var p=await Task.Run(()=>Engine.ImportDetails(source));string target=Rules.Target(preferences.GamePath,Rules.OnlyFile(p));bool replace=File.Exists(target)||File.Exists(target+".disabled");if(replace&&MessageBox.Show(this,"Replace "+Path.GetFileName(target)+"? The current DLL will be backed up.","Replace local mod",MessageBoxButtons.YesNo,MessageBoxIcon.Question)!=DialogResult.Yes)return;
    Directory.CreateDirectory(Engine.Data);string staged=Path.Combine(Engine.Data,Guid.NewGuid().ToString("N")+".dll");try{File.Copy(source,staged);var result=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Package=p,Catalog=catalog,Action="import-local",ZipPath=staged,ReplaceUnknown=replace});if(!result.Success)throw new IOException(result.Message);SetStatus(result.Message);await Scan();}finally{if(File.Exists(staged))File.Delete(staged);}
   });}}
   async Task Change(Package p,string action){await Run(async()=>{var r=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Package=p,Catalog=catalog,Action=p.Local?action+"-local":action});if(!r.Success)throw new IOException(r.Message);SetStatus(r.Message);RefreshState();});}
-  async Task Run(Func<Task> task){if(busy)return;busy=true;UseWaitCursor=true;installAll.Enabled=updateAll.Enabled=updateEverything.Enabled=updateEverythingTop.Enabled=managerUpdate.Enabled=importMod.Enabled=playModded.Enabled=playVanilla.Enabled=apiInstall.Enabled=modInstall.Enabled=toggle.Enabled=remove.Enabled=false;try{await task();}catch(Exception e){ManagerLog.Error("Manager action",e);SetStatus(e is System.Net.Http.HttpRequestException?"Couldn't reach GitHub. Check your connection and try again.":e.Message);}finally{busy=false;UseWaitCursor=false;managerUpdate.Enabled=true;importMod.Enabled=exeHash!="";RefreshState();}}
+  async Task Run(Func<Task> task){if(busy)return;busy=true;UseWaitCursor=true;enableAll.Enabled=disableAll.Enabled=installAll.Enabled=updateAll.Enabled=updateEverythingTop.Enabled=managerUpdate.Enabled=importMod.Enabled=playModded.Enabled=playVanilla.Enabled=apiInstall.Enabled=modInstall.Enabled=toggle.Enabled=remove.Enabled=false;try{await task();}catch(Exception e){ManagerLog.Error("Manager action",e);SetStatus(e is System.Net.Http.HttpRequestException?"Couldn't reach GitHub. Check your connection and try again.":e.Message);}finally{busy=false;UseWaitCursor=false;managerUpdate.Enabled=true;importMod.Enabled=exeHash!="";RefreshState();}}
   void SetStatus(string text){status.Text=text;tips.SetToolTip(status,text);activity.Add(text);bool bad=text!=null&&(text.StartsWith("Couldn't")||text.Contains("failed")||text.Contains("could not"));statusColor=bad?Theme.Bad:busy?Theme.Blue:Theme.Ok;statusBar.Invalidate();}
   void PopulatePreview(){var api=bundled.Api[0];var build=api.GameBuilds[0];exeHash=build.ExeSha256;gclHash=build.GclSha256;RefreshState();apiVersion.Text=api.Version;apiNote.Text="Revision "+api.Revision+" · Matches this game build.";apiBox.SetNote("Up to date",Theme.Ok,true);apiInstall.Text="Reinstall API";apiInstall.Kind=ButtonKind.Secondary;playModded.Enabled=playVanilla.Enabled=true;playBox.SetNote("Mods active",Theme.Ok,true);gameValues[1].Text=gameValues[2].Text="SHA-256 verified";gameBox.SetNote("Verified",Theme.Ok,true);developer.InstalledRevision(api.Revision);SetStatus("Catalog updated. "+bundled.Mods.Count+" mods available.");SetStatus("Ready");}
   public void CapturePreview(string file){File.WriteAllText(file+".layout", "status="+status.Bounds+" visible="+status.Visible+" text="+status.Text+" content="+content.Bounds+" scale="+CurrentAutoScaleDimensions);var pages=new[]{apiPage,modsPage,developerPage,settingsPage};var names=new[]{"","-Mods","-Develop","-Settings"};for(int i=0;i<pages.Length;++i){ShowPage(pages[i]);Refresh();using(var image=new Bitmap(Width,Height)){DrawToBitmap(image,new Rectangle(0,0,Width,Height));image.Save(Path.Combine(Path.GetDirectoryName(file),Path.GetFileNameWithoutExtension(file)+names[i]+".png"),System.Drawing.Imaging.ImageFormat.Png);}}}
