@@ -142,6 +142,26 @@ struct pattern {
 // Find a gcl function by its code signature. Scans committed MEM_PRIVATE executable regions at
 // 64-byte steps (gcl functions start 64-byte aligned [runtime]). Returns nullptr if not found or not
 // unique. Call it after the game's JIT load has finished (any time after on_create has run).
+// Every gcl function starting with the code signature, up to max_hits (0 if there are more).
+inline size_t find_gcl_functions(std::string_view code_signature, uint8_t** hits, size_t max_hits) {
+    pattern pat(code_signature);
+    if (pat.bytes.empty() || !max_hits) return 0;
+    size_t count = 0;
+    MEMORY_BASIC_INFORMATION mbi{};
+    for (uint8_t* a = nullptr; VirtualQuery(a, &mbi, sizeof(mbi)); a = (uint8_t*)mbi.BaseAddress + mbi.RegionSize) {
+        const DWORD x = PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+        if (mbi.State != MEM_COMMIT || mbi.Type != MEM_PRIVATE || !(mbi.Protect & x) || (mbi.Protect & PAGE_GUARD))
+            continue;
+        uint8_t* base = (uint8_t*)mbi.BaseAddress;
+        for (size_t off = 0; off + pat.bytes.size() <= mbi.RegionSize; off += 64)
+            if (pat.match(base + off)) {
+                if (count == max_hits) return 0;
+                hits[count++] = base + off;
+            }
+        if ((uintptr_t)a + mbi.RegionSize < (uintptr_t)a) break;
+    }
+    return count;
+}
 inline uint8_t* find_gcl_function(std::string_view code_signature) {
     pattern pat(code_signature);
     if (pat.bytes.empty()) return nullptr;
@@ -216,15 +236,29 @@ inline void** follow_route(const slot_route& r) {
     }
     return cell;
 }
-inline void** typeinfo_cell(const func_desc& d) {
-    if (!d.ti_anchor_sig || !*d.ti_anchor_sig || d.method_slot < 0) return nullptr;
-    uint8_t* a = find_gcl_function(d.ti_anchor_sig);
-    if (!a) return nullptr;
-    auto* ti = reinterpret_cast<const uint8_t*>(read_slot(a, d.ti_slot_offset));
+inline void** typeinfo_cell_from(const uint8_t* anchor, const func_desc& d) {
+    auto* ti = reinterpret_cast<const uint8_t*>(read_slot(anchor, d.ti_slot_offset));
     if (!readable(ti, 0x88)) return nullptr;
     void* const* table = *reinterpret_cast<void* const* const*>(ti + 0x80);
     if (!readable(table, 8 * (d.method_slot + 1))) return nullptr;
-    return reinterpret_cast<void**>(table[d.method_slot]);
+    auto cell = reinterpret_cast<void**>(table[d.method_slot]);
+    return readable(cell, 8) ? cell : nullptr;
+}
+inline void** typeinfo_cell(const func_desc& d) {
+    if (!d.ti_anchor_sig || !*d.ti_anchor_sig || d.method_slot < 0) return nullptr;
+    if (uint8_t* a = find_gcl_function(d.ti_anchor_sig)) return typeinfo_cell_from(a, d);
+    // Shared anchor (identical code in several functions, e.g. two tools' state ctors): keep the
+    // one candidate whose method cell points at this function's own unique code.
+    uint8_t* entry = d.code_sig && *d.code_sig ? find_gcl_function(d.code_sig) : nullptr;
+    uint8_t* hits[16];
+    size_t n = entry ? find_gcl_functions(d.ti_anchor_sig, hits, 16) : 0;
+    void** found = nullptr;
+    for (size_t i = 0; i < n; ++i)
+        if (void** cell = typeinfo_cell_from(hits[i], d); cell && *cell == entry) {
+            if (found && found != cell) return nullptr;
+            found = cell;
+        }
+    return found;
 }
 // The 8-byte cell every caller (direct and virtual) reads for this function; nullptr if no route.
 inline void** cell_of(const func_desc& d) {

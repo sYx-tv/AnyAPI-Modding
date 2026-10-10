@@ -696,9 +696,22 @@ def main(argv=None):
                 cand = (rank(i, pf.code_end + 8 * k), pf.sig, pf.code_end + 8 * k, k)
                 if sym not in ti_anchor or cand < ti_anchor[sym]:
                     ti_anchor[sym] = cand
+    # Types whose only typeinfo references sit in functions shared byte-for-byte with another type
+    # (0.1.24: both edge tools' state ctors). The anchor then matches several functions; the
+    # runtime tries each and keeps the one whose method cell points at the target's own unique
+    # code, so these routes are emitted only for targets with a unique direct signature.
+    shared_ti = {}
+    for i, pf in enumerate(p.functions):
+        if not pf.code_end or i in unique or pf.sig not in sig_of:
+            continue
+        for k, (kind, sym) in enumerate(pf.relocs):
+            if kind == 5 and sym in tb and sym not in ti_anchor and not excluded(sym):
+                cand = (rank(i, pf.code_end + 8 * k), pf.sig, pf.code_end + 8 * k, k)
+                if sym not in shared_ti or cand < shared_ti[sym]:
+                    shared_ti[sym] = cand
     method_home = {}
     for t in p.types:
-        if t.name in ti_anchor:
+        if t.name in ti_anchor or t.name in shared_ti:
             for k, m in enumerate(t.methods):
                 method_home.setdefault(m, (t.name, k))
 
@@ -746,12 +759,18 @@ def main(argv=None):
                                         'the last slot read gives the cell itself'}
         if not f['native'] and f['sig'] in method_home:
             tn, k = method_home[f['sig']]
-            a_ = ti_anchor[tn]
-            e['via_typeinfo'] = {'type': tn, 'method_slot': k, 'anchor_sig': a_[1],
-                                 'anchor_signature': sig_of[a_[1]]['code_signature'], 'slot_offset': a_[2],
-                                 'evidence': STATIC,
-                                 'basis': 'typeinfo slot -> typeinfo; [typeinfo+0x80] + 8*method_slot -> cell -> entry '
-                                          '(dispatch layout runtime-validated)'}
+            shared = tn not in ti_anchor
+            if not shared or 'direct' in e:
+                a_ = shared_ti[tn] if shared else ti_anchor[tn]
+                e['via_typeinfo'] = {'type': tn, 'method_slot': k, 'anchor_sig': a_[1],
+                                     'anchor_signature': sig_of[a_[1]]['code_signature'], 'slot_offset': a_[2],
+                                     'evidence': STATIC,
+                                     'basis': 'typeinfo slot -> typeinfo; [typeinfo+0x80] + 8*method_slot -> cell -> entry '
+                                              '(dispatch layout runtime-validated)'}
+                if shared:
+                    e['via_typeinfo']['shared_anchor'] = True
+                    e['via_typeinfo']['basis'] += ('; the anchor code is shared with other functions: try each match '
+                                                   'and keep the cell whose entry is this function (direct signature)')
         if e:
             anchors['functions'][f['sig']] = e
 
