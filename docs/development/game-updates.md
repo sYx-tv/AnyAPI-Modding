@@ -80,6 +80,10 @@ Then check these, which the audit cannot see:
   `client` after offset 3768, `client_scene.actor_character` after 5088,
   `main_menu`, gamepad data and creatures. None of AnyAPI's or the mods' offsets fell
   in the moved ranges.
+- **Hook slots.** Wherever code validates a dependency cell and then replaces a cell, both offsets
+  must move together. In 0.35.0 the inventory title dependency moved to `+0x6430` but its hook stayed
+  on `+0x6438` (now a one-argument helper), which crashed the game when a container inventory
+  opened. `inventory_ui::prepare` now refuses to hook a cell that does not lead to the validated function.
 - **Twin functions.** Identical editor-tool functions can diverge by a byte between builds. In
   0.1.24 AnyBalance's `HOVER_OVERLAY` bytes went on matching the microcontroller tool instead
   of the Properties tool, so the API hooked the wrong tool; the audit now reports that as `changed`.

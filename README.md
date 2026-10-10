@@ -44,7 +44,7 @@ installation is needed to build and test game-dependent features.
 
 | Package | Stable download | Requires |
 | --- | --- | --- |
-| AnyAPI | **0.35.1** | Anymaker 0.1.24 (0.34.1 for 0.1.23) |
+| AnyAPI | **0.35.2** | Anymaker 0.1.24 (0.34.1 for 0.1.23) |
 | AnyHelpers, AnyInventory, AnyStorage | 0.27.0 | API 0.27.0 |
 | AnyMap | 0.27.2 | API 0.27.0 |
 | AnyGraphics | 0.29.3 | API 0.32.0 |
@@ -66,13 +66,14 @@ to the Properties Tool, confirmed in game before release on 9 October 2026.
 
 AnyAPI 0.35.0 ports the API to Anymaker 0.1.24 ([release notes](docs/releases/release-0.35.0.md)), with EngineSound 0.2.1
 and [AnyMirror 1.0.0](docs/mods/mirror.md). AnyAPI 0.35.1 ([release notes](docs/releases/release-0.35.1.md)) fixes
-[AnyBalance](docs/mods/balance.md) on 0.1.24, with AnyBalance 1.2.0 (creation size on its card).
+[AnyBalance](docs/mods/balance.md) on 0.1.24, with AnyBalance 1.2.0 (creation size on its card). AnyAPI 0.35.2
+([release notes](docs/releases/release-0.35.2.md)) fixes a crash when opening a storage container's inventory on 0.1.24.
 
 AnyAPI 0.34.1 fixes the [quick wheel](docs/mods/quick-wheel.md) refusing to equip tools after a world reload when every hotbar slot was full; confirmed in game before release on 9 October 2026.
 
 ## Compatibility
 
-The current native profile (API 0.35.1) targets **Anymaker 0.1.24**, Steam build **25826614**,
+The current native profile (API 0.35.2) targets **Anymaker 0.1.24**, Steam build **25826614**,
 on **Windows x64**. API 0.34.1 remains for Anymaker 0.1.23 / Steam build 25755694. Exact executable and game-data fingerprints are recorded in
 [the build manifest](native/BUILD_MANIFEST.json). API ABI/service version numbers
 are compatibility contracts and remain part of SDK names.
