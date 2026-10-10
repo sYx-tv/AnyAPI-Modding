@@ -35,6 +35,7 @@ made and what has to be checked before anything reaches players.
    | Native code or mods | Full Windows build and `ctest` ([Building](docs/development/building.md)); the suite has 51 checks today |
    | Gameplay behavior | Test in a world on the pinned game build and note what you saw |
    | Manager | `powershell -File manager/build.ps1`, then the EXE's `--self-test` |
+   | Game update | `python native/tools/game_update.py` ([Porting to a new game build](docs/development/game-updates.md)), then the full build, `ctest` and a gameplay test |
 
 3. Update the docs in the same pull request. Each mod has a player guide in
    `docs/mods/` and each service a contract page in `docs/api/`.

@@ -5,15 +5,15 @@
 
 namespace anymaker::sym {
 
-inline constexpr const char* steam_build_id = "25755694";
-inline constexpr uint32_t game_exe_pe_timestamp = 1791299158u;
-inline constexpr uint64_t game_gcl_size = 82290752ull;
-inline constexpr const char* game_exe_sha256 = "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610";
-inline constexpr const char* game_gcl_sha256 = "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1";
+inline constexpr const char* steam_build_id = "25826614";
+inline constexpr uint32_t game_exe_pe_timestamp = 1791540771u;
+inline constexpr uint64_t game_gcl_size = 82479913ull;
+inline constexpr const char* game_exe_sha256 = "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7";
+inline constexpr const char* game_gcl_sha256 = "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d";
 
 // ---- functions (gcl, JIT-loaded). Resolve with anymaker::resolve(desc) / anymaker::cell_of(desc).
 // FN:() server.tick (server)  [direct, via_caller]
-inline constexpr func_desc server_tick{"() server.tick (server)", "53 55 56 57 41 54 41 55 41 56 48 81 ec 50 03 00 00 48 89 8c 24 50 02 00 00 48 8d 01 48 8b 15 dd", {"48 81 ec 78 2c 00 00 48 8b 05 32 04 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f 84 fd 03 00 00 48 8d", {1192u}, 1}, "", 0u, -1};
+inline constexpr func_desc server_tick{"() server.tick (server)", "53 55 56 57 41 54 41 55 41 56 48 81 ec 50 03 00 00 48 89 8c 24 50 02 00 00 48 8d 01 48 8b 15 d5", {"48 81 ec 78 2c 00 00 48 8b 05 32 04 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f 84 fd 03 00 00 48 8d", {1192u}, 1}, "", 0u, -1};
 inline constexpr int server_tick_vslot = -1;  // zero-based slot in server's method table, -1 if not virtual
 // FN:() client.tick (client, const f64, const bool, frontend_ui, settings)  [direct, via_caller]
 inline constexpr func_desc client_tick{"() client.tick (client, const f64, const bool, frontend_ui, settings)", "53 55 56 57 48 81 ec a8 01 00 00 4c 8b 94 24 f0 01 00 00 48 89 8c 24 d0 00 00 00 48 89 94 24 d8", {"53 55 48 81 ec 98 00 00 00 48 8d 4c 24 58 48 8b 05 cb 05 00 00 ff 10 48 8b 05 ca 05 00 00 f2 0f", {1704u}, 1}, "", 0u, -1};
@@ -42,18 +42,18 @@ inline constexpr int actor_container_get_actor_by_id_vslot = 33;  // zero-based 
 // FN:(ptr<server_scene.entity>) server_scene.entity.container.get_entity_by_id (const server_scene.entity.container, const s32)  [via_typeinfo]
 inline constexpr func_desc entity_container_get_entity_by_id{"(ptr<server_scene.entity>) server_scene.entity.container.get_entity_by_id (const server_scene.entity.container, const s32)", "", {"", {}, 0}, "48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 5d 00 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05 54 00 00 00 48 8b 4c 24 28 48 89 01 8b 05 36 00 00 00 89 41 78", 120u, 27};
 inline constexpr int entity_container_get_entity_by_id_vslot = 27;  // zero-based slot in server_scene.entity.container's method table, -1 if not virtual
-// FN:(ptr<server_scene.vehicle>) server_scene.vehicle.container.get_vehicle_by_id (const server_scene.vehicle.container, const s32)  [direct]
-inline constexpr func_desc vehicle_container_get_vehicle_by_id{"(ptr<server_scene.vehicle>) server_scene.vehicle.container.get_vehicle_by_id (const server_scene.vehicle.container, const s32)", "48 81 ec 98 00 00 00 48 89 4c 24 48 48 89 54 24 50 4c 89 44 24 58 48 8b 44 24 28 48 89 44 24 60 4c 8d 4c 24 60 48 8d 44 24 68 48 89 84 24 80 00 00 00 48 8d 12 48 8b 05 d4 00 00 00 48 89 4c 24 78 4c 89 c9 48 89 4c 24 40 48 89 54 24 20 4c 89 44 24 38 ff 10 48 8d 44 24 70 48 8b 0d b7 00 00 00 48 89 44 24 30 48 89 8c 24 88 00 00 00 48 8b 84 24 88 00 00 00 48 8b 4c 24 30 48 8b 54 24 20 ff 10 48 8b 44 24 70 48 39 44 24 60 0f 84 63", {"", {}, 0}, "", 0u, -1};
+// FN:(ptr<server_scene.vehicle>) server_scene.vehicle.container.get_vehicle_by_id (const server_scene.vehicle.container, const s32)  [direct, via_typeinfo]
+inline constexpr func_desc vehicle_container_get_vehicle_by_id{"(ptr<server_scene.vehicle>) server_scene.vehicle.container.get_vehicle_by_id (const server_scene.vehicle.container, const s32)", "48 81 ec 98 00 00 00 48 89 4c 24 48 48 89 54 24 50 4c 89 44 24 58 48 8b 44 24 28 48 89 44 24 60 4c 8d 4c 24 60 48 8d 44 24 68 48 89 84 24 80 00 00 00 48 8d 12 48 8b 05 d4 00 00 00 48 89 4c 24 78 4c 89 c9 48 89 4c 24 40 48 89 54 24 20 4c 89 44 24 38 ff 10 48 8d 44 24 70 48 8b 0d b7 00 00 00 48 89 44 24 30 48 89 8c 24 88 00 00 00 48 8b 84 24 88 00 00 00 48 8b 4c 24 30 48 8b 54 24 20 ff 10 48 8b 44 24 70 48 39 44 24 60 0f 84 63", {"", {}, 0}, "48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 45 00 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05 3c 00 00 00 48 8b 4c 24 28 48 89 01 8b 05 1e 00 00 00 89 41 78 48 8d 89 80 00 00 00 48 8b 05 25", 96u, 29};
 inline constexpr int vehicle_container_get_vehicle_by_id_vslot = 29;  // zero-based slot in server_scene.vehicle.container's method table, -1 if not virtual
 // FN:(mat34) server_scene.entity.get_transform (const server_scene.entity)  [via_typeinfo]
 inline constexpr func_desc entity_get_transform{"(mat34) server_scene.entity.get_transform (const server_scene.entity)", "", {"", {}, 0}, "48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 5d 00 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05 54 00 00 00 48 8b 4c 24 28 48 89 01 8b 05 36 00 00 00 89 41 40", 120u, 5};
 inline constexpr int entity_get_transform_vslot = 5;  // zero-based slot in server_scene.entity's method table, -1 if not virtual
 // FN:() server_scene.actor.damage (server_scene.actor, server_scene, const f64, const server_scene.actor_damage_src)  [direct, via_caller, via_typeinfo]
-inline constexpr func_desc actor_damage{"() server_scene.actor.damage (server_scene.actor, server_scene, const f64, const server_scene.actor_damage_src)", "53 55 56 48 81 ec 40 01 00 00 48 89 8c 24 b0 00 00 00 48 89 94 24 b8 00 00 00 4c 89 84 24 c0 00 00 00 4c", {"53 55 56 57 48 81 ec a8 00 00 00 48 89 4c 24 58 48 89 54 24 60 4c 89 44 24 68 4c 89 4c 24 70 48 8d 44 24 78 48 8d 19", {840u}, 1}, "53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 ac 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b", 456u, 93};
-inline constexpr int actor_damage_vslot = 93;  // zero-based slot in server_scene.actor's method table, -1 if not virtual
+inline constexpr func_desc actor_damage{"() server_scene.actor.damage (server_scene.actor, server_scene, const f64, const server_scene.actor_damage_src)", "53 55 56 48 81 ec 40 01 00 00 48 89 8c 24 b0 00 00 00 48 89 94 24 b8 00 00 00 4c 89 84 24 c0 00 00 00 4c", {"53 55 56 57 48 81 ec a8 00 00 00 48 89 4c 24 58 48 89 54 24 60 4c 89 44 24 68 4c 89 4c 24 70 48 8d 44 24 78 48 8d 19", {840u}, 1}, "53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 a4 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b", 448u, 99};
+inline constexpr int actor_damage_vslot = 99;  // zero-based slot in server_scene.actor's method table, -1 if not virtual
 // FN:(ptr<server_scene.inventory>) server_scene.actor.get_inventory (server_scene.actor)  [via_typeinfo]
-inline constexpr func_desc actor_get_inventory{"(ptr<server_scene.inventory>) server_scene.actor.get_inventory (server_scene.actor)", "", {"", {}, 0}, "53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 ac 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b", 456u, 91};
-inline constexpr int actor_get_inventory_vslot = 91;  // zero-based slot in server_scene.actor's method table, -1 if not virtual
+inline constexpr func_desc actor_get_inventory{"(ptr<server_scene.inventory>) server_scene.actor.get_inventory (server_scene.actor)", "", {"", {}, 0}, "53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 a4 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b", 448u, 97};
+inline constexpr int actor_get_inventory_vslot = 97;  // zero-based slot in server_scene.actor's method table, -1 if not virtual
 // FN:() mm_ui.begin (mm_ui)  [direct, via_caller]
 inline constexpr func_desc mm_ui_begin{"() mm_ui.begin (mm_ui)", "53 55 56 48 81 ec 30 02 00 00 48 89 8c 24 b8 01 00 00 8b 05 e0 15 00 00 48 8d 94 24 c0 01 00 00", {"53 55 56 48 81 ec e0 01 00 00 48 8b 05 97 29 00 00 48 8d 08 48 8b 05 95 29 00 00 ff 10 48 8b 2d", {10672u}, 1}, "", 0u, -1};
 inline constexpr int mm_ui_begin_vslot = -1;  // zero-based slot in mm_ui's method table, -1 if not virtual
@@ -98,12 +98,12 @@ inline constexpr func_desc inventory_definitions_add_definitions{"() inventory_d
 inline constexpr int inventory_definitions_add_definitions_vslot = -1;  // zero-based slot in inventory_definition_container's method table, -1 if not virtual
 
 // ---- natives (game.exe RVAs). Evidence: metadata (static scan) and/or runtime (call cells).
-inline constexpr uint32_t string_ctor_cstr_rva = 0x4f050;  // N:() $string_ctor_cstr (string, const uptr) [runtime]
-inline constexpr uint32_t string_dtor_rva = 0x4f1d0;  // N:() $string_dtor (string) [runtime]
-inline constexpr uint32_t string_length_rva = 0x25e10;  // N:(s32) string.length (const string) [metadata+runtime]
-inline constexpr uint32_t file_write_string_rva = 0x3f0b0;  // N:(bool) file.write_string (const file.path, const string) [metadata+runtime]
-inline constexpr uint32_t file_read_string_rva = 0x3f080;  // N:(bool) file.read_string (const file.path, string) [metadata+runtime]
-inline constexpr uint32_t file_get_is_exists_rva = 0x3f140;  // N:(bool) file.get_is_exists (const file.path) [metadata+runtime]
+inline constexpr uint32_t string_ctor_cstr_rva = 0x4f050;  // N:() $string_ctor_cstr (string, const uptr) [metadata]
+inline constexpr uint32_t string_dtor_rva = 0x4f1d0;  // N:() $string_dtor (string) [metadata]
+inline constexpr uint32_t string_length_rva = 0x25e10;  // N:(s32) string.length (const string) [metadata]
+inline constexpr uint32_t file_write_string_rva = 0x3f0b0;  // N:(bool) file.write_string (const file.path, const string) [metadata]
+inline constexpr uint32_t file_read_string_rva = 0x3f080;  // N:(bool) file.read_string (const file.path, string) [metadata]
+inline constexpr uint32_t file_get_is_exists_rva = 0x3f140;  // N:(bool) file.get_is_exists (const file.path) [metadata]
 
 // ---- globals: address = slot at anchor+slot_offset (anchors.json; runtime-validated layout)
 inline constexpr global_desc g_server{"g_server", "48 83 ec 48 48 89 4c 24 20 48 89 54 24 28 48 8d 8a d0 43 00 00 48 8b 05 bc 00 00 00 48 89 54 24", 224u};  // G:g_server

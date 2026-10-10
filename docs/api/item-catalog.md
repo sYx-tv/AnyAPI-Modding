@@ -14,7 +14,7 @@ This is authored item information, not owned inventory, live quantity, network s
 
 See `examples/item_catalog.cpp` for querying and copying a record and full JSON. `item_catalog_parser` covers malformed input and `item_catalog_current_assets` verifies the installed game's assets. `inventory_browser_test` verifies the real DLL and AnyHelpers with the current catalog fixture; normal Steam startup evidence is recorded separately.
 
-copied previews, native Add requests and generic screen offsets are separate services; see item-images.md, inventory-actions.md and screen-layout.md. Original JSON copying remains available; the browser export controls were removed. Current target is Anymaker 0.1.23, Steam build 25755694.
+copied previews, native Add requests and generic screen offsets are separate services; see item-images.md, inventory-actions.md and screen-layout.md. Original JSON copying remains available; the browser export controls were removed. Current target is Anymaker 0.1.24, Steam build 25826614.
 
 ## Component definitions
 

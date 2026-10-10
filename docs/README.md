@@ -14,8 +14,8 @@
 [AnyHelpers](mods/helpers.md) · [AnyInventory](mods/inventory.md) ·
 [AnyStorage](mods/storage.md) · [AnyMap](mods/map.md) ([rendering](mods/map-rendering.md)) ·
 [AnyGraphics](mods/graphics.md) · [AnyClock](mods/clock.md) ·
-[AnyQuickWheel](mods/quick-wheel.md) · [AnyBalance](mods/balance.md) · [EngineSound](mods/engine-sound.md) ·
-Prototypes: [AnyMirror](mods/mirror.md) · [AnyLights](mods/lights.md)
+[AnyQuickWheel](mods/quick-wheel.md) · [AnyBalance](mods/balance.md) · [EngineSound](mods/engine-sound.md) · [AnyMirror](mods/mirror.md) ·
+Prototype: [AnyLights](mods/lights.md)
 
 ## Developer reference
 
@@ -24,7 +24,7 @@ Prototypes: [AnyMirror](mods/mirror.md) · [AnyLights](mods/lights.md)
 - [Experimental game-access SDK](../sdk/experimental/README.md) and [research references](sdk-reference/README.md)
 - [Toolchain](development/toolchain.md) and [native inspection tools](../native/tools/README.md)
 - [Publishing](development/publishing.md) and [catalog format](../manager/CATALOG_FORMAT.md)
-- [Compatibility and validation](development/validation.md)
+- [Compatibility and validation](development/validation.md) and [porting to a new game build](development/game-updates.md)
 - [Workspace handoff](development/workspace-handoff.md) for setting up a new machine
 - [Contributing](../CONTRIBUTING.md)
 

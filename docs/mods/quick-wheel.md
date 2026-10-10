@@ -26,4 +26,4 @@ Menus, inventory and focus loss close the wheel and release input. The wheel use
 
 ## Compatibility and validation
 
-Requires the updated AnyAPI **0.31.0**, including `anyapi.equipment` v2, for reviewed Anymaker 0.1.23. The inventory-driven wheel and equipping were confirmed in a live world. The optional native control hint did not appear in the author’s live test; it is not required to use the wheel. All 47 native checks passed.
+Requires the updated AnyAPI **0.31.0**, including `anyapi.equipment` v2, for reviewed Anymaker 0.1.24. The inventory-driven wheel and equipping were confirmed in a live world. The optional native control hint did not appear in the author’s live test; it is not required to use the wheel. All 47 native checks passed.

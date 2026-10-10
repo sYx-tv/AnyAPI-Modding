@@ -21,7 +21,7 @@ git pull --ff-only origin main
 
 Install Windows x64, Git, Visual Studio's **Desktop development with C++** workload, Windows SDK, CMake and Python 3. This workspace used Visual Studio 2026 (18) and Python 3.12. Use a Visual Studio developer PowerShell so the compiler and CMake are available. Capstone is optional for native disassembly research, not a normal build requirement. GitHub CLI/login is only needed for publishing.
 
-Install Anymaker through Steam. Native hooks target **0.1.23 / Steam build 25755694**. Verify both files against `native/BUILD_MANIFEST.json`; a different game build needs reviewed bindings, not disabled identity checks.
+Install Anymaker through Steam. Native hooks target **0.1.24 / Steam build 25826614**. Verify both files against `native/BUILD_MANIFEST.json`; a different game build needs reviewed bindings, not disabled identity checks.
 
 ```powershell
 $gameDirectory = 'C:/Program Files (x86)/Steam/steamapps/common/Anymaker'

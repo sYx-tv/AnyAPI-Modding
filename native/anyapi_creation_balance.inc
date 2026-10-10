@@ -20,41 +20,50 @@ static std::mutex projection_mutex;
 static balance::RenderCamera render_camera;
 static uint64_t render_camera_tick{},geometry_tick{},geometry_context{};
 static std::array<AnyBalancePointV1,14> world_geometry{};
-static bool copy(AnyCreationBalanceSnapshotV1* out){int32_t ui=-1;
- if(!ready||faulted||!allowed_item||GetForegroundWindow()!=platform::game_window||!g_p34_frontend||!safe_read_memory(g_p34_frontend+0x828,&ui,4)||ui!=1)return false;
- auto now=GetTickCount64();if(!store.copy(out,now))return false;
+// Why copy() last failed, logged on change so an in-game report names the failing condition.
+static std::atomic<int> copy_reason{-1},capture_logged{-1},capture_stage{0};static std::atomic<unsigned> diagnostic_lines{};
+static void diagnose(std::atomic<int>& last,int reason,const char* what){if(last.exchange(reason)==reason||diagnostic_lines.fetch_add(1)>=128)return;
+ log_line(ANY_LOG_INFO,"framework",("BALANCE "+std::string(what)+"="+std::to_string(reason)).c_str());}
+static bool copy_inner(AnyCreationBalanceSnapshotV1* out,int& reason){int32_t ui=-1;
+ if(!ready||faulted||!allowed_item){reason=!ready?1:faulted?2:3;return false;}
+ if(GetForegroundWindow()!=platform::game_window){reason=4;return false;}
+ if(!g_p34_frontend||!safe_read_memory(g_p34_frontend+0x828,&ui,4)||ui!=1){reason=5;return false;}
+ auto now=GetTickCount64();if(!store.copy(out,now)){reason=6;return false;}
  std::lock_guard lock(projection_mutex);
- if(now<render_camera_tick||now-render_camera_tick>150||geometry_tick!=out->sampled_tick||geometry_context!=out->context)return false;
+ if(now<render_camera_tick||now-render_camera_tick>150){reason=7;return false;}
+ if(geometry_tick!=out->sampled_tick||geometry_context!=out->context){reason=8;return false;}
  AnyBalanceScreenV1* points[]={&out->centre,&out->base,&out->geometric_centre,&out->axes[0],&out->axes[1],&out->axes[2],&out->corners[0],&out->corners[1],&out->corners[2],&out->corners[3],&out->corners[4],&out->corners[5],&out->corners[6],&out->corners[7]};
  for(unsigned i=0;i<14;++i)*points[i]=balance::project(render_camera,world_geometry[i]);
- return true;
+ reason=0;return true;
 }
+static bool copy(AnyCreationBalanceSnapshotV1* out){int reason=0;bool ok=copy_inner(out,reason);if(allowed_item)diagnose(copy_reason,reason,"copy_reason");return ok;}
 static const AnyCreationBalanceV1 api{sizeof(AnyCreationBalanceV1),1,copy};
 } // namespace balance_runtime
 #include "balance_assembly.inc"
 namespace balance_runtime {
 struct BodyProperties {uintptr_t object{};uint64_t tick{};AnyBalancePointV1 centre{},bounds[2]{};double mass{};};
 static std::unordered_map<int32_t,BodyProperties> body_properties;static uint64_t properties_context=UINT64_MAX;
+static bool fail(int stage){capture_stage=stage;return false;}
 static bool capture_inner(void* item,void* camera,void* scene,void* client=nullptr){
  uintptr_t state{},fn{},vehicle{};int32_t id=-1;
  // ref<T> stores its object pointer in the second word; checked against the
  // Properties tool's actual overlay body, which reads item + 0x40.
  if(!safe_read_memory(uintptr_t(item)+0x40,&state,8)||!state||!p34_virtual(state,state_slot,fn)||
-   (!p34_body(fn,HOVER_OVERLAY)&&!p34_body(fn,SELECT_OVERLAY))||!safe_read_memory(state+8,&id,4))return false;
+   (!p34_body(fn,HOVER_OVERLAY)&&!p34_body(fn,SELECT_OVERLAY))||!safe_read_memory(state+8,&id,4))return fail(1);
  // The native Properties tick clears both IDs to zero and populates them only
  // for component hovers. Bare bodies/edges must use the first native hover,
  // matching get_hovered_interactible; never search through occluding objects.
- if(id<=0){int32_t type{};NativeVector hovered{};if(!safe_read_memory(uintptr_t(scene)+10672+8,&hovered,sizeof(hovered))||hovered.size!=272||hovered.count<1||hovered.count>64||hovered.capacity<hovered.count||hovered.capacity>4096||hovered.offset<0||hovered.offset>=hovered.capacity||!hovered.buffer)return false;
+ if(id<=0){int32_t type{};NativeVector hovered{};if(!safe_read_memory(uintptr_t(scene)+10672+8,&hovered,sizeof(hovered))||hovered.size!=272||hovered.count<1||hovered.count>64||hovered.capacity<hovered.count||hovered.capacity>4096||hovered.offset<0||hovered.offset>=hovered.capacity||!hovered.buffer)return fail(2);
   auto interaction=hovered.buffer+uintptr_t(hovered.offset)*272;
-  if(!safe_read_memory(interaction,&type,4)||(type!=1&&type!=2)||!safe_read_memory(interaction+8,&id,4)||id<=0)return false;}
+  if(!safe_read_memory(interaction,&type,4)||(type!=1&&type!=2)||!safe_read_memory(interaction+8,&id,4)||id<=0)return fail(3);}
  auto container=uintptr_t(scene)+0xa0;
- if(!p34_virtual(container,vehicle_slot,fn)||!p34_body(fn,VEHICLE_LOOKUP))return false;
+ if(!p34_virtual(container,vehicle_slot,fn)||!p34_body(fn,VEHICLE_LOOKUP))return fail(4);
  ((Lookup)fn)(&vehicle,(void*)container,&id);
- if(!vehicle)return false;int32_t observed_id=-1;
- if(!safe_read_memory(vehicle+8,&observed_id,4)||observed_id!=id)return false;
+ if(!vehicle)return fail(5);int32_t observed_id=-1;
+ if(!safe_read_memory(vehicle+8,&observed_id,4)||observed_id!=id)return fail(6);
  AnyCreationBalanceSnapshotV1 sample;sample.vehicle_id=id;sample.context=context;sample.sampled_tick=GetTickCount64();
  bool local=false;if(client)safe_read_memory(uintptr_t(client)+3748,&local,1);
- auto ids=assembly_ids(id,local);if(ids.empty())return false;
+ auto ids=assembly_ids(id,local);if(ids.empty())return fail(7);
  struct Body {int32_t id;double transform[12];AnyBalancePointV1 centre,bounds[2];double mass{};};
  std::vector<Body> bodies;bodies.reserve(ids.size());
  if(properties_context!=uint64_t(context)){body_properties.clear();properties_context=context;}
@@ -62,17 +71,17 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
   if(body_id==id)object=vehicle;
   else if(known!=body_properties.end()&&now>=known->second.tick&&now-known->second.tick<200)object=known->second.object;
   else ((Lookup)fn)(&object,(void*)container,&body_id);
-  int32_t actual_id=-1;if(!object||!safe_read_memory(object+8,&actual_id,4)||actual_id!=body_id)return false;
+  int32_t actual_id=-1;if(!object||!safe_read_memory(object+8,&actual_id,4)||actual_id!=body_id)return fail(8);
   Body body{};body.id=body_id;uintptr_t method{};
-  if(!p34_virtual(object,transform_slot,method)||!p34_body(method,TRANSFORM))return false;
+  if(!p34_virtual(object,transform_slot,method)||!p34_body(method,TRANSFORM))return fail(9);
   ((Transform)method)(body.transform,(void*)object);
-  for(double value:body.transform)if(!std::isfinite(value)||std::abs(value)>1e9)return false;
+  for(double value:body.transform)if(!std::isfinite(value)||std::abs(value)>1e9)return fail(10);
   auto& cached=body_properties[body_id];now=GetTickCount64();
   if(cached.object!=object||now<cached.tick||now-cached.tick>=200){
    BodyProperties next;next.object=object;next.tick=now;
-   if(!safe_read_memory(object+0x408,&next.centre,sizeof(next.centre))||!p34_virtual(object,15*8,method)||!p34_body(method,BOUNDS))return false;
+   if(!safe_read_memory(object+0x408,&next.centre,sizeof(next.centre))||!p34_virtual(object,15*8,method)||!p34_body(method,BOUNDS))return fail(11);
    ((Bounds)method)(next.bounds,(void*)object);
-   AnyCreationBalanceSnapshotV1 check;check.centre_local=next.centre;check.bounds_min=next.bounds[0];check.bounds_max=next.bounds[1];if(!balance::derive(check))return false;
+   AnyCreationBalanceSnapshotV1 check;check.centre_local=next.centre;check.bounds_min=next.bounds[0];check.bounds_max=next.bounds[1];if(!balance::derive(check))return fail(12);
    uintptr_t physics{};if(mass_fn&&safe_read_memory(object+0x4d8,&physics,8)&&physics)((Mass)mass_fn)(&next.mass,(void*)(object+0x4d0));
    if(!std::isfinite(next.mass)||next.mass<=0||next.mass>=1e12)next.mass=0;cached=next;
   }
@@ -92,7 +101,7 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
    sample.bounds_max={std::max(sample.bounds_max.x,p.x),std::max(sample.bounds_max.y,p.y),std::max(sample.bounds_max.z,p.z)};
   }
  }
- if(bodies.size()>1&&!complete_mass)return false; // Never label a partial/unweighted assembly as its centre of mass.
+ if(bodies.size()>1&&!complete_mass)return fail(13); // Never label a partial/unweighted assembly as its centre of mass.
  std::vector<FluidMass> fluids;
  if(local&&complete_mass&&assembly_fluids(ids,fluids)){sample.valid_fields|=ANY_BALANCE_FLUID_MASS;
   for(auto& fluid:fluids){auto relative=balance::inverse_transform(transform,fluid.world);sample.body_mass_kg+=fluid.mass;
@@ -100,13 +109,13 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  sample.centre_local={weighted.x/sample.body_mass_kg,weighted.y/sample.body_mass_kg,weighted.z/sample.body_mass_kg};
  if(complete_mass)sample.valid_fields|=ANY_BALANCE_BODY_MASS;else sample.body_mass_kg=0;
  if(local&&ids.size()>1)sample.valid_fields|=ANY_BALANCE_CONNECTED_CREATION;
- if(!balance::derive(sample))return false;
- sample.centre_world=balance::transform(transform,sample.centre_local);if(!balance::finite(sample.centre_world))return false;
+ if(!balance::derive(sample))return fail(14);
+ sample.centre_world=balance::transform(transform,sample.centre_local);if(!balance::finite(sample.centre_world))return fail(15);
  AnyBalancePointV1 bounds[2]={sample.bounds_min,sample.bounds_max};
  balance::Camera view{};
- if(!camera||!safe_read_memory(uintptr_t(camera)+8,view.transform,sizeof(view.transform))||!safe_read_memory(uintptr_t(camera)+416,view.projection,sizeof(view.projection)))return false;
- for(auto value:view.transform)if(!std::isfinite(value))return false;
- for(auto value:view.projection)if(!std::isfinite(value))return false;
+ if(!camera||!safe_read_memory(uintptr_t(camera)+8,view.transform,sizeof(view.transform))||!safe_read_memory(uintptr_t(camera)+416,view.projection,sizeof(view.projection)))return fail(16);
+ for(auto value:view.transform)if(!std::isfinite(value))return fail(17);
+ for(auto value:view.projection)if(!std::isfinite(value))return fail(18);
  std::array<AnyBalancePointV1,14> geometry{};unsigned point_index{};
  auto project=[&](AnyBalancePointV1 local,AnyBalanceScreenV1& out){auto world=balance::transform(transform,local);geometry[point_index++]=world;out=balance::project(view,world);};
  project(sample.centre_local,sample.centre);
@@ -118,15 +127,17 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  AnyEquipmentSnapshotV1 equipped;if(equipment_runtime::api.copy(&equipped))for(unsigned i=0;i<equipped.count;++i)if(equipped.slots[i].slot_index==equipped.selected_slot)sample.tool_item_id=equipped.slots[i].item_id;
  if(body_properties.size()>256){auto now=GetTickCount64();for(auto it=body_properties.begin();it!=body_properties.end();)if(now-it->second.tick>1000)it=body_properties.erase(it);else ++it;}
  {std::lock_guard lock(projection_mutex);world_geometry=geometry;geometry_tick=sample.sampled_tick;geometry_context=sample.context;}
- store.publish(sample);++captures;
+ store.publish(sample);++captures;capture_stage=0;
  if(last_vehicle!=uintptr_t(sample.vehicle_id)+1){last_vehicle=uintptr_t(sample.vehicle_id)+1;log_line(ANY_LOG_INFO,"framework",("BALANCE sampled=1 vehicle="+std::to_string(sample.vehicle_id)+" bodies="+std::to_string(sample.body_count)+" native_weighted_centre=1 body_mass_available="+std::to_string(bool(sample.valid_fields&ANY_BALANCE_BODY_MASS))).c_str());}
  return true;
 }
-static bool capture(void* item,void* camera,void* scene,void* client){__try{return capture_inner(item,camera,scene,client);}__except(EXCEPTION_EXECUTE_HANDLER){faulted=true;return false;}}
+static bool capture(void* item,void* camera,void* scene,void* client){__try{return capture_inner(item,camera,scene,client);}__except(EXCEPTION_EXECUTE_HANDLER){if(!faulted.exchange(true))log_line(ANY_LOG_WARN,"framework","BALANCE faulted=1 in=capture");return false;}}
 static void observe(void* item,void* camera,void* client,void* scene,const bool* authority,const int32_t* active,void* overlay){
  ((Overlay)overlay_hook.original())(item,camera,client,scene,authority,active,overlay);
  if(!ready||faulted||uintptr_t(item)!=allowed_item||uintptr_t(scene)!=allowed_scene)return;
- if(!authority||!*authority||!active||*active!=allowed_id||!camera||!capture(item,camera,scene,client))store.clear();
+ if(!authority||!*authority||!active||*active!=allowed_id||!camera){capture_stage=100;store.clear();}
+ else if(!capture(item,camera,scene,client))store.clear();
+ diagnose(capture_logged,faulted?200:capture_stage.load(),"capture_stage");
 }
 static bool bind(uintptr_t item){uintptr_t klass{},table{},cell{},fn{};
  if(!safe_read_memory(item,&klass,8)||!klass||!safe_read_memory(klass+0x80,&table,8)||!table||!safe_read_memory(table+12*8,&cell,8)||!cell||!safe_read_memory(cell,&fn,8))return false;
@@ -145,7 +156,7 @@ static void tick_inner(void* scene,void* actor){uintptr_t local{};
  if(allowed_item!=selected||allowed_scene!=uintptr_t(scene)){store.clear();++context;last_vehicle=0;}
  allowed_scene=uintptr_t(scene);allowed_id=selected?selected_id:-1;allowed_item=selected;
 }
-static void tick(void* scene,void* actor){__try{tick_inner(scene,actor);}__except(EXCEPTION_EXECUTE_HANDLER){faulted=true;allowed_item=0;store.clear();}}
+static void tick(void* scene,void* actor){__try{tick_inner(scene,actor);}__except(EXCEPTION_EXECUTE_HANDLER){if(!faulted.exchange(true))log_line(ANY_LOG_WARN,"framework","BALANCE faulted=1 in=tick");allowed_item=0;store.clear();}}
 static bool prepare(){auto hits=scan_exact(HOVER_OVERLAY,sizeof(HOVER_OVERLAY)),mass=scan_exact(MASS_OWNER,sizeof(MASS_OWNER));
  if(hits.size()!=1||!safe_read_memory(hits[0]+HOVER_OVERLAY_END,&vehicle_slot,8)||vehicle_slot%8||vehicle_slot>0x10000||
  !safe_read_memory(hits[0]+HOVER_OVERLAY_END+9*8,&transform_slot,8)||transform_slot%8||transform_slot>0x10000)return false;

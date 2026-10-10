@@ -19,7 +19,7 @@ BEGIN
    VALUE "OriginalFilename", "@ANYAPI_BINARY_NAME@\0"
    VALUE "ProductName", "@ANYAPI_PRODUCT_NAME@\0"
    VALUE "ProductVersion", "@ANYAPI_VERSION_TEXT@\0"
-   VALUE "Comments", "Anymaker 0.1.23 compatibility candidate\0"
+   VALUE "Comments", "Anymaker 0.1.24 compatibility candidate\0"
   END
  END
  BLOCK "VarFileInfo"

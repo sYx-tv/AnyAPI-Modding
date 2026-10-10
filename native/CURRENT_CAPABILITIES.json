@@ -442,8 +442,8 @@
       "ui_aligner_tooltip"
     ]
   },
-  "game_version": "0.1.23",
-  "steam_build_id": 25755694,
+  "game_version": "0.1.24",
+  "steam_build_id": 25826614,
   "inventory_revision14_services": {
     "anyapi.session v1": "copied recent named native mode",
     "anyapi.inventory_actions v2": "caller mode mask checked at queue and dispatch",

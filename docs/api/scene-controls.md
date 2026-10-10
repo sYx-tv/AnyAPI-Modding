@@ -44,7 +44,7 @@ policy. Providers and hook code stay loaded for the process lifetime.
 
 ## Reviewed native contracts
 
-The candidate targets Anymaker 0.1.23, Steam build 25755694, and the framework's
+The candidate targets Anymaker 0.1.24, Steam build 25826614, and the framework's
 exact executable/GCL hash guard. The SDK reference identifies:
 
 - `renderer`: FXAA through fog-blur flags at `0x638`–`0x63c`, bloom threshold

@@ -6,7 +6,7 @@ The gold marker identifies the centre of mass. Coloured X/Y/Z guides show the bu
 
 Open **Mod Settings → AnyBalance** to change marker size and opacity, or toggle axes, bounds, the height guide and summary. It works without AnyHelpers using the default display.
 
-This is a separate mod. AnyBalance **1.1.0** requires **AnyAPI 0.33.0** (fluid mass needs **0.34.0**), Anymaker **0.1.23**, Steam build **25755694**; install both from the manager. Marker anchoring and bare-body targeting (chassis, plate edge, door handle and tyre) were confirmed in game before release.
+This is a separate mod. AnyBalance **1.1.0** requires **AnyAPI 0.33.0** (fluid mass needs **0.34.0**), Anymaker **0.1.23**, Steam build **25755694**; install both from the manager. It does not work on Anymaker 0.1.24 with AnyAPI 0.35.0 yet; a fix follows. Marker anchoring and bare-body targeting (chassis, plate edge, door handle and tyre) were confirmed in game before release.
 
 ## What the readings mean
 

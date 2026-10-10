@@ -24,7 +24,7 @@ build it in place from this repository. The snippets below are taken from its
 
 - Windows x64, Visual Studio with **Desktop development with C++**, CMake.
 - A clone of this repository for the headers in [`sdk/include`](../../sdk/include/).
-- Anymaker **0.1.23** (Steam build 25755694) with AnyAPI installed through the
+- Anymaker **0.1.24** (Steam build 25826614) with AnyAPI installed through the
   manager. AnyHelpers is optional; install it to see the settings and keybind.
 
 ## 2. Project layout

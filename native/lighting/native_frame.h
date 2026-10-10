@@ -7,7 +7,7 @@
 namespace volumetric {
 struct NativeTarget {uintptr_t resource{};uint32_t state{},width{},height{},srv_format{},srv_dimension{};};
 struct NativeFrame {Frame gpu;NativeTarget color,depth,shadow;std::array<NativeTarget,12> cascades{};uint32_t shadow_count{},failure{};};
-// Exact 0.1.23 contract: native ref<T> is control block then object pointer.
+// Exact 0.1.24 contract: native ref<T> is control block then object pointer.
 // target+0x10 is the D3D12 resource, +0x28 its recorded state, +0x50 its SRV.
 template<class Read> bool target(uintptr_t object,NativeTarget& out,Read read){unsigned char data[0x60]{};if(!object||!read(object,data,sizeof(data)))return false;memcpy(&out.resource,data+0x10,8);memcpy(&out.state,data+0x28,4);memcpy(&out.width,data+0x34,4);memcpy(&out.height,data+0x38,4);memcpy(&out.srv_format,data+0x50,4);memcpy(&out.srv_dimension,data+0x54,4);return out.resource&&out.width>0&&out.width<=8192&&out.height>0&&out.height<=8192&&out.srv_dimension==4;}
 template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,const AnySceneLightingParametersV1& p,NativeFrame& out,Read read,float local_strength=0,uint32_t local_budget=4){

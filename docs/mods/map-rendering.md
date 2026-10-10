@@ -1,6 +1,6 @@
 # AnyMap rendering
 
-Target: Anymaker 0.1.23, Steam build 25755694, Windows x64, reviewed executable and GCL hashes in [the build manifest](../../native/BUILD_MANIFEST.json).
+Target: Anymaker 0.1.24, Steam build 25826614, Windows x64, reviewed executable and GCL hashes in [the build manifest](../../native/BUILD_MANIFEST.json).
 
 The normal game path now uploads the composed terrain texture once and draws it as a GPU image. Full-map zoom/pan and minimap rotation change transforms and source rectangles rather than painting/resampling a bitmap on the CPU. Labels use cached DirectWrite layouts; routes and markers are GPU primitives. The previous CPU renderer remains a fallback for older hosts without the GPU service.
 

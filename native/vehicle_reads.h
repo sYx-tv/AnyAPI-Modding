@@ -1,7 +1,7 @@
 #pragma once
 // Read-only walks over the client vehicle graph, shared by AnyMirror and AnyLights.
-// Offsets come from the experimental SDK reference layouts (metadata, Anymaker 0.1.23 / Steam build
-// 25755694). Call these only on the game's main thread with pointers the game handed you this tick.
+// Offsets come from the experimental SDK reference layouts (metadata, Anymaker 0.1.24 / Steam build
+// 25826614). Call these only on the game's main thread with pointers the game handed you this tick.
 #include "anymaker_sdk_runtime.hpp"
 #include <cstdint>
 #include <cstring>
