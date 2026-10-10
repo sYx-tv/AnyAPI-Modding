@@ -1,4 +1,7 @@
 #include "../anygps_logic.h"
+#include "../anygps_mesh.h"
+#include <cstring>
+#include <vector>
 #include <cassert>
 #include <cmath>
 using namespace anygps;
@@ -44,4 +47,18 @@ int main(){
  Sensor k;k.slots[kWaypointX]=100;tick(k,at({0,0,0},0),0,0);tick(k,at({0,0,0},10),-10,0.02);assert(k.sign_known&&k.sign==-1);
  Sensor k2;k2.slots[kWaypointX]=100;tick(k2,at({0,0,0},0),0,0);tick(k2,at({0,0,0},10),10,0.02);assert(k2.sign_known&&k2.sign==1);
  assert(near(k.slots[kWaypointRelativeBearing],-k2.slots[kWaypointRelativeBearing]));
+ // Mesh: a synthetic file in the compass layout gains the arrows and still parses; junk is rejected.
+ std::vector<uint8_t> mf;auto put=[&](const void*p,size_t n){auto*c=(const uint8_t*)p;mf.insert(mf.end(),c,c+n);};
+ put("mesh",4);uint32_t u=5;put(&u,4);u=1;put(&u,4);const char*nm="compass_sensor_a";u=16;put(&u,4);put(nm,16);
+ uint32_t hdr[8]={3,1,5,2,2,3,3,4};put(hdr,32);uint8_t zero[56]={};put(zero,56);double bd[6]={-.04,-.04,-.04,.04,.12,.04};put(bd,48);
+ MeshVertex vs[3]={};float P[3][3]={{.04f,-.04f,.04f},{.04f,.04f,.04f},{-.04f,.12f,-.04f}};for(int i=0;i<3;++i){std::memcpy(vs[i].pos,P[i],12);vs[i].rgba[0]=153;vs[i].rgba[3]=255;}
+ u=sizeof vs;put(&u,4);put(vs,sizeof vs);uint32_t I[3]={0,1,2};u=12;put(&u,4);put(I,12);uint8_t tr[8]={};put(tr,8);
+ MeshLayout L;assert(parse_mesh(mf,L)&&L.vertices==3&&L.indices==3);
+ auto g=build_gps_mesh(mf,"anygps_gps_sensor_a");MeshLayout G;assert(!g.empty()&&parse_mesh(g,G)&&G.vertices==3+4*6&&G.indices==3+4*6);
+ assert(std::memcmp(g.data()+16,"anygps_gps_sensor_a",19)==0);
+ double gb[6];std::memcpy(gb,g.data()+G.bounds,48);assert(gb[4]>.12&&gb[5]>.04&&gb[0]==-.04);
+ MeshVertex last;std::memcpy(&last,g.data()+G.vertex_bytes+4+(G.vertices-1)*36,36);assert(last.rgba[0]==255&&last.rgba[1]==196&&last.normal[2]==-1);
+ auto bad=mf;bad[0]='x';assert(build_gps_mesh(bad,"x").empty());bad=mf;bad.pop_back();assert(build_gps_mesh(bad,"x").empty());
+ // The definition points at whichever mesh was built.
+ assert(definition_json(kGpsMeshPath).find(kGpsMeshPath)!=std::string::npos&&definition_json().find(kStockMeshPath)!=std::string::npos);
  return 0;}

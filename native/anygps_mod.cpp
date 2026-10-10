@@ -22,6 +22,7 @@
 #include "anyapi_experimental.hpp"
 #include "anygps_bindings.h"
 #include "anygps_logic.h"
+#include "anygps_mesh.h"
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
@@ -29,6 +30,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace anygps {
 namespace {
@@ -55,6 +57,7 @@ constexpr ptrdiff_t component_definition = 312;     // server_scene.vehicle_comp
 constexpr ptrdiff_t compass_angle_to_north = 536;   // server_scene.vehicle_component.compass_sensor.m_angle_to_north (f64)
 constexpr ptrdiff_t definition_id = 0;              // vehicle_component_definition.m_id (string)
 constexpr size_t definition_file_size = 40;         // vehicle_component_definition_file
+constexpr ptrdiff_t scene_loot_level = 5336;        // server_scene.m_loot_level (s32)
 }  // namespace off
 constexpr int32_t kStoreSystem = 1;                 // file.e_store.system (static inference)
 
@@ -75,6 +78,39 @@ file_load_t g_file_load;
 std::string g_json_path;                            // absolute, backslashes
 std::thread::id g_adding;                           // the thread currently adding our file (re-entry guard)
 
+std::vector<uint8_t> read_file(const std::wstring& path) {
+    std::vector<uint8_t> data;
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return data;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(h, &size) && size.QuadPart > 0 && size.QuadPart < (1 << 24)) {
+        data.resize(size_t(size.QuadPart));
+        DWORD got = 0;
+        if (!ReadFile(h, data.data(), DWORD(data.size()), &got, nullptr) || got != data.size()) data.clear();
+    }
+    CloseHandle(h);
+    return data;
+}
+bool write_file(const std::wstring& path, const void* data, size_t size) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    DWORD written = 0;
+    bool ok = WriteFile(h, data, DWORD(size), &written, nullptr) && written == size;
+    CloseHandle(h);
+    return ok;
+}
+
+// Builds the GPS mesh (compass mesh + forward arrow) into rom/meshes/components beside the stock mesh, where the
+// game loads part meshes from. Returns the mesh path to put in the definition: the stock compass mesh on failure.
+std::string build_mesh(const std::wstring& game_dir) {
+    std::wstring components = game_dir + L"\\rom\\meshes\\components\\";
+    std::vector<uint8_t> stock = read_file(components + L"compass_sensor_a.mesh");
+    std::vector<uint8_t> gps = build_gps_mesh(stock, "anygps_gps_sensor_a");
+    if (gps.empty()) { log(1, "compass mesh not recognised (%zu bytes); the GPS Sensor uses the stock compass look", stock.size()); return kStockMeshPath; }
+    if (!write_file(components + L"anygps_gps_sensor_a.mesh", gps.data(), gps.size())) { log(1, "could not write the GPS Sensor mesh; using the stock compass look"); return kStockMeshPath; }
+    return kGpsMeshPath;
+}
+
 bool write_definition_file() {
     HMODULE self = nullptr;
     wchar_t dll[MAX_PATH]{};
@@ -83,15 +119,14 @@ bool write_definition_file() {
     std::wstring dir(dll);
     dir = dir.substr(0, dir.find_last_of(L"\\/"));      // ...\AnyAPI and Modding\mods
     dir = dir.substr(0, dir.find_last_of(L"\\/"));      // ...\AnyAPI and Modding
+    std::wstring game_dir = dir.substr(0, dir.find_last_of(L"\\/"));
+    std::string mesh = build_mesh(game_dir);
     dir += L"\\AnyGPS";
     CreateDirectoryW(dir.c_str(), nullptr);
     std::wstring file = dir + L"\\gps_sensor.json";
-    std::string json = definition_json();
-    HANDLE h = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (h == INVALID_HANDLE_VALUE) return false;
-    DWORD written = 0;
-    bool ok = WriteFile(h, json.data(), DWORD(json.size()), &written, nullptr) && written == json.size();
-    CloseHandle(h);
+    std::string json = definition_json(mesh);
+    bool ok = write_file(file, json.data(), json.size());
+    log(0, "GPS Sensor mesh: %s", mesh.c_str());
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
     if (n > 1) WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, g_json_path.data(), n, nullptr, nullptr);
@@ -171,9 +206,11 @@ void hk_tick(uint8_t* sensor, void* vehicle, void* scene) {
     bool was_known = s.sign_known;
     tick(s, world, north, now_seconds());
     static std::atomic<int> logs{4};
-    if (logs.fetch_sub(1) > 0)
-        log(0, "GPS sensor at (%.1f, %.1f, %.1f) heading %.1f pitch %.1f roll %.1f speed %.2f m/s", s.slots[kX], s.slots[kY], s.slots[kZ],
-            s.slots[kHeading], s.slots[kPitch], s.slots[kRoll], s.slots[kSpeedMs]);
+    if (logs.fetch_sub(1) > 0) {
+        auto* lvl = static_cast<uint8_t*>(scene) + off::scene_loot_level;
+        log(0, "GPS sensor at (%.1f, %.1f, %.1f) heading %.1f pitch %.1f roll %.1f speed %.2f m/s, world loot level %d", s.slots[kX], s.slots[kY], s.slots[kZ],
+            s.slots[kHeading], s.slots[kPitch], s.slots[kRoll], s.slots[kSpeedMs], scene && anymaker::readable(lvl, 4) ? *reinterpret_cast<int32_t*>(lvl) : -1);
+    }
     if (!was_known && s.sign_known) log(0, "heading direction calibrated (sign %+.0f)", s.sign);
 }
 
@@ -188,6 +225,22 @@ void hk_get_f64(double** ret, uint8_t* sensor, const anymaker::gc_string_view* n
     *ret = &g_sensors[sensor].slots[i];
     static std::atomic<int> logs{8};
     if (logs.fetch_sub(1) > 0) log(0, "data channel %s connected", kChannels[i].name);
+}
+
+// ================================================================== loot level (diagnostic: which loot level each bunker sets)
+using set_loot_level_t = void (*)(void* scene, const int32_t* level);
+using complete_dungeon_t = void (*)(void* manager, void* scene, const int32_t* dungeon);
+anymaker::cell_hook h_set_loot_level, h_complete_dungeon;
+void hk_set_loot_level(void* scene, const int32_t* level) {
+    int32_t before = scene && anymaker::readable(static_cast<uint8_t*>(scene) + off::scene_loot_level, 4) ? *reinterpret_cast<int32_t*>(static_cast<uint8_t*>(scene) + off::scene_loot_level) : -1;
+    reinterpret_cast<set_loot_level_t>(h_set_loot_level.original)(scene, level);
+    static std::atomic<int> logs{16};
+    if (logs.fetch_sub(1) > 0) log(0, "loot level %d -> %d", before, level ? *level : -1);
+}
+void hk_complete_dungeon(void* manager, void* scene, const int32_t* dungeon) {
+    static std::atomic<int> logs{16};
+    if (logs.fetch_sub(1) > 0) log(0, "bunker %d completed", dungeon ? *dungeon : -1);
+    reinterpret_cast<complete_dungeon_t>(h_complete_dungeon.original)(manager, scene, dungeon);
 }
 
 // ================================================================== install (background thread)
@@ -216,12 +269,18 @@ void install_hooks() {
         bool ok = h_tick.install(tick_cell, (void*)&hk_tick) && h_get_f64.install(get_cell, (void*)&hk_get_f64) &&
                   h_add_definitions.install(add, (void*)&hk_add_definitions);
         if (!ok) { log(2, "a hook cell was already taken or not writable; AnyGPS is off"); return; }
+        void** lootc = hook_cell(bind::server_set_loot_level);
+        void** dungeonc = hook_cell(bind::server_complete_dungeon);
+        if (!lootc || !h_set_loot_level.install(lootc, (void*)&hk_set_loot_level)) log(1, "loot level logging unavailable");
+        if (!dungeonc || !h_complete_dungeon.install(dungeonc, (void*)&hk_complete_dungeon)) log(1, "bunker logging unavailable");
         g_ready = true;
         log(0, "Ready after %d s. Load or start a world to add the GPS Sensor part (definition file %s).", attempt, g_json_path.c_str());
         return;
     }
 }
 void remove_hooks() {
+    h_complete_dungeon.remove((void*)&hk_complete_dungeon);
+    h_set_loot_level.remove((void*)&hk_set_loot_level);
     h_add_definitions.remove((void*)&hk_add_definitions);
     h_get_f64.remove((void*)&hk_get_f64);
     h_tick.remove((void*)&hk_tick);

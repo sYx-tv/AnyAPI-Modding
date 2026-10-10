@@ -7,6 +7,9 @@
 AnyGPS adds a new part, the **GPS Sensor**. It looks like the stock Compass Sensor (same mesh, size and data
 ports) and gives the data port and microcontroller everything a GPS needs.
 
+A yellow arrow on top of the part and a yellow triangle on its front face show its forward axis, the axis
+`heading` measures.
+
 ## Getting it
 
 - **Survival:** world loot from tech tier 4, the tier unlocked by the tier 3 bunker. It drops like the other
@@ -46,6 +49,9 @@ Speed and acceleration come from the block's movement, smoothed over about a qua
   is written to `AnyAPI and Modding/AnyGPS/gps_sensor.json` and added to the game's vehicle components right
   after the game adds its own, on both the server and the client scene. Its id is `gps_sensor`, class
   `compass_sensor`, `tech_tier` 4, category `sensor`.
+- The part's mesh is the stock compass mesh plus the yellow arrows, built at start-up from the game's own
+  `rom/meshes/components/compass_sensor_a.mesh` and written beside it as `anygps_gps_sensor_a.mesh`. If the
+  stock mesh is not in the expected format, the GPS Sensor uses the plain compass look.
 - The compass sensor's server tick and `get_data_f64` are hooked. Stock compass sensors are untouched; only parts
   with the `gps_sensor` definition get the extra channels.
 - Saves that contain a GPS Sensor need AnyGPS installed to load it.

@@ -8,6 +8,9 @@
 namespace anygps {
 
 constexpr const char* kDefinitionId = "gps_sensor";
+constexpr const char* kStockMeshPath = "meshes/components/compass_sensor_a.mesh";
+// The marked mesh (anygps_mesh.h) is written beside the stock one under rom/.
+constexpr const char* kGpsMeshPath = "meshes/components/anygps_gps_sensor_a.mesh";
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kMsToKmh = 3.6;
 
@@ -44,9 +47,10 @@ inline int channel_index(const char* name, size_t length) {
 
 // The new part: a copy of the stock compass sensor (same class, mesh, ports and size) with the GPS channels.
 // north_angle stays first so the stock compass behaviour keeps working on the same class.
+// mesh_path: the marked GPS mesh when it was built, else the stock compass mesh.
 // tech_tier 4: loot from the next tier after the tier 3 bunker. category "sensor": the sandbox/creative sensor
 // container. Edited by hand only together with the in-game test, see docs/mods/anygps.md.
-inline std::string definition_json() {
+inline std::string definition_json(const std::string& mesh_path = kStockMeshPath) {
     std::string descriptors = "{\"type\": \"type_f64_output\", \"name\": \"north_angle\"}";
     for (const auto& c : kChannels)
         descriptors += std::string(",\n        {\"type\": \"") + (c.input ? "type_f64_input" : "type_f64_output") + "\", \"name\": \"" + c.name + "\"}";
@@ -67,7 +71,7 @@ inline std::string definition_json() {
         {"dir": 5, "gender": 2, "type": "port"}
       ],
       "logic_nodes": [],
-      "mesh_static": {"mesh_path": "meshes/components/compass_sensor_a.mesh"},
+      "mesh_static": {"mesh_path": ")" + mesh_path + R"("},
       "meshes_dynamic": [],
       "category": "sensor",
       "tags_generated": "port,",
