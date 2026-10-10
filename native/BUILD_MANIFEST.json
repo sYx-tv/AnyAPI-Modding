@@ -35,7 +35,7 @@
   "graphics_version": "0.29.0",
   "helpers_sha256": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c",
   "graphics_settings_acceptance": "USER_CONFIRMED_NATIVE_GRAPHICS_MENU",
-  "api_version": "0.35.0",
+  "api_version": "0.35.1",
   "status": "CANDIDATE: laptop build, ctest and in-game acceptance pending",
   "new_services": [
     "anyapi.scene_controls v1/v2",
