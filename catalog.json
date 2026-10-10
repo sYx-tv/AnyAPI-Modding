@@ -219,7 +219,7 @@
       "Name": "AnyBalance",
       "Version": "1.2.0",
       "Revision": 3,
-      "MinimumApi": 33,
+      "MinimumApi": 37,
       "Description": "Native centre of mass, including tank fluid, plus creation mass and size, with local balance offsets and bounds while the Properties Tool is equipped.",
       "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.1/AnyBalance-1.2.0.zip",
       "Sha256": "82363de728d9cefff7cfd0a3ff66b779b8348c0ae4e7acb01594222f4e47ccb8",
