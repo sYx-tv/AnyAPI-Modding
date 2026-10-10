@@ -184,13 +184,18 @@ def main():
             continue
         hits = [f for f in new_by_prefix.get(body[:16], []) if f.blob.startswith(body)] if len(body) >= 16 else \
                [f for f in prog.functions if f.code_end and f.blob.startswith(body)]
-        if hits:
-            row.update(status='unchanged', matches=len(hits), function=hits[0].sig if len(hits) == 1 else None)
-            report.append(row)
-            continue
         def prefix_of(f):
             sig = bytes.fromhex(f['code_signature'])
             return body.startswith(sig) or sig.startswith(body)
+        if hits:
+            row.update(status='unchanged', matches=len(hits), function=hits[0].sig if len(hits) == 1 else None)
+            # Same bytes, different function: the intended function changed and an old twin now matches.
+            was = {f['sig'] for f in old_by_prefix.get(body[:16], []) if prefix_of(f)} if len(body) >= 16 else set()
+            if was and not was & {f.sig for f in hits}:
+                row.update(status='changed', note='now matches %s; it used to match %s' % (
+                    row['function'] or '%d functions' % len(hits), ', '.join(sorted(was))))
+            report.append(row)
+            continue
         cands = [f for f in old_by_prefix.get(body[:16], []) if prefix_of(f)] or \
                 [f for f in old_with_sig if len(f['code_signature']) < 47 and prefix_of(f)]
         sigs = sorted({f['sig'] for f in cands})
