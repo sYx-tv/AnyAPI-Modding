@@ -5,21 +5,21 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.34.1",
-      "Revision": 35,
+      "Version": "0.35.0",
+      "Revision": 36,
       "MinimumApi": 0,
-      "Description": "Native mod framework with creation balance snapshots including tank fluid mass.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.34.1/AnyAPI-0.34.1.zip",
-      "Sha256": "3852f47c16b8728699fc487107fc140e3b7754750db3ff2df73519c60195b460",
+      "Description": "Native mod framework for Anymaker 0.1.24, with creation balance snapshots including tank fluid mass.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.0/AnyAPI-0.35.0.zip",
+      "Sha256": "e2fdd4b6809e3d4d5b9ef8674ef3f7400fa711453e6cd2e381ec33df2325ef04",
       "FileHashes": {
-        "dinput8.dll": "6fe12f7a02c3201f8fb9a76f3eafab0915f80270a7622bf048352a7c5b8a109f"
+        "dinput8.dll": "0df02a2d3382e1b2ac85d6ed6f6d78d5ecfe4538a7afd5befb8d0324739022f9"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.23",
-          "SteamBuild": 25755694,
-          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
-          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ]
     }
@@ -43,6 +43,12 @@
           "SteamBuild": 25755694,
           "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
           "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        },
+        {
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ]
     },
@@ -64,6 +70,12 @@
           "SteamBuild": 25755694,
           "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
           "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        },
+        {
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ]
     },
@@ -85,6 +97,12 @@
           "SteamBuild": 25755694,
           "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
           "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        },
+        {
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ]
     },
@@ -106,6 +124,12 @@
           "SteamBuild": 25755694,
           "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
           "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        },
+        {
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ]
     },
@@ -127,6 +151,12 @@
           "SteamBuild": 25755694,
           "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
           "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        },
+        {
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ]
     },
@@ -146,6 +176,12 @@
           "SteamBuild": 25755694,
           "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
           "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        },
+        {
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ],
       "Sha256": "8cc9f8d2642ded76e71ce704700673219ba3efd798b384e4024164d20c5e3fa8",
@@ -167,6 +203,12 @@
           "SteamBuild": 25755694,
           "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
           "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+        },
+        {
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ],
       "Sha256": "e10ec56dcbc9158a1318cdbed2ce8856cdc593287088344ce3cda2ed462fff3b",
@@ -196,21 +238,42 @@
     {
       "Id": "enginesound",
       "Name": "EngineSound",
-      "Version": "0.2.0",
-      "Revision": 1,
+      "Version": "0.2.1",
+      "Revision": 2,
       "MinimumApi": 34,
-      "Description": "Engine sound presets (Muscle V8, Built 2JZ, Powerstroke, Hemi and more) and a Custom sound tuner in the Properties Tool engine window, synced for every player in co-op. Uses the experimental SDK; Anymaker 0.1.23 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.09/EngineSound-0.2.0.zip",
-      "Sha256": "139defd5306ac4a1a7696aa5967704af9f58e050e76bcb93dd83673e57864cb6",
+      "Description": "Engine sound presets (Muscle V8, Built 2JZ, Powerstroke, Hemi and more) and a Custom sound tuner in the Properties Tool engine window, synced for every player in co-op. Uses the experimental SDK; Anymaker 0.1.24 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.0/EngineSound-0.2.1.zip",
+      "Sha256": "552a8f9cc0e70431b0738bf08e90a997b6f272325eba0f3b8d9d758c69565f14",
       "FileHashes": {
-        "AnyAPI and Modding/mods/EngineSound.dll": "a769527019003e96c3f92a19f9abb7480c1d20080a6b6a927238188de36f25b3"
+        "AnyAPI and Modding/mods/EngineSound.dll": "775bb45b51b8db591863a4a4d085c2d15b643d888bc41ed955182180a8aa81ff"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.23",
-          "SteamBuild": 25755694,
-          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
-          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+        }
+      ]
+    },
+    {
+      "Id": "anymirror",
+      "Name": "AnyMirror",
+      "Version": "1.0.0",
+      "Revision": 1,
+      "MinimumApi": 34,
+      "Description": "Mirrored edge building with either edge tool, a toggleable mirror wall and keybinds. Uses the experimental SDK; Anymaker 0.1.24 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.0/AnyMirror-1.0.0.zip",
+      "Sha256": "e9a581a9c5d315488cde0541c8f3349bc9ea8a7759acd02738547eb1e56fe8c3",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/AnyMirror.dll": "9adac0cd63c7e97798332b69ac483d05a45fb1c34f183689c8260e4cddd01aa8"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ]
     }
