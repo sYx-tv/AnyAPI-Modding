@@ -10,6 +10,7 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Contents | Evidence |
 | --- | --- | --- | --- | --- |
+| 2026-10-10 | [v0.35.2](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.35.2) | [0.35.2](release-0.35.2.md) | AnyAPI 0.35.2, fixes the crash when opening a container inventory on Anymaker 0.1.24 | |
 | 2026-10-10 | [v0.35.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.35.1) | [0.35.1](release-0.35.1.md) | AnyAPI 0.35.1 (AnyBalance fix for Anymaker 0.1.24), AnyBalance 1.2.0 | |
 | 2026-10-10 | [v0.35.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.35.0) | [0.35.0](release-0.35.0.md) | AnyAPI 0.35.0 for Anymaker 0.1.24, AnyMirror 1.0.0, EngineSound 0.2.1 | |
 | 2026-10-09 | [v0.34.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.34.1) | [0.34.1](release-0.34.1.md) | AnyAPI 0.34.1, quick wheel fix for full hotbars after a world reload | |
