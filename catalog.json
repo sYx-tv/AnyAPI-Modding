@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.35.1",
-      "Revision": 37,
+      "Version": "0.35.2",
+      "Revision": 38,
       "MinimumApi": 0,
       "Description": "Native mod framework for Anymaker 0.1.24, with creation balance snapshots including tank fluid mass.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.1/AnyAPI-0.35.1.zip",
-      "Sha256": "223ffa52de741d1fa6f79c01e85d980fc40993822cd87293cd2a847b8cb7c6d5",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.2/AnyAPI-0.35.2.zip",
+      "Sha256": "cf84c60c9fd3025b700fccf8e163eedbce6ca7a1cf1756d40436f4a5494b942e",
       "FileHashes": {
-        "dinput8.dll": "9ad7519328a7a8c5bd2124801d9c1fdfc9155829ddeba08de8c3a0434eec1a90"
+        "dinput8.dll": "cf104ea4a82b1d45895d2dc9572a6ccd6fa5a99b627d029f8a9f4fcde9a1c1ec"
       },
       "GameBuilds": [
         {
