@@ -50,7 +50,7 @@ installation is needed to build and test game-dependent features.
 | AnyGraphics | 0.29.3 | API 0.32.0 |
 | AnyClock | 1.0.0 | API 0.30.0 |
 | AnyQuickWheel | 1.1.0 | API 0.31.0 |
-| AnyBalance | 1.2.0 | API 0.33.0 (fluid mass: 0.34.0) |
+| AnyBalance | 1.1.0 | API 0.33.0 (fluid mass: 0.34.0); Anymaker 0.1.23 only for now |
 | EngineSound | 0.2.1 | API 0.34.0 |
 | AnyMirror | 1.0.0 | API 0.34.0 |
 | AnyAPI Manager | 1.4.0 | Windows x64 |
@@ -64,8 +64,8 @@ centre-of-mass display; both were confirmed in game before release on 8 October 
 [EngineSound 0.2.0](docs/mods/engine-sound.md) adds engine sound presets and a Custom sound tuner
 to the Properties Tool, confirmed in game before release on 9 October 2026.
 
-AnyAPI 0.35.0 ports the API to Anymaker 0.1.24 ([release notes](docs/releases/release-0.35.0.md)), with EngineSound 0.2.1,
-[AnyMirror 1.0.0](docs/mods/mirror.md) and [AnyBalance 1.2.0](docs/mods/balance.md) (creation size on its card).
+AnyAPI 0.35.0 ports the API to Anymaker 0.1.24 ([release notes](docs/releases/release-0.35.0.md)), with EngineSound 0.2.1
+and [AnyMirror 1.0.0](docs/mods/mirror.md). AnyBalance does not work on 0.1.24 yet; a fix follows.
 
 AnyAPI 0.34.1 fixes the [quick wheel](docs/mods/quick-wheel.md) refusing to equip tools after a world reload when every hotbar slot was full; confirmed in game before release on 9 October 2026.
 
