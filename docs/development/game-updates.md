@@ -66,7 +66,7 @@ Open `<work>/audit/pattern_audit.md`. Each pattern has one state:
 | refreshable | Same code; only pool displacements moved | Applied by the script |
 | shifted | Same instruction layout, so return-address and call-site offsets hold; struct, stack or enum numbers changed | Applied by the script. Check each **offset hint**: our code may hard-code one of the old numbers. Most hints are coincidences (UI sizes, colours) |
 | resized | Same code, different size | Bytes applied. Every `code_end`-relative offset used with it (dependency cells `code_end + 8*index`, `*_END`) must move by the size change |
-| changed | Instructions or dependencies changed | Read `<work>/audit/diffs/`; re-derive the pattern and any offsets from the new function |
+| changed | Instructions or dependencies changed, or the old bytes now match a different function (the note names both) | Read `<work>/audit/diffs/`; re-derive the pattern and any offsets from the new function |
 | moved | `game.exe` code at a new RVA | Update the `*_RVA` constant after confirming the function |
 | stale | Did not match the previous build either | Nothing new; legacy telemetry |
 | missing | Not found, no previous function identified | Usually stale; check the name |
@@ -80,6 +80,9 @@ Then check these, which the audit cannot see:
   `client` after offset 3768, `client_scene.actor_character` after 5088,
   `main_menu`, gamepad data and creatures. None of AnyAPI's or the mods' offsets fell
   in the moved ranges.
+- **Twin functions.** Identical editor-tool functions can diverge by a byte between builds. In
+  0.1.24 AnyBalance's `HOVER_OVERLAY` bytes went on matching the microcontroller tool instead
+  of the Properties tool, so the API hooked the wrong tool; the audit now reports that as `changed`.
 - **Enum values** the mods hard-code (`e_localization_string`, `e_audio_effect`): check
   them in the new `json/types.json`.
 - **`game.exe` addresses** that are not byte patterns, such as the graphics context
