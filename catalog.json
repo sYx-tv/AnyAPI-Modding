@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.35.0",
-      "Revision": 36,
+      "Version": "0.35.1",
+      "Revision": 37,
       "MinimumApi": 0,
       "Description": "Native mod framework for Anymaker 0.1.24, with creation balance snapshots including tank fluid mass.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.0/AnyAPI-0.35.0.zip",
-      "Sha256": "e2fdd4b6809e3d4d5b9ef8674ef3f7400fa711453e6cd2e381ec33df2325ef04",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.1/AnyAPI-0.35.1.zip",
+      "Sha256": "223ffa52de741d1fa6f79c01e85d980fc40993822cd87293cd2a847b8cb7c6d5",
       "FileHashes": {
-        "dinput8.dll": "0df02a2d3382e1b2ac85d6ed6f6d78d5ecfe4538a7afd5befb8d0324739022f9"
+        "dinput8.dll": "9ad7519328a7a8c5bd2124801d9c1fdfc9155829ddeba08de8c3a0434eec1a90"
       },
       "GameBuilds": [
         {
@@ -217,21 +217,21 @@
     {
       "Id": "anybalance",
       "Name": "AnyBalance",
-      "Version": "1.1.0",
-      "Revision": 2,
+      "Version": "1.2.0",
+      "Revision": 3,
       "MinimumApi": 33,
-      "Description": "Native centre of mass, including tank fluid, with local balance offsets and bounds while the Properties Tool is equipped.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.34.0/AnyBalance-1.1.0.zip",
-      "Sha256": "8859b83f2246d55a91197dec754d194c19a30e3ada06e0fdcfb4fda0b88ac7f8",
+      "Description": "Native centre of mass, including tank fluid, plus creation mass and size, with local balance offsets and bounds while the Properties Tool is equipped.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.1/AnyBalance-1.2.0.zip",
+      "Sha256": "82363de728d9cefff7cfd0a3ff66b779b8348c0ae4e7acb01594222f4e47ccb8",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyBalance.dll": "30ac9715c499aab285eb5b795c4e1ad82cc54214a1a868fe494e4452e0b2ab76"
+        "AnyAPI and Modding/mods/AnyBalance.dll": "7531aa92dc440851dc43a1a45a06ff3a3efb443c65ddc17351d9a5d5597b6f7d"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.23",
-          "SteamBuild": 25755694,
-          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
-          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ]
     },
