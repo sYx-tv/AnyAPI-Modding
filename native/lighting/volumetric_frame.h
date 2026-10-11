@@ -18,6 +18,12 @@ struct Frame {
  // shadow slot/depth mode/intensity/reserved. All positions graphics-relative.
  std::array<std::array<float,16>,8> lights{};
  float local_shadow_count{};
+ // Matrix texture rows 20-21. Row 20: previous camera position relative to
+ // this frame's origin + history valid, previous right/up (w: half-FOV
+ // tangent) and forward (w: frame index). Row 21: clarity, beam reach,
+ // sun-height response, temporal; history read selector, history weight.
+ // All zero keeps the original single-frame scattering.
+ std::array<std::array<float,16>,2> temporal{};
 };
 static_assert(offsetof(Frame,additional_shadows)==56*4);
 inline bool valid(const Frame& f){
@@ -25,6 +31,10 @@ inline bool valid(const Frame& f){
  auto unit=[](const std::array<float,4>& v){float n=v[0]*v[0]+v[1]*v[1]+v[2]*v[2];return n>.99f&&n<1.01f;};
  if(f.local_shadow_count!=std::floor(f.local_shadow_count)||f.fog_color[3]!=std::floor(f.fog_color[3]))return false;
  for(unsigned i=0;i<unsigned(std::clamp(f.fog_color[3],0.f,8.f));++i){auto& l=f.lights[i];if(l[3]<=.01f||l[3]>2000||l[8]<0||l[9]<0||l[10]<0)return false;if(l[11]!=0&&l[11]!=1)return false;if(l[11]){float n=l[4]*l[4]+l[5]*l[5]+l[6]*l[6];if(n<.99f||n>1.01f||l[7]<0||l[7]>=1)return false;}if(l[12]!=-1&&(l[12]<8||l[12]>=8+f.local_shadow_count||l[12]!=std::floor(l[12])||(l[13]!=1&&l[13]!=2)))return false;}
+ auto& t=f.temporal;
+ if(t[0][3]!=0&&t[0][3]!=1)return false;
+ if(t[0][3]==1){auto axis=[&](size_t at){float n=t[0][at]*t[0][at]+t[0][at+1]*t[0][at+1]+t[0][at+2]*t[0][at+2];return n>.99f&&n<1.01f;};if(!axis(4)||!axis(8)||!axis(12)||t[0][7]<=0||t[0][7]>=10||t[0][11]<=0||t[0][11]>=10)return false;}
+ if(t[1][0]<0||t[1][0]>1||t[1][1]<0||t[1][1]>2000||(t[1][2]!=0&&t[1][2]!=1)||(t[1][3]!=0&&t[1][3]!=1)||(t[1][4]!=0&&t[1][4]!=1)||t[1][5]<0||t[1][5]>.98f)return false;
  return f.local_shadow_count>=0&&f.local_shadow_count<=4&&f.fog_color[3]>=0&&f.fog_color[3]<=8&&f.sun_color[3]>=0&&f.sun_color[3]<=15&&f.forward[3]>=1&&f.forward[3]<=8&&f.forward[3]==std::floor(f.forward[3])&&unit(f.right)&&unit(f.up)&&unit(f.forward)&&unit(f.sun)&&f.right[3]>0&&f.right[3]<10&&f.up[3]>0&&f.up[3]<10&&f.medium[0]>=0&&f.medium[0]<=.1f&&f.medium[2]>=0&&f.medium[2]<=1&&std::abs(f.medium[3])<=.8f&&f.controls[0]>=8&&f.controls[0]<=64&&f.controls[1]>0&&f.controls[1]<=2000&&f.controls[2]>=0&&f.controls[2]<=15&&f.controls[3]>=0&&f.controls[3]<=2&&std::abs(f.projection[0]*f.projection[3]-f.projection[1]*f.projection[2])>1e-8f;
 }
 }

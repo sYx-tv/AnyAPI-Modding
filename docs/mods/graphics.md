@@ -1,13 +1,42 @@
 # AnyGraphics
 
 AnyGraphics is a native graphics mod for Anymaker 0.1.24. The current release is
-**0.29.3**, which requires **AnyAPI 0.32.0**. Its controls live inside
+**0.30.0**, which needs **AnyAPI 0.36.0** for TAA, sharpening, beam shaping,
+tone mapping and colour looks, and the GPU cost readout (older APIs keep the 0.29 feature set; TAA choices
+fall back to SMAA). Its controls live inside
 Settings → Graphics, in the scrolling **AnyGraphics · Modded** section. It does
 not require AnyHelpers.
 
 The menu and native controls arrived in 0.28.0, volumetric lighting in 0.29.0,
 fog-independent light beams in 0.29.1 (with API 0.32.0), and bounded retries for
-rejected settings in 0.29.3. See the [release records](../releases/README.md).
+rejected settings in 0.29.3. 0.30.0 fixes foggy sun shafts and adds TAA,
+sharpening, tone mapping and colour looks, a Cinematic preset and a GPU cost
+readout. See the
+[release records](../releases/README.md).
+
+## Tone mapping and colour (0.30.0)
+
+The **Finish** rows grade the HDR scene before the game's tone mapping, using
+[scene effects](../api/scene-effects.md):
+
+- **Tone mapping**: Off (game look), Game curve, Filmic (AgX-style, keeps
+  colour in bright light) or Clean (bright and true to the game's colours).
+  Anything but Off also replaces the game's bloom, so the Bloom row there
+  takes over and the native Bloom row is hidden.
+- **Colour look**: None, Warm, Cool, Teal & orange, Moody or Vivid (the
+  shader-pack look), with **Look strength** Subtle, Normal or Strong.
+- **Eye adaptation**: brightens caves and tunnels and dims bright views for a
+  moment, then returns to the game's own day and night brightness.
+- **Brightness (stops)**, **Bloom**, **Sun glare** and **Vignette**.
+
+Presets use Filmic from Low up and add Vivid from Ultra; Cinematic applies it
+at Strong with strong bloom and a light vignette.
+
+**Detailed shading** (Off, Low, Medium or High, next to Ambient occlusion)
+replaces the game's ambient occlusion with softer, deeper contact shading in
+corners, under parts and between blocks. It only darkens ambient light, never
+sunlight, and is hidden while Ambient occlusion is forced off. Presets use it
+from Medium up.
 
 ## Controls
 
@@ -27,7 +56,7 @@ setting. These levels change native intensity inputs; they are not separate
 shadow-map or SSAO sampling-quality modes. Shadows, ambient occlusion and fog
 blur retain the game's actual on/off capability.
 
-Presets are **Off / Performance / Low / Medium / High / Ultra**. Choosing a
+Presets are **Off / Performance / Low / Medium / High / Ultra / Cinematic**. Choosing a
 profile stages a group of settings; individual choices may then be changed.
 Off bypasses overrides and restores the game's own values. Medium is the
 initial profile. Advanced options reveals sunlight, sky and ambient strength,
@@ -35,25 +64,25 @@ plus native Cloud rendering, Grass rendering and Foliage rendering switches.
 Each detail switch offers Game setting / Off / On and changes rendering only;
 world objects and collision remain intact. Numeric controls are hidden.
 
-| Preset | Native settings |
-| --- | --- |
-| Off | Game settings; no native overrides |
-| Performance | FXAA on; SSAO, shadows, fog blur, bloom, base fog, clouds and grass off |
-| Low | Shadows on, low bloom/base fog; SSAO, fog blur and grass off |
-| Medium | Native effects on; medium bloom/base fog |
-| High | Native effects on; high bloom/base fog |
-| Ultra | Native effects on; strongest supplied bloom/base fog |
+| Preset | Native settings | Antialiasing |
+| --- | --- | --- |
+| Off | Game settings; no native overrides | Game setting |
+| Performance | SSAO, shadows, fog blur, bloom, base fog, clouds and grass off | FXAA |
+| Low | Shadows on, low bloom/base fog; SSAO, fog blur and grass off | SMAA Medium |
+| Medium | Native effects on; medium bloom/base fog | SMAA High |
+| High | Native effects on; high bloom, medium base fog | TAA High, sharpening Low |
+| Ultra | Native effects on; ultra bloom, high base fog | TAA + jitter Ultra, sharpening Low |
+| Cinematic | As Ultra, with stronger beams and local lights | TAA + jitter Ultra, sharpening Medium |
 
 High and Ultra do not claim greater texture resolution or sample counts.
 
 Performance is a combination of settings, not a measured FPS guarantee.
 Native bloom is part of the game's own render pipeline. AnyGraphics registers
 no finished-screen filter passes. SMAA copies scene colour before HUD drawing
-for its three AA passes.
-Sharpening, supplemental smoothing, colour filters, tone curves, grain,
-vignette, chromatic separation and split comparison have been removed.
-Antialiasing choices are native FXAA, SMAA 1x and Enhanced SMAA. TAA, MSAA
-and DLSS are not implemented.
+for its AA passes.
+Colour filters, tone curves, grain, vignette, chromatic separation and split
+comparison have been removed. Antialiasing choices are native FXAA, SMAA 1x,
+Enhanced SMAA, TAA and TAA + jitter. MSAA and DLSS are not implemented.
 
 ## Apply and persistence
 
@@ -87,7 +116,25 @@ the HUD, preserving UI sharpness. The game-bound visual/FPS check is pending;
 automated GPU smoothing and HUD restoration tests pass. Unsupported bindings
 bypass rather than falling back to a finished-screen filter.
 
-See [Scene AA development](../development/scene-antialiasing.md).
+Since 0.30.0 (AnyAPI 0.36.0) two more choices appear:
+
+- **TAA (scene)** blends each SMAA frame with recent frames, reprojected
+  through scene depth and the camera. It stops the shimmer and crawling on
+  foliage, wires and thin edges. Pixels that moved relative to the camera fall
+  back to the current frame, so fast objects do not smear. Your own vehicle,
+  which moves with the camera, stays stable.
+- **TAA + jitter (scene, smoothest)** also moves the camera by a fraction of a
+  pixel each frame, so edges settle into a supersampled look. It can trail
+  slightly behind fast motion.
+
+**AA quality** sets SMAA's edge search and, with TAA, how much of the previous
+frames is kept. **Sharpening** (Off / Low / Medium / High) restores detail
+softened by AA. It is contrast-adaptive, so flat areas and hard edges are left
+alone, and it runs before the HUD. **Show GPU cost** adds a line with the GPU
+time of volumetric lighting and scene AA, plus the frame rate.
+
+See [Scene AA development](../development/scene-antialiasing.md) and
+[Scene antialiasing](../api/scene-antialiasing.md).
 
 ## Volumetric lighting
 
@@ -97,5 +144,14 @@ torches and other native point/spot lights participate. Fog, beam strengths,
 beam focus, sampling quality and local-light budgets are editable in Graphics.
 Performance disables the added lighting; Low through Ultra progressively add
 beams, fog and higher sampling budgets. Off restores game settings.
+
+Version 0.30.0 fixes sun shafts looking like thick fog. Light now gathers
+where it breaks through gaps (trees, windows, terrain) instead of lighting all
+air out to 500 m. **Haze between beams** chooses Clear, Light (default),
+Natural or Classic (the original look). **Beam reach** stops distant air from
+piling up into haze. **Follow sun height** makes beams strongest and warm at
+sunrise and sunset, subtle at noon, and off at night. **Smooth beams and fog**
+blends recent frames to remove banding and noise, so lower sample counts look
+clean.
 
 See [Scene lighting](../scene-lighting.md) for preset values, the API and limits.

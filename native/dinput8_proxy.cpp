@@ -5252,6 +5252,8 @@ static DWORD WINAPI framework_runtime_thread(void*) {
 #include "anyapi_screen_layout.inc"
 #include "anyapi_scene_antialiasing.inc"
 #include "anyapi_scene_lighting.inc"
+#include "anyapi_scene_effects.inc"
+#include "anyapi_scene_ao.inc"
 static void anyapi_creation_balance_render_camera(void*);
 #include "anyapi_scene_controls.inc"
 #include "anyapi_world_time.inc"

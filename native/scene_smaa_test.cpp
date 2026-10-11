@@ -12,7 +12,7 @@ using Microsoft::WRL::ComPtr;
 int wmain(int argc,wchar_t** argv){assert(argc==2||argc==3);unsigned kernels{};std::ofstream output;if(argc==3){output.open(argv[2],std::ios::binary);assert(output);output<<"#pragma once\nnamespace scene_smaa_bytecode {\n";}unsigned quality=0;
  for(auto preset:{"SMAA_PRESET_LOW","SMAA_PRESET_MEDIUM","SMAA_PRESET_HIGH","SMAA_PRESET_ULTRA"}){
   D3D_SHADER_MACRO macros[]={{preset,"1"},{nullptr,nullptr}};
-  for(auto entry:{"Vertex","Edges","Weights","Resolve"}){
+  for(auto entry:{"Vertex","Edges","Weights","Resolve","Temporal","Output"}){
    ComPtr<ID3DBlob> code,errors;auto hr=D3DCompileFromFile(argv[1],macros,D3D_COMPILE_STANDARD_FILE_INCLUDE,entry,entry[0]=='V'?"vs_5_0":"ps_5_0",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
    if(FAILED(hr)){if(errors)std::cerr.write((char*)errors->GetBufferPointer(),errors->GetBufferSize());return 1;}
    assert(code&&code->GetBufferSize()>32);++kernels;
@@ -24,5 +24,5 @@ int wmain(int argc,wchar_t** argv){assert(argc==2||argc==3);unsigned kernels{};s
  }
  if(output)output<<"}\n";
  assert(sizeof(areaTexBytes)==AREATEX_SIZE&&sizeof(searchTexBytes)==SEARCHTEX_SIZE);
- std::cout<<"PASS: official SMAA 1x vertex/edge/weight/resolve kernels compile for Low, Medium, High and Ultra; complete lookup tables. Kernels="<<kernels<<"\n";
+ std::cout<<"PASS: official SMAA 1x vertex/edge/weight/resolve plus temporal and output kernels compile for Low, Medium, High and Ultra; complete lookup tables. Kernels="<<kernels<<"\n";
 }

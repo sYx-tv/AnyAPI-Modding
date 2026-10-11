@@ -1,5 +1,5 @@
 {
-  "revision": 36,
+  "revision": 39,
   "date": "2026-10-09",
   "game_version": "0.1.24",
   "steam_build_id": 25826614,
@@ -8,7 +8,7 @@
     "game.exe": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
     "bin/game.gcl": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
   },
-  "tests_passed": 52,
+  "tests_passed": 59,
   "mods": [
     "AnyHelpers",
     "AnyMap",
@@ -31,16 +31,18 @@
   "map_sha256": "faf0174ae46cc055a8e170d8e2064055b0890b01722d1a89cc74535368b4ec0a",
   "graphics_sha256": "ef57af5842ad2af12e9e40bd4c7c34a02da0521d32ed662558eea824803caf53",
   "graphics_gameplay_acceptance": "USER_CONFIRMED fog, sun shafts, local lights and preset update; publication authorized",
-  "graphics_gpu_performance": "PENDING: native-world measurements",
-  "graphics_version": "0.29.0",
+  "graphics_gpu_performance": "PENDING: 0.30.0 adds an in-menu GPU cost readout; native-world measurements pending",
+  "graphics_version": "0.30.0",
   "helpers_sha256": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c",
   "graphics_settings_acceptance": "USER_CONFIRMED_NATIVE_GRAPHICS_MENU",
-  "api_version": "0.35.2",
+  "api_version": "0.36.0",
   "status": "CANDIDATE: laptop build, ctest and in-game acceptance pending",
   "new_services": [
     "anyapi.scene_controls v1/v2",
-    "anyapi.scene_antialiasing v1",
-    "anyapi.scene_lighting v1/v2",
+    "anyapi.scene_antialiasing v1/v2",
+    "anyapi.scene_timing v1",
+    "anyapi.scene_effects v1",
+    "anyapi.scene_lighting v1/v2/v3",
     "anyapi.world_time v1",
     "anyapi.equipment v1/v2",
     "anyapi.creation_balance v1"
@@ -54,7 +56,7 @@
     "AnyMap": "0.27.0",
     "AnyInventory": "0.27.0",
     "AnyStorage": "0.27.0",
-    "AnyGraphics": "0.29.0",
+    "AnyGraphics": "0.30.0",
     "AnyClock": "1.0.0",
     "AnyQuickWheel": "1.1.0",
     "AnyBalance": "1.0.0"

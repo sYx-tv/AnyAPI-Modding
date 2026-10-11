@@ -6,7 +6,9 @@
 #include <vector>
 namespace volumetric {
 struct NativeTarget {uintptr_t resource{};uint32_t state{},width{},height{},srv_format{},srv_dimension{};};
-struct NativeFrame {Frame gpu;NativeTarget color,depth,shadow;std::array<NativeTarget,12> cascades{};uint32_t shadow_count{},failure{};};
+// origin: graphics-relative positions plus origin give world positions; the
+// origin moves as the player travels, so temporal history must account for it.
+struct NativeFrame {Frame gpu;NativeTarget color,depth,shadow;std::array<NativeTarget,12> cascades{};uint32_t shadow_count{},failure{};double origin[3]{};};
 // Exact 0.1.24 contract: native ref<T> is control block then object pointer.
 // target+0x10 is the D3D12 resource, +0x28 its recorded state, +0x50 its SRV.
 template<class Read> bool target(uintptr_t object,NativeTarget& out,Read read){unsigned char data[0x60]{};if(!object||!read(object,data,sizeof(data)))return false;memcpy(&out.resource,data+0x10,8);memcpy(&out.state,data+0x28,4);memcpy(&out.width,data+0x34,4);memcpy(&out.height,data+0x38,4);memcpy(&out.srv_format,data+0x50,4);memcpy(&out.srv_dimension,data+0x54,4);return out.resource&&out.width>0&&out.width<=8192&&out.height>0&&out.height<=8192&&out.srv_dimension==4;}
@@ -21,7 +23,7 @@ template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,const AnySc
  if(!read(scene+0x608,&radii,8)||!read(scene+0x610,&cascade_count,4)||!read(scene+0x614,&cascade_stride,4)||!radii||cascade_stride!=8||!cascade_count||cascade_count>8||cascade_count>count||cascade_count>camera_count)return false;
  out.shadow_count=cascade_count;auto& f=out.gpu;double matrix[16]{},v[3]{},offset[3]{};auto vector=[&](uintptr_t addr,std::array<float,4>& destination){if(!read(addr,v,sizeof(v)))return false;for(size_t i=0;i<3;++i){if(!std::isfinite(v[i])||std::abs(v[i])>1e8)return false;destination[i]=float(v[i]);}return true;};
  out.failure=5;uintptr_t main=scene+0x20;if(!vector(main+0x108,f.camera)||!read(scene+8,offset,sizeof(offset))||!vector(main+0xa8,f.right)||!vector(main+0x90,f.up)||!vector(main+0x78,f.forward)||!vector(scene+0xa78,f.sun)||!vector(scene+0xaf0,f.sun_color)||!vector(scene+0xb08,f.fog_color)||!read(main+0x1a0,matrix,sizeof(matrix)))return false;
- out.failure=6;f.camera[3]=float(double(f.camera[1])+offset[1]);f.projection={float(matrix[10]),float(matrix[14]),float(matrix[11]),float(matrix[15])};if(std::abs(matrix[0])<1e-8||std::abs(matrix[5])<1e-8||std::abs(matrix[11])<.5||std::abs(matrix[15])>.001)return false;f.right[3]=float(1/std::abs(matrix[0]));f.up[3]=float(1/std::abs(matrix[5]));
+ out.failure=6;for(size_t i=0;i<3;++i)out.origin[i]=offset[i];f.camera[3]=float(double(f.camera[1])+offset[1]);f.projection={float(matrix[10]),float(matrix[14]),float(matrix[11]),float(matrix[15])};if(std::abs(matrix[0])<1e-8||std::abs(matrix[5])<1e-8||std::abs(matrix[11])<.5||std::abs(matrix[15])>.001)return false;f.right[3]=float(1/std::abs(matrix[0]));f.up[3]=float(1/std::abs(matrix[5]));
  // Native mat44 stores columns. row_major HLSL treats those columns as rows,
  // so mul(position, copied_matrix) is the native column-vector transform.
  out.failure=7;if(!read(cameras+0x220,matrix,sizeof(matrix)))return false;for(size_t i=0;i<16;++i)f.shadow[i]=float(matrix[i]);for(uint32_t c=0;c<cascade_count;++c){uintptr_t object{};double radius{};

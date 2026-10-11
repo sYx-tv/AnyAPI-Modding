@@ -38,7 +38,7 @@ static bool p27_build_matches() {
         auto& info = build_runtime::info;
         info.api_revision = 36;
         info.status = ok ? ANY_BUILD_MATCH : ANY_BUILD_MISMATCH;
-        strcpy_s(info.api_version, "0.35.2"); strcpy_s(info.game_version, "0.1.24");
+        strcpy_s(info.api_version, "0.36.0"); strcpy_s(info.game_version, "0.1.24");
         strcpy_s(info.steam_build, "25826614");
         strcpy_s(info.executable_sha256, exe.c_str()); strcpy_s(info.game_data_sha256, gcl.c_str());
     }
