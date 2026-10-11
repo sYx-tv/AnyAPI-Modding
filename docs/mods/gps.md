@@ -46,6 +46,12 @@ Positions are the GPS Sensor block's own world coordinates. **y is up**.
 
 Speed and acceleration come from the block's movement, smoothed over about a quarter of a second.
 
+## Help in the microcontroller
+
+While the microcontroller editor is open, a yellow **? GPS outputs** button sits in its top-right corner. Click it
+to list every channel above with a one-line explanation; click it again, click the ×, click elsewhere or press
+Esc to close the list. The button needs AnyAPI's GPU drawing service (`anyapi.gpu_draw`).
+
 ## How it works
 
 - The part definition is embedded in the DLL ([`gpspart_logic.h`](../../native/gpspart_logic.h)). At start-up it
@@ -55,6 +61,7 @@ Speed and acceleration come from the block's movement, smoothed over about a qua
 - The part's mesh is the stock compass mesh plus the yellow arrows, built at start-up from the game's own
   `rom/meshes/components/compass_sensor_a.mesh` and written beside it as `gpspart_gps_sensor_a.mesh`. If the
   stock mesh is not in the expected format, the GPS Sensor uses the plain compass look.
+- The help button is drawn over the editor while the game's microcontroller editor update runs (hooked).
 - The compass sensor's server tick and `get_data_f64` are hooked. Stock compass sensors are untouched; only parts
   with the `gps_sensor` definition get the extra channels.
 - Saves that contain a GPS Sensor need GpsPart installed to load it.

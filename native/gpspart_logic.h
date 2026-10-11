@@ -26,17 +26,33 @@ enum Channel {
     kChannelCount
 };
 constexpr int kFirstInput = kWaypointX;
-struct ChannelInfo { const char* name; bool input; };
+struct ChannelInfo { const char* name; bool input; const wchar_t* help; };
 inline constexpr ChannelInfo kChannels[kChannelCount] = {
-    {"x", false}, {"y", false}, {"z", false}, {"altitude", false},
-    {"heading", false}, {"pitch", false}, {"roll", false},
-    {"speed_ms", false}, {"speed_kmh", false}, {"ground_speed_ms", false}, {"ground_speed_kmh", false},
-    {"vertical_speed_ms", false}, {"vertical_speed_kmh", false},
-    {"acceleration_ms2", false}, {"acceleration_kmh_s", false},
-    {"waypoint_distance", false}, {"waypoint_horizontal_distance", false}, {"waypoint_bearing", false},
-    {"waypoint_relative_bearing", false}, {"waypoint_height_difference", false},
-    {"waypoint_x", true}, {"waypoint_y", true}, {"waypoint_z", true},
+    {"x", false, L"World position of the sensor along the map's x axis, in metres"},
+    {"y", false, L"Height of the sensor, in metres (same as altitude)"},
+    {"z", false, L"World position of the sensor along the map's z axis, in metres"},
+    {"altitude", false, L"Height of the sensor, in metres"},
+    {"heading", false, L"Compass direction the yellow arrow points, 0-360\u00b0"},
+    {"pitch", false, L"Nose up (+) or down (-) along the arrow, -90 to 90\u00b0"},
+    {"roll", false, L"Bank to the right (+) or left (-), -90 to 90\u00b0"},
+    {"speed_ms", false, L"Speed in any direction, in m/s"},
+    {"speed_kmh", false, L"Speed in any direction, in km/h"},
+    {"ground_speed_ms", false, L"Speed along the ground, ignoring climb, in m/s"},
+    {"ground_speed_kmh", false, L"Speed along the ground, ignoring climb, in km/h"},
+    {"vertical_speed_ms", false, L"Climbing (+) or falling (-) speed, in m/s"},
+    {"vertical_speed_kmh", false, L"Climbing (+) or falling (-) speed, in km/h"},
+    {"acceleration_ms2", false, L"Speeding up (+) or slowing down (-), in m/s per second"},
+    {"acceleration_kmh_s", false, L"Speeding up (+) or slowing down (-), in km/h per second"},
+    {"waypoint_distance", false, L"Straight-line distance to the waypoint, in metres"},
+    {"waypoint_horizontal_distance", false, L"Distance to the waypoint ignoring height, in metres"},
+    {"waypoint_bearing", false, L"Compass direction to the waypoint, 0-360\u00b0"},
+    {"waypoint_relative_bearing", false, L"Turn needed to face the waypoint, -180 to 180\u00b0 (+ is the way heading counts up)"},
+    {"waypoint_height_difference", false, L"How far the waypoint is above (+) or below (-) you, in metres"},
+    {"waypoint_x", true, L"Input: set the waypoint's x (copy x from a GPS at the spot)"},
+    {"waypoint_y", true, L"Input: set the waypoint's height"},
+    {"waypoint_z", true, L"Input: set the waypoint's z"},
 };
+constexpr const wchar_t* kNorthAngleHelp = L"Stock compass output: angle to north";
 inline int channel_index(const char* name, size_t length) {
     for (int i = 0; i < kChannelCount; ++i) {
         const char* n = kChannels[i].name;

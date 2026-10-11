@@ -1,5 +1,7 @@
 #include "../gpspart_logic.h"
 #include "../gpspart_mesh.h"
+#include "../gpspart_help.h"
+#include <cwchar>
 #include <cstring>
 #include <vector>
 #include <cassert>
@@ -61,4 +63,9 @@ int main(){
  auto bad=mf;bad[0]='x';assert(build_gps_mesh(bad,"x").empty());bad=mf;bad.pop_back();assert(build_gps_mesh(bad,"x").empty());
  // The definition points at whichever mesh was built.
  assert(definition_json(kGpsMeshPath).find(kGpsMeshPath)!=std::string::npos&&definition_json().find(kStockMeshPath)!=std::string::npos);
+ // Help panel: every channel is explained, and the button and panel fit on screen at common sizes.
+ for(auto& c:kChannels)assert(c.help&&std::wcslen(c.help)>10);
+ for(auto [w,h]:{std::pair{1280.f,720.f},{1920.f,1080.f},{2560.f,1440.f},{3840.f,2160.f}}){HelpLayout hl=help_layout(w,h);
+  assert(hl.button.x>0&&hl.button.x+hl.button.w<=w&&hl.panel.x>=0&&hl.panel.x+hl.panel.w<=w&&hl.panel.y+hl.panel.h<=h);
+  assert(hl.button.contains(hl.button.x+1,hl.button.y+1)&&!hl.button.contains(hl.button.x-1,hl.button.y+1)&&hl.panel.contains(hl.close.x+1,hl.close.y+1));}
  return 0;}
