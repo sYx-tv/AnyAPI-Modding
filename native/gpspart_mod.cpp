@@ -22,13 +22,17 @@
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
+#include "anyapi_gpu_draw_v1.h"
 #include "anyapi_experimental.hpp"
 #include "gpspart_bindings.h"
 #include "gpspart_logic.h"
+#include "gpspart_help.h"
 #include "gpspart_mesh.h"
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
+#include <cwchar>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -230,6 +234,87 @@ void hk_get_f64(double** ret, uint8_t* sensor, const anymaker::gc_string_view* n
     if (logs.fetch_sub(1) > 0) log(0, "data channel %s connected", kChannels[i].name);
 }
 
+// ================================================================== microcontroller help panel
+// frontend_ui_microcontroller.update_ui runs every client frame while the microcontroller editor is open, so a
+// recent call means the editor is on screen. The button and panel are drawn over it with anyapi.gpu_draw.
+using update_ui_t = void (*)(void*, void*, void*, void*, void*, void*, void*, void*);
+anymaker::cell_hook h_update_ui;
+std::atomic<double> g_editor_seen{-1e9};
+const AnyGpuDrawV1* gpu;
+std::mutex g_help_mutex;                               // input and render run on different threads
+bool g_help_open = false, g_help_escape_held = false;
+float g_frame_w = 0, g_frame_h = 0;
+
+void hk_update_ui(void* a, void* b, void* c, void* d, void* e, void* f, void* g, void* h) {
+    g_editor_seen = now_seconds();
+    reinterpret_cast<update_ui_t>(h_update_ui.original)(a, b, c, d, e, f, g, h);
+}
+bool editor_open() { return now_seconds() - g_editor_seen.load() < 0.3; }
+
+void draw_help(const AnyFrameV1* frame, void*) {
+    if (!frame || !gpu) return;
+    std::lock_guard lock(g_help_mutex);
+    g_frame_w = float(frame->width); g_frame_h = float(frame->height);
+    if (!editor_open()) { g_help_open = false; return; }
+    HelpLayout l = help_layout(g_frame_w, g_frame_h);
+    float s = l.s;
+    auto box = [&](const Box& b, uint32_t color, float radius, uint32_t flags = 0, float stroke = 1) {
+        AnyGpuCommandV1 c; c.kind = ANY_GPU_ROUND_RECT; c.rect[0] = b.x; c.rect[1] = b.y; c.rect[2] = b.w; c.rect[3] = b.h;
+        c.color = color; c.radius = radius; c.flags = flags; c.stroke = stroke; gpu->emit(&c);
+    };
+    auto text = [&](float x, float y, float w, float h, const wchar_t* t, float size, uint32_t color, uint32_t flags = 0) {
+        AnyGpuCommandV1 c; c.kind = ANY_GPU_TEXT; c.rect[0] = x; c.rect[1] = y; c.rect[2] = w; c.rect[3] = h;
+        c.text = t; c.text_length = uint32_t(wcslen(t)); c.font_size = size; c.color = color;
+        c.flags = flags | ANY_GPU_NOWRAP | ANY_GPU_VCENTER; gpu->emit(&c);
+    };
+    const uint32_t yellow = 0xffffc400, panel = 0xf0191f25, line = 0xff3a434d, light = 0xffe8ecef, dim = 0xffaab4bd;
+    box(l.button, g_help_open ? 0xff2b333b : panel, 6 * s);
+    box(l.button, yellow, 6 * s, ANY_GPU_STROKE, 1.5f * s);
+    text(l.button.x, l.button.y, l.button.w, l.button.h, L"?  GPS outputs", 15 * s, yellow, ANY_GPU_BOLD | ANY_GPU_CENTER);
+    if (!g_help_open) return;
+    box(l.panel, panel, 8 * s);
+    box(l.panel, line, 8 * s, ANY_GPU_STROKE, 1 * s);
+    float pad = 16 * s;
+    text(l.panel.x + pad, l.panel.y + 8 * s, l.panel.w - 2 * pad, 30 * s, L"GPS Sensor data channels", 18 * s, yellow, ANY_GPU_BOLD);
+    text(l.close.x, l.close.y, l.close.w, l.close.h, L"×", 20 * s, light, ANY_GPU_CENTER);
+    float font = std::min(14 * s, l.row_h * .72f);
+    for (int r = 0; r < kHelpRows; ++r) {
+        float y = l.rows_y + r * l.row_h;
+        if (r % 2) box({l.panel.x + 6 * s, y, l.panel.w - 12 * s, l.row_h}, 0x18ffffff, 3 * s);
+        std::wstring name = r == 0 ? L"north_angle" : std::wstring(kChannels[r - 1].name, kChannels[r - 1].name + strlen(kChannels[r - 1].name));
+        const wchar_t* help = r == 0 ? kNorthAngleHelp : kChannels[r - 1].help;
+        bool input = r > 0 && kChannels[r - 1].input;
+        text(l.panel.x + pad, y, l.name_w, l.row_h, name.c_str(), font, input ? 0xff7cc8ff : light, ANY_GPU_BOLD);
+        text(l.panel.x + pad + l.name_w, y, l.panel.w - 2 * pad - l.name_w, l.row_h, help, font, dim);
+    }
+    text(l.panel.x + pad, l.panel.y + l.panel.h - 30 * s, l.panel.w - 2 * pad, 26 * s,
+         L"Yellow arrow = forward. Blue rows are inputs; positions are world metres, y is up.", font, dim);
+}
+
+uint32_t help_input(const AnyInputV1* e, void*) {
+    if (!e || !gpu) return 0;
+    std::lock_guard lock(g_help_mutex);
+    if (e->kind == ANY_FOCUS_LOST) { g_help_escape_held = false; return 0; }
+    if (e->kind == ANY_KEY_UP && e->key == VK_ESCAPE && g_help_escape_held) { g_help_escape_held = false; return 1; }
+    if (!editor_open() || g_frame_h <= 0) return 0;
+    HelpLayout l = help_layout(g_frame_w, g_frame_h);
+    float x = float(e->x), y = float(e->y);
+    bool on_button = l.button.contains(x, y), on_panel = g_help_open && l.panel.contains(x, y);
+    switch (e->kind) {
+    case ANY_KEY_DOWN:
+        if (e->key == VK_ESCAPE && g_help_open) { g_help_open = false; g_help_escape_held = true; return 1; }
+        return 0;
+    case ANY_MOUSE_DOWN:
+        if (on_button) { if (e->button == 1) g_help_open = !g_help_open; return 1; }
+        if (on_panel) { if (e->button == 1 && l.close.contains(x, y)) g_help_open = false; return 1; }
+        if (g_help_open && e->button == 1) g_help_open = false;   // a click elsewhere closes it and reaches the editor
+        return 0;
+    case ANY_MOUSE_UP: case ANY_MOUSE_WHEEL: case ANY_MOUSE_MOVE:
+        return (on_button || on_panel) && e->kind != ANY_MOUSE_MOVE ? 1 : 0;
+    default: return 0;
+    }
+}
+
 // ================================================================== install (background thread)
 void install_hooks() {
     using namespace anymaker::experimental;
@@ -256,12 +341,16 @@ void install_hooks() {
         bool ok = h_tick.install(tick_cell, (void*)&hk_tick) && h_get_f64.install(get_cell, (void*)&hk_get_f64) &&
                   h_add_definitions.install(add, (void*)&hk_add_definitions);
         if (!ok) { log(2, "a hook cell was already taken or not writable; GpsPart is off"); return; }
+        void** ui_cell = hook_cell(bind::client_microcontroller_update_ui);
+        if (!ui_cell || !h_update_ui.install(ui_cell, (void*)&hk_update_ui)) log(1, "microcontroller help button unavailable (editor hook not found)");
+        else if (!gpu) log(1, "microcontroller help button unavailable (anyapi.gpu_draw missing)");
         g_ready = true;
         log(0, "Ready after %d s. Load or start a world to add the GPS Sensor part (definition file %s).", attempt, g_json_path.c_str());
         return;
     }
 }
 void remove_hooks() {
+    h_update_ui.remove((void*)&hk_update_ui);
     h_add_definitions.remove((void*)&hk_add_definitions);
     h_get_f64.remove((void*)&hk_get_f64);
     h_tick.remove((void*)&hk_tick);
@@ -272,10 +361,14 @@ void remove_hooks() {
 using namespace gpspart;
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyModCallbacksV1* out) {
     if (!h || !out || h->struct_size != sizeof(*h) || h->abi != ANYAPI_MOD_ABI || out->struct_size != sizeof(*out)) return false;
-    host = *h; out->id = kModId;
+    host = *h; out->id = kModId; out->input = help_input;
     out->shutdown = [](void*) { g_stop = true; remove_hooks(); };
     return true;
 }
 extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
+    if (auto services = AnyAPI_Services()) {
+        auto* g = static_cast<const AnyGpuDrawV1*>(services->query("anyapi.gpu_draw", 1));
+        if (g && g->struct_size == sizeof(*g) && g->version == 1 && g->emit && g->register_renderer && g->register_renderer(draw_help, nullptr)) gpu = g;
+    }
     std::thread(install_hooks).detach();   // resolving scans game memory; keep it off the loader and frame threads
 }
