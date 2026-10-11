@@ -48,8 +48,8 @@ inline int channel_index(const char* name, size_t length) {
 // The new part: a copy of the stock compass sensor (same class, mesh, ports and size) with the GPS channels.
 // north_angle stays first so the stock compass behaviour keeps working on the same class.
 // mesh_path: the marked GPS mesh when it was built, else the stock compass mesh.
-// tech_tier 4: loot from the next tier after the tier 3 bunker. category "sensor": the sandbox/creative sensor
-// container. Edited by hand only together with the in-game test, see docs/mods/anygps.md.
+// tech_tier 4: world loot from the moment the 3rd bunker's end sequence starts (loot level 1 + 3 bunkers). category "sensor": the sandbox/creative sensor
+// container. Edited by hand only together with the in-game test, see docs/mods/gps.md.
 inline std::string definition_json(const std::string& mesh_path = kStockMeshPath) {
     std::string descriptors = "{\"type\": \"type_f64_output\", \"name\": \"north_angle\"}";
     for (const auto& c : kChannels)

@@ -6,8 +6,11 @@
 // height difference to a waypoint. Inputs waypoint_x, waypoint_y and waypoint_z set the waypoint (world
 // coordinates). north_angle still works as on the compass.
 //
-// Getting it: the part is a vehicle component with tech_tier 4 (world loot after the tier 3 bunker) in the
-// "sensor" category (the sandbox and creative sensor container). Single player only for now: the definition
+// Getting it: the part is a vehicle component with tech_tier 4 in the
+// "sensor" category (the sandbox and creative sensor container). World loot spawns items whose tech_tier equals
+// the loot level being generated; a new world starts at loot level 1 and each bunker's end sequence
+// (dungeon_<n>_end_sequence -> dungeon_manager.complete_dungeon) raises it by one, so tier 4 loot starts
+// generating the moment the 3rd bunker is triggered to explode (game code, Anymaker 0.1.24). Single player only for now: the definition
 // is added on both the server and the client scene of this game, and every player would need the mod.
 //
 // How: the part definition is embedded below (anygps_logic.h), written to "AnyAPI and Modding/AnyGPS" and added
@@ -227,22 +230,6 @@ void hk_get_f64(double** ret, uint8_t* sensor, const anymaker::gc_string_view* n
     if (logs.fetch_sub(1) > 0) log(0, "data channel %s connected", kChannels[i].name);
 }
 
-// ================================================================== loot level (diagnostic: which loot level each bunker sets)
-using set_loot_level_t = void (*)(void* scene, const int32_t* level);
-using complete_dungeon_t = void (*)(void* manager, void* scene, const int32_t* dungeon);
-anymaker::cell_hook h_set_loot_level, h_complete_dungeon;
-void hk_set_loot_level(void* scene, const int32_t* level) {
-    int32_t before = scene && anymaker::readable(static_cast<uint8_t*>(scene) + off::scene_loot_level, 4) ? *reinterpret_cast<int32_t*>(static_cast<uint8_t*>(scene) + off::scene_loot_level) : -1;
-    reinterpret_cast<set_loot_level_t>(h_set_loot_level.original)(scene, level);
-    static std::atomic<int> logs{16};
-    if (logs.fetch_sub(1) > 0) log(0, "loot level %d -> %d", before, level ? *level : -1);
-}
-void hk_complete_dungeon(void* manager, void* scene, const int32_t* dungeon) {
-    static std::atomic<int> logs{16};
-    if (logs.fetch_sub(1) > 0) log(0, "bunker %d completed", dungeon ? *dungeon : -1);
-    reinterpret_cast<complete_dungeon_t>(h_complete_dungeon.original)(manager, scene, dungeon);
-}
-
 // ================================================================== install (background thread)
 void install_hooks() {
     using namespace anymaker::experimental;
@@ -269,18 +256,12 @@ void install_hooks() {
         bool ok = h_tick.install(tick_cell, (void*)&hk_tick) && h_get_f64.install(get_cell, (void*)&hk_get_f64) &&
                   h_add_definitions.install(add, (void*)&hk_add_definitions);
         if (!ok) { log(2, "a hook cell was already taken or not writable; AnyGPS is off"); return; }
-        void** lootc = hook_cell(bind::server_set_loot_level);
-        void** dungeonc = hook_cell(bind::server_complete_dungeon);
-        if (!lootc || !h_set_loot_level.install(lootc, (void*)&hk_set_loot_level)) log(1, "loot level logging unavailable");
-        if (!dungeonc || !h_complete_dungeon.install(dungeonc, (void*)&hk_complete_dungeon)) log(1, "bunker logging unavailable");
         g_ready = true;
         log(0, "Ready after %d s. Load or start a world to add the GPS Sensor part (definition file %s).", attempt, g_json_path.c_str());
         return;
     }
 }
 void remove_hooks() {
-    h_complete_dungeon.remove((void*)&hk_complete_dungeon);
-    h_set_loot_level.remove((void*)&hk_set_loot_level);
     h_add_definitions.remove((void*)&hk_add_definitions);
     h_get_f64.remove((void*)&hk_get_f64);
     h_tick.remove((void*)&hk_tick);

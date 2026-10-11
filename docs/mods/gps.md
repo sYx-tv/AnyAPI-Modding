@@ -12,9 +12,12 @@ A yellow arrow on top of the part and a yellow triangle on its front face show i
 
 ## Getting it
 
-- **Survival:** world loot from tech tier 4, the tier unlocked by the tier 3 bunker. It drops like the other
-  sensors (mechanical loot, 0.2 spawn probability). Buildings whose tier 4 loot was already generated before
-  you installed AnyGPS do not get it retroactively.
+- **Survival:** world loot as soon as the 3rd bunker is triggered to explode. The game spawns loot by tech tier:
+  a new world starts at loot level 1, and each bunker's end sequence raises the level by one and generates
+  that level's loot in loaded buildings (and in every building loaded later). The GPS Sensor is tech tier 4,
+  so it starts appearing with the 3rd bunker, like the other sensors (mechanical loot, 0.2 spawn probability).
+  If you were already past the 3rd bunker before installing AnyGPS, buildings you had loaded since then keep
+  their old loot.
 - **Sandbox and Creative:** in the sensor container with the other sensors.
 
 ## Data channels
