@@ -66,6 +66,9 @@ int main(){std::cout<<std::unitbuf;
   float classic=run(lit,100,.002f,0,48,64,48,reversed,false,false,false,1,.35f,0,4,0),clear=run(lit,100,.002f,0,48,64,48,reversed,false,false,false,1,.35f,0,4,1),light=run(lit,100,.002f,0,48,64,48,reversed,false,false,false,1,.35f,0,4,.85f);
   std::cout<<"Clarity classic="<<classic<<" light="<<light<<" clear="<<clear<<std::endl;assert(clear<light&&light<classic&&std::abs(clear-.05f)<.01f);
   assert(std::abs(run(dark,100,.002f,0,48,64,48,reversed,false,false,false,1,.35f,0,4,1)-.05f)<.001f);
+  // V3 lights the fog: sunlit fog is brighter than fog in shadow; V2 fog ignores shadow.
+  {float sunny=run(lit,100,.01f,1,48,64,48,reversed,false,false,false,1,.35f,0,0,1),shaded=run(dark,100,.01f,1,48,64,48,reversed,false,false,false,1,.35f,0,0,1),flat_lit=run(lit,100,.01f,1,48,64,48,reversed,false,false,false,1,.35f,0,0,0),flat_dark=run(dark,100,.01f,1,48,64,48,reversed,false,false,false,1,.35f,0,0,0);
+   std::cout<<"Fog light sunny="<<sunny<<" shaded="<<shaded<<std::endl;assert(sunny>shaded+.01f&&std::abs(flat_lit-flat_dark)<.002f);}
   float single=run(lit,100,.002f,0,48,64,48,reversed),smoothed=run(lit,100,.002f,0,48,64,48,reversed,false,false,false,1,.35f,0,4,0,true);
   std::cout<<"Temporal single="<<single<<" smoothed="<<smoothed<<std::endl;assert(std::isfinite(smoothed)&&std::abs(single-smoothed)<.02f);
  }

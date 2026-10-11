@@ -172,8 +172,13 @@ float4 Integrate(Varying v) : SV_Target {
         if(shape.y>0)beam_weight*=exp(-d/shape.y);
         float local_segment=exp(-.02*step);
         float local_weight=transmittance*local_transmittance*(1-local_segment);
-        beam_lit+=visibility(position)*beam_weight;beam_total+=beam_weight;
-        scattered+=fog_colour.rgb*fog_weight+local_illumination(position,ray)*local_weight;
+        float lit=visibility(position);
+        beam_lit+=lit*beam_weight;beam_total+=beam_weight;
+        // V3 lights the fog itself: shadowed air (under a canopy, behind a
+        // hill) is darker and sunlit air brighter, at the same average level.
+        // A flat fog colour read as an evenly milky wall.
+        float fog_light=shape.x>0?lerp(.45,1.35,lit):1;
+        scattered+=fog_colour.rgb*fog_weight*fog_light+local_illumination(position,ray)*local_weight;
         transmittance*=segment;beam_transmittance*=beam_segment;local_transmittance*=local_segment;
         if(transmittance<.001)break;
     }
