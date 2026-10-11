@@ -1,10 +1,10 @@
-# AnyGPS
+# GpsPart
 
-> AnyGPS hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
+> GpsPart hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.1.24 / Steam build 25826614 and turns itself off on any other build.
-> Prototype: not in the catalog yet. **Single player only** for now.
+> GpsPart 1.0.0 requires AnyAPI 0.35.0 or newer on that build; install it from the manager. **Single player only** for now.
 
-AnyGPS adds a new part, the **GPS Sensor**. It looks like the stock Compass Sensor (same mesh, size and data
+GpsPart adds a new part, the **GPS Sensor**. It looks like the stock Compass Sensor (same mesh, size and data
 ports) and gives the data port and microcontroller everything a GPS needs.
 
 A yellow arrow on top of the part and a yellow triangle on its front face show its forward axis, the axis
@@ -16,7 +16,7 @@ A yellow arrow on top of the part and a yellow triangle on its front face show i
   a new world starts at loot level 1, and each bunker's end sequence raises the level by one and generates
   that level's loot in loaded buildings (and in every building loaded later). The GPS Sensor is tech tier 4,
   so it starts appearing with the 3rd bunker, like the other sensors (mechanical loot, 0.2 spawn probability).
-  If you were already past the 3rd bunker before installing AnyGPS, buildings you had loaded since then keep
+  If you were already past the 3rd bunker before installing GpsPart, buildings you had loaded since then keep
   their old loot.
 - **Sandbox and Creative:** in the sensor container with the other sensors.
 
@@ -48,17 +48,17 @@ Speed and acceleration come from the block's movement, smoothed over about a qua
 
 ## How it works
 
-- The part definition is embedded in the DLL ([`anygps_logic.h`](../../native/anygps_logic.h)). At start-up it
-  is written to `AnyAPI and Modding/AnyGPS/gps_sensor.json` and added to the game's vehicle components right
+- The part definition is embedded in the DLL ([`gpspart_logic.h`](../../native/gpspart_logic.h)). At start-up it
+  is written to `AnyAPI and Modding/GpsPart/gps_sensor.json` and added to the game's vehicle components right
   after the game adds its own, on both the server and the client scene. Its id is `gps_sensor`, class
   `compass_sensor`, `tech_tier` 4, category `sensor`.
 - The part's mesh is the stock compass mesh plus the yellow arrows, built at start-up from the game's own
-  `rom/meshes/components/compass_sensor_a.mesh` and written beside it as `anygps_gps_sensor_a.mesh`. If the
+  `rom/meshes/components/compass_sensor_a.mesh` and written beside it as `gpspart_gps_sensor_a.mesh`. If the
   stock mesh is not in the expected format, the GPS Sensor uses the plain compass look.
 - The compass sensor's server tick and `get_data_f64` are hooked. Stock compass sensors are untouched; only parts
   with the `gps_sensor` definition get the extra channels.
-- Saves that contain a GPS Sensor need AnyGPS installed to load it.
+- Saves that contain a GPS Sensor need GpsPart installed to load it.
 
-Source: [`anygps_mod.cpp`](../../native/anygps_mod.cpp), bindings in
-[`anygps_bindings.h`](../../native/anygps_bindings.h), tests in
-[`tests/anygps_logic_test.cpp`](../../native/tests/anygps_logic_test.cpp).
+Source: [`gpspart_mod.cpp`](../../native/gpspart_mod.cpp), bindings in
+[`gpspart_bindings.h`](../../native/gpspart_bindings.h), tests in
+[`tests/gpspart_logic_test.cpp`](../../native/tests/gpspart_logic_test.cpp).

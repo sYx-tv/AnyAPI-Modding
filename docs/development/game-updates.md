@@ -47,7 +47,7 @@ Run it once without `--apply` to read the report, then again with `--apply` (add
    `--apply`, rewrites the ones that are safe to refresh;
 4. regenerates the legacy event-route offsets and dispatcher bytes
    ([`refresh_legacy_routes.py`](../../native/tools/refresh_legacy_routes.py));
-5. re-binds EngineSound, AnyMirror, AnyLights and AnyGPS from the new SDK
+5. re-binds EngineSound, AnyMirror, AnyLights and GpsPart from the new SDK
    ([`rebind_mod_bindings.py`](../../native/tools/rebind_mod_bindings.py));
 6. copies the generated SDK headers and system docs into `sdk/experimental/`;
 7. writes the build identity: `runtime_build_identity.h`, `runtime_build_guard.inc`,

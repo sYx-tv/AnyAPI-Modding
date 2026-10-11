@@ -1,4 +1,4 @@
-// AnyGPS (prototype): a new "GPS Sensor" part, built from the stock compass sensor (same class, mesh and ports).
+// GpsPart: a new "GPS Sensor" part, built from the stock compass sensor (same class, mesh and ports).
 //
 // Data port and microcontroller outputs: x, y, z (the part's world position, y is up), altitude, heading
 // (the stock compass north angle, 0-360), pitch, roll, speed / ground speed / vertical speed in m/s and km/h,
@@ -13,19 +13,19 @@
 // generating the moment the 3rd bunker is triggered to explode (game code, Anymaker 0.1.24). Single player only for now: the definition
 // is added on both the server and the client scene of this game, and every player would need the mod.
 //
-// How: the part definition is embedded below (anygps_logic.h), written to "AnyAPI and Modding/AnyGPS" and added
+// How: the part definition is embedded below (gpspart_logic.h), written to "AnyAPI and Modding/GpsPart" and added
 // to the game's vehicle component definitions right after the game adds its own. The compass sensor's server
 // tick and get_data_f64 are hooked; they only change anything for parts whose definition id is gps_sensor.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (anygps_bindings.h): Anymaker 0.1.24 /
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (gpspart_bindings.h): Anymaker 0.1.24 /
 // Steam build 25826614 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
 #include "anyapi_experimental.hpp"
-#include "anygps_bindings.h"
-#include "anygps_logic.h"
-#include "anygps_mesh.h"
+#include "gpspart_bindings.h"
+#include "gpspart_logic.h"
+#include "gpspart_mesh.h"
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
@@ -35,9 +35,9 @@
 #include <unordered_map>
 #include <vector>
 
-namespace anygps {
+namespace gpspart {
 namespace {
-constexpr const char* kModId = "anygps";
+constexpr const char* kModId = "gpspart";
 
 AnyModHostV1 host;
 std::atomic<bool> g_ready{false}, g_stop{false};
@@ -108,9 +108,9 @@ bool write_file(const std::wstring& path, const void* data, size_t size) {
 std::string build_mesh(const std::wstring& game_dir) {
     std::wstring components = game_dir + L"\\rom\\meshes\\components\\";
     std::vector<uint8_t> stock = read_file(components + L"compass_sensor_a.mesh");
-    std::vector<uint8_t> gps = build_gps_mesh(stock, "anygps_gps_sensor_a");
+    std::vector<uint8_t> gps = build_gps_mesh(stock, "gpspart_gps_sensor_a");
     if (gps.empty()) { log(1, "compass mesh not recognised (%zu bytes); the GPS Sensor uses the stock compass look", stock.size()); return kStockMeshPath; }
-    if (!write_file(components + L"anygps_gps_sensor_a.mesh", gps.data(), gps.size())) { log(1, "could not write the GPS Sensor mesh; using the stock compass look"); return kStockMeshPath; }
+    if (!write_file(components + L"gpspart_gps_sensor_a.mesh", gps.data(), gps.size())) { log(1, "could not write the GPS Sensor mesh; using the stock compass look"); return kStockMeshPath; }
     return kGpsMeshPath;
 }
 
@@ -124,7 +124,7 @@ bool write_definition_file() {
     dir = dir.substr(0, dir.find_last_of(L"\\/"));      // ...\AnyAPI and Modding
     std::wstring game_dir = dir.substr(0, dir.find_last_of(L"\\/"));
     std::string mesh = build_mesh(game_dir);
-    dir += L"\\AnyGPS";
+    dir += L"\\GpsPart";
     CreateDirectoryW(dir.c_str(), nullptr);
     std::wstring file = dir + L"\\gps_sensor.json";
     std::string json = definition_json(mesh);
@@ -235,7 +235,7 @@ void install_hooks() {
     using namespace anymaker::experimental;
     for (int attempt = 0; attempt < 180 && !g_stop; ++attempt) {
         if (attempt) Sleep(1000);
-        if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; AnyGPS stays off"); return; }
+        if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; GpsPart stays off"); return; }
         void** add = hook_cell(bind::definitions_add_definitions);
         void** tick_cell = hook_cell(bind::server_compass_tick);
         void** get_cell = hook_cell(bind::server_compass_get_data_f64);
@@ -251,11 +251,11 @@ void install_hooks() {
                     !!add, !!tick_cell, !!get_cell, !!ctor, !!dtor, !!load, !!vt, !!ct, !!sc);
             continue;
         }
-        if (!write_definition_file()) { log(2, "could not write the GPS Sensor definition file; AnyGPS is off"); return; }
+        if (!write_definition_file()) { log(2, "could not write the GPS Sensor definition file; GpsPart is off"); return; }
         g_file_ctor = ctor; g_file_dtor = dtor; g_file_load = load; g_vehicle_transform = vt; g_component_transform = ct; g_string_ctor = sc;
         bool ok = h_tick.install(tick_cell, (void*)&hk_tick) && h_get_f64.install(get_cell, (void*)&hk_get_f64) &&
                   h_add_definitions.install(add, (void*)&hk_add_definitions);
-        if (!ok) { log(2, "a hook cell was already taken or not writable; AnyGPS is off"); return; }
+        if (!ok) { log(2, "a hook cell was already taken or not writable; GpsPart is off"); return; }
         g_ready = true;
         log(0, "Ready after %d s. Load or start a world to add the GPS Sensor part (definition file %s).", attempt, g_json_path.c_str());
         return;
@@ -267,9 +267,9 @@ void remove_hooks() {
     h_tick.remove((void*)&hk_tick);
 }
 }  // namespace
-}  // namespace anygps
+}  // namespace gpspart
 
-using namespace anygps;
+using namespace gpspart;
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyModCallbacksV1* out) {
     if (!h || !out || h->struct_size != sizeof(*h) || h->abi != ANYAPI_MOD_ABI || out->struct_size != sizeof(*out)) return false;
     host = *h; out->id = kModId;

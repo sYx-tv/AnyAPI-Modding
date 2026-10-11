@@ -1,16 +1,16 @@
 #pragma once
-// AnyGPS pure logic: data channel table, the GPS sensor definition and the per-sensor maths.
-// No game or Windows dependencies, so tests/anygps_logic_test.cpp runs it on any platform.
+// GpsPart pure logic: data channel table, the GPS sensor definition and the per-sensor maths.
+// No game or Windows dependencies, so tests/gpspart_logic_test.cpp runs it on any platform.
 #include <cmath>
 #include <cstdint>
 #include <string>
 
-namespace anygps {
+namespace gpspart {
 
 constexpr const char* kDefinitionId = "gps_sensor";
 constexpr const char* kStockMeshPath = "meshes/components/compass_sensor_a.mesh";
-// The marked mesh (anygps_mesh.h) is written beside the stock one under rom/.
-constexpr const char* kGpsMeshPath = "meshes/components/anygps_gps_sensor_a.mesh";
+// The marked mesh (gpspart_mesh.h) is written beside the stock one under rom/.
+constexpr const char* kGpsMeshPath = "meshes/components/gpspart_gps_sensor_a.mesh";
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kMsToKmh = 3.6;
 
@@ -186,4 +186,4 @@ inline void tick(Sensor& s, const Mat34& world, double north, double now) {
     }
 }
 
-}  // namespace anygps
+}  // namespace gpspart

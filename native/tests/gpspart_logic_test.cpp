@@ -1,10 +1,10 @@
-#include "../anygps_logic.h"
-#include "../anygps_mesh.h"
+#include "../gpspart_logic.h"
+#include "../gpspart_mesh.h"
 #include <cstring>
 #include <vector>
 #include <cassert>
 #include <cmath>
-using namespace anygps;
+using namespace gpspart;
 static bool near(double a,double b,double e=1e-6){return std::abs(a-b)<e;}
 static Mat34 at(Vec3 p,double yaw_deg=0){double r=yaw_deg*kPi/180;Mat34 m;
  // columns: right, up, forward; yaw about +Y keeps forward = (sin, 0, cos)
@@ -54,8 +54,8 @@ int main(){
  MeshVertex vs[3]={};float P[3][3]={{.04f,-.04f,.04f},{.04f,.04f,.04f},{-.04f,.12f,-.04f}};for(int i=0;i<3;++i){std::memcpy(vs[i].pos,P[i],12);vs[i].rgba[0]=153;vs[i].rgba[3]=255;}
  u=sizeof vs;put(&u,4);put(vs,sizeof vs);uint32_t I[3]={0,1,2};u=12;put(&u,4);put(I,12);uint8_t tr[8]={};put(tr,8);
  MeshLayout L;assert(parse_mesh(mf,L)&&L.vertices==3&&L.indices==3);
- auto g=build_gps_mesh(mf,"anygps_gps_sensor_a");MeshLayout G;assert(!g.empty()&&parse_mesh(g,G)&&G.vertices==3+4*6&&G.indices==3+4*6);
- assert(std::memcmp(g.data()+16,"anygps_gps_sensor_a",19)==0);
+ auto g=build_gps_mesh(mf,"gpspart_gps_sensor_a");MeshLayout G;assert(!g.empty()&&parse_mesh(g,G)&&G.vertices==3+4*6&&G.indices==3+4*6);
+ assert(std::memcmp(g.data()+16,"gpspart_gps_sensor_a",19)==0);
  double gb[6];std::memcpy(gb,g.data()+G.bounds,48);assert(gb[4]>.12&&gb[5]>.04&&gb[0]==-.04);
  MeshVertex last;std::memcpy(&last,g.data()+G.vertex_bytes+4+(G.vertices-1)*36,36);assert(last.rgba[0]==255&&last.rgba[1]==196&&last.normal[2]==-1);
  auto bad=mf;bad[0]='x';assert(build_gps_mesh(bad,"x").empty());bad=mf;bad.pop_back();assert(build_gps_mesh(bad,"x").empty());

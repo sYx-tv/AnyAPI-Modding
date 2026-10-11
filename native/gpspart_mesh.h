@@ -1,5 +1,5 @@
 #pragma once
-// AnyGPS part mesh: the stock compass sensor mesh plus a yellow arrow that shows the part's forward axis (+Z).
+// GpsPart part mesh: the stock compass sensor mesh plus a yellow arrow that shows the part's forward axis (+Z).
 // Built at start-up from the game's own compass_sensor_a.mesh, so no game asset ships with the mod.
 //
 // Mesh file layout as read from compass_sensor_a.mesh (Anymaker 0.1.24; static inference, checked by parse):
@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace anygps {
+namespace gpspart {
 
 struct MeshVertex { float pos[3]; uint8_t rgba[4]; float uv[2]; float normal[3]; };
 static_assert(sizeof(MeshVertex) == 36, "mesh vertex");
@@ -99,4 +99,4 @@ inline std::vector<uint8_t> build_gps_mesh(const std::vector<uint8_t>& stock, co
     return out;
 }
 
-}  // namespace anygps
+}  // namespace gpspart
