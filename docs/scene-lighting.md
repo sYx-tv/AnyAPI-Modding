@@ -34,18 +34,20 @@ Apply commits changes; Cancel discards drafts; Reset stages defaults. Settings
 persist in AnyGraphics/settings.tsv. Previously saved settings are retained until a preset is selected. Selecting a
 preset stages all its lighting choices together:
 
-| Preset | Volumetric fog | Sun / local beams | Samples | Local lights | Sun / local intensity | Focus |
-|---|---|---|---|---|---|---|
-| Off | Game settings | Off | No pass | None | Bypassed | Bypassed |
-| Performance | Off | Off | No pass | None | Bypassed | Balanced |
-| Low | Off | Low | 16 | 2 | 1 / 1 | Balanced |
-| Medium | Low | Medium | 24 | 4 | 1 / 1 | Balanced |
-| High | Medium | High | 32 | 6 | 1.3 / 1.2 | Focused |
-| Ultra | High | Ultra | 48 | 8 | 1.5 / 1.3 | Focused |
+| Preset | Volumetric fog | Sun / local beams | Samples | Local lights | Sun / local intensity | Focus | Haze between beams | Beam reach |
+|---|---|---|---|---|---|---|---|---|
+| Off | Game settings | Off | No pass | None | Bypassed | Bypassed | Bypassed | Bypassed |
+| Performance | Off | Off | No pass | None | Bypassed | Balanced | Light | Near |
+| Low | Off | Low | 16 | 2 | 1 / 1 | Balanced | Light | Near |
+| Medium | Low | Medium | 24 | 4 | 1 / 1 | Balanced | Light | Medium |
+| High | Low | Medium / High | 32 | 6 | 1 / 1 | Balanced | Light | Medium |
+| Ultra | Medium | High | 48 | 8 | 1 / 1.1 | Focused | Light | Far |
+| Cinematic | Medium | High / Ultra | 48 | 8 | 1.3 / 1.3 | Focused | Natural | Far |
 
-Height falloff stays Off in every preset so hills do not lose the effect. Ultra
-uses High fog density to preserve scene visibility; standalone Ultra fog remains
-available. These are visual/performance starting points, not measured FPS guarantees.
+All presets turn on Follow sun height and Smooth beams and fog (AnyAPI 0.36.0
+or newer). Height falloff stays Off in every preset so hills do not lose the
+effect. Since AnyGraphics 0.30.0 no preset goes above Medium volumetric fog;
+stronger fog stays available individually. These are visual/performance starting points, not measured FPS guarantees.
 
 Sun and local beams use a fixed clear-air scattering density, independent of the
 Volumetric fog tier and Fog height falloff. With Volumetric fog Off, beams add
@@ -68,6 +70,8 @@ Query `anyapi.scene_lighting` through the service registry:
 | 1 | [anyapi_scene_lighting_v1.h](../sdk/include/anyapi_scene_lighting_v1.h) | Fog and sun scattering; local lights disabled |
 | 2 | [anyapi_scene_lighting_v2.h](../sdk/include/anyapi_scene_lighting_v2.h) | V1 scene policy plus local strength and light budget |
 
+| 3 | [anyapi_scene_lighting_v3.h](../sdk/include/anyapi_scene_lighting_v3.h) | V2 plus beam clarity, beam reach, sun-height response and temporal smoothing (0.36.0) |
+
 V2 preserves the V1 ABI. Local strength is finite, 0–15; budget is 1–8. Shaft
 radiance is 0–15; the menu reaches 12 through its tier and multiplier. Only an
 active mod can own an enabled policy. Missing/inactive owners disable it. A
@@ -78,6 +82,37 @@ Native capture is gated to the supported game build and checks array/ring
 layouts, dimensions, formats, projection and finite data. Failed contracts bypass
 the effect and log a reason. The service exposes copied policy and status,
 not raw native resource pointers.
+
+## Beam shaping and temporal smoothing (V3, AnyAPI 0.36.0)
+
+Earlier sun shafts scattered sunlight from every lit point along each ray, out
+to 500 m, without dimming the scene behind. In open terrain every ray is lit end
+to end, so the result was a uniform white veil that read as fog. A strong beam
+focus multiplied it again looking toward the sun (up to about 19× at Strong).
+V3 keeps that behaviour available (clarity 0, reach 0) and adds:
+
+- **clarity** 0–1: the integrator tracks how much of each ray is in shadow.
+  Rays that cross shadow edges (gaps in trees, windows, terrain) keep full
+  beams; rays that are lit end to end are reduced to `1 - clarity` of their
+  glow. With clarity above 0 the phase peak is capped at 4×.
+- **beam_reach** metres: clear-air beam scattering fades as `exp(-d/reach)`, so
+  distant air no longer piles up into haze. 0 is unlimited, otherwise 10–2000.
+- **sun_response**: beams are full at sunrise and sunset, about a third at
+  noon, off below the horizon, and warm-tinted while the sun is low.
+- **temporal**: ray samples are jittered per pixel and per frame
+  (interleaved gradient noise), then blended at half resolution with history
+  reprojected through scene depth and the previous camera, clamped to the
+  current 3×3 neighbourhood. History weight is 0.85–0.92 by quality. History
+  resets after a pause, a resize or a jump of more than 50 m. The graphics
+  origin offset is applied, so history survives origin shifts.
+
+V1 and V2 callers get zeros for all four, which is the original look. Per-frame
+values travel in rows 20–21 of the existing matrix texture, so the root
+constants and the V1/V2 ABI are unchanged.
+
+AnyGraphics 0.30.0 exposes these as **Haze between beams** (Clear / Light /
+Natural / Classic), **Beam reach** (Near 60 m / Medium 120 m / Far 250 m /
+Unlimited), **Follow sun height** and **Smooth beams and fog**.
 
 ## Validation and acceptance
 

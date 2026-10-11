@@ -1,5 +1,7 @@
 #include "aa/scene_smaa_gpu.h"
 #include "aa/scene_smaa_bindings.h"
+#include "aa/scene_taa_frame.h"
+#include "aa/scene_jitter.h"
 namespace scene_antialiasing {
 using Microsoft::WRL::ComPtr;
 static scene_smaa::Gpu gpu;
@@ -27,14 +29,41 @@ static ID3D12GraphicsCommandList* command_list(){uintptr_t p{};if(!safe_read_mem
 static bool hooks(ID3D12GraphicsCommandList* l){bool ok=true;for(auto item:{std::pair<size_t,void*>(30,(void*)signature),{25,(void*)pipeline},{28,(void*)heaps},{20,(void*)topology},{21,(void*)viewports},{22,(void*)scissors},{46,(void*)targets},{32,(void*)table},{38,(void*)cbv},{40,(void*)srv},{42,(void*)uav},{34,(void*)constant},{36,(void*)constants}})ok=platform::hook_slot(l,item.first,item.second)&&ok;return ok;}
 static bool begin(){tracking=false;states.clear();auto p=copy();if(!p.enabled&&!scene_lighting::copy().enabled)return false;auto list=command_list();if(!list||!hooks(list)){gpu_ready=false;return false;}tracking=true;return p.enabled&&gpu_ready;}
 static void finish(){tracking=false;}
-static void record(){auto p=copy();if(!p.enabled)return;auto list=command_list();auto found=states.find(list);if(!tracking||!list||found==states.end()||!found->second.ready()){gpu_ready=false;auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework",("SCENE_SMAA bypass=incomplete_native_bindings tracking="+std::to_string(tracking)+" list="+std::to_string(list!=nullptr)+" captured="+std::to_string(found!=states.end())).c_str());return;}
+// Previous camera for TAA reprojection, world coordinates.
+struct History {bool valid{};scene_taa::Camera camera;uint64_t tick{};uint32_t width{},height{};};
+static History history;static scene_jitter::State jitter;static uint32_t jitter_index{};static std::atomic<uint64_t> jittered{},jitter_skipped{};static std::atomic<bool> temporal_active{};
+// History weight by quality: higher keeps more of the past (smoother, more trailing).
+static constexpr float history_weights[]={.85f,.88f,.9f,.92f};
+// Called from the scene hook before _build_scene. Only TAA with jitter moves the camera.
+static void apply_jitter(void* renderer,void* scene){auto p=copy();// Jitter without a working history would visibly shake the image.
+ if(!p.enabled||p.method!=4||!gpu_ready||!temporal_active){jitter.active=false;return;}
+ uintptr_t target{};int32_t size[2]{};if(!safe_read_memory(uintptr_t(renderer)+0x3c0,&target,8)||!target||!safe_read_memory(target+0x34,size,8)||size[0]<=0||size[1]<=0){++jitter_skipped;return;}
+ if(scene_jitter::apply((unsigned char*)scene,uint32_t(size[0]),uint32_t(size[1]),jitter_index++,jitter))++jittered;else{jitter.active=false;auto n=++jitter_skipped;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework","SCENE_TAA_JITTER skipped=1 reason=camera_contract");}}
+static bool interface_valid_depth(ID3D12Resource* resource){uintptr_t vtable{},method{};MEMORY_BASIC_INFORMATION region{};if(!resource||!safe_read_memory(uintptr_t(resource),&vtable,8)||!vtable||!safe_read_memory(vtable+10*8,&method,8)||!method||!VirtualQuery((void*)method,&region,sizeof(region))||region.State!=MEM_COMMIT||region.Type!=MEM_IMAGE||(region.AllocationBase!=GetModuleHandleW(L"D3D12Core.dll")&&region.AllocationBase!=GetModuleHandleW(L"d3d12.dll")))return false;
+ ComPtr<ID3D12Device> owner,device;auto list=command_list();return list&&SUCCEEDED(resource->GetDevice(IID_PPV_ARGS(&owner)))&&SUCCEEDED(list->GetDevice(IID_PPV_ARGS(&device)))&&owner.Get()==device.Get();}
+static bool temporal_extra(void* renderer,void* scene,UINT w,UINT h,scene_smaa::Extra& extra){
+ scene_taa::Capture c;if(!renderer||!scene||!scene_taa::capture(uintptr_t(renderer),uintptr_t(scene),c,safe_read_memory)||c.depth.width!=w||c.depth.height!=h){history.valid=false;return false;}
+ extra.temporal=true;extra.depth=(ID3D12Resource*)c.depth.resource;extra.depth_state=D3D12_RESOURCE_STATES(c.depth.state);
+ uint64_t now=GetTickCount64();double moved=0;for(size_t i=0;i<3;++i)moved+=(c.camera.position[i]-history.camera.position[i])*(c.camera.position[i]-history.camera.position[i]);
+ extra.history_valid=history.valid&&now-history.tick<250&&history.width==w&&history.height==h&&moved<50.0*50.0;
+ auto& k=extra.constants;auto put=[&](size_t at,const std::array<float,4>& v){for(size_t i=0;i<4;++i)k[at+i]=v[i];};
+ put(0,c.camera.projection);put(4,c.camera.right);put(8,c.camera.up);put(12,c.camera.forward);
+ for(size_t i=0;i<3;++i)k[16+i]=float(history.camera.position[i]-c.camera.position[i]);put(20,history.camera.right);put(24,history.camera.up);put(28,history.camera.forward);k[31]=0;
+ history.camera=c.camera;history.tick=now;history.width=w;history.height=h;history.valid=true;return true;
+}
+// CPU interval between pre-HUD boundaries, smoothed, for the FPS readout.
+static double frame_ms=-1;static LARGE_INTEGER last_frame{};
+static void frame_tick(){LARGE_INTEGER now,frequency;QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);if(last_frame.QuadPart){double ms=double(now.QuadPart-last_frame.QuadPart)*1000.0/double(frequency.QuadPart);if(ms>0&&ms<1000)frame_ms=frame_ms<0?ms:frame_ms*.9+ms*.1;}last_frame=now;}
+static void record(void* renderer=nullptr,void* scene=nullptr){frame_tick();auto p=copy();if(!p.enabled){history.valid=false;temporal_active=false;return;}auto list=command_list();auto found=states.find(list);if(!tracking||!list||found==states.end()||!found->second.ready()){gpu_ready=false;auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework",("SCENE_SMAA bypass=incomplete_native_bindings tracking="+std::to_string(tracking)+" list="+std::to_string(list!=nullptr)+" captured="+std::to_string(found!=states.end())).c_str());return;}
  std::lock_guard lock(platform::render_mutex);if(!platform::swap||!platform::queue){gpu_ready=false;return;}ComPtr<ID3D12Device> device;ComPtr<ID3D12Resource> back;if(FAILED(list->GetDevice(IID_PPV_ARGS(&device)))||FAILED(platform::swap->GetBuffer(platform::swap->GetCurrentBackBufferIndex(),IID_PPV_ARGS(&back)))){gpu_ready=false;++rejected;return;}
  ComPtr<ID3D12Device> back_device;if(FAILED(back->GetDevice(IID_PPV_ARGS(&back_device)))||back_device.Get()!=device.Get()){gpu_ready=false;++rejected;return;}
  auto desc=back->GetDesc();if(!gpu.ensure(device.Get(),platform::queue.Get(),desc)){gpu_ready=false;error=gpu.error();auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework",("SCENE_SMAA bypass=GPU_unavailable error="+std::to_string(error.load())+" format="+std::to_string(desc.Format)).c_str());return;}
  // Use the current buffer from the game presentation swapchain.
  // At this reviewed boundary the game has completed scene composition and has
  // not yet emitted frontend_ui.render/mm_ui.render.
- auto saved=found->second;owned=true;gpu.record(list,back.Get(),p.quality,p.method==2);saved.restore(list);owned=false;gpu_ready=true;width=UINT(desc.Width);height=desc.Height;error=0;auto count=++frames;
- if(count==1||count%600==0)log_line(ANY_LOG_INFO,"framework",("SCENE_SMAA frames="+std::to_string(count)+" method="+std::to_string(p.method)+" quality="+std::to_string(p.quality)+" width="+std::to_string(width.load())+" height="+std::to_string(height.load())+" location=BEFORE_HUD native_FXAA_replaced=1 bindings_restored=1").c_str());
+ scene_smaa::Extra extra;extra.sharpen=p.sharpening;extra.history_weight=history_weights[std::min(p.quality,3u)];bool temporal=p.method>=3&&temporal_extra(renderer,scene,UINT(desc.Width),desc.Height,extra);if(p.method>=3&&!temporal){auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework","SCENE_TAA bypass=depth_or_camera_contract fallback=SMAA");}
+ if(temporal&&!interface_valid_depth(extra.depth)){extra.temporal=false;history.valid=false;}
+ auto saved=found->second;owned=true;bool depth_ok=gpu.record(list,back.Get(),p.quality,p.method==2,&extra);if(!depth_ok)history.valid=false;temporal_active=extra.temporal&&depth_ok;saved.restore(list);owned=false;gpu_ready=true;width=UINT(desc.Width);height=desc.Height;error=0;auto count=++frames;
+ if(count==1||count%600==0)log_line(ANY_LOG_INFO,"framework",("SCENE_SMAA frames="+std::to_string(count)+" method="+std::to_string(p.method)+" quality="+std::to_string(p.quality)+" sharpening="+std::to_string(p.sharpening)+" temporal="+std::to_string(extra.temporal)+" jittered="+std::to_string(jittered.load())+" gpu_ms="+std::to_string(gpu.gpu_milliseconds())+" width="+std::to_string(width.load())+" height="+std::to_string(height.load())+" location=BEFORE_HUD native_FXAA_replaced=1 bindings_restored=1").c_str());
 }
 }

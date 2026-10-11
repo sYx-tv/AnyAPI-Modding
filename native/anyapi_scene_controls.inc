@@ -37,7 +37,11 @@ static bool scene_apply(void* object,const AnySceneParametersV1& p){if(!writable
  memcpy(b+0xa90,colors,sizeof(colors));memcpy(b+0xb60,&fog,8);return true;
 }
 using SceneFn=void(*)(void*,void*);
-static void scene_hook(void* renderer,void* scene){++scene_calls;auto p=copy();if(p.enabled&&!scene_apply(scene,p))++rejected_frames;((SceneFn)scene_cell.original())(renderer,scene);}
+static void scene_hook(void* renderer,void* scene){++scene_calls;auto p=copy();if(p.enabled&&!scene_apply(scene,p))++rejected_frames;
+#ifndef ANYAPI_SCENE_CONTROLS_TEST
+ if(writable(scene,0x2bf8))scene_antialiasing::apply_jitter(renderer,scene);
+#endif
+((SceneFn)scene_cell.original())(renderer,scene);}
 // Native scene/UI boundary: the AA replacement records on the native command
 // list after scene composition, before either native UI renderer.
 static std::atomic<uint64_t> before_hud_calls{};
@@ -46,7 +50,7 @@ static void pre_hud_hook(void* renderer,void* scene){
  ((SceneFn)pre_hud_cell.original())(renderer,scene);auto calls=++before_hud_calls;
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  anyapi_creation_balance_render_camera(scene);
- scene_antialiasing::record();
+ scene_antialiasing::record(renderer,scene);
 #endif
  if(calls==1||calls%600==0){uintptr_t target{};int32_t dimensions[2]{};
   bool valid=safe_read_memory(uintptr_t(renderer)+0x3c0,&target,8)&&target&&safe_read_memory(target+0x34,dimensions,8)&&dimensions[0]>0&&dimensions[0]<=16384&&dimensions[1]>0&&dimensions[1]<=16384;
