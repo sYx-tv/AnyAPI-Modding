@@ -1,5 +1,5 @@
 {
-  "revision": 36,
+  "revision": 39,
   "date": "2026-10-09",
   "game_version": "0.1.24",
   "steam_build_id": 25826614,
@@ -8,7 +8,7 @@
     "game.exe": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
     "bin/game.gcl": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
   },
-  "tests_passed": 52,
+  "tests_passed": 55,
   "mods": [
     "AnyHelpers",
     "AnyMap",

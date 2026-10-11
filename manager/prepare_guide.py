@@ -67,7 +67,7 @@ Legacy v16 native hook and action registries are retained as reference but quara
 ''')
 add('Compatibility and validation','Start here',f'''# Know what is supported
 
-This guide describes AnyAPI 0.{manifest['revision']}.0, Anymaker {manifest['game_version']}, Steam build {manifest['steam_build_id']}, Windows x64.
+This guide describes AnyAPI {manifest['api_version']}, Anymaker {manifest['game_version']}, Steam build {manifest['steam_build_id']}, Windows x64.
 
 Current services come from the DLL plugin runtime, not the old v16 hook worker. Native contract checks, automated fixtures and author host gameplay acceptance are separate evidence. Joining-client coverage should not be inferred from host tests.
 
