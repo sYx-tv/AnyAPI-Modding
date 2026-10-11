@@ -21,7 +21,7 @@ int wmain(int argc,wchar_t** argv){assert(argc==2||argc==3);std::ofstream out;if
  scene_effects_gpu::Frame f;f.metrics={1.f/64,1.f/64,64,64};f.grading={1,3,1,0};f.exposure={1,.1f,.01f,1.5f};assert(scene_effects_gpu::valid(f));
  auto bad=f;bad.grading[0]=3;assert(!scene_effects_gpu::valid(bad));bad=f;bad.extras[0]=NAN;assert(!scene_effects_gpu::valid(bad));bad=f;bad.metrics[2]=8;assert(!scene_effects_gpu::valid(bad));
  // Sun projection: straight ahead is the screen centre; behind the camera has no glare.
- scene_effects_gpu::Native n;float r[4]{1,0,0,.7f},u[4]{0,1,0,.4f},fw[4]{0,0,1,0};memcpy(n.right,r,sizeof(r));memcpy(n.up,u,sizeof(u));memcpy(n.forward,fw,sizeof(fw));n.sun[0]=0;n.sun[1]=.6f;n.sun[2]=.8f;
- auto s=scene_effects_gpu::sun_screen(n);assert(s[2]==1&&std::abs(s[0]-.5f)<1e-5f&&s[1]<.5f);n.sun[2]=-.8f;assert(scene_effects_gpu::sun_screen(n)[2]==0);
+ scene_effects_gpu::Native n;float r[4]{1,0,0,.7f},u[4]{0,1,0,.4f},fw[4]{0,0,1,0};memcpy(n.right,r,sizeof(r));memcpy(n.up,u,sizeof(u));memcpy(n.forward,fw,sizeof(fw));n.sun[0]=0;n.sun[1]=.3f;n.sun[2]=.954f;
+ auto s=scene_effects_gpu::sun_screen(n);assert(s[2]==1&&std::abs(s[0]-.5f)<1e-5f&&s[1]<.5f);n.sun[2]=-.954f;assert(scene_effects_gpu::sun_screen(n)[2]==0);
  std::cout<<"PASS: scene effects shaders compile; constants, sampler slots and sun projection validated\n";
 }
