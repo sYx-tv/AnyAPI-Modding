@@ -1,6 +1,6 @@
 # Scene lighting
 
-AnyAPI and AnyGraphics 0.29.0 add HDR fog, sun shafts and local-light scattering
+AnyAPI and AnyGraphics (0.29.0, overhauled in 0.30.0) add HDR fog, sun shafts and local-light scattering
 for Anymaker 0.1.24 / Steam build 25826614.
 
 ## Render integration
@@ -69,7 +69,6 @@ Query `anyapi.scene_lighting` through the service registry:
 |---|---|---|
 | 1 | [anyapi_scene_lighting_v1.h](../sdk/include/anyapi_scene_lighting_v1.h) | Fog and sun scattering; local lights disabled |
 | 2 | [anyapi_scene_lighting_v2.h](../sdk/include/anyapi_scene_lighting_v2.h) | V1 scene policy plus local strength and light budget |
-
 | 3 | [anyapi_scene_lighting_v3.h](../sdk/include/anyapi_scene_lighting_v3.h) | V2 plus beam clarity, beam reach, sun-height response and temporal smoothing (0.36.0) |
 
 V2 preserves the V1 ABI. Local strength is finite, 0–15; budget is 1–8. Shaft
@@ -135,7 +134,7 @@ local shadow counts to assist world validation.
 
 ## Limits
 
-There is no temporal accumulation, new point-light shadow generation, cascade
+Temporal smoothing covers the volumetric pass only. There is no new point-light shadow generation, cascade
 cross-fading, volumetric cloud replacement or material/water overhaul. Samples
 outside all sun cascades remain unshadowed. More lights and march samples increase
 GPU cost. This candidate is a lighting extension, not a complete shader pack.
