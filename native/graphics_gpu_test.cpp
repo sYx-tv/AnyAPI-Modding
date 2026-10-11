@@ -19,6 +19,7 @@ static const AnyEquipmentV1* anyapi_equipment_service(){return nullptr;}
 static const AnyEquipmentV2* anyapi_equipment_service_v2(){return nullptr;}
 static const AnyWorldTimeV1* anyapi_world_time_service(){return nullptr;}
 static const AnyBuildV1* anyapi_build_service(){return nullptr;}
+static const void* anyapi_scene_timing_service(){return nullptr;}
 #include "anyapi_client_tasks.inc"
 static const AnyMenuV1* anyapi_menu_service(){return nullptr;}
 static const AnyMenuV2* anyapi_menu_service_v2(){return nullptr;}
