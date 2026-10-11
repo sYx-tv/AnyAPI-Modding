@@ -6,7 +6,7 @@ static double elapsed(){LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(
 static bool interface_valid(uintptr_t resource){uintptr_t vtable{},method{};MEMORY_BASIC_INFORMATION region{};return resource&&safe_read_memory(resource,&vtable,8)&&vtable&&safe_read_memory(vtable+10*8,&method,8)&&method&&VirtualQuery((void*)method,&region,sizeof(region))&&region.State==MEM_COMMIT&&region.Type==MEM_IMAGE&&(region.AllocationBase==GetModuleHandleW(L"D3D12Core.dll")||region.AllocationBase==GetModuleHandleW(L"d3d12.dll"));}
 static void bypass(int code,const char* why){gpu_ready=false;error=code;history=false;auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework",(std::string("SCENE_EFFECTS bypass=")+why).c_str());}
 // Runs at the HDR additive stage after volumetric lighting.
-static void record(void* renderer,void* scene){auto p=copy();if(!p.enabled){history=false;gpu_ready=false;return;}
+static void record(void* renderer,void* scene){auto p=copy();if(!p.enabled||!p.finish){history=false;gpu_ready=false;return;}
  scene_effects_gpu::Native n;if(!scene_effects_gpu::capture(uintptr_t(renderer),uintptr_t(scene),n,safe_read_memory)){bypass(100+int(n.failure),"native_frame_contract");return;}
  auto list=scene_antialiasing::command_list();auto saved=scene_antialiasing::states.find(list);
  if(!scene_antialiasing::tracking||!list||saved==scene_antialiasing::states.end()||!saved->second.ready()||!interface_valid(n.color.resource)||!interface_valid(n.depth.resource)||n.color.state!=D3D12_RESOURCE_STATE_RENDER_TARGET){bypass(2,"command_bindings_or_target_state");return;}

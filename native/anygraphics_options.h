@@ -4,7 +4,7 @@
 #include <array>
 #include <cmath>
 namespace graphics_options {
-enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,ShaftClarity,BeamReach,SunResponse,TemporalLighting,Sharpening,CostReadout,ToneMapping,ColourLook,LookStrength,EyeAdaptation,Brightness,SceneBloom,SunGlare,Vignette,Count};
+enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,ShaftClarity,BeamReach,SunResponse,TemporalLighting,Sharpening,CostReadout,ToneMapping,ColourLook,LookStrength,EyeAdaptation,Brightness,SceneBloom,SunGlare,Vignette,DetailedAO,Count};
 struct Option {const char* id;const char* group;const char* label;const char* description;uint32_t kind;float initial,minimum,maximum,step;};
 static constexpr Option definitions[]={
  {"enabled","General","Enable AnyGraphics","Use the selected native graphics settings. Off restores the game's own settings.",ANY_SETTING_BOOL,1,0,1,1},
@@ -49,7 +49,8 @@ static constexpr Option definitions[]={
  {"brightness","Finish","Brightness (stops)","Overall exposure before tone mapping. 0 keeps the game's brightness.",ANY_SETTING_NUMBER,0,-2,2,.25f},
  {"scene_bloom","Finish","Bloom","Soft, wide glow around bright light, before tone mapping. Replaces the game's bloom while tone mapping is on.",ANY_SETTING_CHOICE,2,0,3,1},
  {"sun_glare","Finish","Sun glare","A glow and faint streaks around the sun when it is in view, dimmed when trees or terrain block it.",ANY_SETTING_CHOICE,2,0,3,1},
- {"vignette","Finish","Vignette","Darkens the corners of the screen.",ANY_SETTING_CHOICE,0,0,3,1}
+ {"vignette","Finish","Vignette","Darkens the corners of the screen.",ANY_SETTING_CHOICE,0,0,3,1},
+ {"detailed_ao","Scene","Detailed shading","Replaces the game's ambient occlusion with softer, deeper contact shading in corners, under parts and between blocks. Needs Ambient occlusion to be on or left to the game.",ANY_SETTING_CHOICE,0,0,3,1}
 };
 static_assert(std::size(definitions)==Count);
 using Values=std::array<float,Count>;
@@ -60,10 +61,11 @@ inline constexpr float light_levels[]={0,.75f,1,1.15f,1.3f};
 inline constexpr float bloom_levels[]={.05f,.1f,.2f,.35f};
 inline constexpr float clarity_levels[]={1,.85f,.6f,0},reach_levels[]={60,120,250,0},sharpen_levels[]={0,.3f,.55f,.8f};
 inline constexpr float look_strength_levels[]={.5f,.8f,1},scene_bloom_levels[]={0,.25f,.45f,.7f},glare_levels[]={0,.5f,1,1.6f},vignette_levels[]={0,.25f,.5f,.8f};
+inline constexpr float ao_radius_levels[]={1.5f,1,1.5f,2.5f},ao_strength_levels[]={1,.8f,1,1.25f};
 // Native AA choice -> scene AA method: 3 SMAA, 4 Enhanced SMAA, 5 TAA, 6 TAA + jitter.
 inline uint32_t aa_method(float choice){return choice>=6?4:choice>=5?3:choice>=4?2:1;}
 // Menu order: new rows sit next to the controls they modify.
-inline constexpr Index order[]={Enabled,GameplayOnly,Preset,Advanced,NativeAA,AAQuality,Sharpening,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,Clouds,Grass,Foliage,
+inline constexpr Index order[]={Enabled,GameplayOnly,Preset,Advanced,NativeAA,AAQuality,Sharpening,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,DetailedAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,Clouds,Grass,Foliage,
  ToneMapping,ColourLook,LookStrength,Brightness,EyeAdaptation,SceneBloom,SunGlare,Vignette,
  Atmosphere,SunShafts,ShaftIntensity,ShaftClarity,BeamReach,SunResponse,BeamFocus,LightingQuality,TemporalLighting,GroundFog,LocalBeams,LocalIntensity,LocalBudget,CostReadout};
 static_assert(std::size(order)==Count);
@@ -75,7 +77,7 @@ inline Values profile(const Values& current,int level){
  auto tier=size_t(level-1);
  static constexpr float aa[]={2,3,3,5,6,6},aa_quality[]={1,1,2,2,3,3},sharpen[]={0,0,0,1,1,2};
  v[NativeAA]=aa[tier];v[AAQuality]=aa_quality[tier];v[Sharpening]=sharpen[tier];
- v[NativeSSAO]=level>=3?2.f:1.f;v[NativeShadows]=level>=2?2.f:1.f;v[NativeFogBlur]=level>=3?2.f:1.f;
+ v[NativeSSAO]=level>=3?2.f:1.f;static constexpr float ao[]={0,0,1,2,3,3};v[DetailedAO]=ao[tier];v[NativeShadows]=level>=2?2.f:1.f;v[NativeFogBlur]=level>=3?2.f:1.f;
  static constexpr float bloom[]={0,.05f,.1f,.2f,.35f,.35f};v[NativeBloom]=level>=2?2.f:1.f;v[BloomAmount]=bloom[tier];v[BloomThreshold]=.75f;
  // Fog and beams are artistic strengths, not sample quality. High tiers add
  // samples and lights but keep fog moderate so beams never wash out the scene.

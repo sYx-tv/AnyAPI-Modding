@@ -81,14 +81,17 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
   assert(aa2_policy.enabled==(preset>1)&&(preset==1||aa2_policy.method==methods[i])&&std::abs(aa2_policy.sharpening-sharpening[i])<.001f);
   // Finishing: Filmic from Low up; Vivid from Ultra; bloom and glare grow with the preset.
   const float scene_bloom[]={0,.25f,.25f,.45f,.45f,.7f};const uint32_t looks[]={0,0,0,0,5,5};
-  assert(effects_policy.enabled==(preset>1)&&(preset==1||effects_policy.tonemap==1)&&(preset==1||effects_policy.look==looks[i])&&(preset==1||std::abs(effects_policy.bloom-scene_bloom[i])<.001f)&&effects_policy.eye_adaptation==1);}
+  assert(effects_policy.enabled==(preset>1)&&(preset==1||effects_policy.tonemap==1)&&(preset==1||effects_policy.look==looks[i])&&(preset==1||std::abs(effects_policy.bloom-scene_bloom[i])<.001f)&&effects_policy.eye_adaptation==1);
+  // Detailed shading from Medium up; Performance and Low keep the game's SSAO.
+  const float ao_radius[]={1.5f,1.5f,1,1.5f,2.5f,2.5f};assert(effects_policy.ambient_occlusion==(preset>=3)&&effects_policy.finish==(preset>1)&&effects_policy.ao_radius==ao_radius[i]);}
  // Shaping rows submit their own values; the GPU cost readout polls timing while the menu draws.
  apply(Preset,3);apply(ShaftClarity,3);apply(BeamReach,3);apply(SunResponse,0);apply(TemporalLighting,0);assert(shaped_policy.clarity==0&&shaped_policy.beam_reach==0&&!shaped_policy.sun_response&&!shaped_policy.temporal);
  apply(NativeAA,5);apply(Sharpening,3);assert(aa2_policy.enabled&&aa2_policy.method==3&&std::abs(aa2_policy.sharpening-.8f)<.001f);apply(NativeAA,6);assert(aa2_policy.method==4);apply(NativeAA,2);assert(!aa2_policy.enabled);
  event(ANY_MENU_OPEN);stage(0,0);assert(timing_reads>0&&effects_reads>0);event(ANY_MENU_CANCEL);
  apply(ToneMapping,3);apply(ColourLook,3);apply(LookStrength,0);apply(SunGlare,0);apply(Vignette,3);apply(Brightness,1);
  assert(effects_policy.enabled&&effects_policy.tonemap==2&&effects_policy.look==3&&effects_policy.look_strength==.5f&&effects_policy.glare==0&&effects_policy.vignette==.8f&&effects_policy.exposure==1);
- apply(ToneMapping,0);assert(!effects_policy.enabled);
+ apply(ToneMapping,0);assert(effects_policy.enabled&&!effects_policy.finish&&effects_policy.ambient_occlusion);
+ apply(NativeSSAO,1);assert(!effects_policy.enabled&&!effects_policy.ambient_occlusion);apply(NativeSSAO,2);apply(DetailedAO,0);assert(!effects_policy.enabled);
  apply(Preset,6);
  event(ANY_MENU_OPEN);stage(Preset+1,1);render();assert(std::abs(local_policy.local_strength-3.9f)<.001f);event(ANY_MENU_CANCEL);render();assert(std::abs(local_policy.local_strength-3.9f)<.001f);
  apply(Enabled,0);assert(!lighting_policy.enabled);apply(Enabled,1);ui(13);render();assert(!lighting_policy.enabled);apply(GameplayOnly,0);assert(lighting_policy.enabled);

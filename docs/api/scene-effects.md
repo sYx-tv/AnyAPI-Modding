@@ -31,7 +31,8 @@ trip and the image is unchanged.
 
 | Field | Range | Meaning |
 | --- | --- | --- |
-| `enabled` | 0/1 | Run the pass. While enabled, the game's own bloom is turned off for the frame because this pass replaces it |
+| `enabled` | 0/1 | Turn the service on |
+| `finish` | 0/1 | Run the finishing pass (the rows below up to `vignette`). While it runs, the game's own bloom is turned off for the frame because this pass replaces it |
 | `tonemap` | 0-2 | 0 Game (the game's ACES curve), 1 Filmic (AgX-style, keeps colour in bright light), 2 Clean (Khronos PBR Neutral) |
 | `look` | 0-5 | None, Warm, Cool, Teal & orange, Moody, Vivid |
 | `look_strength` | 0-1 | How strongly the look is applied |
@@ -41,6 +42,9 @@ trip and the image is unchanged.
 | `bloom` | 0-1 | Threshold-free 6-level bloom (13-tap downsample with a Karis average on the first level, tent upsample) |
 | `glare` | 0-2 | Halo, core and six faint streaks around the sun while it is on screen |
 | `vignette` | 0-1 | Darkens the corners |
+| `ambient_occlusion` | 0/1 | Replace the game's SSAO output with detailed ambient occlusion (see below). The game's SSAO switch is forced on while this is on |
+| `ao_radius` | 0.25-4 | World radius of the occlusion search, in metres |
+| `ao_strength` | 0-2 | How dark occlusion gets |
 
 Only one active mod owns the policy, as with the other scene services.
 
@@ -60,18 +64,31 @@ disc is open sky (reversed depth: sky is 0). Glare scales with that fraction,
 smoothed over a few frames, and fades out at the horizon. Trees, terrain and
 buildings in front of the sun dim it.
 
+## Ambient occlusion
+
+The game's SSAO (8 samples, inside `renderer._record_commands_composite`) is
+followed by this pass, from the same call cell, before the lighting composite
+reads the SSAO target. It overwrites that target with Alchemy ambient
+occlusion: 12 spiral samples rotated per pixel and per frame, a world-space
+radius with falloff, a depth-aware 4x4 blur and a multi-bounce fit on the
+albedo so bright surfaces do not go grey. The game multiplies only ambient and
+back light by this value, so direct sunlight is never darkened. Sky and cloud
+pixels are left unoccluded.
+
 ## Status
 
 `status` fills `AnySceneEffectsStatusV1`: `available`, `ready`, frame and
 rejected-frame counts, `gpu_ms` (smoothed GPU time of the pass),
 `adapted_exposure` (stops currently added by eye adaptation),
-`scene_luminance` (measured average) and `sun_visibility`. The values are read
+`scene_luminance` (measured average) and `sun_visibility`. `ao_available`,
+`ao_ready`, `ao_frames` and `ao_ms` describe the ambient occlusion pass. The values are read
 back seven frames late without a fence.
 
 ## Limits
 
 The pass is bypassed, with a logged reason, in special views (scope, vision
 modes), when the native HDR target, depth or command bindings fail their
-checks, or when the pass cannot create its resources. The game's bloom stays
+checks, or when the pass cannot create its resources. Ambient occlusion is bypassed the
+same way and the game's own SSAO result is then kept. The game's bloom stays
 off while the policy is enabled. Effects cover the scene only: water and glass
 are finished like everything else, and no material data is used.

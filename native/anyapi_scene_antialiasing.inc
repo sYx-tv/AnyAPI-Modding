@@ -27,7 +27,7 @@ static void STDMETHODCALLTYPE constant(ID3D12GraphicsCommandList* l,UINT i,UINT 
 static void STDMETHODCALLTYPE constants(ID3D12GraphicsCommandList* l,UINT i,UINT n,const void* p,UINT offset){if(auto s=capture(l))s->constants(i,n,p,offset);chained<void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,const void*,UINT)>(l,36)(l,i,n,p,offset);}
 static ID3D12GraphicsCommandList* command_list(){uintptr_t p{};if(!safe_read_memory(uintptr_t(GetModuleHandleW(nullptr))+0x5e5340+0x2648,&p,8)||!p)return nullptr;uintptr_t vt{};if(!safe_read_memory(p,&vt,8)||!vt)return nullptr;return (ID3D12GraphicsCommandList*)p;}
 static bool hooks(ID3D12GraphicsCommandList* l){bool ok=true;for(auto item:{std::pair<size_t,void*>(30,(void*)signature),{25,(void*)pipeline},{28,(void*)heaps},{20,(void*)topology},{21,(void*)viewports},{22,(void*)scissors},{46,(void*)targets},{32,(void*)table},{38,(void*)cbv},{40,(void*)srv},{42,(void*)uav},{34,(void*)constant},{36,(void*)constants}})ok=platform::hook_slot(l,item.first,item.second)&&ok;return ok;}
-static bool begin(){tracking=false;states.clear();auto p=copy();if(!p.enabled&&!scene_lighting::copy().enabled)return false;auto list=command_list();if(!list||!hooks(list)){gpu_ready=false;return false;}tracking=true;return p.enabled&&gpu_ready;}
+static bool begin(){tracking=false;states.clear();auto p=copy();if(!p.enabled&&!scene_lighting::copy().enabled&&!scene_effects::copy().enabled)return false;auto list=command_list();if(!list||!hooks(list)){gpu_ready=false;return false;}tracking=true;return p.enabled&&gpu_ready;}
 static void finish(){tracking=false;}
 // Previous camera for TAA reprojection, world coordinates.
 struct History {bool valid{};scene_taa::Camera camera;uint64_t tick{};uint32_t width{},height{};};

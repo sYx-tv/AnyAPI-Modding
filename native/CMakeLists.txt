@@ -272,6 +272,23 @@ target_include_directories(effects_gpu_test PRIVATE "${CMAKE_CURRENT_BINARY_DIR}
 target_compile_options(effects_gpu_test PRIVATE /UNDEBUG /EHsc /utf-8)
 target_link_libraries(effects_gpu_test PRIVATE d3d12 dxgi d3dcompiler)
 add_test(NAME effects_gpu COMMAND effects_gpu_test)
+# Ambient occlusion written into the game's SSAO target before the composite reads it.
+add_executable(ao_shader_test ao_shader_test.cpp)
+target_compile_options(ao_shader_test PRIVATE /UNDEBUG /EHsc /utf-8)
+target_link_libraries(ao_shader_test PRIVATE d3dcompiler)
+add_test(NAME ao_kernels COMMAND ao_shader_test "${CMAKE_CURRENT_SOURCE_DIR}/effects/ao.hlsl")
+set(AO_GENERATED "${CMAKE_CURRENT_BINARY_DIR}/effects-generated/ao_bytecode.h")
+add_custom_command(OUTPUT "${AO_GENERATED}"
+ COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/effects-generated"
+ COMMAND ao_shader_test "${CMAKE_CURRENT_SOURCE_DIR}/effects/ao.hlsl" "${AO_GENERATED}"
+ DEPENDS ao_shader_test effects/ao.hlsl VERBATIM)
+add_custom_target(ao_bytecode DEPENDS "${AO_GENERATED}")
+add_executable(ao_gpu_test ao_gpu_test.cpp)
+add_dependencies(ao_gpu_test ao_bytecode)
+target_include_directories(ao_gpu_test PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/effects-generated")
+target_compile_options(ao_gpu_test PRIVATE /UNDEBUG /EHsc /utf-8)
+target_link_libraries(ao_gpu_test PRIVATE d3d12 dxgi)
+add_test(NAME ao_gpu COMMAND ao_gpu_test)
 add_executable(hud_hints_test hud_hints_test.cpp)
 target_compile_options(hud_hints_test PRIVATE /UNDEBUG /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS)
 target_link_libraries(hud_hints_test PRIVATE bcrypt d3d12 d3d11 dxgi d2d1 dwrite d3dcompiler)
@@ -285,7 +302,7 @@ endforeach()
 foreach(target dinput8 inventory_native_test menu_extensions_test players_producer_test settings_tabs_test settings_widgets_test storage_native_test hud_hints_test)
  add_dependencies(${target} lighting_bytecode)
  target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/lighting-generated")
- add_dependencies(${target} effects_bytecode)
+ add_dependencies(${target} effects_bytecode ao_bytecode)
  target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/effects-generated")
 endforeach()
 

@@ -1,6 +1,8 @@
 #include "runtime_call_cell.h"
 namespace scene_controls {
-static anyapi_runtime::CallCellHook renderer_cell,scene_cell,pre_hud_cell,lighting_cell;
+static anyapi_runtime::CallCellHook renderer_cell,scene_cell,pre_hud_cell,lighting_cell,ssao_cell;
+// The frame's scene_renderer, valid from scene_hook until renderer_hook returns.
+static void* frame_scene{};
 static bool writable(void* pointer,size_t bytes){MEMORY_BASIC_INFORMATION m{};return pointer&&VirtualQuery(pointer,&m,sizeof(m))&&m.State==MEM_COMMIT&&!(m.Protect&(PAGE_GUARD|PAGE_NOACCESS))&&(m.Protect&(PAGE_READWRITE|PAGE_EXECUTE_READWRITE))&&uintptr_t(pointer)+bytes>=uintptr_t(pointer)&&uintptr_t(pointer)+bytes<=uintptr_t(m.BaseAddress)+m.RegionSize;}
 struct RendererSaved {unsigned char flags[9];double threshold,intensity;};
 static bool renderer_apply(void* object,const AnySceneParametersV1* p,RendererSaved* old,const uint32_t* details=nullptr){
@@ -23,9 +25,13 @@ static void renderer_hook(void* self){++renderer_calls;auto policy=snapshot();au
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  if(scene_antialiasing::begin()){if(!p.enabled){p=AnySceneParametersV1{};p.enabled=1;}p.aa=1;}
  // Scene effects replace the game's bloom; their own bloom runs before tone mapping.
- if(scene_effects::copy().enabled){if(!p.enabled){p=AnySceneParametersV1{};p.enabled=1;}p.bloom=1;}
+ auto fx=scene_effects::copy();
+ if(fx.enabled&&fx.finish){if(!p.enabled){p=AnySceneParametersV1{};p.enabled=1;}p.bloom=1;}
+ // The replacement ambient occlusion writes into the game's SSAO target, so the game's SSAO must run.
+ if(fx.enabled&&fx.ambient_occlusion&&scene_effects::ao_available){if(!p.enabled){p=AnySceneParametersV1{};p.enabled=1;}p.ssao=2;}
 #endif
  if(p.enabled)scoped_render(self,&p,policy.details.data());else ((RenderFn)renderer_cell.original())(self);
+ frame_scene=nullptr;
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  scene_antialiasing::finish();
 #endif
@@ -39,7 +45,7 @@ static bool scene_apply(void* object,const AnySceneParametersV1& p){if(!writable
  memcpy(b+0xa90,colors,sizeof(colors));memcpy(b+0xb60,&fog,8);return true;
 }
 using SceneFn=void(*)(void*,void*);
-static void scene_hook(void* renderer,void* scene){++scene_calls;auto p=copy();if(p.enabled&&!scene_apply(scene,p))++rejected_frames;
+static void scene_hook(void* renderer,void* scene){++scene_calls;frame_scene=scene;auto p=copy();if(p.enabled&&!scene_apply(scene,p))++rejected_frames;
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  if(writable(scene,0x2bf8))scene_antialiasing::apply_jitter(renderer,scene);
 #endif
@@ -65,6 +71,14 @@ static void lighting_hook(void* renderer,void* scene){((SceneFn)lighting_cell.or
  scene_effects::record(renderer,scene);
 #endif
 }
+using SsaoFn=void(*)(void*,void*);
+static void ssao_hook(void* renderer,void* camera){((SsaoFn)ssao_cell.original())(renderer,camera);
+#ifndef ANYAPI_SCENE_CONTROLS_TEST
+ scene_effects::record_ao(renderer,frame_scene);
+#endif
+}
+static const unsigned char COMPOSITE[]={0x53,0x55,0x56,0x48,0x81,0xec,0x20,0x02,0,0,0x48,0x89,0x8c,0x24,0xc0,0x01,0,0,0x48,0x89,0x94,0x24,0xc8,0x01,0,0,0x48,0x8b,0x05,0xaf,0x0c,0};
+static const unsigned char SSAO[]={0x53,0x55,0x48,0x81,0xec,0xc8,0,0,0,0x48,0x89,0x4c,0x24,0x60,0x48,0x89,0x54,0x24,0x68,0x48,0x8d,0x44,0x24,0x70,0x48,0x8d,0x19,0x48,0x8b,0x2d,0xde,0x01};
 static const unsigned char ADDITIVE[]={0x53,0x55,0x56,0x57,0x41,0x54,0x48,0x81,0xec,0x50,0x01,0,0,0x48,0x89,0x8c,0x24,0xe8,0,0,0,0x48,0x89,0x94,0x24,0xf0,0,0,0,0x48,0x8b,0x05};
 static const unsigned char RECORD_COMMANDS[]={0x53,0x55,0x56,0x48,0x81,0xec,0x10,0x02,0,0,0x48,0x89,0x8c,0x24,0xb0,0x01,0,0,0x48,0x89,0x94,0x24,0xb8,0x01,0,0,0x48,0x8b,0x05,0x07,0x0a,0};
 static const unsigned char POST_COMPOSITE[]={0x53,0x55,0x56,0x48,0x81,0xec,0x80,0x04,0,0,0x48,0x89,0x8c,0x24,0x28,0x04,0,0,0x48,0x89,0x94,0x24,0x30,0x04,0,0,0x48,0x8b,0x05,0x17,0x17,0};
@@ -88,6 +102,10 @@ static DWORD WINAPI worker(void*){for(unsigned attempt=0;attempt<120&&!ready;++a
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  scene_antialiasing::available=true;
  auto light=resolve_unique_cell(record,2600,33,ADDITIVE,sizeof(ADDITIVE));if(light&&lighting_cell.install(light,(void*)lighting_hook)){scene_lighting::available=true;scene_effects::available=true;log_line(ANY_LOG_INFO,"framework","SCENE_LIGHTING resolved=1 location=HDR_AFTER_ADDITIVE_BEFORE_BLOOM_TONEMAP_HUD experimental=1");}
+ // _record_commands_composite runs the game's SSAO from its own call cell.
+ auto composite=resolve_unique_cell(record,2600,28,COMPOSITE,sizeof(COMPOSITE));uintptr_t composite_body{};
+ if(composite&&safe_read_memory(uintptr_t(composite),&composite_body,8)&&composite_body){auto ssao=resolve_cell(composite_body,3280,6,SSAO,sizeof(SSAO));if(ssao&&ssao_cell.install(ssao,(void*)ssao_hook)){scene_effects::ao_available=true;log_line(ANY_LOG_INFO,"framework","SCENE_AO resolved=1 location=COMPOSITE_AFTER_NATIVE_SSAO");}}
+ if(!scene_effects::ao_available)log_line(ANY_LOG_WARN,"framework","SCENE_AO unavailable=1 native_ssao_kept=1");
 #endif
  log_line(ANY_LOG_INFO,"framework","SCENE_AA_STAGE resolved=1 location=AFTER_SCENE_COMPOSITION_BEFORE_HUD scene_replacement_available=1");}
  else log_line(ANY_LOG_WARN,"framework","SCENE_AA_STAGE unavailable=1 replacement_AA_not_exposed=1");

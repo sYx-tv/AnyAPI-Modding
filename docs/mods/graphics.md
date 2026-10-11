@@ -32,6 +32,12 @@ The **Finish** rows grade the HDR scene before the game's tone mapping, using
 Presets use Filmic from Low up and add Vivid from Ultra; Cinematic applies it
 at Strong with strong bloom and a light vignette.
 
+**Detailed shading** (Off, Low, Medium or High, next to Ambient occlusion)
+replaces the game's ambient occlusion with softer, deeper contact shading in
+corners, under parts and between blocks. It only darkens ambient light, never
+sunlight, and is hidden while Ambient occlusion is forced off. Presets use it
+from Medium up.
+
 ## Controls
 
 The original game controls remain above the mod section. Choosing Game setting
