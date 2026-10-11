@@ -276,6 +276,27 @@
           "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
         }
       ]
+    },
+    {
+      "Id": "gpspart",
+      "Name": "GpsPart",
+      "Version": "1.0.0",
+      "Revision": 1,
+      "MinimumApi": 36,
+      "Description": "Adds a GPS Sensor part with position, altitude, heading, pitch, roll, speed, acceleration and waypoint distance/bearing data channels. Single player only. Uses the experimental SDK; Anymaker 0.1.24 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.11/GpsPart-1.0.0.zip",
+      "Sha256": "0e81d16729be7ff7302ad8aa6aa1b46b4852ecded9303e139227633189efc2df",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/GpsPart.dll": "9a8d26f2e2c4f84b4e63109d01f3a5d6697b7bce523fb9cea6c8964af81a5db5"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.24",
+          "SteamBuild": 25826614,
+          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
+          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+        }
+      ]
     }
   ]
 }
