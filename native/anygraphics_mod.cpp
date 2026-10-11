@@ -10,6 +10,7 @@
 #include "anyapi_scene_lighting_v3.h"
 #include "anyapi_scene_antialiasing_v2.h"
 #include "anyapi_scene_timing_v1.h"
+#include "anyapi_scene_effects_v1.h"
 #include "anyhelpers_settings_v2.h"
 #include "anygraphics_options.h"
 #include "anyapi_menu_v3.h"
@@ -23,6 +24,7 @@ static const AnySceneControlsV2* scene_v2;
 static const AnySceneLightingV1* lighting;static const AnySceneLightingV2* lighting_v2;static const AnySceneLightingV3* lighting_v3;
 static const AnySceneAntialiasingV1* aa;static const AnySceneAntialiasingV2* aa_v2;
 static const AnySceneTimingServiceV1* timing;
+static const AnySceneEffectsV1* effects;
 static helpersettings::State state;static std::mutex mutex;
 static const AnyMenuV1* menu;static const AnyMenuV3* widgets;
 static const AnyUiStateV1* ui;
@@ -45,6 +47,10 @@ static void draw(const AnyMenuFrameV1*,void*){std::lock_guard lock(mutex);
   if((i==ShaftClarity||i==BeamReach||i==SunResponse)&&(!lighting_v3||!shown(SunShafts)))continue;
   if(i==TemporalLighting&&(!lighting_v3||(!shown(Atmosphere)&&!shown(SunShafts)&&!shown(LocalBeams))))continue;
   if(i==CostReadout&&!timing)continue;
+  // Finishing rows (0.31) need the scene effects service; the rest show only with tone mapping on.
+  bool finishing=effects&&state.settings[ToneMapping].draft.number>0;
+  if(i>=ToneMapping&&(!effects||(i!=ToneMapping&&!finishing)||(i==LookStrength&&state.settings[ColourLook].draft.number==0)))continue;
+  if(i==NativeBloom&&finishing)continue;
   if(i<ShaftClarity){if(i>=Clouds&&i<=Foliage&&!scene_v2)continue;if(i>=Atmosphere&&!lighting)continue;if(i>=LightingQuality&&i<LocalBeams&&state.settings[Atmosphere].draft.number==0&&state.settings[SunShafts].draft.number==0&&(!lighting_v2||state.settings[LocalBeams].draft.number==0))continue;if(i==ShaftIntensity&&state.settings[SunShafts].draft.number==0)continue;if(i==BeamFocus&&state.settings[SunShafts].draft.number==0&&(!lighting_v2||state.settings[LocalBeams].draft.number==0))continue;if(i>=LocalBeams&&!lighting_v2)continue;if(i>LocalBeams&&state.settings[LocalBeams].draft.number==0)continue;if(i==AAQuality&&state.settings[NativeAA].draft.number<3)continue;if(advanced(i)&&i!=FogDensity&&i<Atmosphere&&!advanced_on)continue;}
   auto& row=state.settings[i];auto value=row.draft;auto id="setting."+std::to_string(i+1);uint32_t changed{};
   if(i==NativeBloom||i==FogDensity||i==SunLight||i==SkyLight||i==AmbientLight){
@@ -62,9 +68,11 @@ static void draw(const AnyMenuFrameV1*,void*){std::lock_guard lock(mutex);
  }
  if(aa&&state.settings[NativeAA].draft.number>=3){AnySceneAntialiasingStatusV1 a;bool active=aa&&aa->status(&a)&&a.ready;auto choice=state.settings[NativeAA].draft.number;widgets->tabs->label("aa_status",active?(choice>=6?"TAA + jitter: scene only, before HUD.":choice>=5?"TAA: scene only, before HUD.":choice==4?"Enhanced SMAA: scene only, before HUD.":"SMAA: scene only, before HUD."):"Scene AA is waiting for the scene renderer; native AA stays available.");}
  if(lighting&&(state.settings[Atmosphere].draft.number>0||state.settings[SunShafts].draft.number>0||state.settings[LocalBeams].draft.number>0)){AnySceneLightingStatusV1 light;bool connected=lighting->status(&light)&&light.ready;widgets->tabs->label("lighting_status",connected?"Volumetric lighting: native scene depth and sun shadows.":"Experimental lighting is waiting for a supported scene.");}
+ if(effects&&state.settings[ToneMapping].draft.number>0){AnySceneEffectsStatusV1 e;bool connected=effects->status(&e)&&e.ready;widgets->tabs->label("effects_status",connected?"Tone mapping and bloom: HDR scene, before the game's tone mapping and HUD.":"Scene effects are waiting for a supported scene.");}
  if(timing&&state.settings[CostReadout].draft.number==1){AnySceneTimingV1 t;if(timing->copy(&t)){char lit[24]="off",scene_aa[24]="off",fps[24]="";
   if(t.lighting_ms>=0)snprintf(lit,sizeof(lit),"%.2f ms",t.lighting_ms);if(t.antialiasing_ms>=0)snprintf(scene_aa,sizeof(scene_aa),"%.2f ms",t.antialiasing_ms);if(t.frame_ms>0)snprintf(fps,sizeof(fps)," | %.0f fps",1000/t.frame_ms);
-  char text[128];snprintf(text,sizeof(text),"GPU cost: lighting %s, scene AA %s%s",lit,scene_aa,fps);widgets->tabs->label("gpu_cost",text);}}
+  char finish[24]="off";AnySceneEffectsStatusV1 e;if(effects&&effects->status(&e)&&e.ready&&e.gpu_ms>=0)snprintf(finish,sizeof(finish),"%.2f ms",e.gpu_ms);
+  char text[160];snprintf(text,sizeof(text),"GPU cost: lighting %s, effects %s, scene AA %s%s",lit,finish,scene_aa,fps);widgets->tabs->label("gpu_cost",text);}}
  if(!state.status.empty())widgets->tabs->label("save_status",state.status.c_str());
 }
 static void render(const AnyFrameV1* frame,AnyCanvasV1*,void*){
@@ -81,6 +89,8 @@ static void render(const AnyFrameV1* frame,AnyCanvasV1*,void*){
   if(lighting){AnySceneLightingParametersV1 light;light.enabled=on&&(v[Atmosphere]>0||v[SunShafts]>0);light.quality=uint32_t(v[LightingQuality]);static const float density[]={0,.001f,.002f,.004f,.008f},strength[]={0,.5f,1,2,3},height[]={0,.01f,.025f,.06f};light.fog_density=v[Atmosphere]>0?density[size_t(v[Atmosphere])]:.002f;light.sun_shafts=strength[size_t(v[SunShafts])]*v[ShaftIntensity];static const float focus[]={.2f,.35f,.55f,.7f};light.anisotropy=focus[size_t(v[BeamFocus])];light.enabled=on&&(v[Atmosphere]>0||light.sun_shafts>0);light.fog_strength=v[Atmosphere]>0?1.f:0.f;light.height_falloff=height[size_t(v[GroundFog])];bool accepted;if(lighting_v2){AnySceneLightingParametersV2 local;local.scene=light;local.local_strength=strength[size_t(v[LocalBeams])]*v[LocalIntensity];static const uint32_t budgets[]={2,4,6,8};local.local_budget=budgets[size_t(v[LocalBudget])];local.scene.enabled=on&&(light.enabled||local.local_strength>0);
    if(lighting_v3){AnySceneLightingParametersV3 shaped;shaped.lighting=local;shaped.clarity=clarity_levels[size_t(v[ShaftClarity])];shaped.beam_reach=reach_levels[size_t(v[BeamReach])];shaped.sun_response=uint32_t(v[SunResponse]);shaped.temporal=uint32_t(v[TemporalLighting]);accepted=lighting_v3->set(&shaped);}
    else accepted=lighting_v2->set(&local);}else accepted=lighting->set(&light);if(!accepted){all_accepted=false;log("SCENE_LIGHTING_UPDATE rejected=1 retry_pending=1");}}
+  if(effects){AnySceneEffectsParametersV1 e;e.enabled=on&&v[ToneMapping]>0;e.tonemap=v[ToneMapping]>=3?2:v[ToneMapping]>=2?1:0;e.look=uint32_t(v[ColourLook]);e.look_strength=look_strength_levels[size_t(v[LookStrength])];e.eye_adaptation=uint32_t(v[EyeAdaptation]);e.exposure=v[Brightness];e.bloom=scene_bloom_levels[size_t(v[SceneBloom])];e.glare=glare_levels[size_t(v[SunGlare])];e.vignette=vignette_levels[size_t(v[Vignette])];
+   if(!effects->set(&e)){all_accepted=false;log("SCENE_EFFECTS_UPDATE rejected=1 retry_pending=1");}}
   bool accepted=false;if(scene_v2){AnySceneParametersV2 detailed;detailed.scene=p;detailed.clouds=uint32_t(v[Clouds]);detailed.grass=uint32_t(v[Grass]);detailed.foliage=uint32_t(v[Foliage]);accepted=scene_v2->set(&detailed);}else accepted=scene->set(&p);
   if(!accepted){all_accepted=false;log("NATIVE_SCENE_UPDATE rejected=1 retry_pending=1");}configured=all_accepted;retry_at=all_accepted?0:now+500;last_on=on;native_ready=now_ready;
  }
@@ -88,7 +98,7 @@ static void render(const AnyFrameV1* frame,AnyCanvasV1*,void*){
 }
 }
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* host,AnyModCallbacksV1* callbacks){
- if(!host||!callbacks||host->abi!=ANYAPI_MOD_ABI||host->struct_size!=sizeof(*host)||!host->log)return false;graphics::host=*host;callbacks->id="anygraphics";callbacks->render=graphics::render;graphics::log("DLL_READY settings=35 presets=7 native_only=1 post_fx_passes=0");return true;
+ if(!host||!callbacks||host->abi!=ANYAPI_MOD_ABI||host->struct_size!=sizeof(*host)||!host->log)return false;graphics::host=*host;callbacks->id="anygraphics";callbacks->render=graphics::render;graphics::log("DLL_READY settings=43 presets=7 native_only=1 post_fx_passes=0");return true;
 }
 extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics;auto services=AnyAPI_Services();if(!services)return;
  scene=(const AnySceneControlsV1*)services->query("anyapi.scene_controls",1);if(scene&&(scene->version!=1||scene->struct_size!=sizeof(*scene)||!scene->set||!scene->status))scene=nullptr;
@@ -97,6 +107,7 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics
  aa=(const AnySceneAntialiasingV1*)services->query("anyapi.scene_antialiasing",1);if(aa&&(aa->struct_size!=sizeof(*aa)||aa->version!=1||!aa->set||!aa->status))aa=nullptr;
  aa_v2=(const AnySceneAntialiasingV2*)services->query("anyapi.scene_antialiasing",2);if(aa_v2&&(aa_v2->struct_size!=sizeof(*aa_v2)||aa_v2->version!=2||!aa_v2->set||!aa_v2->status))aa_v2=nullptr;
  timing=(const AnySceneTimingServiceV1*)services->query("anyapi.scene_timing",1);if(timing&&(timing->struct_size!=sizeof(*timing)||timing->version!=1||!timing->copy))timing=nullptr;
+ effects=(const AnySceneEffectsV1*)services->query("anyapi.scene_effects",1);if(effects&&(effects->struct_size!=sizeof(*effects)||effects->version!=1||!effects->set||!effects->status))effects=nullptr;
  lighting=(const AnySceneLightingV1*)services->query("anyapi.scene_lighting",1);if(lighting&&(lighting->struct_size!=sizeof(*lighting)||lighting->version!=1||!lighting->set||!lighting->status))lighting=nullptr;
  lighting_v2=(const AnySceneLightingV2*)services->query("anyapi.scene_lighting",2);if(lighting_v2&&(lighting_v2->struct_size!=sizeof(*lighting_v2)||lighting_v2->version!=2||!lighting_v2->set||!lighting_v2->status))lighting_v2=nullptr;
  lighting_v3=(const AnySceneLightingV3*)services->query("anyapi.scene_lighting",3);if(lighting_v3&&(lighting_v3->struct_size!=sizeof(*lighting_v3)||lighting_v3->version!=3||!lighting_v3->set||!lighting_v3->status||!lighting_v2))lighting_v3=nullptr;
@@ -111,9 +122,9 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics
  if(imported){auto b=retained.find("anygraphics.scene\tnative_bloom"),enabled=state.saved.find("anygraphics.bloom\tbloom");if(b!=retained.end()&&b->second.value.number==2&&enabled!=state.saved.end()&&enabled->second.value.number==0)b->second.value.number=1;}
  state.saved=std::move(retained);
  static std::array<std::string,Count> ids;
- static const char* choices[]={"Game setting","Off (override)","On (override)"},*aa[]={"Game setting","Off (override)","FXAA (override)","SMAA 1x (scene)","Enhanced SMAA (scene)","TAA (scene)","TAA + jitter (scene, smoothest)"},*aa_quality[]={"Low","Medium","High","Ultra"},*bloom[]={"Game setting","Off (override)","Custom (override)"},*looks[]={"Off","Performance","Low","Medium","High","Ultra","Cinematic"},*haze[]={"Clear","Light","Natural","Classic (original)"},*reach[]={"Near","Medium","Far","Unlimited"},*sharpness[]={"Off","Low","Medium","High"},*strengths[]={"Off","Low","Medium","High","Ultra"},*falloff[]={"Off","Low","Medium","High"},*focus[]={"Soft","Balanced","Focused","Strong"},*budgets[]={"2 lights","4 lights","6 lights","8 lights"};
+ static const char* choices[]={"Game setting","Off (override)","On (override)"},*aa[]={"Game setting","Off (override)","FXAA (override)","SMAA 1x (scene)","Enhanced SMAA (scene)","TAA (scene)","TAA + jitter (scene, smoothest)"},*aa_quality[]={"Low","Medium","High","Ultra"},*bloom[]={"Game setting","Off (override)","Custom (override)"},*looks[]={"Off","Performance","Low","Medium","High","Ultra","Cinematic"},*haze[]={"Clear","Light","Natural","Classic (original)"},*reach[]={"Near","Medium","Far","Unlimited"},*sharpness[]={"Off","Low","Medium","High"},*strengths[]={"Off","Low","Medium","High","Ultra"},*falloff[]={"Off","Low","Medium","High"},*focus[]={"Soft","Balanced","Focused","Strong"},*budgets[]={"2 lights","4 lights","6 lights","8 lights"},*tones[]={"Off (game look)","Game curve","Filmic","Clean"},*grades[]={"None","Warm","Cool","Teal & orange","Moody","Vivid"},*amounts[]={"Subtle","Normal","Strong"},*glows[]={"Off","Subtle","Normal","Strong"},*corners[]={"Off","Light","Medium","Strong"};
  for(size_t i=0;i<Count;++i){auto& o=definitions[i];ids[i]="anygraphics."+std::string(o.group);std::transform(ids[i].begin(),ids[i].end(),ids[i].begin(),[](unsigned char c){return char(std::tolower(c));});AnyModSettingV1 d;d.mod_id=ids[i].c_str();d.mod_name="AnyGraphics";d.setting_id=o.id;d.label=o.label;d.description=o.description;d.order=int32_t(i);d.kind=o.kind;d.default_number=o.initial;d.minimum=o.minimum;d.maximum=o.maximum;d.step=o.step;
-  if(d.kind==ANY_SETTING_CHOICE){d.choices=i==ShaftClarity?haze:i==BeamReach?reach:i==Sharpening?sharpness:i==LocalBeams?strengths:i==LocalBudget?budgets:i==BeamFocus?focus:i==Atmosphere||i==SunShafts?strengths:i==LightingQuality?aa_quality:i==GroundFog?falloff:i==Preset?looks:i==NativeAA?aa:i==NativeBloom?bloom:i==AAQuality?aa_quality:choices;d.choice_count=i==ShaftClarity||i==BeamReach||i==Sharpening?4:i==LocalBeams?5:i==LocalBudget?4:i==BeamFocus?4:i==Atmosphere||i==SunShafts?5:i==LightingQuality||i==GroundFog?4:i==Preset?7:i==AAQuality?4:i==NativeAA?(graphics::aa_v2?7:graphics::aa?5:3):3;}tokens[i]=state.add(&d);
+  if(d.kind==ANY_SETTING_CHOICE){d.choices=i==ToneMapping?tones:i==ColourLook?grades:i==LookStrength?amounts:i==SceneBloom||i==SunGlare?glows:i==Vignette?corners:i==ShaftClarity?haze:i==BeamReach?reach:i==Sharpening?sharpness:i==LocalBeams?strengths:i==LocalBudget?budgets:i==BeamFocus?focus:i==Atmosphere||i==SunShafts?strengths:i==LightingQuality?aa_quality:i==GroundFog?falloff:i==Preset?looks:i==NativeAA?aa:i==NativeBloom?bloom:i==AAQuality?aa_quality:choices;d.choice_count=i==ToneMapping||i==SceneBloom||i==SunGlare||i==Vignette?4:i==ColourLook?6:i==LookStrength?3:i==ShaftClarity||i==BeamReach||i==Sharpening?4:i==LocalBeams?5:i==LocalBudget?4:i==BeamFocus?4:i==Atmosphere||i==SunShafts?5:i==LightingQuality||i==GroundFog?4:i==Preset?7:i==AAQuality?4:i==NativeAA?(graphics::aa_v2?7:graphics::aa?5:3):3;}tokens[i]=state.add(&d);
  }
  if(state.settings.size()!=Count){log("GRAPHICS_MENU registration_failed=1");return;}
  // Migrate numeric tuning to the nearest named strength without changing native on/off choices.
@@ -124,5 +135,5 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics
  state.settings[SceneExposure].committed.number=0;state.settings[SceneExposure].draft=state.settings[SceneExposure].committed;
  AnyMenuSectionV1 section;section.id="anygraphics";section.title="AnyGraphics · Modded";section.location=ANY_MENU_SETTINGS_GRAPHICS;section.order=100;section.draw=draw;section.event=event;section.dirty=dirty;section.defaults=defaults;
  if(!menu->add_section(&section)){log("GRAPHICS_MENU registration_failed=1 requires_API_28=1");return;}
- log("SETTINGS_REGISTERED count=35 location=settings.graphics native_only=1 post_fx_passes=0 imported="+std::to_string(imported));
+ log("SETTINGS_REGISTERED count=43 location=settings.graphics native_only=1 post_fx_passes=0 imported="+std::to_string(imported));
 }

@@ -22,6 +22,8 @@ static void scoped_render(void* self,const AnySceneParametersV1* p,const uint32_
 static void renderer_hook(void* self){++renderer_calls;auto policy=snapshot();auto p=policy.scene;
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  if(scene_antialiasing::begin()){if(!p.enabled){p=AnySceneParametersV1{};p.enabled=1;}p.aa=1;}
+ // Scene effects replace the game's bloom; their own bloom runs before tone mapping.
+ if(scene_effects::copy().enabled){if(!p.enabled){p=AnySceneParametersV1{};p.enabled=1;}p.bloom=1;}
 #endif
  if(p.enabled)scoped_render(self,&p,policy.details.data());else ((RenderFn)renderer_cell.original())(self);
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
@@ -60,6 +62,7 @@ static void pre_hud_hook(void* renderer,void* scene){
 static void lighting_hook(void* renderer,void* scene){((SceneFn)lighting_cell.original())(renderer,scene);
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  scene_lighting::record(renderer,scene);
+ scene_effects::record(renderer,scene);
 #endif
 }
 static const unsigned char ADDITIVE[]={0x53,0x55,0x56,0x57,0x41,0x54,0x48,0x81,0xec,0x50,0x01,0,0,0x48,0x89,0x8c,0x24,0xe8,0,0,0,0x48,0x89,0x94,0x24,0xf0,0,0,0,0x48,0x8b,0x05};
@@ -84,7 +87,7 @@ static DWORD WINAPI worker(void*){for(unsigned attempt=0;attempt<120&&!ready;++a
  if(boundary&&pre_hud_cell.install(boundary,(void*)pre_hud_hook)){pre_hud_ready=true;
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  scene_antialiasing::available=true;
- auto light=resolve_unique_cell(record,2600,33,ADDITIVE,sizeof(ADDITIVE));if(light&&lighting_cell.install(light,(void*)lighting_hook)){scene_lighting::available=true;log_line(ANY_LOG_INFO,"framework","SCENE_LIGHTING resolved=1 location=HDR_AFTER_ADDITIVE_BEFORE_BLOOM_TONEMAP_HUD experimental=1");}
+ auto light=resolve_unique_cell(record,2600,33,ADDITIVE,sizeof(ADDITIVE));if(light&&lighting_cell.install(light,(void*)lighting_hook)){scene_lighting::available=true;scene_effects::available=true;log_line(ANY_LOG_INFO,"framework","SCENE_LIGHTING resolved=1 location=HDR_AFTER_ADDITIVE_BEFORE_BLOOM_TONEMAP_HUD experimental=1");}
 #endif
  log_line(ANY_LOG_INFO,"framework","SCENE_AA_STAGE resolved=1 location=AFTER_SCENE_COMPOSITION_BEFORE_HUD scene_replacement_available=1");}
  else log_line(ANY_LOG_WARN,"framework","SCENE_AA_STAGE unavailable=1 replacement_AA_not_exposed=1");

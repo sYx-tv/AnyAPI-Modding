@@ -13,6 +13,7 @@
 #include "anyapi_scene_lighting_v3.h"
 #include "anyapi_scene_antialiasing_v2.h"
 #include "anyapi_scene_timing_v1.h"
+#include "anyapi_scene_effects_v1.h"
 #include "anyapi_scene_antialiasing_v1.h"
 #include "anyapi_post_process_v1.h"
 #include "anygraphics_options.h"
@@ -38,6 +39,10 @@ static const AnySceneAntialiasingV2 aa2_api{sizeof(AnySceneAntialiasingV2),2,aa_
 static unsigned timing_reads{};
 static bool timing_copy(AnySceneTimingV1* t){++timing_reads;t->lighting_ms=1.25f;t->antialiasing_ms=.5f;t->frame_ms=16.6f;return true;}
 static const AnySceneTimingServiceV1 timing_api{sizeof(AnySceneTimingServiceV1),1,timing_copy};
+static AnySceneEffectsParametersV1 effects_policy;static unsigned effects_reads{};
+static bool effects_set(const AnySceneEffectsParametersV1* p){effects_policy=*p;return true;}
+static bool effects_status(AnySceneEffectsStatusV1* s){++effects_reads;s->ready=1;s->gpu_ms=.4f;return true;}
+static const AnySceneEffectsV1 effects_api{sizeof(AnySceneEffectsV1),1,effects_set,effects_status};
 static AnySceneParametersV1 policy;static bool ready=true;static unsigned submissions{},post_calls{};
 static bool reject_scene=false;
 static bool set(const AnySceneParametersV1* p){++submissions;if(reject_scene)return false;policy=*p;return true;}
@@ -51,7 +56,7 @@ static const AnyPostProcessV1 post{sizeof(AnyPostProcessV1),1,forbidden,nullptr,
 static void log(uint32_t,const char*,const char* text){std::cout<<text<<'\n';}
 int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitbuf;using namespace graphics_options;assert(argc==4||argc==5);bool local=argc==5&&std::wstring(argv[4])==L"--local-lights",absent=argc==5&&!local;
  auto fixture=LoadLibraryW(argv[1]);assert(fixture);auto service=AnyAPI_Services();assert(service);assert(service->publish("anyapi.post_process",1,&post));if(!absent){assert(service->publish("anyapi.scene_controls",1,&scene));assert(service->publish("anyapi.scene_controls",2,&scene_v2));assert(service->publish("anyapi.scene_antialiasing",1,&aa_api));assert(service->publish("anyapi.scene_lighting",1,&lighting_api));}auto graphics=LoadLibraryW(argv[3]);assert(graphics);
- if(local){assert(service->publish("anyapi.scene_lighting",2,&local_api));assert(service->publish("anyapi.scene_lighting",3,&shaped_api));assert(service->publish("anyapi.scene_antialiasing",2,&aa2_api));assert(service->publish("anyapi.scene_timing",1,&timing_api));}
+ if(local){assert(service->publish("anyapi.scene_lighting",2,&local_api));assert(service->publish("anyapi.scene_lighting",3,&shaped_api));assert(service->publish("anyapi.scene_antialiasing",2,&aa2_api));assert(service->publish("anyapi.scene_timing",1,&timing_api));assert(service->publish("anyapi.scene_effects",1,&effects_api));}
  auto root=std::filesystem::temp_directory_path()/(L"AnyGraphicsNative-"+std::to_wstring(GetCurrentProcessId()));std::filesystem::create_directories(root/L"AnyHelpers");
  // Migration retains native keys, ignores removed post FX and does not load AnyHelpers.
  {std::ofstream old(root/L"AnyHelpers"/L"settings.tsv");old<<"anygraphics.scene\tsun_light\t3\t312e35\nanygraphics.general\tcomparison\t4\t31\nanygraphics.sharpness\tsharpen\t1\t31\n";}
@@ -73,11 +78,17 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  const float clarity[]={.85f,.85f,.85f,.85f,.85f,.6f},reach[]={60,60,120,120,250,250},sharpening[]={0,0,0,.3f,.3f,.55f};const uint32_t methods[]={1,1,1,3,4,4};
  for(int preset=1;preset<=6;++preset){apply(Preset,preset);auto i=preset-1;std::cout<<"PRESET "<<preset<<" enabled="<<lighting_policy.enabled<<" density="<<lighting_policy.fog_density<<" sun="<<lighting_policy.sun_shafts<<" local="<<local_policy.local_strength<<" quality="<<lighting_policy.quality<<" budget="<<local_policy.local_budget<<" height="<<lighting_policy.height_falloff<<std::endl;assert(lighting_policy.enabled==(preset>1)&&lighting_policy.fog_density==densities[i]&&std::abs(lighting_policy.sun_shafts-sun_strength[i])<.001f&&std::abs(local_policy.local_strength-local_strength[i])<.001f&&lighting_policy.quality==quality[i]&&local_policy.local_budget==budgets[i]&&lighting_policy.height_falloff==0);
   assert(shaped_policy.clarity==clarity[i]&&shaped_policy.beam_reach==reach[i]&&shaped_policy.sun_response==1&&shaped_policy.temporal==1);
-  assert(aa2_policy.enabled==(preset>1)&&(preset==1||aa2_policy.method==methods[i])&&std::abs(aa2_policy.sharpening-sharpening[i])<.001f);}
+  assert(aa2_policy.enabled==(preset>1)&&(preset==1||aa2_policy.method==methods[i])&&std::abs(aa2_policy.sharpening-sharpening[i])<.001f);
+  // Finishing: Filmic from Low up; Vivid from Ultra; bloom and glare grow with the preset.
+  const float scene_bloom[]={0,.25f,.25f,.45f,.45f,.7f};const uint32_t looks[]={0,0,0,0,5,5};
+  assert(effects_policy.enabled==(preset>1)&&(preset==1||effects_policy.tonemap==1)&&(preset==1||effects_policy.look==looks[i])&&(preset==1||std::abs(effects_policy.bloom-scene_bloom[i])<.001f)&&effects_policy.eye_adaptation==1);}
  // Shaping rows submit their own values; the GPU cost readout polls timing while the menu draws.
  apply(Preset,3);apply(ShaftClarity,3);apply(BeamReach,3);apply(SunResponse,0);apply(TemporalLighting,0);assert(shaped_policy.clarity==0&&shaped_policy.beam_reach==0&&!shaped_policy.sun_response&&!shaped_policy.temporal);
  apply(NativeAA,5);apply(Sharpening,3);assert(aa2_policy.enabled&&aa2_policy.method==3&&std::abs(aa2_policy.sharpening-.8f)<.001f);apply(NativeAA,6);assert(aa2_policy.method==4);apply(NativeAA,2);assert(!aa2_policy.enabled);
- event(ANY_MENU_OPEN);stage(0,0);assert(timing_reads>0);event(ANY_MENU_CANCEL);
+ event(ANY_MENU_OPEN);stage(0,0);assert(timing_reads>0&&effects_reads>0);event(ANY_MENU_CANCEL);
+ apply(ToneMapping,3);apply(ColourLook,3);apply(LookStrength,0);apply(SunGlare,0);apply(Vignette,3);apply(Brightness,1);
+ assert(effects_policy.enabled&&effects_policy.tonemap==2&&effects_policy.look==3&&effects_policy.look_strength==.5f&&effects_policy.glare==0&&effects_policy.vignette==.8f&&effects_policy.exposure==1);
+ apply(ToneMapping,0);assert(!effects_policy.enabled);
  apply(Preset,6);
  event(ANY_MENU_OPEN);stage(Preset+1,1);render();assert(std::abs(local_policy.local_strength-3.9f)<.001f);event(ANY_MENU_CANCEL);render();assert(std::abs(local_policy.local_strength-3.9f)<.001f);
  apply(Enabled,0);assert(!lighting_policy.enabled);apply(Enabled,1);ui(13);render();assert(!lighting_policy.enabled);apply(GameplayOnly,0);assert(lighting_policy.enabled);

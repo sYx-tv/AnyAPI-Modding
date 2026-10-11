@@ -4,7 +4,7 @@
 #include <array>
 #include <cmath>
 namespace graphics_options {
-enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,ShaftClarity,BeamReach,SunResponse,TemporalLighting,Sharpening,CostReadout,Count};
+enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,ShaftClarity,BeamReach,SunResponse,TemporalLighting,Sharpening,CostReadout,ToneMapping,ColourLook,LookStrength,EyeAdaptation,Brightness,SceneBloom,SunGlare,Vignette,Count};
 struct Option {const char* id;const char* group;const char* label;const char* description;uint32_t kind;float initial,minimum,maximum,step;};
 static constexpr Option definitions[]={
  {"enabled","General","Enable AnyGraphics","Use the selected native graphics settings. Off restores the game's own settings.",ANY_SETTING_BOOL,1,0,1,1},
@@ -41,7 +41,15 @@ static constexpr Option definitions[]={
  {"sun_response","Lighting","Follow sun height","Strongest, warm beams at sunrise and sunset; subtle at noon; none at night.",ANY_SETTING_BOOL,1,0,1,1},
  {"temporal_lighting","Lighting","Smooth beams and fog","Blend recent frames to remove banding and noise in volumetric lighting.",ANY_SETTING_BOOL,1,0,1,1},
  {"crispness","Scene","Sharpening","Contrast-adaptive sharpening after scene AA, before the HUD. Restores detail softened by TAA or SMAA.",ANY_SETTING_CHOICE,0,0,3,1},
- {"cost_readout","General","Show GPU cost","Show how long volumetric lighting and scene AA take on the GPU, and the frame rate.",ANY_SETTING_BOOL,1,0,1,1}
+ {"cost_readout","General","Show GPU cost","Show how long volumetric lighting, scene effects and scene AA take on the GPU, and the frame rate.",ANY_SETTING_BOOL,1,0,1,1},
+ {"tone_mapping","Finish","Tone mapping","Off keeps the game's look. Filmic keeps colour and detail in bright light like a film camera; Clean stays bright and true to the game's colours. Any choice other than Off also replaces the game's bloom.",ANY_SETTING_CHOICE,0,0,3,1},
+ {"colour_look","Finish","Colour look","A colour grade on top of tone mapping. Vivid is the shader-pack look.",ANY_SETTING_CHOICE,0,0,5,1},
+ {"look_strength","Finish","Look strength","How strongly the colour look is applied.",ANY_SETTING_CHOICE,1,0,2,1},
+ {"eye_adaptation","Finish","Eye adaptation","Briefly brightens dark places and dims bright ones, like your eyes adjusting, then settles back to the game's own day and night brightness.",ANY_SETTING_BOOL,1,0,1,1},
+ {"brightness","Finish","Brightness (stops)","Overall exposure before tone mapping. 0 keeps the game's brightness.",ANY_SETTING_NUMBER,0,-2,2,.25f},
+ {"scene_bloom","Finish","Bloom","Soft, wide glow around bright light, before tone mapping. Replaces the game's bloom while tone mapping is on.",ANY_SETTING_CHOICE,2,0,3,1},
+ {"sun_glare","Finish","Sun glare","A glow and faint streaks around the sun when it is in view, dimmed when trees or terrain block it.",ANY_SETTING_CHOICE,2,0,3,1},
+ {"vignette","Finish","Vignette","Darkens the corners of the screen.",ANY_SETTING_CHOICE,0,0,3,1}
 };
 static_assert(std::size(definitions)==Count);
 using Values=std::array<float,Count>;
@@ -51,10 +59,12 @@ inline constexpr float fog_levels[]={0,.35f,.65f,1,1.5f};
 inline constexpr float light_levels[]={0,.75f,1,1.15f,1.3f};
 inline constexpr float bloom_levels[]={.05f,.1f,.2f,.35f};
 inline constexpr float clarity_levels[]={1,.85f,.6f,0},reach_levels[]={60,120,250,0},sharpen_levels[]={0,.3f,.55f,.8f};
+inline constexpr float look_strength_levels[]={.5f,.8f,1},scene_bloom_levels[]={0,.25f,.45f,.7f},glare_levels[]={0,.5f,1,1.6f},vignette_levels[]={0,.25f,.5f,.8f};
 // Native AA choice -> scene AA method: 3 SMAA, 4 Enhanced SMAA, 5 TAA, 6 TAA + jitter.
 inline uint32_t aa_method(float choice){return choice>=6?4:choice>=5?3:choice>=4?2:1;}
 // Menu order: new rows sit next to the controls they modify.
 inline constexpr Index order[]={Enabled,GameplayOnly,Preset,Advanced,NativeAA,AAQuality,Sharpening,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,Clouds,Grass,Foliage,
+ ToneMapping,ColourLook,LookStrength,Brightness,EyeAdaptation,SceneBloom,SunGlare,Vignette,
  Atmosphere,SunShafts,ShaftIntensity,ShaftClarity,BeamReach,SunResponse,BeamFocus,LightingQuality,TemporalLighting,GroundFog,LocalBeams,LocalIntensity,LocalBudget,CostReadout};
 static_assert(std::size(order)==Count);
 template<size_t N> inline uint32_t nearest(float value,const float(&levels)[N]){uint32_t best=0;for(uint32_t i=1;i<N;++i)if(std::abs(value-levels[i])<std::abs(value-levels[best]))best=i;return best;}
@@ -74,6 +84,9 @@ inline Values profile(const Values& current,int level){
  v[Atmosphere]=atmosphere[tier];v[SunShafts]=beams[tier];v[LocalBeams]=local[tier];v[LightingQuality]=v[LocalBudget]=quality[tier];
  v[ShaftIntensity]=sun_intensity[tier];v[LocalIntensity]=local_intensity[tier];v[BeamFocus]=focus[tier];v[GroundFog]=0;
  v[ShaftClarity]=clarity[tier];v[BeamReach]=reach[tier];v[SunResponse]=1;v[TemporalLighting]=1;
+ // Finishing: Filmic from Low up, the shader-pack look from Ultra.
+ static constexpr float tone[]={0,2,2,2,2,2},look[]={0,0,0,0,5,5},strength[]={1,1,1,1,1,2},scene_bloom[]={0,1,1,2,2,3},glare[]={0,1,1,2,2,2},vignette[]={0,0,0,0,1,1};
+ v[ToneMapping]=tone[tier];v[ColourLook]=look[tier];v[LookStrength]=strength[tier];v[EyeAdaptation]=1;v[Brightness]=0;v[SceneBloom]=scene_bloom[tier];v[SunGlare]=glare[tier];v[Vignette]=vignette[tier];
  v[Clouds]=level==1?1.f:0.f;v[Grass]=level<=2?1.f:0.f;v[Foliage]=0;v[FogDensity]=fog[tier];return v;
 }
 inline Values effective(const Values& custom){return custom;}

@@ -1,8 +1,8 @@
 # AnyGraphics
 
 AnyGraphics is a native graphics mod for Anymaker 0.1.24. The current release is
-**0.30.0**, which needs **AnyAPI 0.36.0** for TAA, sharpening, beam shaping
-and the GPU cost readout (older APIs keep the 0.29 feature set; TAA choices
+**0.30.0**, which needs **AnyAPI 0.36.0** for TAA, sharpening, beam shaping,
+tone mapping and colour looks, and the GPU cost readout (older APIs keep the 0.29 feature set; TAA choices
 fall back to SMAA). Its controls live inside
 Settings → Graphics, in the scrolling **AnyGraphics · Modded** section. It does
 not require AnyHelpers.
@@ -10,8 +10,27 @@ not require AnyHelpers.
 The menu and native controls arrived in 0.28.0, volumetric lighting in 0.29.0,
 fog-independent light beams in 0.29.1 (with API 0.32.0), and bounded retries for
 rejected settings in 0.29.3. 0.30.0 fixes foggy sun shafts and adds TAA,
-sharpening, a Cinematic preset and a GPU cost readout. See the
+sharpening, tone mapping and colour looks, a Cinematic preset and a GPU cost
+readout. See the
 [release records](../releases/README.md).
+
+## Tone mapping and colour (0.30.0)
+
+The **Finish** rows grade the HDR scene before the game's tone mapping, using
+[scene effects](../api/scene-effects.md):
+
+- **Tone mapping**: Off (game look), Game curve, Filmic (AgX-style, keeps
+  colour in bright light) or Clean (bright and true to the game's colours).
+  Anything but Off also replaces the game's bloom, so the Bloom row there
+  takes over and the native Bloom row is hidden.
+- **Colour look**: None, Warm, Cool, Teal & orange, Moody or Vivid (the
+  shader-pack look), with **Look strength** Subtle, Normal or Strong.
+- **Eye adaptation**: brightens caves and tunnels and dims bright views for a
+  moment, then returns to the game's own day and night brightness.
+- **Brightness (stops)**, **Bloom**, **Sun glare** and **Vignette**.
+
+Presets use Filmic from Low up and add Vivid from Ultra; Cinematic applies it
+at Strong with strong bloom and a light vignette.
 
 ## Controls
 
