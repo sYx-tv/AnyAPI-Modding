@@ -223,6 +223,7 @@ void hk_update_ui_new_game(void* fui, const double* dt, void* settings, void* ui
 struct ServerState {
     uint8_t* scene = nullptr;
     bool settled = false, active = false, tier_pending = false, players_set = false;
+    int players_logged = 0;
     int waits = 0;
     WorldFile world;
 };
@@ -324,6 +325,17 @@ void server_tick(uint8_t* scene, uint8_t* server, bool loading) {
         }
     }
     if (!s.active) return;
+    // The multiplayer host screen writes its own player count when hosting starts (server.settings.update_settings),
+    // so keep the world's choice in place; joins check this value (server.on_network_event request_join).
+    if (server && !s.world.config.is_default(kMaxPlayers)) {
+        auto* count = reinterpret_cast<int32_t*>(server + off::server_max_players);
+        int32_t want = int32_t(s.world.config[kMaxPlayers]);
+        if (*count != want) {
+            if (s.players_logged < 5) { log(0, "max players was changed to %d by the game; set back to %d", int(*count), int(want)); ++s.players_logged; }
+            if (g_s32[gMaxPlayers].p && *g_s32[gMaxPlayers].p < want) *g_s32[gMaxPlayers].p = want;
+            *count = want;
+        }
+    }
     if (needs_time_override(s.world.config)) drive_time(scene, s.world.config);
     if (s.tier_pending && !loading && fn_set_loot_level) {
         int32_t level = int32_t(s.world.config[kStartTier]);

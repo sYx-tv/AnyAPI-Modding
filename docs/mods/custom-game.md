@@ -22,8 +22,8 @@ The page remembers the last settings you started with. The **Presets** tab saves
 | General | Game mode | Career, Creative, Sandbox | |
 | | Day cycle speed | Normal, Frozen, 0.25x to 8x | Normal keeps the game's rules (Sandbox time stands still) |
 | | Start time | Game default, 00:00 to 23:00 | |
-| | Starting loot tier | 1 to 5 | Set once when the world starts; finishing bunkers still raises it |
-| | Max players | 2 to 20 | The game's own limit is 6; above 6 is untested |
+| | Starting loot tier | 1 to 5 | Set once when the world starts; finishing bunkers still raises it. Sandbox has no loot |
+| | Max players | 2 to 20 | The game's own limit is 6. Kept in place even when the multiplayer host screen sets its own count; above 6 is untested |
 | Survival | Hunger, thirst, stamina drain, clothes soak speed | Off, 25% to 400% | Off means it never happens |
 | | Stamina recovery, clothes dry speed | 25% to 400% | |
 | | Breath underwater | 25% to 500% | Air and drowning time |
@@ -33,7 +33,7 @@ The page remembers the last settings you started with. The **Presets** tab saves
 | | Zombie horde size | 0% to 300% | |
 | | Max enemies around | 25% to 300% | Zombies, creatures and survivors |
 | | Enemy sight range, enemy hearing range | 25% to 300% | Zombies, creatures and survivors |
-| | No-spawn zone | 0% to 300% | How close to players enemies may spawn |
+| | No-spawn zone | 0% to 300% | The safe area around the world's starting point where enemies never spawn |
 | World | Loot amount | 25% to 500% | How often loot spots have something. Only places not yet visited are affected |
 | | Weather | Normal, Always clear, cloudy, rain, storm, fog | |
 | | Rain and snow density | 0% to 100% | Looks only |
@@ -76,6 +76,9 @@ The files are plain `key=value` text. Hand edits snap to the nearest menu step.
 ## Known limits
 
 - More than 6 players is untested: the game, its networking and its UI were built for 6.
+- Sandbox players cannot be hurt and are revived at once, so zombies and creatures switched on there are harmless.
+- Survival, loot and tier settings follow the game's own mode rules: Sandbox has no loot, and the Creative dome
+  protects you while you are inside it.
 - A world started with a higher tier skips the loot of the earlier tiers, the same way finishing bunkers does.
 - With a fixed day speed or start time, the game's developer time controls are overridden.
 - The field offsets come from the 0.1.24 SDK reference; after a game update, re-check them as well as the
