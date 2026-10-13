@@ -12,11 +12,11 @@ the normal world.
 
 1. In **Settings → MapEditor**, type a name in **Map pack** (for example `My Island`) and apply. A new name
    starts as a copy of the normal world, saved in `<game>\AnyAPI and Modding\maps\My Island\`.
-2. Create a new world (Creative is easiest) and press **F8**. The editor's menu bar appears at the top of the
+2. Create a new world (Creative is easiest) and press **F7**. The editor's menu bar appears at the top of the
    screen; open its windows (terrain chunks, tiles and junctions, props, loot, spawns...) from there.
 3. The mouse cursor is free while the editor is open. Hold the **right mouse button** to look around.
 4. Saving in the editor writes the changed tiles into the map pack, never into the game's own files.
-5. Press **F8** again to close the editor.
+5. Press **F7** again to close the editor.
 
 To play a map, keep its name in **Map pack** and create a new world. Clear the setting to go back to the normal
 world. Existing saves keep the props they already stored, so map changes show fully only in new worlds. Every
@@ -24,7 +24,7 @@ player in a multiplayer game needs the same map pack.
 
 | Control | What it does |
 | --- | --- |
-| **F8** | Open or close the map editor (in a world; rebind it in **Controls → MapEditor**) |
+| **F7** | Open or close the map editor (in a world; rebind it in **Controls → MapEditor**) |
 | **Right mouse (hold)** | Look around while the editor is open |
 
 MapEditor needs [AnyHelpers](helpers.md) to choose a map pack. Without it the editor stays closed.

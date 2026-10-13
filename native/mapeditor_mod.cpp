@@ -13,7 +13,7 @@
 // of the stock tiles. With no pack chosen the editor stays closed and the stock tiles are never written.
 // Map changes apply to new worlds; an existing save keeps the props it already stored.
 //
-// Controls: F8 toggles the editor in a world (rebindable in Controls under MapEditor when AnyHelpers is installed).
+// Controls: F7 toggles the editor in a world (rebindable in Controls under MapEditor when AnyHelpers is installed).
 //
 // EXPERIMENTAL and diagnostic. Anymaker 0.1.24 / Steam build 25826614 only (mapeditor_bindings.h). The first runs
 // log the file paths the game uses and which path store reads absolute paths; read anymaker_modding.log.
@@ -262,7 +262,7 @@ void read_settings() {
 
 uint32_t toggle_key() {
     uint32_t k = controls && g_action ? controls->key(g_action) : 0;
-    return k ? k : (controls && g_action ? 0 : VK_F8);
+    return k ? k : (controls && g_action ? 0 : VK_F7);
 }
 
 void toggle_editor() {
@@ -349,7 +349,7 @@ void install_hooks() {
         bool ui_ok = hook(h_scene_ui, bind::client_scene_update_ui, (void*)&hk_scene_ui, "client_scene.update_ui");
         hook(h_capture, bind::mouse_capture, (void*)&hk_capture, "frontend_ui.get_is_mouse_capture_requested");
         g_ready = files && ui_ok && g_update_ui && g_abs_store >= 0;
-        log(g_ready ? 0 : 2, g_ready ? "Ready after %d s. Choose a map pack in Settings, enter a world and press F8."
+        log(g_ready ? 0 : 2, g_ready ? "Ready after %d s. Choose a map pack in Settings, enter a world and press F7."
                                      : "Not ready after %d s; see the errors above", attempt);
         return;
     }
@@ -377,7 +377,7 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
     controls = static_cast<const ModControlsV1*>(services->query("anyhelpers.controls", 1));
     if (controls && controls->struct_size == sizeof(*controls) && controls->version == 1 && controls->register_action && controls->key) {
         ModControlActionV1 d; d.mod_id = kModId; d.mod_name = "MapEditor"; d.action_id = "toggle_editor";
-        d.label = "Open / close the map editor"; d.default_key = VK_F8;
+        d.label = "Open / close the map editor"; d.default_key = VK_F7;
         g_action = controls->register_action(&d);
     } else controls = nullptr;
     settings = static_cast<const AnyHelpersSettingsV1*>(services->query("anyhelpers.settings", 1));
