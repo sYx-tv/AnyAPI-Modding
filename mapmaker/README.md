@@ -3,7 +3,7 @@
 A Windows map editor for Anymaker. It saves map packs into the game folder; the
 [CustomMap mod](../docs/mods/custom-map.md) plays them (pick the map on CustomGame's Custom Game page).
 
-**Status: 0.2.0.** Open the stock world, a map pack, or a new blank island, then edit it with the tools on the left:
+**Status: 0.2.1.** Open the stock world, a map pack, or a new blank island, then edit it with the tools on the left:
 
 | Tool | What it does |
 | --- | --- |
@@ -17,7 +17,9 @@ A Windows map editor for Anymaker. It saves map packs into the game folder; the
 | Erase | Removes things and roads under the brush |
 | Select | Shows a tile's raw data for hand edits |
 
-Ctrl+Z / Ctrl+Y undo and redo. Terrain is made of the game's own authored pieces, so there is no free-form
+Ctrl+Z / Ctrl+Y undo and redo. Two crosshairs mark where the game starts new players (Creative/Sandbox and
+Survival; fixed in the game). They turn red when there is no land under them. A new blank island is centred on the
+Creative/Sandbox start. Terrain is made of the game's own authored pieces, so there is no free-form
 grass or dirt painting; buildings come from the game's own set.
 
 ## Build and run

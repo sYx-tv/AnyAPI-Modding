@@ -5,7 +5,7 @@ using System.IO;
 using System.Windows.Forms;
 namespace AnyMapMaker {
  public sealed class MainForm : Form {
-  public const string Version="0.2.0";
+  public const string Version="0.2.1";
   static readonly Color Panel=Color.FromArgb(14,19,28), Raised=Color.FromArgb(21,27,39), Ink=Color.FromArgb(230,235,243), Muted=Color.FromArgb(125,136,153);
   readonly MapView view=new MapView{Dock=DockStyle.Fill};
   readonly CheckedListBox layers=new CheckedListBox{Dock=DockStyle.Fill,BorderStyle=BorderStyle.None,CheckOnClick=true,IntegralHeight=false};
@@ -47,7 +47,7 @@ namespace AnyMapMaker {
    var viewMenu=new ToolStripMenuItem("&View");
    ((ToolStripMenuItem)viewMenu.DropDownItems.Add("&Fit whole map",null,(s,e)=>view.FitAll())).ShortcutKeys=Keys.Control|Keys.D0;
    var help=new ToolStripMenuItem("&Help");
-   help.DropDownItems.Add("&Controls",null,(s,e)=>MessageBox.Show(this,"Scroll to zoom. Drag with the right or middle mouse button to move around.\nPick a tool on the left; its options appear under it. Ctrl+Z undoes, Ctrl+Y redoes.\n\nTerrain: click or drag over triangles to paint a terrain piece (ocean removes land).\nHeight: click to raise a triangle 32 m, Ctrl+click to lower it.\nRoad: click points along the road, double click or Enter to finish, Backspace removes the last point, Esc cancels.\nFence: drag a line.\nProp, building spot, loot: click to place, or drag to aim it.\nErase: click or drag over things to remove them.\nSelect: click a tile to see and edit its raw data on the right.\n\nSave map pack writes the map to AnyAPI and Modding\\maps in the game folder, where the CustomMap mod finds it.","Controls"));
+   help.DropDownItems.Add("&Controls",null,(s,e)=>MessageBox.Show(this,"Scroll to zoom. Drag with the right or middle mouse button to move around.\nPick a tool on the left; its options appear under it. Ctrl+Z undoes, Ctrl+Y redoes.\n\nTerrain: click or drag over triangles to paint a terrain piece (ocean removes land).\nHeight: click to raise a triangle 32 m, Ctrl+click to lower it.\nRoad: click points along the road, double click or Enter to finish, Backspace removes the last point, Esc cancels.\nFence: drag a line.\nProp, building spot, loot: click to place, or drag to aim it.\nErase: click or drag over things to remove them.\nSelect: click a tile to see and edit its raw data on the right.\n\nThe crosshairs mark where the game starts new players (Creative/Sandbox and Survival). Keep land there, or they turn red.\n\nSave map pack writes the map to AnyAPI and Modding\\maps in the game folder, where the CustomMap mod finds it.","Controls"));
    help.DropDownItems.Add("&About",null,(s,e)=>MessageBox.Show(this,"Anymaker Map Maker "+Version+"\nPart of AnyAPI-Modding. Map packs are loaded in game by the CustomMap mod.","About"));
    menu.Items.AddRange(new ToolStripItem[]{file,edit,viewMenu,help});
    MainMenuStrip=menu;
@@ -249,9 +249,8 @@ namespace AnyMapMaker {
     var ok=new Button{Text="Create",DialogResult=DialogResult.OK,Location=new Point(250,90)};d.Controls.Add(ok);d.AcceptButton=ok;
     if(d.ShowDialog(this)!=DialogResult.OK)return;cells=(int)size.Value;
    }
-   // Centre it where the normal world's land is, so the game's start area is on the island.
-   int cx=87,cz=118;
-   try{if(game!=null){var stock=MapPack.LoadTiles(game.StockTiles,"stock");long sx=0,sz=0;foreach(var k in stock.Tiles.Keys){sx+=k.X;sz+=k.Z;}if(stock.Tiles.Count>0){cx=(int)(sx/stock.Tiles.Count);cz=(int)(sz/stock.Tiles.Count);}}}catch{}
+   // Centre it on the game's fixed Creative / Sandbox start point, so new players land on the island.
+   var spawn=Grid.At(Grid.SpawnCreative.X,Grid.SpawnCreative.Z);int cx=spawn.X,cz=spawn.Z;
    OpenWith(()=>MapEditor.BlankIsland(catalog,cx,cz,cells,cells,0));
   }
 

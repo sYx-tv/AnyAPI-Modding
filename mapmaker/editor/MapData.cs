@@ -43,6 +43,8 @@ namespace AnyMapMaker {
 
  public static class Grid {
   public const double Edge=512, Height=443.40500673763256, Step=32; // Height = 256*sqrt(3)
+  // Where the game puts new players (server_scene.get_spawn_position, fixed in game.exe 0.1.25).
+  public static readonly Vec3 SpawnCreative=new Vec3(83949,0,55851), SpawnSurvival=new Vec3(85611,0,49871);
   public static Vec3 Corner(int x,int z){return new Vec3(Edge*x+Edge/2*z,0,Height*z);}
   public static Vec3[] Corners(TileKey k){
    if(k.T==0)return new[]{Corner(k.X,k.Z),Corner(k.X+1,k.Z),Corner(k.X,k.Z+1)};

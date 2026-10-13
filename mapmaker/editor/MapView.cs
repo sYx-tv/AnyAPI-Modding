@@ -121,6 +121,7 @@ namespace AnyMapMaker {
      if(scale>0.6&&m.Layer!="junctions")TextRenderer.DrawText(g,m.Label,Font,new Point((int)p.X+6,(int)p.Y-6),Color.FromArgb(230,235,243));
     }
    }
+   DrawSpawn(g,Grid.SpawnCreative,"Start: Creative / Sandbox");DrawSpawn(g,Grid.SpawnSurvival,"Start: Survival");
    DrawPreview(g);
    DrawOutline(g,Hovered,Color.FromArgb(160,255,255,255),1);
    DrawOutline(g,Selected,Color.FromArgb(255,214,102),2.5f);
@@ -141,6 +142,13 @@ namespace AnyMapMaker {
     float r=(float)Math.Max(3,EraseRadius*scale);
     using(var pen=new Pen(Color.FromArgb(255,90,100),1.5f))g.DrawEllipse(pen,mouse.X-r,mouse.Y-r,r*2,r*2);
    }
+  }
+  void DrawSpawn(Graphics g,Vec3 at,string label){
+   var p=ToScreen(at.X,at.Z);if(p.X<-40||p.Y<-40||p.X>Width+40||p.Y>Height+40)return;
+   bool land=Pack!=null&&Pack.Get(Grid.At(at.X,at.Z))!=null;
+   var c=land?Color.FromArgb(255,255,255):Color.FromArgb(255,90,100);
+   using(var pen=new Pen(c,2.5f)){g.DrawEllipse(pen,p.X-9,p.Y-9,18,18);g.DrawLine(pen,p.X-13,p.Y,p.X+13,p.Y);g.DrawLine(pen,p.X,p.Y-13,p.X,p.Y+13);}
+   TextRenderer.DrawText(g,label+(land?"":" (in the sea!)"),Font,new Point((int)p.X+14,(int)p.Y-8),c);
   }
   public void ClearRoad(){RoadPoints.Clear();Invalidate();}
   public void FinishRoad(){if(RoadPoints.Count>=2&&RoadFinished!=null)RoadFinished(new List<Vec3>(RoadPoints));RoadPoints.Clear();Invalidate();}
