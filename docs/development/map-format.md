@@ -1,6 +1,6 @@
 # Custom maps: how the world is stored, and the map pack format
 
-Research notes for the Map Maker (`mapmaker/`) and the CustomMap mod, for Anymaker 0.1.24 (Steam 25826614).
+Research notes for the [MapEditor mod](../mods/map-editor.md) and the optional Map Maker viewer (`mapmaker/`), for Anymaker 0.1.24 (Steam 25826614).
 Sources are the regenerated SDK reference (types, fields and natives) and `native/generate_road_graph.py`,
 whose maths is validated against the shipped roads. Items marked **to confirm** wait on a
 `mapmaker/tools/survey_world_data.py` run against the installed game.
@@ -39,12 +39,15 @@ The world is a grid of triangles. There is no heightmap and no single world file
   has loaded, so a map change only fully applies to **new worlds**.
 - **File access.** Every data file goes through a few game.exe natives: `file.read_string`
   (game.exe+0x3f080), `file.read_binary` (+0x3f0e0), `file.get_is_exists` (+0x3f140),
-  `file.get_files_in_dir` (+0x3edf0). A mod that hooks these can serve a map pack's files in place of
-  `rom/data/tiles` without touching the install. This is the CustomMap mod's plan.
+  `file.get_files_in_dir` (+0x3edf0). gcl code calls them through per-function call cells, so a mod can
+  swap those cells to serve a map pack's files in place of `rom/data/tiles` without touching the install.
+  The [MapEditor mod](../mods/map-editor.md) does this. Paths are `file.path` values: a store (0 embedded,
+  1 system, 2 rom, 3 user) and a string.
 - **The developers' editor ships in the game, switched off**: chunk (terrain), tile (junctions), prop,
   loot, actor spawn, dead drop, prefab and map-screenshot panels, toggled by `g_is_*_window` globals and
   drawn from `update_ui` in `main.gc`, which has no caller in the release build. It saves through
-  `chunk_edit_panel.save_scene`. Enabling it is a possible later bonus, not part of the plan.
+  `chunk_edit_panel.save_scene`, which writes each tile with `client_scene.environment_tile.save`.
+  The [MapEditor mod](../mods/map-editor.md) opens it in game; it is the main way to make maps.
 
 ## Map pack format (version 1)
 
