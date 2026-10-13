@@ -11,9 +11,13 @@ namespace AnyMapMaker {
  // The editor window, in the AnyAPI Manager's look: frameless dark window, title bar with the file actions,
  // a sidebar with the map details, tools and layers, the map in the middle and the selected tile on the right.
  public sealed class MainForm : Form, IMessageFilter {
-  public const string Version="0.3.1";
+  public const string Version="0.4.0";
   static int S(float px){return Theme.S(px);}
   readonly MapView view=new MapView();
+  readonly MapView3D view3d=new MapView3D{Visible=false};
+  readonly ModernButton viewToggle=new ModernButton{Text="3D view",Kind=ButtonKind.Ghost};
+  readonly Stepper falloffBox=new Stepper(0,1000,120){Step=10,Suffix=" m"};
+  bool in3d;
   readonly Panel titleBar=new Panel(), sidebar=new Panel(), statusBar=new Panel(), inspector=new Panel();
   readonly Field nameBox=new Field("Map name"), authorBox=new Field("Your name"), descriptionBox=new Field("A short description");
   readonly ToolGrid tools=new ToolGrid();
@@ -42,12 +46,16 @@ namespace AnyMapMaker {
    ClientSize=new Size(S(1360),S(860));MinimumSize=new Size(S(1000),S(640));StartPosition=FormStartPosition.CenterScreen;
    try{Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);}catch{}
    foreach(var bar in new Control[]{titleBar,sidebar,statusBar,inspector}){bar.BackColor=Theme.Side;Buffer(bar);}
-   view.Font=Theme.Font(12);
-   Controls.AddRange(new Control[]{titleBar,sidebar,statusBar,inspector,view});
+   view.Font=Theme.Font(12);view3d.Font=Theme.Font(12);
+   Controls.AddRange(new Control[]{titleBar,sidebar,statusBar,inspector,view,view3d});
    BuildTitle();BuildSidebar();BuildInspector();BuildStatus();
    view.TilePainted+=OnTilePainted;view.Placed+=OnPlaced;view.LineDrawn+=OnLine;view.RoadFinished+=OnRoad;view.Erased+=OnErase;
    view.StrokeEnded+=()=>{if(editor!=null&&editor.Commit())Edited(true);};
    view.StatusChanged+=t=>SetStatus(t,Theme.Dim);view.SelectionChanged+=ShowTile;
+   view3d.StatusChanged+=t=>SetStatus(t,Theme.Dim);
+   view3d.NodesMoved+=()=>{unsaved=true;if(!rebuildPending){rebuildPending=true;BeginInvoke(new Action(()=>{rebuildPending=false;if(pack!=null)view3d.ShowScene(MapScene.Build(pack),editor);}));}};
+   view3d.DragFinished+=()=>Edited(true);
+   falloffBox.ValueChanged+=()=>view3d.Falloff=falloffBox.Value;
    tools.Pick(Tool.Select);
    Resize+=(s,e)=>{LayoutShell();maximize.Maximized=WindowState==FormWindowState.Maximized;maximize.Invalidate();};LayoutShell();
    Shown+=(s,e)=>FindGame(false);
@@ -89,7 +97,7 @@ namespace AnyMapMaker {
    int b=WindowState==FormWindowState.Maximized?0:1;var r=new Rectangle(b,b,ClientSize.Width-b*2,ClientSize.Height-b*2);int title=S(44),foot=S(30),side=S(284),right=S(360);
    titleBar.Bounds=new Rectangle(r.X,r.Y,r.Width,title);statusBar.Bounds=new Rectangle(r.X,r.Bottom-foot,r.Width,foot);
    sidebar.Bounds=new Rectangle(r.X,r.Y+title,side,r.Height-title-foot);inspector.Bounds=new Rectangle(r.Right-right,r.Y+title,right,r.Height-title-foot);
-   view.Bounds=new Rectangle(r.X+side,r.Y+title,r.Width-side-right,r.Height-title-foot);
+   view.Bounds=new Rectangle(r.X+side,r.Y+title,r.Width-side-right,r.Height-title-foot);view3d.Bounds=view.Bounds;
    LayoutTitle();LayoutSidebar();LayoutInspector();
   }
 
@@ -103,6 +111,7 @@ namespace AnyMapMaker {
    add("New island",ButtonKind.Ghost,NewIsland);add("Open",ButtonKind.Ghost,OpenPack);add("Save",ButtonKind.Primary,()=>Save(false));
    actions.Add(undoButton);actions.Add(redoButton);titleBar.Controls.AddRange(new Control[]{undoButton,redoButton});
    undoButton.Click+=(s,e)=>Undo();redoButton.Click+=(s,e)=>Redo();
+   actions.Add(viewToggle);titleBar.Controls.Add(viewToggle);viewToggle.Height=S(30);viewToggle.Click+=(s,e)=>Show3D(!in3d);
    add("More",ButtonKind.Ghost,()=>{var b=actions[actions.Count-1];more.Show(b,new Point(0,b.Height+S(4)));});
    more.Items.Add("Open the stock world",null,(s,e)=>OpenStock());
    more.Items.Add("Save as a new map...",null,(s,e)=>Save(true));
@@ -133,7 +142,7 @@ namespace AnyMapMaker {
    int x=titleBar.Width-S(4);var buttons=new[]{(Control)titleBar.Controls[0],titleBar.Controls[1],titleBar.Controls[2]};
    for(int i=buttons.Length-1;i>=0;i--){x-=buttons[i].Width;buttons[i].Location=new Point(x,(titleBar.Height-buttons[i].Height)/2-1);}
    int ax=S(284)+S(4);
-   using(var g=CreateGraphics())foreach(var b in actions){b.Width=TextRenderer.MeasureText(g,b.Text,b.Font).Width+S(28);b.Location=new Point(ax,(titleBar.Height-b.Height)/2);ax+=b.Width+(b==redoButton||b.Text=="Save"?S(16):S(6));}
+   using(var g=CreateGraphics())foreach(var b in actions){b.Width=TextRenderer.MeasureText(g,b.Text,b.Font).Width+S(28);b.Location=new Point(ax,(titleBar.Height-b.Height)/2);ax+=b.Width+(b==redoButton||b==viewToggle||b.Text=="Save"?S(16):S(6));}
    titleBar.Invalidate();
   }
 
@@ -145,7 +154,7 @@ namespace AnyMapMaker {
    foreach(var box in new[]{nameBox,authorBox,descriptionBox})box.Box.TextChanged+=(s,e)=>MetadataChanged();
    foreach(Tool t in Enum.GetValues(typeof(Tool)))tools.Add(t,ToolName(t));
    tools.Picked+=SetTool;
-   layers.Changed+=()=>view.Invalidate();
+   layers.Changed+=()=>{view.Invalidate();if(in3d)view3d.ShowScene(view3d.Scene,editor);};
    fenceBox.Items.AddRange(FenceStyle.All);fenceBox.SelectedIndex=0;
    roadBox.Items.AddRange(Catalog.RoadTypes);roadBox.SelectedIndex=0;
    filterBox.Items.AddRange(Catalog.BuildingFilters);filterBox.SelectedIndex=0;
@@ -219,7 +228,8 @@ namespace AnyMapMaker {
     case Keys.Control|Keys.Shift|Keys.S:Save(true);return true;
     case Keys.Control|Keys.O:OpenPack();return true;
     case Keys.Control|Keys.N:NewIsland();return true;
-    case Keys.Control|Keys.D0:view.FitAll();return true;
+    case Keys.Control|Keys.D0:if(in3d)view3d.FitAll();else view.FitAll();return true;
+    case Keys.Tab:if(typing)break;Show3D(!in3d);return true;
     case Keys.Control|Keys.Z:if(typing)break;Undo();return true;
     case Keys.Control|Keys.Y:if(typing)break;Redo();return true;
    }
@@ -295,7 +305,7 @@ namespace AnyMapMaker {
   void OpenWith(Func<MapPack> loader){
    Cursor=Cursors.WaitCursor;
    try{
-    pack=loader();editor=new MapEditor(pack);var scene=MapScene.Build(pack);view.SetMap(pack,scene);view.ClearRoad();
+    pack=loader();editor=new MapEditor(pack);var scene=MapScene.Build(pack);view.SetMap(pack,scene);view.ClearRoad();view3d.SetMap(pack,scene,editor);
     loading=true;nameBox.Text=pack.Name;authorBox.Text=pack.Author;descriptionBox.Text=pack.Description;loading=false;
     unsaved=pack.Folder==null;layers.Reload();ShowTile(null);UpdateCounts();UpdateUndo();
     SetStatus(pack.Folder==null?"New map. Save puts it in the game's maps folder.":"Opened "+pack.Folder,Theme.Ok);WarnSeaLevel();
@@ -378,7 +388,20 @@ namespace AnyMapMaker {
    if(propBox.Items.Count>0)propBox.SelectedItem=prop!=null&&propBox.Items.Contains(prop)?prop:(propBox.Items.Contains("lamp_post_a")?"lamp_post_a":propBox.Items[0]);
   }
   static Label Label(string text){return new Label{Text=text,ForeColor=Theme.Ink,Font=Theme.Font(12.5f),BackColor=Color.Transparent,Height=S(20),AutoEllipsis=true};}
+  bool rebuildPending;
+  void Show3D(bool on){
+   in3d=on;viewToggle.Text=on?"2D view":"3D view";LayoutTitle();
+   if(on&&pack!=null&&view3d.Pack!=pack)view3d.SetMap(pack,MapScene.Build(pack),editor);else if(on&&pack!=null)view3d.ShowScene(MapScene.Build(pack),editor);
+   view3d.Visible=on;view.Visible=!on;
+   if(on){tools.Current=(Tool)(-1);tools.Invalidate();options.Controls.Clear();
+    options.Controls.AddRange(new Control[]{new Hint("Drag the white dots to move road points, props and spots. Hold Shift while you drag to raise or lower them: that's how you make ramps and inclines."),
+     Label("Smooth radius"),falloffBox,new Hint("Road points within this distance move along with a smooth falloff, so a raised point makes a gentle slope. 0 moves one point."),
+     new Hint("Right-drag turns the camera, middle-drag (or Shift+right-drag) moves it, scroll zooms, double click centres. Tab switches 2D and 3D. Pick a tool to go back to 2D.")});
+    LayoutSidebar();view3d.Focus();
+   }else{tools.Pick(view.Tool);}
+  }
   void SetTool(Tool t){
+   if(in3d){in3d=false;view3d.Visible=false;view.Visible=true;viewToggle.Text="3D view";LayoutTitle();tools.Current=t;tools.Invalidate();}
    view.Tool=t;view.ClearRoad();options.Controls.Clear();
    switch(t){
     case Tool.Select:options.Controls.Add(new Hint("Click a tile to see its raw data on the right. Edit it there and press Apply."));break;
@@ -400,7 +423,7 @@ namespace AnyMapMaker {
   }
   bool Ready(){if(pack==null||editor==null){SetStatus("Open a map first: New island, Open, or More, Open the stock world.",Theme.Warn);return false;}return true;}
   void Edited(bool rebuild){
-   unsaved=true;if(rebuild){view.ShowScene(MapScene.Build(pack));layers.Reload();}else view.Invalidate();
+   unsaved=true;if(rebuild){var scene=MapScene.Build(pack);view.ShowScene(scene);view3d.ShowScene(scene,editor);layers.Reload();}else{view.Invalidate();view3d.Invalidate();}
    UpdateCounts();ShowTile(view.Selected);UpdateUndo();
   }
   void OnTilePainted(TileKey k,MouseButtons b,Keys mods){
@@ -444,7 +467,7 @@ namespace AnyMapMaker {
   }
 
   // For --ui-shot: a small island with one of everything, Road tool selected.
-  public void Demo(){
+  public void Demo(bool threeD){
    OpenWith(()=>MapEditor.BlankIsland(catalog,10,10,3,3,MapEditor.LandHeight));
    var c=Grid.Origin(new TileKey(10,10,0),0);editor.Begin();
    editor.AddRoad("road",new List<Vec3>{new Vec3(c.X-500,0,c.Z-100),new Vec3(c.X,0,c.Z+80),new Vec3(c.X+500,0,c.Z)});
@@ -454,6 +477,7 @@ namespace AnyMapMaker {
    pack.Spawn=new Vec3(c.X,2,c.Z+120);
    tools.Pick(Tool.Road);view.Selected=new TileKey(10,10,0);ShowTile(view.Selected);
    view.FitAll();
+   if(threeD){editor.Begin();editor.SetHeight(new TileKey(11,10,0),3);editor.SetHeight(new TileKey(10,11,0),2);editor.Commit();Edited(true);Show3D(true);view3d.LookAt(new Vec3(c.X,32,c.Z),1500);}
   }
 
   bool showingTile;
@@ -469,7 +493,7 @@ namespace AnyMapMaker {
    try{data=Json.Parse(tileJson.Text) as JsonObject;if(data==null)throw new FormatException("A tile must be a JSON object { ... }");}
    catch(Exception e){ThemedDialog.Tell(this,"That isn't valid tile JSON",e.Message);return;}
    var t=pack.Get(key.Value);t.Data=data;t.Dirty=true;unsaved=true;editor=new MapEditor(pack);  // raw edits are not undoable
-   view.ShowScene(MapScene.Build(pack));layers.Reload();ShowTile(key);UpdateCounts();UpdateUndo();
+   var scene=MapScene.Build(pack);view.ShowScene(scene);view3d.ShowScene(scene,editor);layers.Reload();ShowTile(key);UpdateCounts();UpdateUndo();
   }
  }
 

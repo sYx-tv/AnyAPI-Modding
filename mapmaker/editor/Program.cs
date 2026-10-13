@@ -14,7 +14,7 @@ namespace AnyMapMaker {
    //   --render <tiles folder or map pack> <out.png> [width height]
    if(args.Length>=2&&args[0]=="--self-test")return SelfTest(args[1]);
    if(args.Length>=2&&args[0]=="--ui-shot"){
-    MainForm.Headless=true;try{SetProcessDPIAware();}catch{}AnyApiManager.Theme.InitScale();Application.EnableVisualStyles();var f=new MainForm{Size=new Size(1400,900)};f.Show();f.Demo();Application.DoEvents();
+    MainForm.Headless=true;try{SetProcessDPIAware();}catch{}AnyApiManager.Theme.InitScale();Application.EnableVisualStyles();var f=new MainForm{Size=new Size(1400,900)};f.Show();f.Demo(args.Length>=3&&args[2]=="3d");Application.DoEvents();
     for(int i=0;i<20;i++){Application.DoEvents();System.Threading.Thread.Sleep(50);}
     using(var bmp=new Bitmap(f.Width,f.Height))using(var g=Graphics.FromImage(bmp)){g.CopyFromScreen(f.Location,Point.Empty,f.Size);bmp.Save(args[1],ImageFormat.Png);}
     return 0;
@@ -86,6 +86,21 @@ namespace AnyMapMaker {
     ed.Begin();int er=ed.Erase(c.X+12,c.Z,3,true,true);ed.Commit();
     check(er>=2,"erase removes the fence pieces under a 3 m brush ("+er+")");
     check(ed.Undo()&&MapScene.Build(pack).Markers.Count==scene.Markers.Count,"undo brings them back");
+    {// 3D view node drags: raise the middle of the road with a 120 m falloff, then drag an end across tiles.
+     var nodes=ed.Nodes(true,false);MapNode mid=null;foreach(var n in nodes)if(mid==null||Math.Abs(n.Position.X-c.X)<Math.Abs(mid.Position.X-c.X))mid=n;
+     check(nodes.Count==13,"the 12-link road has 13 nodes ("+nodes.Count+")");
+     var d=ed.StartDrag(mid,nodes,120);ed.DragTo(d,new Vec3(0,20,0));ed.EndDrag(d);
+     double peak=0,far=0,near=0;foreach(var n in ed.Nodes(true,false)){double dx=Math.Abs(n.Position.X-c.X);if(dx<1)peak=n.Position.Y;else if(dx<70)near=Math.Max(near,n.Position.Y);else if(dx>150)far=Math.Max(far,n.Position.Y);}
+     check(Math.Abs(peak-52)<0.01&&near>32.5&&near<52&&Math.Abs(far-32)<0.01,"raising a road node 20 m makes a smooth hump (peak "+peak.ToString("0.0")+", next "+near.ToString("0.0")+", far "+far.ToString("0.0")+")");
+     double gap=0;var ls=MapScene.Build(pack).Roads;ls.Sort((x,y)=>x.Points[0].X.CompareTo(y.Points[0].X));for(int i=0;i+1<ls.Count;i++)gap=Math.Max(gap,(ls[i+1].Points[0]-ls[i].Points[ls[i].Points.Length-1]).Length);
+     check(gap<0.01&&ls.Count==12,"the raised road stays joined ("+gap.ToString("0.000")+")");
+     nodes=ed.Nodes(true,false);MapNode end=null;foreach(var n in nodes)if(end==null||n.Position.X>end.Position.X)end=n;
+     d=ed.StartDrag(end,nodes,0);ed.DragTo(d,new Vec3(400,0,0));ed.EndDrag(d);
+     bool home=true;foreach(var tl in pack.Tiles.Values){var links=tl.Data.Arr("junction_links");if(links!=null)foreach(var o in links){Vec3 pb;Vec3.TryRead(((JsonObject)o)["pos_b"],out pb);if(!Grid.At(pb.X,pb.Z).Equals(tl.Key))home=false;}}
+     check(home,"a dragged road end moves its link to the tile it lands in");
+     check(ed.Undo()&&ed.Undo()&&MapScene.Build(pack).Roads.Count==12,"undo puts both drags back");
+     double flat=0;foreach(var n in ed.Nodes(true,false))flat=Math.Max(flat,Math.Abs(n.Position.Y-32));check(flat<0.01,"after undo the road is flat again");
+    }
     ed.Begin();ed.SetHeight(Grid.At(c.X,c.Z),3);ed.Commit();
     Vec3.TryRead(((JsonObject)pack.Get(Grid.At(c.X,c.Z)).Data.Arr("prop_spawn_zones")[0])["pos"],out pp);
     check(Math.Abs(pp.Y-96)<0.01,"raising a tile to height 3 lifts its street light to 96 m ("+pp.Y+")");

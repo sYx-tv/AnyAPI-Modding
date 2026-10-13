@@ -66,17 +66,17 @@ namespace AnyMapMaker {
 
  // Number field with − and + ends. Mouse wheel and arrow keys change it too.
  public sealed class Stepper:Control {
-  int value,hover=-1;public int Minimum,Maximum;public string Suffix="";public event Action ValueChanged;
+  int value,hover=-1;public int Minimum,Maximum,Step=1;public string Suffix="";public event Action ValueChanged;
   public Stepper(int min,int max,int value){Minimum=min;Maximum=max;this.value=value;Size=new Size(Theme.S(132),Theme.S(32));Font=Theme.Font(13);TabStop=true;
    SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw|ControlStyles.Selectable,true);}
   public int Value {get{return value;}set{int v=Math.Max(Minimum,Math.Min(Maximum,value));if(v==this.value)return;this.value=v;Invalidate();if(ValueChanged!=null)ValueChanged();}}
   int Part(Point p){int w=Height;return p.X<w?0:p.X>=Width-w?2:1;}
   protected override void OnMouseMove(MouseEventArgs e){int h=Part(e.Location);if(h!=hover){hover=h;Invalidate();}Cursor=h==1?Cursors.Default:Cursors.Hand;base.OnMouseMove(e);}
   protected override void OnMouseLeave(EventArgs e){hover=-1;Invalidate();base.OnMouseLeave(e);}
-  protected override void OnMouseDown(MouseEventArgs e){Focus();int step=(ModifierKeys&Keys.Shift)!=0?10:1;int p=Part(e.Location);if(p==0)Value-=step;else if(p==2)Value+=step;base.OnMouseDown(e);}
-  protected override void OnMouseWheel(MouseEventArgs e){Value+=Math.Sign(e.Delta);base.OnMouseWheel(e);}
+  protected override void OnMouseDown(MouseEventArgs e){Focus();int step=(ModifierKeys&Keys.Shift)!=0?Step*10:Step;int p=Part(e.Location);if(p==0)Value-=step;else if(p==2)Value+=step;base.OnMouseDown(e);}
+  protected override void OnMouseWheel(MouseEventArgs e){Value+=Math.Sign(e.Delta)*Step;base.OnMouseWheel(e);}
   protected override bool IsInputKey(Keys k){return k==Keys.Up||k==Keys.Down||base.IsInputKey(k);}
-  protected override void OnKeyDown(KeyEventArgs e){if(e.KeyCode==Keys.Up||e.KeyCode==Keys.Right)Value++;else if(e.KeyCode==Keys.Down||e.KeyCode==Keys.Left)Value--;base.OnKeyDown(e);}
+  protected override void OnKeyDown(KeyEventArgs e){if(e.KeyCode==Keys.Up||e.KeyCode==Keys.Right)Value+=Step;else if(e.KeyCode==Keys.Down||e.KeyCode==Keys.Left)Value-=Step;base.OnKeyDown(e);}
   protected override void OnGotFocus(EventArgs e){Invalidate();base.OnGotFocus(e);}
   protected override void OnLostFocus(EventArgs e){Invalidate();base.OnLostFocus(e);}
   protected override void OnPaint(PaintEventArgs e){

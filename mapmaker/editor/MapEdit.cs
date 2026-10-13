@@ -52,7 +52,7 @@ namespace AnyMapMaker {
   }
  }
 
- public sealed class MapEditor {
+ public sealed partial class MapEditor {
   public readonly MapPack Pack;
   readonly Stack<Dictionary<TileKey,string>> undo=new Stack<Dictionary<TileKey,string>>(), redo=new Stack<Dictionary<TileKey,string>>();
   Dictionary<TileKey,string> pending;

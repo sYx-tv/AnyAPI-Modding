@@ -3,7 +3,7 @@
 A Windows map editor for Anymaker. It saves map packs into the game folder; the
 [CustomMap mod](../docs/mods/custom-map.md) plays them (pick the map on CustomGame's Custom Game page).
 
-**Status: 0.3.1.** It looks like the AnyAPI Manager (it compiles in the manager's `Theme.cs` and `ModernButton.cs`) and follows the Windows display scale. Start with New island, Open (lists your maps) or More, Open the stock world, then edit with the tools on the left:
+**Status: 0.4.0.** It looks like the AnyAPI Manager (it compiles in the manager's `Theme.cs` and `ModernButton.cs`) and follows the Windows display scale. Start with New island, Open (lists your maps) or More, Open the stock world, then edit with the tools on the left:
 
 | Tool | What it does |
 | --- | --- |
@@ -17,6 +17,7 @@ A Windows map editor for Anymaker. It saves map packs into the game folder; the
 | Start | Where players start a new game on this map (every game mode); CustomMap moves them there |
 | Erase | Removes things and roads under the brush |
 | Select | Shows a tile's raw data for hand edits |
+| 3D view | Title bar button or Tab. Orbit (right-drag), pan (middle-drag), zoom (scroll). Drag the white nodes to move road points and placed things; Shift+drag raises or lowers them. Road points within the Smooth radius follow with a falloff, so raising one makes a ramp. Terrain shows as flat pieces at their height step with cliffs between steps |
 
 Sea level is height 0: new land starts at height 1 (32 m), like the stock world's flat land, and More has Raise / Lower the whole map. Roads are cut into links of at most 60 m, like the stock roads. Ctrl+Z / Ctrl+Y undo and redo. A crosshair marks where new players start: the map's own start point once you set
 one with the Start tool, otherwise the game's two fixed ones (Creative/Sandbox and Survival). It turns red when there
