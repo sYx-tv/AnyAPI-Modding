@@ -331,21 +331,65 @@ bool hook(anymaker::cell_hook& h, const anymaker::func_desc& d, void* fn, const 
     return true;
 }
 
+// The file functions are game.exe natives at fixed thunks (same in 0.1.24 and 0.1.25, SDK natives.json).
+// Their call cells are found through gcl callers, which can point at the wrong cell while the game is
+// still starting; a hook on the wrong cell receives another function's arguments and crashes (round 3,
+// 2026-10-13). So a file cell is only used when it is found AND still holds the native's own thunk.
+struct native_cell { anymaker::cell_hook* h; const anymaker::func_desc* d; void* fn; const char* name; uintptr_t rva; void** cell; };
+native_cell g_file_cells[] = {
+    {&h_read_string, &bind::read_string, (void*)&hk_read_string, "file.read_string", 0x3f080, nullptr},
+    {&h_read_binary, &bind::read_binary, (void*)&hk_read_binary, "file.read_binary", 0x3f0e0, nullptr},
+    {&h_write_string, &bind::write_string, (void*)&hk_write_string, "file.write_string", 0x3f0b0, nullptr},
+    {&h_exists, &bind::is_exists, (void*)&hk_exists, "file.get_is_exists", 0x3f140, nullptr},
+    {&h_files, &bind::files_in_dir, (void*)&hk_files, "file.get_files_in_dir", 0x3edf0, nullptr},
+    {&h_folders, &bind::folders_in_dir, (void*)&hk_folders, "file.get_files_folders_in_dir", 0x3eb80, nullptr},
+};
+// Locates every file cell; true only when all six are found and verified. Logs only on the last attempt.
+bool locate_file_cells(bool report) {
+    static std::set<std::string> attempt_logged;
+    auto base = uintptr_t(GetModuleHandleW(nullptr));
+    auto* nt = (const IMAGE_NT_HEADERS64*)(base + ((const IMAGE_DOS_HEADER*)base)->e_lfanew);
+    uintptr_t image_size = nt->OptionalHeader.SizeOfImage;
+    bool all = true;
+    for (auto& c : g_file_cells) {
+        c.cell = anymaker::experimental::hook_cell(*c.d);
+        void* want = (void*)(base + c.rva);
+        if (!c.cell) { if (report) log(2, "could not locate %s", c.name); all = false; continue; }
+        if (*c.cell == want) continue;
+        // Not the expected thunk: still accept a pointer into game.exe's own code (a native), never one into
+        // gcl code, which is what a wrong cell holds.
+        auto v = uintptr_t(*c.cell);
+        if (v >= base && v < base + image_size) {
+            if (report || attempt_logged.insert(c.name).second)
+                log(1, "%s: cell holds game.exe+0x%llx, expected +0x%llx; using it", c.name, (unsigned long long)(v - base), (unsigned long long)c.rva);
+            continue;
+        }
+        if (report) log(2, "%s: the located cell holds %p, which is not a game.exe native; not hooking it", c.name, *c.cell);
+        c.cell = nullptr; all = false;
+    }
+    return all;
+}
+bool install_file_hooks() {
+    for (auto& c : g_file_cells)
+        if (!c.h->install(c.cell, c.fn)) {
+            log(2, "the %s hook cell was already taken or not writable", c.name);
+            for (auto& u : g_file_cells) u.h->remove(u.fn);   // all or nothing
+            return false;
+        }
+    return true;
+}
+
 void install_hooks() {
     using namespace anymaker::experimental;
     for (int attempt = 0; attempt < 180 && !g_stop; ++attempt) {
         if (attempt) Sleep(1000);
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; MapEditor stays off"); return; }
-        if (!hook_cell(bind::read_string)) { if (attempt == 179) log(2, "game functions not found; MapEditor is off"); continue; }
-        // File redirection first: it must be in place before any world loads tiles.
-        bool files = hook(h_read_string, bind::read_string, (void*)&hk_read_string, "file.read_string") &&
-                     hook(h_exists, bind::is_exists, (void*)&hk_exists, "file.get_is_exists") &&
-                     hook(h_write_string, bind::write_string, (void*)&hk_write_string, "file.write_string");
-        hook(h_read_binary, bind::read_binary, (void*)&hk_read_binary, "file.read_binary");
-        hook(h_files, bind::files_in_dir, (void*)&hk_files, "file.get_files_in_dir");
-        hook(h_folders, bind::folders_in_dir, (void*)&hk_folders, "file.get_files_folders_in_dir");
+        // All six file cells, verified, or none: wait while the game finishes starting.
+        bool last = attempt == 179;
+        if (!locate_file_cells(last)) { if (last) log(2, "file functions not found; MapEditor is off"); continue; }
+        bool files = install_file_hooks();
         if (files) calibrate_store(exists_t(h_exists.original));
-        else log(2, "file hooks incomplete: map packs are off");
+        else log(2, "file hooks not installed: map packs are off");
         hook(h_tile_save, bind::tile_save, (void*)&hk_tile_save, "client_scene.environment_tile.save");
         g_update_ui = update_ui_t(function(bind::update_ui));
         if (!g_update_ui) log(2, "could not locate update_ui (the editor's entry point)");
