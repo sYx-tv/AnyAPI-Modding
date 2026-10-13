@@ -102,7 +102,7 @@ bool load_config(const std::filesystem::path& path, WorldFile& w) { std::string 
 enum F64Global {
     gHunger, gThirst, gStaminaDrain, gStaminaRecover, gOxygenDeplete, gOxygenDrown, gRainSoak, gSwimSoak, gDryWarm,
     gDryCold, gCorpse, gLostBody, gTempMin, gTempMax, gSurvivorSight, gSurvivorHearing, gCreatureSight,
-    gCreatureHearing, gZombieSight, gZombieHearing, gSpawnExclusion, gLoot, gJoints, gSandboxFactor, gDeltaTime, kF64Count
+    gCreatureHearing, gZombieSight, gZombieHearing, gSpawnExclusion, gLoot, gJoints, gGunRange, gGunMin, gSandboxFactor, gDeltaTime, kF64Count
 };
 enum S32Global { gDayTicks, gStartOffset, gMaxPlayers, gHorde, gMaxSpawned, gRainParticles, gSnowParticles, kS32Count };
 enum BoolGlobal { gNoCreatures, gNoZombies, kBoolCount };
@@ -148,6 +148,8 @@ void apply_globals(const Config* c) {
     for (F64Global g : {gSurvivorSight, gCreatureSight, gZombieSight}) mul(g, v[kSight]);
     for (F64Global g : {gSurvivorHearing, gCreatureHearing, gZombieHearing}) mul(g, v[kHearing]);
     mul(gSpawnExclusion, v[kSafeRadius]);
+    // Survivors close in beyond the max range and back off inside the min range; keep max above min.
+    if (g_f64[gGunRange].p) *g_f64[gGunRange].p = std::max(scaled(g_f64[gGunRange].def, v[kGunRange]), (g_f64[gGunMin].p ? g_f64[gGunMin].def : 0) + 1);
     if (g_f64[gLoot].p) *g_f64[gLoot].p = loot_capacity(g_f64[gLoot].def, v[kLoot]);
     if (g_f64[gJoints].p) *g_f64[gJoints].p = v[kJoints] >= kUnbreakable ? 1e15 : scaled(g_f64[gJoints].def, v[kJoints]);
     set(g_s32[gHorde], scaled_count(g_s32[gHorde].def, v[kHordeSize], 0));
@@ -754,7 +756,7 @@ void install() {
         &b::g_dry_seconds_warm, &b::g_dry_seconds_cold, &b::g_corpse_seconds, &b::g_lost_body_seconds,
         &b::g_temperature_min, &b::g_temperature_max, &b::g_survivor_sight, &b::g_survivor_hearing, &b::g_creature_sight,
         &b::g_creature_hearing, &b::g_zombie_sight, &b::g_zombie_hearing, &b::g_spawn_exclusion, &b::g_loot_capacity,
-        &b::g_joint_break_force, &b::g_sandbox_cycle_factor, &b::g_server_delta_time};
+        &b::g_joint_break_force, &b::g_survivor_gun_range, &b::g_survivor_gun_min, &b::g_sandbox_cycle_factor, &b::g_server_delta_time};
     for (int i = 0; i < kF64Count; ++i) {
         resolve(g_f64[i], *f64s[i]);
         if (g_f64[i].p && !std::isfinite(g_f64[i].def)) { log(1, "global %s has an unexpected value; ignored", f64s[i]->name); g_f64[i].p = nullptr; }

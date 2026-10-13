@@ -52,6 +52,7 @@ int main() {
     e.v[kMode] = 0; e.v[kZombies] = 0; assert(!enemies_on(e, kZombies) && !sandbox_spawns(e));
     assert(value_text(kZombies, -1, d) == "Normal for the mode" && value_text(kCreatures, 0, d) == "Off");
 
+    assert(!std::strcmp(kSettings[kGunRange].key, "gun_range") && kSettings[kGunRange].category == kDanger);
     // Bunkers only change Sandbox.
     Config k; assert(!sandbox_bunkers(k)); k.v[kBunkers] = 1; assert(!sandbox_bunkers(k)); k.v[kMode] = 2; assert(sandbox_bunkers(k));
     k.v[kBunkers] = -1; assert(!sandbox_bunkers(k) && value_text(kBunkers, 1, d) == "On");

@@ -34,6 +34,7 @@ The page remembers the last settings you started with. The **Presets** tab saves
 | | Max enemies around | 25% to 300% | Zombies, creatures and survivors |
 | | Enemy sight range, enemy hearing range | 25% to 300% | Zombies, creatures and survivors |
 | | No-spawn zone | 0% to 300% | The safe area around the world's starting point where enemies never spawn |
+| | Survivor gun range | 50% to 300% | How far hostile survivors start shooting from (30 m normally). They still need to see you (sight range) |
 | World | Loot amount | 25% to 500% | How often loot spots have something. Only places not yet visited are affected |
 | | Weather | Normal, Always clear, cloudy, rain, storm, fog | |
 | | Rain and snow density | 0% to 100% | Looks only |

@@ -114,6 +114,10 @@ inline constexpr global_desc g_zombie_sight{"server_scene.actor_zombie.ai_utilit
 // server_scene.actor_zombie.ai_utility.g_audible_dist_max (anchor: (ptr<server_scene.actor>) server_scene.actor_zombie.ai_utility.find_actor_visible (server_scene.actor_zombie, )
 inline constexpr global_desc g_zombie_hearing{"server_scene.actor_zombie.ai_utility.g_audible_dist_max","53 55 56 57 48 81 ec 68 01 00 00 48 89 8c 24 c8 00 00 00 48 89 94 24 d0 00 00 00 4c 89 84 24 d8",1992u};
 // g_spawn_creature_exclusion_range (anchor: () g_spawn_creature_exclusion_range.$ctor ())
+// server_scene.actor_character.ai_utility.g_attack_range_gun_max (anchor: () server_scene.actor_character.ai_state.attack_vehicle.tick (...))
+inline constexpr global_desc g_survivor_gun_range{"server_scene.actor_character.ai_utility.g_attack_range_gun_max","53 55 56 57 41 54 48 81 ec 10 07 00 00 48 8b bc 24 60 07 00 00 48 8b b4 24 68 07 00 00 48 89 8c",7216u};
+// server_scene.actor_character.ai_utility.g_attack_range_gun_min (same anchor)
+inline constexpr global_desc g_survivor_gun_min{"server_scene.actor_character.ai_utility.g_attack_range_gun_min","53 55 56 57 41 54 48 81 ec 10 07 00 00 48 8b bc 24 60 07 00 00 48 8b b4 24 68 07 00 00 48 89 8c",7208u};
 inline constexpr global_desc g_spawn_exclusion{"g_spawn_creature_exclusion_range","48 8b 05 19 00 00 00 f2 0f 10 05 09 00 00 00 f2 0f 11 00 c3 00 00 00 00 00 00 00 00 00 00 69 40",32u};
 // g_loot_random_loot_capacity (anchor: () server_scene.dungeon.tile.generate_loot (server_scene.dungeon.tile, server_scene, const mat34, const s32))
 inline constexpr global_desc g_loot_capacity{"g_loot_random_loot_capacity","53 55 56 57 41 54 41 55 41 56 48 81 ec e0 05 00 00 48 89 8c 24 b8 03 00 00 48 89 94 24 c0 03 00",7360u};
