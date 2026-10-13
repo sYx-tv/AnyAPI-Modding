@@ -56,6 +56,7 @@ namespace AnyMapMaker {
   public readonly MapPack Pack;
   readonly Stack<Dictionary<TileKey,string>> undo=new Stack<Dictionary<TileKey,string>>(), redo=new Stack<Dictionary<TileKey,string>>();
   Dictionary<TileKey,string> pending;
+  readonly Dictionary<TileKey,string> loadedTerrain=new Dictionary<TileKey,string>();   // survives undo/redo
   public MapEditor(MapPack pack){Pack=pack;}
   public bool CanUndo {get{return undo.Count>0;}}
   public bool CanRedo {get{return redo.Count>0;}}
@@ -66,6 +67,7 @@ namespace AnyMapMaker {
   void Touch(TileKey k){
    if(pending==null||pending.ContainsKey(k))return;
    var t=Pack.Get(k);pending[k]=t==null?null:Json.Write(t.Data,false);
+   if(!loadedTerrain.ContainsKey(k))loadedTerrain[k]=t==null?null:t.TerrainAtLoad;
   }
   public bool Undo(){return Swap(undo,redo);}
   public bool Redo(){return Swap(redo,undo);}
@@ -75,7 +77,7 @@ namespace AnyMapMaker {
    foreach(var kv in snap){
     var cur=Pack.Get(kv.Key);back[kv.Key]=cur==null?null:Json.Write(cur.Data,false);
     if(kv.Value==null)Pack.Tiles.Remove(kv.Key);
-    else Pack.Tiles[kv.Key]=new Tile{Key=kv.Key,Data=(JsonObject)Json.Parse(kv.Value),Dirty=true};
+    else{string was;loadedTerrain.TryGetValue(kv.Key,out was);Pack.Tiles[kv.Key]=new Tile{Key=kv.Key,Data=(JsonObject)Json.Parse(kv.Value),Dirty=true,TerrainAtLoad=was};}
    }
    to.Push(back);Pack.UpdateBounds();return true;
   }

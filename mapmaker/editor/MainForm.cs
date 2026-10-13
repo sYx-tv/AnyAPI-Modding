@@ -125,7 +125,7 @@ namespace AnyMapMaker {
   void OpenStock(){
    if(!ConfirmDiscard())return;
    if(game==null)ChooseGame(true);if(game==null)return;
-   OpenWith(()=>{var p=MapPack.LoadTiles(game.StockTiles,"My map");p.Base="stock";foreach(var t in p.Tiles.Values)t.Dirty=true;return p;});
+   OpenWith(()=>{var p=MapPack.LoadTiles(game.StockTiles,"My map");p.Base="stock";foreach(var k in p.Tiles.Keys)p.StockVegetation.Add(k.BaseName);foreach(var t in p.Tiles.Values)t.Dirty=true;return p;});
   }
   void OpenPack(){
    if(!ConfirmDiscard())return;

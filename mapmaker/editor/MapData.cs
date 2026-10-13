@@ -31,7 +31,8 @@ namespace AnyMapMaker {
   public override bool Equals(object o){return o is TileKey&&Equals((TileKey)o);}
   public override int GetHashCode(){return (X*73856093)^(Z*19349663)^(T*83492791);}
   // The game pads x and z to three digits (tile_091_111_0.json).
-  public string FileName {get{return "tile_"+X.ToString("D3")+"_"+Z.ToString("D3")+"_"+T+".json";}}
+  public string BaseName {get{return "tile_"+X.ToString("D3")+"_"+Z.ToString("D3")+"_"+T;}}
+  public string FileName {get{return BaseName+".json";}}
   static readonly Regex Name=new Regex(@"^tile_(-?\d+)_(-?\d+)_(\d)\.json$",RegexOptions.IgnoreCase);
   public static bool TryParse(string fileName,out TileKey key){
    key=new TileKey();var m=Name.Match(fileName);if(!m.Success)return false;
@@ -63,6 +64,8 @@ namespace AnyMapMaker {
  // and leaves everything else exactly as the game wrote it.
  public sealed class Tile {
   public TileKey Key; public JsonObject Data; public bool Dirty;
+  public string TerrainAtLoad;          // definition|height|orientation when loaded, to spot terrain changes
+  public string Terrain {get{return Definition+"|"+Height+"|"+Orientation;}}
   public string Definition {get{return Data.Str("definition_name")??"";}}
   public int Height {get{return (int)Data.Num("height",0);}}
   public int Orientation {get{return (int)Data.Num("orientation",0);}}
@@ -75,6 +78,9 @@ namespace AnyMapMaker {
   public string Folder;                 // null until saved
   public readonly Dictionary<TileKey,Tile> Tiles=new Dictionary<TileKey,Tile>();
   public readonly List<string> LoadErrors=new List<string>();
+  // Tiles (base names like tile_088_122_0) whose stock vegetation (trees, bushes) still fits their terrain. The
+  // CustomMap mod serves the game's vegetation only for these; any other tile has none unless the pack has its own.
+  public readonly HashSet<string> StockVegetation=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
   public int MinX,MaxX,MinZ,MaxZ;
 
   public static MapPack LoadTiles(string tilesFolder,string name){
@@ -85,7 +91,7 @@ namespace AnyMapMaker {
     try{
      var data=Json.Parse(File.ReadAllText(path)) as JsonObject;
      if(data==null){pack.LoadErrors.Add(Path.GetFileName(path)+": not a JSON object");continue;}
-     pack.Tiles[key]=new Tile{Key=key,Data=data};
+     var tile=new Tile{Key=key,Data=data};tile.TerrainAtLoad=tile.Terrain;pack.Tiles[key]=tile;
     }catch(Exception e){pack.LoadErrors.Add(Path.GetFileName(path)+": "+e.Message);}
    }
    pack.UpdateBounds();return pack;
@@ -96,6 +102,9 @@ namespace AnyMapMaker {
    var manifest=Json.Parse(File.ReadAllText(Path.Combine(folder,"map.json"))) as JsonObject;
    if(manifest==null)throw new InvalidDataException("map.json is not a JSON object");
    var pack=LoadTiles(Path.Combine(folder,"tiles","0"),manifest.Str("name")??Path.GetFileName(folder));
+   var keep=manifest.Arr("stock_vegetation");pack.StockVegetation.Clear();
+   if(keep!=null)foreach(var v in keep){var n=v as string;if(n!=null)pack.StockVegetation.Add(n);}
+   else foreach(var k in pack.Tiles.Keys)pack.StockVegetation.Add(k.BaseName);   // packs from before this list existed
    pack.Author=manifest.Str("author")??"";pack.Description=manifest.Str("description")??"";pack.Base=manifest.Str("base")??"stock";
    pack.Folder=folder;return pack;
   }
@@ -105,6 +114,12 @@ namespace AnyMapMaker {
    var manifest=new JsonObject();
    manifest["format"]=new JsonNumber(FormatVersion.ToString());manifest["name"]=Name;manifest["author"]=Author;manifest["description"]=Description;
    manifest["base"]=Base;manifest["game_build"]=gameBuild??"";manifest["tiles"]=new JsonNumber(Tiles.Count.ToString());
+   // Terrain changed (or land removed or added) since the stock world: its stock vegetation no longer fits.
+   foreach(var tile in Tiles.Values)if(tile.TerrainAtLoad!=tile.Terrain)StockVegetation.Remove(tile.Key.BaseName);
+   var alive=new HashSet<string>(StringComparer.OrdinalIgnoreCase);foreach(var k in Tiles.Keys)alive.Add(k.BaseName);
+   StockVegetation.RemoveWhere(n=>!alive.Contains(n));
+   var names=new List<string>(StockVegetation);names.Sort(StringComparer.OrdinalIgnoreCase);
+   manifest["stock_vegetation"]=names.ConvertAll(n=>(object)n);
    File.WriteAllText(Path.Combine(folder,"map.json"),Json.Write(manifest,true));
    bool sameFolder=string.Equals(Path.GetFullPath(folder).TrimEnd('\\','/'),Folder==null?null:Path.GetFullPath(Folder).TrimEnd('\\','/'),StringComparison.OrdinalIgnoreCase);
    var keep=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -112,6 +127,12 @@ namespace AnyMapMaker {
     keep.Add(tile.Key.FileName);
     if(sameFolder&&!tile.Dirty)continue;
     File.WriteAllText(Path.Combine(tiles,tile.Key.FileName),Json.Write(tile.Data,true));tile.Dirty=false;
+   }
+   // A pack's own vegetation file for a tile whose terrain changed would float or sink: drop it.
+   string veg=Path.Combine(folder,"tiles","vegetation");
+   if(Directory.Exists(veg))foreach(var path in Directory.GetFiles(veg,"tile_*")){
+    string n=Path.GetFileName(path);int cut=n.IndexOf("_vegetation",StringComparison.OrdinalIgnoreCase);
+    if(cut>0&&!StockVegetation.Contains(n.Substring(0,cut)))File.Delete(path);
    }
    // Tiles deleted in the editor (ocean) disappear from the pack too.
    foreach(var path in Directory.GetFiles(tiles,"tile_*.json"))if(!keep.Contains(Path.GetFileName(path)))File.Delete(path);

@@ -4,7 +4,9 @@
 // A map pack is a folder <game>/AnyAPI and Modding/maps/<name>/ holding map.json and its own tiles/ folder. While a
 // pack is selected, every game read, existence check and folder listing under rom data/tiles/ is answered from the
 // pack instead, by hooking the call cells of the game's file.* natives. tiles/0 is always the pack's own (a tile the
-// pack lacks is ocean); anything else under tiles/ (vegetation) falls back to the game's copy when the pack has none.
+// pack lacks is ocean). Vegetation (tiles/vegetation/<tile>_vegetation.bin) comes from the pack when it has the file,
+// else from the game only for tiles listed in map.json "stock_vegetation" (terrain unchanged since the stock world);
+// other tiles get none, so trees never float over edited terrain. Anything else under tiles/ falls back to the game.
 // Nothing in the game folder is ever written.
 //
 // Choosing a map: the CustomGame mod's Custom Game page shows a Map row and calls the "custommap.maps" service
@@ -89,6 +91,27 @@ std::string g_pack_tiles;              // "<maps>/<pack>/tiles" with forward sla
 std::atomic<int32_t> g_abs_store{-1};  // store that reads absolute paths, found by calibration
 std::atomic<bool> g_first_read{false}; // log the first redirected read after each selection
 std::vector<std::string> g_list;       // last scan, sorted
+std::set<std::string> g_stock_veg;     // tile base names ("tile_088_122_0") that keep the game's vegetation
+
+// map.json "stock_vegetation": ["tile_...", ...]. A pack without the key keeps all stock vegetation.
+bool read_stock_vegetation(const fs::path& pack, std::set<std::string>& out, bool& all) {
+    out.clear(); all = true;
+    FILE* f = _wfopen((pack / L"map.json").c_str(), L"rb"); if (!f) return false;
+    std::string text; char buf[65536]; size_t n;
+    while ((n = fread(buf, 1, sizeof buf, f)) > 0 && text.size() < (64u << 20)) text.append(buf, n);
+    fclose(f);
+    size_t at = text.find("\"stock_vegetation\""); if (at == std::string::npos) return true;
+    at = text.find('[', at); size_t end = at == std::string::npos ? at : text.find(']', at);
+    if (at == std::string::npos || end == std::string::npos) return true;
+    all = false;
+    for (size_t i = at; i < end;) {
+        size_t a = text.find('"', i); if (a == std::string::npos || a > end) break;
+        size_t b = text.find('"', a + 1); if (b == std::string::npos || b > end) break;
+        out.insert(text.substr(a + 1, b - a - 1)); i = b + 1;
+    }
+    return true;
+}
+bool g_stock_veg_all = true;
 
 uint32_t svc_count() {
     std::vector<std::string> names;
@@ -124,9 +147,12 @@ bool svc_select(const char* name) {
     if (!g_ready || g_abs_store < 0) { log(2, "map pack '%s' chosen, but CustomMap is not ready (see the errors above)", n.c_str()); svc_select(""); return false; }
     std::string root = utf8((pack / L"tiles").wstring());
     std::replace(root.begin(), root.end(), '\\', '/');
+    std::set<std::string> veg; bool all = true;
+    read_stock_vegetation(pack, veg, all);
     std::lock_guard l(g_pack_mutex);
-    if (g_pack_name != n) log(0, "map pack '%s' selected (%s)", n.c_str(), root.c_str());
-    g_pack_name = n; g_pack_tiles = root; g_first_read = true;
+    if (g_pack_name != n) log(0, "map pack '%s' selected (%s); stock vegetation kept on %s tiles", n.c_str(), root.c_str(),
+                              all ? "all" : std::to_string(veg.size()).c_str());
+    g_pack_name = n; g_pack_tiles = root; g_first_read = true; g_stock_veg = std::move(veg); g_stock_veg_all = all;
     return true;
 }
 bool svc_selected(char* buf, uint32_t cap) {
@@ -161,10 +187,21 @@ struct redirect {
         if (!is_tile_path(p, &rest)) return;
         int32_t store = g_abs_store.load();
         if (store < 0) return;
-        { std::lock_guard l(g_pack_mutex); if (g_pack_tiles.empty()) return; text = g_pack_tiles + rest; }
-        // Outside tiles/0 (vegetation and the like) a file the pack does not have comes from the game.
+        bool stock_ok;
+        {
+            std::lock_guard l(g_pack_mutex); if (g_pack_tiles.empty()) return; text = g_pack_tiles + rest;
+            stock_ok = g_stock_veg_all;
+            const std::string veg = "/vegetation/";
+            if (!stock_ok && rest.rfind(veg, 0) == 0) {
+                std::string file = rest.substr(veg.size());
+                size_t cut = file.find("_vegetation");
+                stock_ok = cut == std::string::npos || g_stock_veg.count(file.substr(0, cut)) > 0;
+            } else if (rest.rfind(veg, 0) != 0) stock_ok = true;
+        }
+        // Outside tiles/0 a file the pack does not have comes from the game, except vegetation of edited tiles,
+        // which is sent to the (missing) pack file so the game finds none.
         std::error_code ec;
-        if (!in_tiles0(rest) && !fs::exists(fs::path(wide(text)), ec)) return;
+        if (!in_tiles0(rest) && stock_ok && !fs::exists(fs::path(wide(text)), ec)) return;
         path = *p; path.store = store; path.path.p = text.c_str(); path.path.len = int32_t(text.size()); path.path.reserved = 0;
         active = true;
         if (g_first_read.exchange(false)) log(0, "the world is reading tiles from the map pack (%s)", text.c_str());

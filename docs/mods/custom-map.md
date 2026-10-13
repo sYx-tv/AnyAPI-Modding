@@ -26,8 +26,9 @@ The world is one small file per triangle of the world grid in `rom/data/tiles/0`
 
 - CustomMap hooks the call cells of the game's file functions (`file.read_string`, `file.read_binary`,
   `file.get_is_exists` and the folder listings). While a map is selected, paths under the game's `data/tiles`
-  are answered from the map pack. The pack's `tiles/0` is the whole world (a missing tile is ocean); other files
-  under `tiles/`, such as vegetation, come from the game when the pack has none. Nothing in the game folder is written.
+  are answered from the map pack. The pack's `tiles/0` is the whole world (a missing tile is ocean). Trees and
+  bushes come from the game only for tiles whose terrain the Map Maker left unchanged (`stock_vegetation` in
+  `map.json`), so edited or new land starts bare. Nothing in the game folder is written.
 - Other mods choose the map through the `custommap.maps` service ([custommap_v1.h](../../sdk/include/custommap_v1.h)):
   `count`, `name`, `select` and `selected`. CustomGame calls `select` when a world starts or loads.
 - On start it checks which of the game's path stores opens an absolute path, by asking whether `game.exe`

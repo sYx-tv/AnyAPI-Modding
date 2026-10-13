@@ -89,6 +89,12 @@ namespace AnyMapMaker {
     check(pack.Get(new TileKey(20,20,1))!=null&&pack.Get(new TileKey(9,9,1))==null,"paint new land and remove land");
     string temp=Path.Combine(Path.GetTempPath(),"anymapmaker-edittest-"+Guid.NewGuid().ToString("N"));
     pack.Save(temp,"test");var again=MapPack.Open(temp);
+    check(again.StockVegetation.Count==0,"a blank island keeps no stock vegetation");
+    var stockLike=MapEditor.BlankIsland(cat,30,30,2,2,0);foreach(var tt in stockLike.Tiles.Values)tt.TerrainAtLoad=tt.Terrain;foreach(var k in stockLike.Tiles.Keys)stockLike.StockVegetation.Add(k.BaseName);
+    var ed2=new MapEditor(stockLike);ed2.Begin();ed2.SetHeight(new TileKey(29,29,0),2);ed2.Commit();ed2.Begin();ed2.Rotate(new TileKey(30,30,1));ed2.Commit();ed2.Undo();
+    string temp2=Path.Combine(Path.GetTempPath(),"anymapmaker-edittest-"+Guid.NewGuid().ToString("N"));stockLike.Save(temp2,"test");
+    var v=MapPack.Open(temp2).StockVegetation;Directory.Delete(temp2,true);
+    check(v.Count==7&&!v.Contains("tile_029_029_0")&&v.Contains("tile_030_030_1"),"a changed tile drops its stock vegetation, an undone change keeps it ("+v.Count+" of 8 kept)");
     check(again.Tiles.Count==pack.Tiles.Count&&MapScene.Build(again).Roads.Count==MapScene.Build(pack).Roads.Count,"save and reload keeps every tile and road");
     Directory.Delete(temp,true);
    }catch(Exception e){Console.WriteLine("FAIL "+e);fails++;}

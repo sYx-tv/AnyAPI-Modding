@@ -60,6 +60,7 @@ A map pack is a folder, by default `<game>\AnyAPI and Modding\maps\<map name>\`:
 ```text
 map.json
 tiles/0/tile_<x>_<z>_<t>.json   (same format as the game's own tiles)
+tiles/vegetation/...            (optional, same as rom/data/tiles/vegetation)
 ```
 
 `map.json`:
@@ -71,6 +72,7 @@ tiles/0/tile_<x>_<z>_<t>.json   (same format as the game's own tiles)
 | `base` | `stock` (started from the stock world) or `blank` |
 | `game_build` | Steam build the pack was saved against (informational) |
 | `tiles` | Number of tile files |
+| `stock_vegetation` | Tiles (`tile_<x>_<z>_<t>`) whose terrain is unchanged from the stock world, so the game's trees and bushes for them still fit. CustomMap serves stock vegetation only for these; other tiles have none unless the pack has its own `tiles/vegetation` file. Missing key = keep all |
 
 The tiles folder is the **whole** world: tiles that are not in the pack are ocean. Tile files keep every
 key the game wrote, including ones the editor does not understand yet, so a pack saved from the stock
