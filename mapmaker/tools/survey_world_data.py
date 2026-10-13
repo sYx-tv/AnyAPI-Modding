@@ -1,13 +1,16 @@
 """Summarise how the installed game stores its world, for map-editor development.
 
-Usage: python mapmaker/tools/survey_world_data.py [game_dir] [out.json]
+Usage: python mapmaker/tools/survey_world_data.py [game_dir] [out.json] [--full]
 
 Reads <game>/rom only and writes a compact JSON report (schemas, id lists, value ranges and two
 trimmed example tiles). It copies no meshes or textures; the report is small enough to paste.
+--full also embeds a few whole tile files; keep that output private (never commit it to the public repo).
 """
 import collections, json, re, sys
 from pathlib import Path
 
+full = '--full' in sys.argv
+sys.argv = [a for a in sys.argv if a != '--full']
 game = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r'C:\Program Files (x86)\Steam\steamapps\common\Anymaker')
 out = Path(sys.argv[2]) if len(sys.argv) > 2 else Path('world-survey.json')
 rom = game / 'rom'
@@ -101,7 +104,7 @@ if tiles:
     picks = {plain[0]: plain[1], rich[0]: rich[1]}
     for group in (with_props, [t for t in tiles if t[1].get('pathway_junctions')], [t for t in tiles if t[1].get('loot_spawn_zones')]):
         if group: picks.setdefault(group[len(group) // 2][0], group[len(group) // 2][1])
-    report['full_example_tiles'] = picks
+    if full: report['full_example_tiles'] = picks
     report['tile_counts'] = {'total': len(tiles), 'with_roads': len(with_roads), 'with_props': len(with_props),
         'with_spawn_zones': sum(1 for t in tiles if t[1].get('spawn_zones'))}
     # Occupancy grid (x,z,t -> definition, height, orientation) as compact rows, for drawing a preview.
