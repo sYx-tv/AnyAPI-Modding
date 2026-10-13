@@ -133,8 +133,13 @@ void prepare_pack(std::string name) {
 }
 
 // rom "data/tiles/..." -> absolute pack path. Returns false when the path is not a tile path or no pack is active.
+// A path argument is only trusted when it looks like a file.path: a known store and a readable string.
+bool sane_path(const gpath* p) {
+    return p && anymaker::readable(p, sizeof(*p)) && p->store >= 0 && p->store <= 3 && p->path.p &&
+           p->path.len > 0 && p->path.len <= 4096 && anymaker::readable(p->path.p, size_t(p->path.len));
+}
 bool is_tile_path(const gpath* p, std::string* rest) {
-    if (!p || p->store != kStoreRom || !p->path.p || p->path.len < 11) return false;
+    if (!sane_path(p) || p->store != kStoreRom || p->path.len < 11) return false;
     std::string s(p->path.p, size_t(p->path.len));
     std::replace(s.begin(), s.end(), '\\', '/');
     size_t start = s.rfind("data/tiles", std::string::npos);
@@ -161,7 +166,7 @@ struct redirect {
 std::mutex g_seen_mutex;
 std::set<std::string> g_seen;
 void note_path(const char* what, const gpath* p) {
-    if (!p || !p->path.p || p->path.len <= 0) return;
+    if (!sane_path(p)) return;
     std::string s(p->path.p, size_t(std::min(p->path.len, 300)));
     size_t slash = s.find_last_of("/\\");
     std::string key = std::to_string(p->store) + ":" + (slash == std::string::npos ? s : s.substr(0, slash + 1));
@@ -190,7 +195,7 @@ void hk_read_binary(bool* ret, const gpath* p, void* out) {
 void hk_write_string(bool* ret, const gpath* p, void* text) {
     note_path("write", p);
     redirect r(p); auto original = read_t(h_write_string.original);
-    if (g_editor && p && p->store == kStoreRom && !is_tile_path(p, nullptr)) {
+    if (g_editor && sane_path(p) && p->store == kStoreRom && !is_tile_path(p, nullptr)) {
         // The editor's other panels can save game definition files; keep the install untouched.
         log(1, "blocked an editor write to game data (%.*s)", p->path.len, p->path.p);
         *ret = false; return;
