@@ -11,7 +11,7 @@ CustomMap then builds new worlds from that pack instead of the normal world.
 ## Using it
 
 1. Make or edit a map in the Map Maker and save it. It goes into the game's `maps` folder.
-2. In game, open **New Game → Custom Game** (needs the [CustomGame](custom-game.md) mod) and pick your map in the
+2. In game, open **New Game → Custom Game** (needs the CustomGame mod) and pick your map in the
    **Map** row.
 3. Press **Start game**. The world is built from the map pack.
 

@@ -142,6 +142,10 @@ bool svc_select(const char* name) {
         g_pack_name.clear(); g_pack_tiles.clear();
         return true;
     }
+    {   // Called on every world load: re-selecting the current pack is a no-op.
+        std::lock_guard l(g_pack_mutex);
+        if (n == g_pack_name && !g_pack_tiles.empty()) return true;
+    }
     fs::path pack = maps_dir() / wide(n);
     if (!valid_name(n) || !loadable(pack)) { log(2, "map pack '%s' is missing or has no tiles; using the normal world", n.c_str()); svc_select(""); return false; }
     if (!g_ready || g_abs_store < 0) { log(2, "map pack '%s' chosen, but CustomMap is not ready (see the errors above)", n.c_str()); svc_select(""); return false; }
