@@ -136,17 +136,27 @@ namespace AnyMapMaker {
     Vec3 a=pts[Math.Max(0,i-1)],b=pts[Math.Min(pts.Count-1,i+1)],d=b-a;double l=d.Length;
     tan[i]=l>0?d*(1/l):new Vec3(1,0,0);
    }
+   // Each clicked span is a Hermite curve; it is cut into links of at most MaxLink metres like the stock roads
+   // (median 59 m), each a cubic Bezier whose handles are a third of the curve's derivative over its piece.
    int n=0;
    for(int i=0;i+1<pts.Count;i++){
-    Vec3 a=pts[i],b=pts[i+1];double len=(b-a).Length;if(len<1)continue;
-    var t=TileAt(b,true);if(t==null)continue;
-    var o=new JsonObject();
-    o["pos_a"]=V(a);o["pos_b"]=V(b);o["dir_a"]=V(tan[i]*(len*0.3));o["dir_b"]=V(tan[i+1]*(-len*0.3));
-    o["normal_a"]=V(new Vec3(0,1,0));o["normal_b"]=V(new Vec3(0,1,0));o["type"]=type;
-    List(t.Data,"junction_links").Add(o);t.Dirty=true;n++;
+    Vec3 p0=pts[i],p1=pts[i+1];double len=(p1-p0).Length;if(len<1)continue;
+    Vec3 m0=tan[i]*len,m1=tan[i+1]*len;int pieces=Math.Max(1,(int)Math.Ceiling(len/MaxLink));double dt=1.0/pieces;
+    Func<double,Vec3> at=u=>{double u2=u*u,u3=u2*u;return p0*(2*u3-3*u2+1)+m0*(u3-2*u2+u)+p1*(-2*u3+3*u2)+m1*(u3-u2);};
+    Func<double,Vec3> slope=u=>{double u2=u*u;return p0*(6*u2-6*u)+m0*(3*u2-4*u+1)+p1*(-6*u2+6*u)+m1*(3*u2-2*u);};
+    for(int j=0;j<pieces;j++){
+     double u0=j*dt,u1=(j+1)*dt;Vec3 a=at(u0),b=at(u1);a=Ground(a.X,a.Z,0);b=Ground(b.X,b.Z,0);
+     var t=TileAt(b,true);if(t==null)continue;
+     Vec3 da=slope(u0)*(dt/3),db=slope(u1)*(-dt/3);da.Y=0;db.Y=0;
+     var o=new JsonObject();
+     o["pos_a"]=V(a);o["pos_b"]=V(b);o["dir_a"]=V(da);o["dir_b"]=V(db);
+     o["normal_a"]=V(new Vec3(0,1,0));o["normal_b"]=V(new Vec3(0,1,0));o["type"]=type;
+     List(t.Data,"junction_links").Add(o);t.Dirty=true;n++;
+    }
    }
    return n;
   }
+  public const double MaxLink=60;
   public bool AddBuildingSpot(string filter,int size,double x,double z,double rot){
    var p=Ground(x,z,0);var t=TileAt(p,true);if(t==null)return false;
    var o=new JsonObject();o["pos"]=V(p);o["rot"]=N(rot);o["filter"]=filter;if(size>0)o["size"]=new JsonNumber(size.ToString());
@@ -236,10 +246,14 @@ namespace AnyMapMaker {
    foreach(var n in new[]{new TileKey(k.X,k.Z,1-k.T),new TileKey(k.X+(k.T==0?-1:1),k.Z,1-k.T),new TileKey(k.X,k.Z+(k.T==0?-1:1),1-k.T)}){
     var t=Pack.Get(n);if(t!=null)return t.Height;
    }
-   return 0;
+   return LandHeight;
   }
 
   // A flat island of w x h grid cells (two triangles each) centred on (cx, cz), surrounded by ocean.
+  // Sea level is y = 0, so land at height 0 sits in the water (the stock world's flat land is at height 1 or 4).
+  public const int LandHeight=1;
+  // Moves every tile up or down by steps of 32 m (undoable).
+  public int ShiftAll(int steps){int n=0;foreach(var k in new List<TileKey>(Pack.Tiles.Keys)){var t=Pack.Get(k);if(SetHeight(k,t.Height+steps))n++;}return n;}
   public static MapPack BlankIsland(Catalog cat,int cx,int cz,int w,int h,int height){
    var pack=new MapPack{Name="My island",Base="blank"};
    for(int x=cx-w/2;x<cx-w/2+w;x++)for(int z=cz-h/2;z<cz-h/2+h;z++)for(int t=0;t<2;t++){

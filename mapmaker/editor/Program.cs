@@ -76,10 +76,13 @@ namespace AnyMapMaker {
     double rot=((JsonObject)pack.Get(Grid.At(c.X+1,c.Z)).Data.Arr("prop_spawn_zones")[1]).Num("rot",-1);
     check(Math.Abs(rot)<1e-6||Math.Abs(rot-2*Math.PI)<1e-6,"an eastward fence has rot 0 ("+rot+")");
     ed.Begin();int r=ed.AddRoad("road",new List<Vec3>{new Vec3(c.X-300,0,c.Z),new Vec3(c.X,0,c.Z+50),new Vec3(c.X+300,0,c.Z)});ed.Commit();
-    check(r==2,"a three-point road is 2 links ("+r+")");
+    check(r==12,"a 600 m three-point road is cut into 12 links of at most 60 m ("+r+")");
+    {var ls=MapScene.Build(pack).Roads;double longest=0,gap=0;foreach(var l in ls)longest=Math.Max(longest,(l.Points[l.Points.Length-1]-l.Points[0]).Length);
+     ls.Sort((x,y)=>x.Points[0].X.CompareTo(y.Points[0].X));for(int i=0;i+1<ls.Count;i++)gap=Math.Max(gap,(ls[i+1].Points[0]-ls[i].Points[ls[i].Points.Length-1]).Length);
+     check(longest<=MapEditor.MaxLink+0.5&&gap<0.01&&Math.Abs(ls[0].Points[0].Y-32)<0.01,"road links join end to end at ground height (longest "+longest.ToString("0.0")+" m, gap "+gap.ToString("0.000")+")");}
     ed.Begin();check(ed.AddBuildingSpot("house",2,c.X+60,c.Z+60,0),"place a house spot");check(ed.AddLoot(c.X+70,c.Z,0),"place loot");check(ed.AddEnemySpawn(c.X+80,c.Z),"place an enemy spawn");ed.Commit();
     var scene=MapScene.Build(pack);
-    check(scene.Roads.Count==2&&MapScene.Find("prop_spawn_zones").Count==22,"the map view shows 2 roads and 22 props");
+    check(scene.Roads.Count==12&&MapScene.Find("prop_spawn_zones").Count==22,"the map view shows 12 road links and 22 props");
     ed.Begin();int er=ed.Erase(c.X+12,c.Z,3,true,true);ed.Commit();
     check(er>=2,"erase removes the fence pieces under a 3 m brush ("+er+")");
     check(ed.Undo()&&MapScene.Build(pack).Markers.Count==scene.Markers.Count,"undo brings them back");

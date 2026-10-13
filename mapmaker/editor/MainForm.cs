@@ -11,7 +11,7 @@ namespace AnyMapMaker {
  // The editor window, in the AnyAPI Manager's look: frameless dark window, title bar with the file actions,
  // a sidebar with the map details, tools and layers, the map in the middle and the selected tile on the right.
  public sealed class MainForm : Form, IMessageFilter {
-  public const string Version="0.3.0";
+  public const string Version="0.3.1";
   static int S(float px){return Theme.S(px);}
   readonly MapView view=new MapView();
   readonly Panel titleBar=new Panel(), sidebar=new Panel(), statusBar=new Panel(), inspector=new Panel();
@@ -107,6 +107,9 @@ namespace AnyMapMaker {
    more.Items.Add("Open the stock world",null,(s,e)=>OpenStock());
    more.Items.Add("Save as a new map...",null,(s,e)=>Save(true));
    more.Items.Add("Export a copy to another folder...",null,(s,e)=>Export());
+   more.Items.Add(new ToolStripSeparator());
+   more.Items.Add("Raise the whole map 32 m",null,(s,e)=>ShiftAll(1));
+   more.Items.Add("Lower the whole map 32 m",null,(s,e)=>ShiftAll(-1));
    more.Items.Add(new ToolStripSeparator());
    more.Items.Add("Show the maps folder",null,(s,e)=>ShowMapsFolder());
    more.Items.Add("Game folder...",null,(s,e)=>FindGame(true));
@@ -295,7 +298,7 @@ namespace AnyMapMaker {
     pack=loader();editor=new MapEditor(pack);var scene=MapScene.Build(pack);view.SetMap(pack,scene);view.ClearRoad();
     loading=true;nameBox.Text=pack.Name;authorBox.Text=pack.Author;descriptionBox.Text=pack.Description;loading=false;
     unsaved=pack.Folder==null;layers.Reload();ShowTile(null);UpdateCounts();UpdateUndo();
-    SetStatus(pack.Folder==null?"New map. Save puts it in the game's maps folder.":"Opened "+pack.Folder,Theme.Ok);
+    SetStatus(pack.Folder==null?"New map. Save puts it in the game's maps folder.":"Opened "+pack.Folder,Theme.Ok);WarnSeaLevel();
     if(pack.LoadErrors.Count>0)ThemedDialog.Tell(this,"Some tiles were skipped",pack.LoadErrors.Count+" tile files could not be read. First: "+pack.LoadErrors[0]);
    }catch(Exception e){ThemedDialog.Tell(this,"Could not open the map",e.Message);}
    finally{Cursor=Cursors.Default;}
@@ -349,6 +352,13 @@ namespace AnyMapMaker {
     catch(Exception e){ThemedDialog.Tell(this,"Could not export",e.Message);}
     finally{pack.Folder=keep;if(keep!=null)foreach(var t in dirty)t.Dirty=false;}
    }
+  }
+  void ShiftAll(int steps){if(!Ready())return;editor.Begin();editor.ShiftAll(steps);if(editor.Commit())Edited(true);SetStatus(steps>0?"Raised the whole map 32 m.":"Lowered the whole map 32 m.",Theme.Ok);}
+  // Land at height 0 or below (other than shallow water pieces) is at sea level and shows water through it.
+  void WarnSeaLevel(){
+   if(pack==null)return;int low=0,land=0;
+   foreach(var t in pack.Tiles.Values){if(t.Definition.StartsWith("shallow")||t.Definition.Contains("ocean"))continue;land++;if(t.Height<=0)low++;}
+   if(land>0&&low*2>land)SetStatus(low+" land tiles are at sea level (height 0 or below), so water shows through them in game. Use More, Raise the whole map 32 m.",Theme.Warn);
   }
   void ShowMapsFolder(){if(!EnsureGame())return;Directory.CreateDirectory(game.MapsFolder);try{Process.Start("explorer.exe","\""+game.MapsFolder+"\"");}catch(Exception e){SetStatus(e.Message,Theme.Bad);}}
   static string SafeName(string name){foreach(char c in Path.GetInvalidFileNameChars())name=name.Replace(c,'_');name=name.Trim().TrimEnd('.');return name.Length==0?"My map":name;}
@@ -430,12 +440,12 @@ namespace AnyMapMaker {
    }
    // Centre it on the game's fixed Creative / Sandbox start point, so new players land on the island.
    var spawn=Grid.At(Grid.SpawnCreative.X,Grid.SpawnCreative.Z);int cx=spawn.X,cz=spawn.Z;
-   OpenWith(()=>MapEditor.BlankIsland(catalog,cx,cz,cells,cells,0));
+   OpenWith(()=>MapEditor.BlankIsland(catalog,cx,cz,cells,cells,MapEditor.LandHeight));
   }
 
   // For --ui-shot: a small island with one of everything, Road tool selected.
   public void Demo(){
-   OpenWith(()=>MapEditor.BlankIsland(catalog,10,10,3,3,0));
+   OpenWith(()=>MapEditor.BlankIsland(catalog,10,10,3,3,MapEditor.LandHeight));
    var c=Grid.Origin(new TileKey(10,10,0),0);editor.Begin();
    editor.AddRoad("road",new List<Vec3>{new Vec3(c.X-500,0,c.Z-100),new Vec3(c.X,0,c.Z+80),new Vec3(c.X+500,0,c.Z)});
    editor.AddFence(FenceStyle.All[0],c.X-200,c.Z-200,c.X+100,c.Z-150);
