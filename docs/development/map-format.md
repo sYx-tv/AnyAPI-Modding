@@ -1,6 +1,6 @@
 # Custom maps: how the world is stored, and the map pack format
 
-Research notes for the [MapEditor mod](../mods/map-editor.md) and the optional Map Maker viewer (`mapmaker/`), for Anymaker 0.1.24 (Steam 25826614).
+Research notes for the Anymaker Map Maker (`mapmaker/`) and the [CustomMap mod](../mods/custom-map.md), for Anymaker 0.1.24 (Steam 25826614).
 Sources are the regenerated SDK reference (types, fields and natives), `native/generate_road_graph.py`, and a
 read of the installed game's `rom/data` on 2026-10-13. The grid maths below put all 136,159 placed points
 (building spots, props, loot) inside their own tile.
@@ -45,13 +45,13 @@ The world is a grid of triangles. There is no heightmap and no single world file
   (game.exe+0x3f080), `file.read_binary` (+0x3f0e0), `file.get_is_exists` (+0x3f140),
   `file.get_files_in_dir` (+0x3edf0). gcl code calls them through per-function call cells, so a mod can
   swap those cells to serve a map pack's files in place of `rom/data/tiles` without touching the install.
-  The [MapEditor mod](../mods/map-editor.md) does this. Paths are `file.path` values: a store (0 embedded,
+  The [CustomMap mod](../mods/custom-map.md) does this. Paths are `file.path` values: a store (0 embedded,
   1 system, 2 rom, 3 user) and a string.
 - **The developers' editor ships in the game, switched off**: chunk (terrain), tile (junctions), prop,
   loot, actor spawn, dead drop, prefab and map-screenshot panels, toggled by `g_is_*_window` globals and
   drawn from `update_ui` in `main.gc`, which has no caller in the release build. It saves through
   `chunk_edit_panel.save_scene`, which writes each tile with `client_scene.environment_tile.save`.
-  The [MapEditor mod](../mods/map-editor.md) opens it in game; it is the main way to make maps.
+  Maps are made with the separate Map Maker instead (`mapmaker/`).
 
 ## Map pack format (version 1)
 

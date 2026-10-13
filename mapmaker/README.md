@@ -1,7 +1,7 @@
 # Anymaker Map Maker
 
-An optional Windows viewer for map packs. Maps are made in game with the
-[MapEditor mod](../docs/mods/map-editor.md); this tool shows a whole pack from above and edits single tiles.
+A Windows map editor for Anymaker. It saves map packs into the game folder; the
+[CustomMap mod](../docs/mods/custom-map.md) plays them (pick the map on CustomGame's Custom Game page).
 
 **Status: 0.1.0.** Opens the stock world or a map pack as a top-down map (terrain, roads, junctions, props,
 building spots, loot, spawns), lets you inspect and edit any tile's data, and saves map packs.
