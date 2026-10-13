@@ -21,7 +21,7 @@ enum Format {
     kFmtHour,        // -1 game default, else 0..23
     kFmtInt,         // plain number
     kFmtPercent,     // 0 shows as "Off" when off_at_zero
-    kFmtOnOff,       // 1 on, 0 off
+    kFmtOnOff,       // -1 normal for the mode, 1 on, 0 off
     kFmtDegrees,     // offset in degrees C from the game's value
     kFmtMinutes,     // multiplier of a game duration in seconds
     kFmtWeather,     // Weather enum
@@ -65,7 +65,7 @@ inline constexpr double rate[] = {25, 50, 75, 100, 125, 150, 200, 300, 400};
 inline constexpr double longer[] = {25, 50, 75, 100, 150, 200, 300, 500};
 inline constexpr double duration[] = {25, 50, 100, 200, 400, 800};
 inline constexpr double degrees[] = {-30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30};
-inline constexpr double on_off[] = {1, 0};
+inline constexpr double on_off[] = {-1, 1, 0};
 inline constexpr double amount[] = {0, 25, 50, 75, 100, 150, 200, 300};
 inline constexpr double enemies[] = {25, 50, 75, 100, 150, 200, 300};
 inline constexpr double senses[] = {25, 50, 75, 100, 125, 150, 200, 300};
@@ -94,14 +94,14 @@ inline const Setting kSettings[kCount] = {
     {"lost_body_time", "Your lost body stays for", "How long your own body (and its gear) waits for you after you die.", kSurvival, kFmtMinutes, CG_LIST(duration), 100, false},
     {"coldest", "Coldest temperature", "Lower makes cold places and nights colder.", kSurvival, kFmtDegrees, CG_LIST(degrees), 0, false},
     {"hottest", "Hottest temperature", "Higher makes hot places and days hotter.", kSurvival, kFmtDegrees, CG_LIST(degrees), 0, false},
-    {"zombies", "Zombies", "Turn zombie spawning off for a peaceful world.", kDanger, kFmtOnOff, CG_LIST(on_off), 1, false},
-    {"creatures", "Creatures", "Turn creature spawning off.", kDanger, kFmtOnOff, CG_LIST(on_off), 1, false},
+    {"zombies", "Zombies", "Normal follows the mode (Sandbox has none). On brings them to Sandbox too; Off removes them.", kDanger, kFmtOnOff, CG_LIST(on_off), -1, false},
+    {"creatures", "Creatures", "Normal follows the mode (Sandbox has none). On brings them to Sandbox too; Off removes them.", kDanger, kFmtOnOff, CG_LIST(on_off), -1, false},
     {"horde_size", "Zombie horde size", "How many zombies come in a horde.", kDanger, kFmtPercent, CG_LIST(amount), 100, true},
     {"max_enemies", "Max enemies around", "The cap on spawned zombies, creatures and survivors at once.", kDanger, kFmtPercent, CG_LIST(enemies), 100, false},
     {"sight", "Enemy sight range", "How far zombies, creatures and survivors can see you.", kDanger, kFmtPercent, CG_LIST(senses), 100, false},
     {"hearing", "Enemy hearing range", "How far zombies, creatures and survivors can hear you.", kDanger, kFmtPercent, CG_LIST(senses), 100, false},
     {"safe_radius", "No-spawn zone", "How close to players new enemies may appear. Bigger keeps them further away.", kDanger, kFmtPercent, CG_LIST(radius), 100, false},
-    {"loot", "Loot amount", "How much loot is in buildings, bunkers and wrecks.", kWorld, kFmtPercent, CG_LIST(loot), 100, false},
+    {"loot", "Loot amount", "How often loot spots have something. Applies to places not yet visited.", kWorld, kFmtPercent, CG_LIST(loot), 100, false},
     {"weather", "Weather", "Lock the weather, or leave it changing as normal.", kWorld, kFmtWeather, CG_LIST(weather), 0, false},
     {"precipitation", "Rain and snow density", "How many rain drops and snowflakes you see. Looks only.", kWorld, kFmtPercent, CG_LIST(precipitation), 100, true},
     {"joints", "Joint strength", "How much force it takes to break hinges, latches, pins and rails.", kWorld, kFmtJoints, CG_LIST(joints), 100, false},
@@ -205,7 +205,7 @@ inline std::string value_text(int id, double value, const GameDefaults& d) {
         if (value == 0 && s.off_at_zero) return "Off";
         snprintf(b, sizeof b, "%d%%", int(value));
         return b;
-    case kFmtOnOff: return value != 0 ? "On" : "Off";
+    case kFmtOnOff: return value < 0 ? "Normal for the mode" : value != 0 ? "On" : "Off";
     case kFmtDegrees: {
         double base = id == kColdest ? d.temperature_min : d.temperature_max;
         if (std::isfinite(base)) snprintf(b, sizeof b, "%.0f \xC2\xB0" "C%s", base + value, value == 0 ? "  (normal)" : "");
@@ -247,6 +247,14 @@ inline double scaled(double base, double percent) { return base * percent / 100.
 inline int32_t scaled_count(int32_t base, double percent, int32_t minimum) {
     return std::max(minimum, int32_t(std::lround(double(base) * percent / 100.0)));
 }
+
+// Zombies and creatures: Normal follows the mode (Sandbox spawns none), On forces them on even in Sandbox.
+inline bool enemies_on(const Config& c, int id) { return c[id] > 0 || (c[id] < 0 && c.mode() != 2); }
+// Sandbox gates its spawners on the mode, so forcing enemies on there means running them as Career.
+inline bool sandbox_spawns(const Config& c) { return c.mode() == 2 && (enemies_on(c, kZombies) || enemies_on(c, kCreatures)); }
+
+// The game rolls loot as rand(0, max(capacity, table weight)) < table weight, so a lower capacity means fuller spots.
+inline double loot_capacity(double base, double percent) { return percent <= 0 ? base : base * 100.0 / percent; }
 
 // Whether the host needs to drive the replicated time-of-day override: any time setting, or a setting that rides
 // along in the payload for joining players.

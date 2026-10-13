@@ -44,6 +44,17 @@ int main() {
     assert(!value_text(kWeather, 3, d).empty() && !value_text(kJoints, kUnbreakable, d).empty());
     assert(!summary(c).empty());
 
+    // Zombies and creatures: Normal follows the mode, On forces them into Sandbox, Off removes them.
+    Config e;
+    assert(enemies_on(e, kZombies) && enemies_on(e, kCreatures) && !sandbox_spawns(e));
+    e.v[kMode] = 2; assert(!enemies_on(e, kZombies) && !sandbox_spawns(e));
+    e.v[kZombies] = 1; assert(enemies_on(e, kZombies) && !enemies_on(e, kCreatures) && sandbox_spawns(e));
+    e.v[kMode] = 0; e.v[kZombies] = 0; assert(!enemies_on(e, kZombies) && !sandbox_spawns(e));
+    assert(value_text(kZombies, -1, d) == "Normal for the mode" && value_text(kCreatures, 0, d) == "Off");
+
+    // Loot: the game's capacity is a denominator, so more loot means a smaller capacity.
+    assert(near(loot_capacity(20, 500), 4) && near(loot_capacity(20, 25), 80) && near(loot_capacity(20, 100), 20));
+
     // Game values.
     assert(near(scaled_duration(600, 200), 300) && scaled_duration(600, 0) >= 1e15 && near(scaled(10, 50), 5));
     assert(scaled_count(10, 0, 0) == 0 && scaled_count(10, 25, 1) == 3 && scaled_count(2, 10, 1) == 1);

@@ -29,12 +29,12 @@ The page remembers the last settings you started with. The **Presets** tab saves
 | | Breath underwater | 25% to 500% | Air and drowning time |
 | | Bodies stay for, your lost body stays for | 25% to 800% | Shown in minutes |
 | | Coldest / hottest temperature | −30 to +30 °C | Shifts the game's temperature limits |
-| Danger | Zombies, creatures | On, Off | |
+| Danger | Zombies, creatures | Normal for the mode, On, Off | Normal follows the mode (Sandbox has none). On brings them to Sandbox too |
 | | Zombie horde size | 0% to 300% | |
 | | Max enemies around | 25% to 300% | Zombies, creatures and survivors |
 | | Enemy sight range, enemy hearing range | 25% to 300% | Zombies, creatures and survivors |
 | | No-spawn zone | 0% to 300% | How close to players enemies may spawn |
-| World | Loot amount | 25% to 500% | |
+| World | Loot amount | 25% to 500% | How often loot spots have something. Only places not yet visited are affected |
 | | Weather | Normal, Always clear, cloudy, rain, storm, fog | |
 | | Rain and snow density | 0% to 100% | Looks only |
 | | Joint strength | 25% to 500%, Unbreakable | Hinges, latches, pins and rails |
@@ -66,6 +66,12 @@ The files are plain `key=value` text. Hand edits snap to the nearest menu step.
   The override value also carries the weather lock and rain density in its lowest bits, so other players with
   CustomGame see the same weather. Weather is locked by hooking `weather_manager.get_weather_data`.
 - The starting tier calls `server_scene.set_loot_level` once, on the first tick of a new world.
+- Loot amount lowers or raises `g_loot_random_loot_capacity`. The game fills a loot spot when `rand(0, max(capacity,
+  weight)) < weight`, so the mod divides the capacity by the chosen percentage.
+- Sandbox switches its spawners off by checking the mode. When zombies or creatures are set to On in a Sandbox world,
+  the mod runs those spawners (`creature_manager._tick_spawn`, tile spawn zones, sleeping actors, hordes) with the
+  mode reading Career for the duration of the call.
+- Every changed game value is written to `anymaker_modding.log` as `name default -> new` when a world starts.
 
 ## Known limits
 

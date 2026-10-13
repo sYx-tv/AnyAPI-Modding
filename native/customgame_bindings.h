@@ -33,6 +33,17 @@ inline constexpr func_desc get_weather_data{"(weather_data) weather_manager.get_
 // () client_scene.weather_particles.create (client_scene.weather_particles) | side: client
 inline constexpr func_desc weather_particles_create{"() client_scene.weather_particles.create (client_scene.weather_particles)","53 55 48 81 ec c8 0a 00 00 48 89 8c 24 58 09 00 00 f2 0f 10 05 9f 26 00 00 f2 0f 11 84 24 60 09",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec d8 03 00 00 48 89 8c 24 50 03 00 00 48 8d 81 a0 29", {5456u}, 1},"",0u,-1};
 
+// () server_scene.creature_manager._tick_spawn (server_scene.creature_manager, server_scene, const vector<vec3>, const f64) | side: server
+inline constexpr func_desc creature_tick_spawn{"() server_scene.creature_manager._tick_spawn (server_scene.creature_manager, server_scene, const vector<vec3>, const f64)","53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec a8 05 00 00 48 89 d5 48 89 8c 24 58 03 00 00 48 89",{"53 55 56 48 81 ec 80 00 00 00 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8d 01 48 8d 1a 48", {544u}, 1},"",0u,-1};
+// () server_scene.environment_tile.populate_actor_spawn_zones (server_scene.environment_tile, server_scene) | side: server
+inline constexpr func_desc populate_actor_spawn_zones{"() server_scene.environment_tile.populate_actor_spawn_zones (server_scene.environment_tile, server_scene)","53 55 56 48 81 ec 50 04 00 00 48 89 8c 24 f8 02 00 00 48 89 94 24 00 03 00 00 48 8d 84 24 08 03",{"53 55 56 57 41 54 41 55 41 56 48 81 ec 70 04 00 00 48 89 8c 24 c8 03 00 00 48 89 94 24 d0 03 00", {8344u}, 1},"",0u,-1};
+// () server_scene.vehicle.spawn_sleeping_actors (server_scene.vehicle, server_scene) | side: server
+inline constexpr func_desc spawn_sleeping_actors{"() server_scene.vehicle.spawn_sleeping_actors (server_scene.vehicle, server_scene)","53 55 56 57 48 81 ec 18 07 00 00 48 89 8c 24 28 05 00 00 48 89 94 24 30 05 00 00 48 8d 84 24 38",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,82};
+// (bool) server_scene.zombie_horde_controller.is_destroy_horde (server_scene.zombie_horde_controller, const server_scene) | side: server
+inline constexpr func_desc is_destroy_horde{"(bool) server_scene.zombie_horde_controller.is_destroy_horde (server_scene.zombie_horde_controller, const server_scene)","53 55 56 48 83 ec 60 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8d 44 24 38 49 8d 98 88 00",{"53 48 81 ec b0 00 00 00 48 89 4c 24 50 48 89 54 24 58 48 8b 44 24 28 48 89 44 24 60 4c 8d 4c 24 60 48 8d 44 24 68 48 89 84 24 98 00 00 00 48 8d 01 48 8b 1d a8", {504u}, 1},"",0u,-1};
+// () server_scene.zombie_horde_manager.spawn_horde (server_scene.zombie_horde_manager, server_scene) | side: server
+inline constexpr func_desc spawn_horde{"() server_scene.zombie_horde_manager.spawn_horde (server_scene.zombie_horde_manager, server_scene)","53 55 56 48 81 ec 40 02 00 00 48 89 8c 24 70 01 00 00 48 89 94 24 78 01 00 00 48 8d 84 24 80 01",{"53 48 81 ec b0 00 00 00 48 89 4c 24 50 48 89 54 24 58 48 8b 44 24 28 48 89 44 24 60 4c 8d 4c 24 60 48 8d 44 24 68 48 89 84 24 98 00 00 00 48 8d 01 48 8b 1d a8", {552u}, 1},"",0u,-1};
+
 // g_day_night_cycle_ticks (anchor: () g_day_night_cycle_ticks.$ctor ())
 inline constexpr global_desc g_day_ticks{"g_day_night_cycle_ticks","48 8b 0d 21 00 00 00 8b 05 13 00 00 00 0f af 05 0c 00 00 00 0f af 05 05 00 00 00 89 01 c3 00 00",40u};
 // g_time_start_offset (anchor: () g_time_start_offset.$ctor ())
