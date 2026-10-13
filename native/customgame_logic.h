@@ -267,8 +267,8 @@ inline double loot_capacity(double base, double percent) { return percent <= 0 ?
 
 // Whether the host needs to drive the replicated time-of-day override: any time setting, or a setting that rides
 // along in the payload for joining players.
-inline bool needs_time_override(const Config& c) {
-    return !c.is_default(kDaySpeed) || !c.is_default(kStartHour) || !c.is_default(kWeather) || !c.is_default(kPrecipitation);
+inline bool needs_time_override(const Config& c, bool has_map = false) {
+    return has_map || !c.is_default(kDaySpeed) || !c.is_default(kStartHour) || !c.is_default(kWeather) || !c.is_default(kPrecipitation);
 }
 
 // The game: cycle = ((tick + start_offset) % day_ticks) / day_ticks, except Sandbox, which holds sandbox_factor.
@@ -287,7 +287,8 @@ inline double day_factor(const Config& c, int32_t tick, int32_t day_ticks, int32
 // ------------------------------------------------------------------ payload in the time of day
 // The host writes the time of day rounded to 2^-20 of a day (under 0.1 s of a 24 min day) and puts 20 payload bits
 // at 2^-21..2^-40. The value replicates as a full f64, so a joining player's mod reads the bits back while the
-// game (and vanilla players) just see the time.
+// game (and vanilla players) just see the time. A further 12 bits at 2^-41..2^-52 carry a hash of the world's
+// CustomMap pack (0 = the normal world); the value stays below 1, so those bits are exact in an f64.
 constexpr uint32_t kMagic = 0xC6;
 inline uint32_t checksum(uint32_t weather, uint32_t precipitation) { return (weather * 7 + precipitation * 13 + 11) & 31; }
 inline uint32_t pack(int weather, double precipitation_percent) {
@@ -295,17 +296,26 @@ inline uint32_t pack(int weather, double precipitation_percent) {
     uint32_t p = uint32_t(std::clamp(int(std::lround(precipitation_percent / 10)), 0, 10));
     return (kMagic << 12) | (w << 9) | (p << 5) | checksum(w, p);
 }
-inline double encode(double factor, uint32_t payload) {
+// 1..4095 for a pack name, 0 for the normal world. Players match it against the packs they have installed.
+inline uint32_t map_hash(const std::string& name) {
+    if (name.empty()) return 0;
+    uint32_t h = 2166136261u;
+    for (unsigned char ch : name) { h ^= ch; h *= 16777619u; }
+    return h % 4095 + 1;
+}
+inline double encode(double factor, uint32_t payload, uint32_t map = 0) {
     const double unit = 1048576.0;   // 2^20
     double q = std::floor(std::clamp(factor, 0.0, 1.0) * unit) / unit;
     if (q >= 1) q = 0;
-    return q + double(payload & 0xFFFFF) / 1099511627776.0;   // 2^40
+    return q + double(payload & 0xFFFFF) / 1099511627776.0 + double(map & 0xFFF) / 4503599627370496.0;   // 2^40, 2^52
 }
-inline bool decode(double value, int& weather, double& precipitation_percent) {
+inline bool decode(double value, int& weather, double& precipitation_percent, uint32_t* map = nullptr) {
     if (!(value >= 0 && value < 1)) return false;
-    double scaled_value = value * 1099511627776.0;   // exact: the low 40 bits are the payload position
+    double scaled_value = value * 4503599627370496.0;   // exact: the low 52 bits are the payload position
     if (scaled_value != std::floor(scaled_value)) return false;
-    uint32_t p = uint32_t(uint64_t(scaled_value) & 0xFFFFF);
+    uint64_t bits = uint64_t(scaled_value);
+    if (map) *map = uint32_t(bits & 0xFFF);
+    uint32_t p = uint32_t((bits >> 12) & 0xFFFFF);
     uint32_t w = (p >> 9) & 7, d = (p >> 5) & 15;
     if ((p >> 12) != kMagic || d > 10 || w >= kWeatherCount || (p & 31) != checksum(w, d)) return false;
     weather = int(w);

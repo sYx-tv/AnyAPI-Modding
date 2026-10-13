@@ -47,6 +47,10 @@ The page remembers the last settings you started with. The **Presets** tab saves
 Only the host needs CustomGame for the gameplay settings, the day cycle and the player limit. Weather and rain
 density are worked out on each player's computer, so players without the mod see the game's normal weather.
 
+Each player's game streams the map from its own files, so a world on a map pack needs that pack (and CustomGame
+plus CustomMap) on every player's computer. The host sends the pack's name along with the weather; a player who
+doesn't have it sees the normal world.
+
 ## Files
 
 Everything lives in `<mods folder>\CustomGame\`:

@@ -90,6 +90,16 @@ int main() {
     assert(!decode(-0.5, w2, p2) && !decode(1.0, w2, p2) && !decode(NAN, w2, p2));
     double corrupt = encode(0.5, pack(kWeatherRain, 50) ^ 1);
     assert(!decode(corrupt, w2, p2));
+    // The map hash rides in the lowest 12 bits without disturbing the rest.
+    assert(map_hash("") == 0 && map_hash("My Island 2") >= 1 && map_hash("My Island 2") <= 4095 && map_hash("a") != map_hash("b"));
+    for (uint32_t m : {1u, 77u, 4095u})
+        for (double f : {0.0, 0.0001, 0.25, 0.5, 0.999999}) {
+            double v = encode(f, pack(kWeatherFog, 30), m);
+            int w3 = -1; double p3 = -1; uint32_t m3 = 0;
+            assert(decode(v, w3, p3, &m3) && w3 == kWeatherFog && p3 == 30 && m3 == m);
+        }
+    uint32_t m4 = 9;
+    assert(decode(encode(0.7, pack(0, 100)), w2, p2, &m4) && m4 == 0);
 
     // Weather lock only changes the locked fields.
     WeatherData base{0.3, 0.4, 0.1, 12, 1, -2};

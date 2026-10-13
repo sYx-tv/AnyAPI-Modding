@@ -229,6 +229,7 @@ using set_loot_level_t = void (*)(uint8_t* scene, const int32_t* level);
 using prop_bool_set_t = void (*)(void* prop, const bool* value);
 using prop_f64_set_t = void (*)(void* prop, const double* value);
 using client_tick_t = void (*)(uint8_t* scene, void* client, const double* a, const double* b);
+using client_tick_loading_t = void (*)(uint8_t* scene, void* client, const double* dt, const bool* flag);
 using weather_t = void (*)(WeatherData* ret, void* manager, const double* position, const double* time);
 using particles_create_t = void (*)(void* particles);
 
@@ -236,7 +237,7 @@ start_new_game_t fn_start_new_game;
 set_loot_level_t fn_set_loot_level;
 prop_bool_set_t fn_prop_bool_set;
 prop_f64_set_t fn_prop_f64_set;
-anymaker::cell_hook h_ui, h_generate, h_tick, h_tick_loading, h_client_tick, h_weather, h_particles;
+anymaker::cell_hook h_ui, h_generate, h_tick, h_tick_loading, h_client_tick, h_client_tick_loading, h_weather, h_particles;
 anymaker::cell_hook h_tick_spawn, h_spawn_zones, h_sleeping, h_destroy_horde, h_spawn_horde, h_integrate;
 anymaker::cell_hook h_dungeon_generate, h_dungeon_creatures, h_dungeon_loot;
 
@@ -283,6 +284,7 @@ struct ServerState {
     int players_logged = 0;
     int waits = 0;
     WorldFile world;
+    std::string map;   // the map pack actually in use, sent to joining players
 };
 std::mutex g_server_mutex;
 ServerState g_srv;
@@ -343,12 +345,12 @@ void set_players(uint8_t* server, const Config* c) {
     }
 }
 
-void drive_time(uint8_t* scene, const Config& c) {
+void drive_time(uint8_t* scene, const Config& c, uint32_t map) {
     if (!fn_prop_bool_set || !fn_prop_f64_set || !g_s32[gDayTicks].p) return;
     int32_t tick = rd<int32_t>(scene, off::scene_tick);
     double sandbox = g_f64[gSandboxFactor].p ? *g_f64[gSandboxFactor].p : 0.0;
     int32_t start = g_s32[gStartOffset].p ? *g_s32[gStartOffset].p : 0;
-    double value = encode(day_factor(c, tick, *g_s32[gDayTicks].p, start, sandbox), pack(int(c[kWeather]), c[kPrecipitation]));
+    double value = encode(day_factor(c, tick, *g_s32[gDayTicks].p, start, sandbox), pack(int(c[kWeather]), c[kPrecipitation]), map);
     uint8_t* tod = scene + off::scene_time_of_day;
     bool on = true;
     fn_prop_bool_set(tod + off::tod_is_override, &on);
@@ -365,6 +367,7 @@ void server_tick(uint8_t* scene, uint8_t* server, bool loading) {
         if (scene == g_generated_scene) {
             s.active = g_generated_custom;
             s.world = g_generated_world;
+            s.map = g_generated_world.map;
         } else {
             int32_t seed = rd<int32_t>(scene, off::scene_seed);
             if (seed == 0 && ++s.waits < 600) return;   // the save may not be parsed yet
@@ -373,7 +376,7 @@ void server_tick(uint8_t* scene, uint8_t* server, bool loading) {
             if (s.active) s.world = w;
             log(0, "world seed %d (after %d loading ticks): %s", seed, s.waits,
                 s.active ? "CustomGame settings found" : "no CustomGame settings, normal rules");
-            select_map(s.active ? s.world.map : std::string(), "loaded world");
+            s.map = select_map(s.active ? s.world.map : std::string(), "loaded world");
         }
         s.settled = true;
         s.tier_pending = s.active && s.world.config[kStartTier] > 1 && !s.world.tier_applied;
@@ -401,7 +404,7 @@ void server_tick(uint8_t* scene, uint8_t* server, bool loading) {
             *count = want;
         }
     }
-    if (needs_time_override(s.world.config)) drive_time(scene, s.world.config);
+    if (needs_time_override(s.world.config, !s.map.empty())) drive_time(scene, s.world.config, map_hash(s.map));
     if (s.tier_pending && !loading && fn_set_loot_level) {
         int32_t level = int32_t(s.world.config[kStartTier]);
         fn_set_loot_level(scene, &level);
@@ -472,10 +475,46 @@ void hk_destroy_horde(bool* ret, void* controller, uint8_t* scene) {
 std::atomic<int> g_client_weather{-1}, g_client_precipitation{-1};
 uint8_t* g_client_scene = nullptr;   // main thread only
 int g_decode_hits = 0, g_decode_misses = 0;
+// Joining players: the host's map pack, matched by hash against the packs installed here.
+uint8_t* g_map_scene = nullptr;      // main thread only
+ULONGLONG g_map_scene_at = 0;
+int g_map_loading_ticks = 0;
+uint32_t g_map_hash = 0xFFFFFFFF;    // last hash acted on for g_map_scene
 
 bool hosting() { return GetTickCount64() - g_host_seen.load() < 3000; }
 int effective_weather() { int h = hosting() ? g_host_weather.load() : -1; return h >= 0 ? h : g_client_weather.load(); }
 int effective_precipitation() { int h = hosting() ? g_host_precipitation.load() : -1; return h >= 0 ? h : g_client_precipitation.load(); }
+
+// The host process selects the pack itself (server_tick), so only a player who joined someone else's world acts here.
+// Runs before the client's own loading tick, which is what streams the world's tiles.
+void client_map(uint8_t* scene) {
+    const CustomMapsV1* maps = g_maps.load();
+    if (!maps || !scene) return;
+    if (scene != g_map_scene) { g_map_scene = scene; g_map_scene_at = GetTickCount64(); g_map_loading_ticks = 0; g_map_hash = 0xFFFFFFFF; }
+    ++g_map_loading_ticks;
+    if (g_host_seen.load() >= g_map_scene_at) return;   // this process hosts the world
+    bool override = rd<bool>(scene, off::client_tod + off::client_tod_is_override);
+    double value = rd<double>(scene, off::client_tod + off::client_tod_override_value);
+    int w = 0; double p = 100; uint32_t hash = 0;
+    if (!override || !decode(value, w, p, &hash) || hash == g_map_hash) return;
+    g_map_hash = hash;
+    if (!hash) { maps->select(""); return; }
+    char name[260];
+    uint32_t n = maps->count ? maps->count() : 0;
+    for (uint32_t i = 0; i < n; ++i)
+        if (maps->name(i, name, sizeof name) && map_hash(name) == hash) {
+            bool ok = maps->select(name);
+            log(ok ? 0 : 1, "host's world uses map pack \"%s\": %s (after %d loading ticks)", name, ok ? "selected" : "could not be loaded",
+                g_map_loading_ticks);
+            return;
+        }
+    maps->select("");
+    log(1, "host's world uses a map pack that is not installed here; you will see the normal world");
+}
+void hk_client_tick_loading(uint8_t* scene, void* client, const double* dt, const bool* flag) {
+    if (g_ready) client_map(scene);
+    reinterpret_cast<client_tick_loading_t>(h_client_tick_loading.original)(scene, client, dt, flag);
+}
 
 void hk_client_tick(uint8_t* scene, void* client, const double* a, const double* b) {
     if (scene && g_ready) {
@@ -886,6 +925,8 @@ void install() {
     bool tick = hook(h_tick, b::server_scene_tick, (void*)&hk_server_tick);
     bool loading = hook(h_tick_loading, b::server_scene_tick_loading, (void*)&hk_server_tick_loading);
     bool client = hook(h_client_tick, b::client_scene_tick, (void*)&hk_client_tick);
+    if (g_maps.load() && !hook(h_client_tick_loading, b::client_scene_tick_loading, (void*)&hk_client_tick_loading))
+        log(1, "joining players will not get the host's map pack");
     bool weather = hook(h_weather, b::get_weather_data, (void*)&hk_get_weather_data);
     bool particles = hook(h_particles, b::weather_particles_create, (void*)&hk_particles_create);
     int sandbox = hook(h_tick_spawn, b::creature_tick_spawn, (void*)&hk_tick_spawn) + hook(h_spawn_zones, b::populate_actor_spawn_zones, (void*)&hk_spawn_zones)
@@ -917,7 +958,7 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyM
         h_destroy_horde.remove((void*)&hk_destroy_horde); h_spawn_horde.remove((void*)&hk_spawn_horde);
         h_sleeping.remove((void*)&hk_sleeping); h_spawn_zones.remove((void*)&hk_spawn_zones); h_tick_spawn.remove((void*)&hk_tick_spawn);
         h_particles.remove((void*)&hk_particles_create); h_weather.remove((void*)&hk_get_weather_data);
-        h_client_tick.remove((void*)&hk_client_tick); h_tick_loading.remove((void*)&hk_server_tick_loading);
+        h_client_tick.remove((void*)&hk_client_tick); h_client_tick_loading.remove((void*)&hk_client_tick_loading); h_tick_loading.remove((void*)&hk_server_tick_loading);
         h_tick.remove((void*)&hk_server_tick); h_generate.remove((void*)&hk_generate_new_game); h_ui.remove((void*)&hk_update_ui_new_game);
     };
     return true;
