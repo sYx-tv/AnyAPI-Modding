@@ -73,6 +73,7 @@ tiles/vegetation/...            (optional, same as rom/data/tiles/vegetation)
 | `game_build` | Steam build the pack was saved against (informational) |
 | `tiles` | Number of tile files |
 | `stock_vegetation` | Tiles (`tile_<x>_<z>_<t>`) whose terrain is unchanged from the stock world, so the game's trees and bushes for them still fit. CustomMap serves stock vegetation only for these; other tiles have none unless the pack has its own `tiles/vegetation` file. Missing key = keep all |
+| `spawn` | Optional `[x, y, z]` in world metres: where players start a new game on this map, in every game mode. CustomMap returns it from `server_scene.get_spawn_position`. Missing key = the game's fixed start points |
 
 The tiles folder is the **whole** world: tiles that are not in the pack are ocean. Tile files keep every
 key the game wrote, including ones the editor does not understand yet, so a pack saved from the stock

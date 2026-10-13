@@ -9,6 +9,9 @@
 // other tiles get none, so trees never float over edited terrain. Anything else under tiles/ falls back to the game.
 // Nothing in the game folder is ever written.
 //
+// Start point: a pack's map.json may hold "spawn": [x, y, z] (set with the Map Maker's Start tool). While that pack is
+// selected, server_scene.get_spawn_position returns it in place of the game's fixed start points.
+//
 // Choosing a map: the CustomGame mod's Custom Game page shows a Map row and calls the "custommap.maps" service
 // (sdk/include/custommap_v1.h) when a world is started or loaded. Without CustomGame the normal world is used.
 // Map changes apply to new worlds; an existing save keeps the props it already stored.
@@ -24,6 +27,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -112,6 +116,24 @@ bool read_stock_vegetation(const fs::path& pack, std::set<std::string>& out, boo
     return true;
 }
 bool g_stock_veg_all = true;
+bool g_has_spawn = false; double g_spawn[3];   // pack start point, under g_pack_mutex
+
+// map.json "spawn": [x, y, z]
+bool read_spawn(const fs::path& pack, double out[3]) {
+    FILE* f = _wfopen((pack / L"map.json").c_str(), L"rb"); if (!f) return false;
+    std::string text; char buf[65536]; size_t n;
+    while ((n = fread(buf, 1, sizeof buf, f)) > 0 && text.size() < (64u << 20)) text.append(buf, n);
+    fclose(f);
+    size_t at = text.find("\"spawn\""); if (at == std::string::npos) return false;
+    at = text.find('[', at); if (at == std::string::npos) return false;
+    const char* p = text.c_str() + at + 1;
+    for (int i = 0; i < 3; ++i) {
+        char* end = nullptr; out[i] = strtod(p, &end);
+        if (end == p || !std::isfinite(out[i])) return false;
+        p = end; while (*p == ' ' || *p == ',' || *p == '\n' || *p == '\r' || *p == '\t') ++p;
+    }
+    return true;
+}
 
 uint32_t svc_count() {
     std::vector<std::string> names;
@@ -139,7 +161,7 @@ bool svc_select(const char* name) {
     if (n.empty()) {
         std::lock_guard l(g_pack_mutex);
         if (!g_pack_name.empty()) log(0, "normal world selected");
-        g_pack_name.clear(); g_pack_tiles.clear();
+        g_pack_name.clear(); g_pack_tiles.clear(); g_has_spawn = false;
         return true;
     }
     {   // Called on every world load: re-selecting the current pack is a no-op.
@@ -153,7 +175,10 @@ bool svc_select(const char* name) {
     std::replace(root.begin(), root.end(), '\\', '/');
     std::set<std::string> veg; bool all = true;
     read_stock_vegetation(pack, veg, all);
+    double spawn[3]; bool has_spawn = read_spawn(pack, spawn);
     std::lock_guard l(g_pack_mutex);
+    g_has_spawn = has_spawn; if (has_spawn) memcpy(g_spawn, spawn, sizeof spawn);
+    if (has_spawn && g_pack_name != n) log(0, "map pack '%s' start point: %.1f, %.1f, %.1f", n.c_str(), spawn[0], spawn[1], spawn[2]);
     if (g_pack_name != n) log(0, "map pack '%s' selected (%s); stock vegetation kept on %s tiles", n.c_str(), root.c_str(),
                               all ? "all" : std::to_string(veg.size()).c_str());
     g_pack_name = n; g_pack_tiles = root; g_first_read = true; g_stock_veg = std::move(veg); g_stock_veg_all = all;
@@ -228,7 +253,7 @@ void note_path(const char* what, const gpath* p) {
 }
 
 // ------------------------------------------------------------------ file native hooks (any thread)
-anymaker::cell_hook h_read_string, h_read_binary, h_exists, h_files, h_folders;
+anymaker::cell_hook h_read_string, h_read_binary, h_exists, h_files, h_folders, h_spawn;
 using read_t = void (*)(bool* ret, const gpath* path, void* out);
 using exists_t = void (*)(bool* ret, const gpath* path);
 using list_t = void (*)(const gpath* path, void* files);
@@ -252,6 +277,17 @@ void hk_files(const gpath* p, void* files) {
 void hk_folders(const gpath* p, void* files, void* folders) {
     note_path("list", p);
     redirect r(p); list2_t(h_folders.original)(r.use(p), files, folders);
+}
+
+// Start point (server thread). vec3 is three f64.
+using spawn_t = void (*)(double* ret, void* scene);
+void hk_spawn(double* ret, void* scene) {
+    spawn_t(h_spawn.original)(ret, scene);
+    std::lock_guard l(g_pack_mutex);
+    if (!g_has_spawn || g_pack_tiles.empty() || !ret) return;
+    static std::atomic<bool> logged{false};
+    if (!logged.exchange(true)) log(0, "start point moved from %.1f, %.1f, %.1f to the map's %.1f, %.1f, %.1f", ret[0], ret[1], ret[2], g_spawn[0], g_spawn[1], g_spawn[2]);
+    ret[0] = g_spawn[0]; ret[1] = g_spawn[1]; ret[2] = g_spawn[2];
 }
 
 // ------------------------------------------------------------------ install (background thread)
@@ -318,6 +354,8 @@ void install_hooks() {
         if (!locate_file_cells(last)) { if (last) log(2, "file functions not found; CustomMap is off"); continue; }
         if (!install_file_hooks()) { log(2, "file hooks not installed; CustomMap is off"); return; }
         calibrate_store(exists_t(h_exists.original));
+        if (void** cell = anymaker::experimental::hook_cell(bind::spawn_position); !cell || !h_spawn.install(cell, (void*)&hk_spawn))
+            log(1, "could not hook server_scene.get_spawn_position: maps use the game's fixed start points");
         g_ready = g_abs_store >= 0;
         uint32_t packs = svc_count();
         log(g_ready ? 0 : 2, g_ready ? "Ready after %d s: %u map pack(s) in %ls" : "Not ready after %d s; see the errors above",
@@ -335,6 +373,7 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyM
     out->shutdown = [](void*) {
         g_stop = true;
         for (auto& c : g_file_cells) c.h->remove(c.fn);
+        h_spawn.remove((void*)&hk_spawn);
     };
     auto services = AnyAPI_Services();
     if (!services || !services->publish || !services->publish("custommap.maps", 1, &g_service))

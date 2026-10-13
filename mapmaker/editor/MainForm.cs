@@ -5,7 +5,7 @@ using System.IO;
 using System.Windows.Forms;
 namespace AnyMapMaker {
  public sealed class MainForm : Form {
-  public const string Version="0.2.1";
+  public const string Version="0.2.2";
   static readonly Color Panel=Color.FromArgb(14,19,28), Raised=Color.FromArgb(21,27,39), Ink=Color.FromArgb(230,235,243), Muted=Color.FromArgb(125,136,153);
   readonly MapView view=new MapView{Dock=DockStyle.Fill};
   readonly CheckedListBox layers=new CheckedListBox{Dock=DockStyle.Fill,BorderStyle=BorderStyle.None,CheckOnClick=true,IntegralHeight=false};
@@ -182,7 +182,7 @@ namespace AnyMapMaker {
   static string ToolName(Tool t){
    switch(t){case Tool.Select:return "Select";case Tool.Terrain:return "Terrain";case Tool.Height:return "Height";case Tool.Road:return "Road";
     case Tool.Fence:return "Fence";case Tool.Prop:return "Prop";case Tool.Building:return "Building";case Tool.Loot:return "Loot";
-    case Tool.Enemy:return "Enemy";default:return "Erase";}
+    case Tool.Enemy:return "Enemy";case Tool.Start:return "Start";default:return "Erase";}
   }
   void FillCatalogBoxes(){
    string piece=pieceBox.SelectedItem as string,prop=propBox.SelectedItem as string;
@@ -208,6 +208,7 @@ namespace AnyMapMaker {
      Hint("A building spot. The game picks a building of this type for it when a world is created. Drag to aim the front.")});break;
     case Tool.Loot:options.Controls.Add(Hint("Click to add a loot spot."));break;
     case Tool.Enemy:options.Controls.Add(Hint("Click to add an enemy spawn point."));break;
+    case Tool.Start:options.Controls.Add(Hint("Click where players start a new game, in every game mode. The crosshair shows it. Without one, the game's own start points are used."));break;
     case Tool.Erase:options.Controls.AddRange(new Control[]{Field("Radius (m)"),radiusBox,eraseThings,eraseRoads,Hint("Click or drag over things to remove them.")});break;
    }
    foreach(Control c in options.Controls){if(c is ComboBox||c is NumericUpDown){c.BackColor=Raised;c.ForeColor=Ink;}if(c is CheckBox)c.ForeColor=Ink;}
@@ -235,6 +236,7 @@ namespace AnyMapMaker {
     case Tool.Building:done=editor.AddBuildingSpot((string)filterBox.SelectedItem,(int)sizeBox.Value,x,z,rot);break;
     case Tool.Loot:done=editor.AddLoot(x,z,rot);break;
     case Tool.Enemy:done=editor.AddEnemySpawn(x,z);break;
+    case Tool.Start:if(pack.Get(Grid.At(x,z))!=null){pack.Spawn=editor.Ground(x,z,2);done=true;unsaved=true;status.Text="Start point set. Save to keep it.";view.Invalidate();}break;
    }
    if(!done)status.Text="That spot is ocean. Paint terrain there first.";
   }

@@ -3,7 +3,7 @@
 A Windows map editor for Anymaker. It saves map packs into the game folder; the
 [CustomMap mod](../docs/mods/custom-map.md) plays them (pick the map on CustomGame's Custom Game page).
 
-**Status: 0.2.1.** Open the stock world, a map pack, or a new blank island, then edit it with the tools on the left:
+**Status: 0.2.2.** Open the stock world, a map pack, or a new blank island, then edit it with the tools on the left:
 
 | Tool | What it does |
 | --- | --- |
@@ -14,11 +14,13 @@ A Windows map editor for Anymaker. It saves map packs into the game folder; the
 | Prop | Any of the game's 136 props: street lights (`lamp_post_a`), benches, signs, barriers, containers... |
 | Building | Building spots (house, town, industrial, farm, gas station...); the game picks the building when a world is made |
 | Loot / Enemy | Loot spots and enemy spawn points |
+| Start | Where players start a new game on this map (every game mode); CustomMap moves them there |
 | Erase | Removes things and roads under the brush |
 | Select | Shows a tile's raw data for hand edits |
 
-Ctrl+Z / Ctrl+Y undo and redo. Two crosshairs mark where the game starts new players (Creative/Sandbox and
-Survival; fixed in the game). They turn red when there is no land under them. A new blank island is centred on the
+Ctrl+Z / Ctrl+Y undo and redo. A crosshair marks where new players start: the map's own start point once you set
+one with the Start tool, otherwise the game's two fixed ones (Creative/Sandbox and Survival). It turns red when there
+is no land under it. A new blank island is centred on the
 Creative/Sandbox start. Terrain is made of the game's own authored pieces, so there is no free-form
 grass or dirt painting; buildings come from the game's own set.
 

@@ -6,7 +6,7 @@ using System.Windows.Forms;
 namespace AnyMapMaker {
  // Top-down view of the world. +X is east (right), +Z is north (up). Drag with the right or
  // middle mouse button to pan, scroll to zoom, left click to select a tile.
- public enum Tool {Select,Terrain,Height,Road,Fence,Prop,Building,Loot,Enemy,Erase}
+ public enum Tool {Select,Terrain,Height,Road,Fence,Prop,Building,Loot,Enemy,Start,Erase}
 
  public sealed class MapView : Control {
   public MapPack Pack; public MapScene Scene;
@@ -121,7 +121,8 @@ namespace AnyMapMaker {
      if(scale>0.6&&m.Layer!="junctions")TextRenderer.DrawText(g,m.Label,Font,new Point((int)p.X+6,(int)p.Y-6),Color.FromArgb(230,235,243));
     }
    }
-   DrawSpawn(g,Grid.SpawnCreative,"Start: Creative / Sandbox");DrawSpawn(g,Grid.SpawnSurvival,"Start: Survival");
+   if(Pack!=null&&Pack.Spawn!=null)DrawSpawn(g,Pack.Spawn.Value,"Start (every game mode)");
+   else{DrawSpawn(g,Grid.SpawnCreative,"Start: Creative / Sandbox");DrawSpawn(g,Grid.SpawnSurvival,"Start: Survival");}
    DrawPreview(g);
    DrawOutline(g,Hovered,Color.FromArgb(160,255,255,255),1);
    DrawOutline(g,Selected,Color.FromArgb(255,214,102),2.5f);
@@ -201,7 +202,7 @@ namespace AnyMapMaker {
    double x,z;ToWorld(e.Location,out x,out z);
    bool moved=Math.Abs(e.X-strokeStart.X)+Math.Abs(e.Y-strokeStart.Y)>6;
    if(Tool==Tool.Fence&&moved&&LineDrawn!=null)LineDrawn(strokeX,strokeZ,x,z);
-   else if((Tool==Tool.Prop||Tool==Tool.Building||Tool==Tool.Loot||Tool==Tool.Enemy)&&Placed!=null)
+   else if((Tool==Tool.Prop||Tool==Tool.Building||Tool==Tool.Loot||Tool==Tool.Enemy||Tool==Tool.Start)&&Placed!=null)
     Placed(strokeX,strokeZ,moved?(double?)MapEditor.Angle(x-strokeX,z-strokeZ):null);
    if(StrokeEnded!=null)StrokeEnded();
    Invalidate();

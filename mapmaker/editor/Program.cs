@@ -89,6 +89,9 @@ namespace AnyMapMaker {
     check(pack.Get(new TileKey(20,20,1))!=null&&pack.Get(new TileKey(9,9,1))==null,"paint new land and remove land");
     string temp=Path.Combine(Path.GetTempPath(),"anymapmaker-edittest-"+Guid.NewGuid().ToString("N"));
     pack.Save(temp,"test");var again=MapPack.Open(temp);
+    check(again.Spawn==null,"a map without a start point keeps the game's own");
+    pack.Spawn=new Vec3(c.X,2,c.Z);pack.Save(temp,"test");var withStart=MapPack.Open(temp);
+    check(withStart.Spawn!=null&&Math.Abs(withStart.Spawn.Value.X-c.X)<0.01&&Math.Abs(withStart.Spawn.Value.Y-2)<0.01,"save and reload keeps the start point");
     check(again.StockVegetation.Count==0,"a blank island keeps no stock vegetation");
     var stockLike=MapEditor.BlankIsland(cat,30,30,2,2,0);foreach(var tt in stockLike.Tiles.Values)tt.TerrainAtLoad=tt.Terrain;foreach(var k in stockLike.Tiles.Keys)stockLike.StockVegetation.Add(k.BaseName);
     var ed2=new MapEditor(stockLike);ed2.Begin();ed2.SetHeight(new TileKey(29,29,0),2);ed2.Commit();ed2.Begin();ed2.Rotate(new TileKey(30,30,1));ed2.Commit();ed2.Undo();

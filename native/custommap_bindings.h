@@ -17,4 +17,6 @@ inline constexpr func_desc is_exists{"(bool) file.get_is_exists (const file.path
 inline constexpr func_desc files_in_dir{"() file.get_files_in_dir (const file.path, vector<string>)","",{"53 48 81 ec 00 01 00 00 48 89 8c 24 88 00 00 00 48 8d 01 48 8b 15 fe 03 00 00 48 89 4c 24 28 48", {1072u}, 1},"",0u,-1};
 // () file.get_files_folders_in_dir (const file.path, vector<string>, vector<string>)
 inline constexpr func_desc folders_in_dir{"() file.get_files_folders_in_dir (const file.path, vector<string>, vector<string>)","",{"53 55 48 81 ec 58 04 00 00 48 8b ac 24 90 04 00 00 48 89 8c 24 d0 02 00 00 48 89 94 24 d8 02 00", {3824u}, 1},"",0u,-1};
+// (vec3) server_scene.get_spawn_position (server_scene)
+inline constexpr func_desc spawn_position{"(vec3) server_scene.get_spawn_position (server_scene)","53 55 56 48 83 ec 70 48 89 4c 24 20 48 89 54 24 28 48 8d 44 24 30 48 8d 9a 88 00 00 00 48 8b aa 88 00 00 00 48 8b ad 80 00 00 00 48 8b 35 0e",{"", {}, 0},"53 55 48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 db 06 00 00 48 89 4c 24 30 48 89 c1 ff 12 48",1784u,6};
 } // namespace custommap::bind

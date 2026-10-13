@@ -83,6 +83,8 @@ namespace AnyMapMaker {
   // Tiles (base names like tile_088_122_0) whose stock vegetation (trees, bushes) still fits their terrain. The
   // CustomMap mod serves the game's vegetation only for these; any other tile has none unless the pack has its own.
   public readonly HashSet<string> StockVegetation=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+  // Where players start (map.json "spawn"); null keeps the game's own start points.
+  public Vec3? Spawn;
   public int MinX,MaxX,MinZ,MaxZ;
 
   public static MapPack LoadTiles(string tilesFolder,string name){
@@ -107,6 +109,7 @@ namespace AnyMapMaker {
    var keep=manifest.Arr("stock_vegetation");pack.StockVegetation.Clear();
    if(keep!=null)foreach(var v in keep){var n=v as string;if(n!=null)pack.StockVegetation.Add(n);}
    else foreach(var k in pack.Tiles.Keys)pack.StockVegetation.Add(k.BaseName);   // packs from before this list existed
+   Vec3 spawn;if(Vec3.TryRead(manifest["spawn"],out spawn))pack.Spawn=spawn;
    pack.Author=manifest.Str("author")??"";pack.Description=manifest.Str("description")??"";pack.Base=manifest.Str("base")??"stock";
    pack.Folder=folder;return pack;
   }
@@ -122,6 +125,7 @@ namespace AnyMapMaker {
    StockVegetation.RemoveWhere(n=>!alive.Contains(n));
    var names=new List<string>(StockVegetation);names.Sort(StringComparer.OrdinalIgnoreCase);
    manifest["stock_vegetation"]=names.ConvertAll(n=>(object)n);
+   if(Spawn!=null)manifest["spawn"]=Spawn.Value.ToJson();
    File.WriteAllText(Path.Combine(folder,"map.json"),Json.Write(manifest,true));
    bool sameFolder=string.Equals(Path.GetFullPath(folder).TrimEnd('\\','/'),Folder==null?null:Path.GetFullPath(Folder).TrimEnd('\\','/'),StringComparison.OrdinalIgnoreCase);
    var keep=new HashSet<string>(StringComparer.OrdinalIgnoreCase);

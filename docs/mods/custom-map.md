@@ -29,6 +29,9 @@ The world is one small file per triangle of the world grid in `rom/data/tiles/0`
   are answered from the map pack. The pack's `tiles/0` is the whole world (a missing tile is ocean). Trees and
   bushes come from the game only for tiles whose terrain the Map Maker left unchanged (`stock_vegetation` in
   `map.json`), so edited or new land starts bare. Nothing in the game folder is written.
+- If the pack's `map.json` has a start point (`"spawn": [x, y, z]`, set with the Map Maker's Start tool), CustomMap
+  hooks `server_scene.get_spawn_position` and starts new players there. Without one, the game's fixed start points
+  are used, so make sure there is land under them.
 - Other mods choose the map through the `custommap.maps` service ([custommap_v1.h](../../sdk/include/custommap_v1.h)):
   `count`, `name`, `select` and `selected`. CustomGame calls `select` when a world starts or loads.
 - On start it checks which of the game's path stores opens an absolute path, by asking whether `game.exe`
