@@ -27,6 +27,9 @@ What changed for the port:
   server's item use resolution follow the authority actor to its new offsets.
 - The SSAO call cell inside the scene composite moved with the function's new size.
 - The `actor_use_ability_actor` legacy route follows the game's new null check.
+- AnyBalance works again: the hotfix made the Properties tool's overlay byte-identical to the
+  microcontroller tool's, so AnyBalance now accepts both matches when they agree on the
+  slots it reads. The audit now flags a pattern that gains an identical twin.
 
 Every pattern was checked against the new build with `native/tools/game_update_audit.py`;
 see [porting to a new game build](../development/game-updates.md).
