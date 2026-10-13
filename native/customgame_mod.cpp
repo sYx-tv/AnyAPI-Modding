@@ -112,15 +112,42 @@ Global<int32_t> g_s32[kS32Count];
 Global<bool> g_bool[kBoolCount];
 std::atomic<bool> g_globals_custom{false};
 
+std::recursive_mutex g_globals_mutex;   // server thread applies, render thread reads defaults for labels
+
 template <class T> void set(Global<T>& g, T v) { if (g.p) *g.p = v; }
 template <class T> void reset(Global<T>& g) { if (g.p) *g.p = g.def; }
 
+// The game fills some tuning globals after this mod resolves them (a laptop run read 0 for day length, hunger and
+// player count), so the defaults are re-read whenever nothing of ours is applied: at that moment every value is the
+// game's own. Logged whenever the snapshot changes.
+void refresh_defaults() {
+    std::lock_guard lock(g_globals_mutex);
+    if (g_globals_custom) return;
+    bool changed = false;
+    for (auto& g : g_f64) if (g.p && std::isfinite(*g.p) && g.def != *g.p) { g.def = *g.p; changed = true; }
+    for (auto& g : g_s32) if (g.p && g.def != *g.p) { g.def = *g.p; changed = true; }
+    for (auto& g : g_bool) if (g.p && g.def != *g.p) { g.def = *g.p; changed = true; }
+    static bool logged = false;
+    if (!changed && logged) return;
+    logged = true;
+    char line[640];
+    snprintf(line, sizeof line, "defaults: day %d ticks, start offset %d, tick %.4f s, max players %d, hunger %.0f s, thirst %.0f s, "
+             "corpse %.0f s, temperature %.1f..%.1f C, zombie sight %.1f, horde %d, max spawned %d, loot %.2f, joints %.1f, gun range %.1f",
+             int(g_s32[gDayTicks].def), int(g_s32[gStartOffset].def), g_f64[gDeltaTime].def, int(g_s32[gMaxPlayers].def),
+             g_f64[gHunger].def, g_f64[gThirst].def, g_f64[gCorpse].def, g_f64[gTempMin].def, g_f64[gTempMax].def,
+             g_f64[gZombieSight].def, int(g_s32[gHorde].def), int(g_s32[gMaxSpawned].def), g_f64[gLoot].def, g_f64[gJoints].def,
+             g_f64[gGunRange].def);
+    log(0, "%s", line);
+}
+
 // Server-side tuning. Called with nullptr to restore every default.
 void apply_globals(const Config* c) {
+    std::lock_guard lock(g_globals_mutex);
+    refresh_defaults();
     if (!c) {
         if (!g_globals_custom.exchange(false)) return;
         for (auto& g : g_f64) if (&g != &g_f64[gSandboxFactor] && &g != &g_f64[gDeltaTime]) reset(g);
-        reset(g_s32[gHorde]); reset(g_s32[gMaxSpawned]);
+        reset(g_s32[gHorde]); reset(g_s32[gMaxSpawned]); reset(g_s32[gMaxPlayers]);
         for (auto& g : g_bool) reset(g);
         log(0, "game defaults restored");
         return;
@@ -172,6 +199,8 @@ void apply_globals(const Config* c) {
 }
 
 GameDefaults game_defaults() {
+    refresh_defaults();
+    std::lock_guard lock(g_globals_mutex);
     GameDefaults d;
     if (g_f64[gCorpse].p) d.corpse_seconds = g_f64[gCorpse].def;
     if (g_f64[gLostBody].p) d.lost_body_seconds = g_f64[gLostBody].def;
@@ -282,7 +311,7 @@ void set_players(uint8_t* server, const Config* c) {
         *count = want;
         log(0, "max players set to %d", want);
     } else {
-        if (cap.p && *cap.p != cap.def) { *cap.p = cap.def; if (*count > cap.def) *count = cap.def; }
+        if (cap.p) { *cap.p = cap.def; if (cap.def > 0 && *count > cap.def) *count = cap.def; }
     }
 }
 
@@ -761,15 +790,7 @@ void install() {
         resolve(g_f64[i], *f64s[i]);
         if (g_f64[i].p && !std::isfinite(g_f64[i].def)) { log(1, "global %s has an unexpected value; ignored", f64s[i]->name); g_f64[i].p = nullptr; }
     }
-    {
-        char line[640];
-        snprintf(line, sizeof line, "defaults: day %d ticks, start offset %d, tick %.4f s, max players %d, hunger %.0f s, thirst %.0f s, "
-                 "corpse %.0f s, temperature %.1f..%.1f C, zombie sight %.1f, horde %d, max spawned %d, loot %.2f, joints %.1f",
-                 int(g_s32[gDayTicks].def), int(g_s32[gStartOffset].def), g_f64[gDeltaTime].def, int(g_s32[gMaxPlayers].def),
-                 g_f64[gHunger].def, g_f64[gThirst].def, g_f64[gCorpse].def, g_f64[gTempMin].def, g_f64[gTempMax].def,
-                 g_f64[gZombieSight].def, int(g_s32[gHorde].def), int(g_s32[gMaxSpawned].def), g_f64[gLoot].def, g_f64[gJoints].def);
-        log(0, "%s", line);
-    }
+    refresh_defaults();
     fn_start_new_game = function<start_new_game_t>(b::start_new_game);
     fn_set_loot_level = function<set_loot_level_t>(b::set_loot_level);
     fn_prop_bool_set = function<prop_bool_set_t>(b::property_bool_set);
