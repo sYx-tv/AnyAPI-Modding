@@ -1,7 +1,7 @@
 # AnyMirror
 
 > AnyMirror hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.24 / Steam build 25826614 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
 > AnyMirror 1.1.0 requires AnyAPI 0.35.0 on that build; install it from the manager.
 
 AnyMirror builds symmetric creations. With mirroring on, these tools work in pairs, mirrored across a plane

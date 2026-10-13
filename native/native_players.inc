@@ -113,7 +113,7 @@ static bool p34_native_sample(void* client,void* scene,AnySessionPlayersV1* resu
                     if(g_p34_peer_contracts_ready){uintptr_t get_peer{},data{},getter{};
                         if(p34_virtual((uintptr_t)scene+0x40,g_p34_peer_lookup_slot,get_peer)&&p34_body(get_peer,P34_PEER_BY_ID)){
                             ((P34ActorLookupFn)get_peer)(&data,(void*)((uintptr_t)scene+0x40),&peer_id);
-                            if(data&&p34_virtual(data+0xb90,g_p34_prop_s32_slot,getter)&&p34_body(getter,P34_PROP_S32_GET)&&safe_read_memory(data+0xb98,&actor_id,4)){
+                            if(data&&p34_virtual(data+0xba0,g_p34_prop_s32_slot,getter)&&p34_body(getter,P34_PROP_S32_GET)&&safe_read_memory(data+0xba8,&actor_id,4)){
                                 p.actor_id=actor_id;actor=0;if(actor_id!=-1)lookup(&actor,(void*)actor_container,&actor_id);
                             }
                         }

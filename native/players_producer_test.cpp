@@ -59,7 +59,7 @@ int main(){
         memcpy(actors[i].data()+0x1d0,pos,sizeof(pos));double basis[9]={1,0,0,0,1,0,0,0,1};memcpy(actors[i].data()+0x188,basis,sizeof(basis));
         refs[i][1]=(uintptr_t)actors[i].data();put(peers[i].data(),8,int32_t(i));put(peers[i].data(),0x48,int32_t(i));
         put(scene_peers[i].data(),8,(uintptr_t)property_class.data());put(scene_peers[i].data(),16,int32_t(i));
-        put(scene_peers[i].data(),0xb90,(uintptr_t)property_class.data());put(scene_peers[i].data(),0xb98,int32_t(i));
+        put(scene_peers[i].data(),0xba0,(uintptr_t)property_class.data());put(scene_peers[i].data(),0xba8,int32_t(i));
         put(peers[i].data(),0x10,GeoString16{(uintptr_t)name,sizeof(name)-1,sizeof(name)-1});
         put(peers[i].data(),0x20,GeoString16{(uintptr_t)id,sizeof(id)-1,sizeof(id)-1});
     }

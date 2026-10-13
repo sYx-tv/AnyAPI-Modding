@@ -1,7 +1,7 @@
 # ThirdPerson
 
 > ThirdPerson hooks a game function directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.24 / Steam build 25826614 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
 > ThirdPerson 0.1.0 requires AnyAPI 0.35.0 or newer on that build; install it from the manager.
 
 ThirdPerson adds a third-person camera with an adjustable follow distance.
@@ -25,7 +25,7 @@ Without AnyHelpers the mod still works with F5 and a 4 m default distance.
 
 ## How it works
 
-Anymaker 0.1.24 already contains a third-person camera that only its developer tools switch on: the client
+Anymaker 0.1.25 already contains a third-person camera that only its developer tools switch on: the client
 scene has a "camera first person" flag, a "render the player in third person" flag and a third-person camera
 distance, and `client_scene.get_camera_transform` (used by rendering, the crosshair and interaction rays)
 applies them. ThirdPerson hooks that function and sets those three values, so the game draws your character's
@@ -42,5 +42,5 @@ back along the view itself. Both cases are written to `anymaker_modding.log`.
 - Aiming and interactions use the camera, as in the game's own third-person mode, so very close objects can be
   harder to target than in first person.
 - Only your own view changes. Other players are not affected and do not need the mod.
-- The client-scene field offsets come from the 0.1.24 SDK reference; after a game update, re-check them as well as
+- The client-scene field offsets come from the 0.1.25 SDK reference; after a game update, re-check them as well as
   the binding in `native/thirdperson_bindings.h`.

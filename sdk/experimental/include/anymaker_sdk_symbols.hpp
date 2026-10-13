@@ -5,15 +5,15 @@
 
 namespace anymaker::sym {
 
-inline constexpr const char* steam_build_id = "25826614";
-inline constexpr uint32_t game_exe_pe_timestamp = 1791540771u;
-inline constexpr uint64_t game_gcl_size = 82479913ull;
-inline constexpr const char* game_exe_sha256 = "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7";
-inline constexpr const char* game_gcl_sha256 = "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d";
+inline constexpr const char* steam_build_id = "25904830";
+inline constexpr uint32_t game_exe_pe_timestamp = 1791886276u;
+inline constexpr uint64_t game_gcl_size = 82528301ull;
+inline constexpr const char* game_exe_sha256 = "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0";
+inline constexpr const char* game_gcl_sha256 = "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355";
 
 // ---- functions (gcl, JIT-loaded). Resolve with anymaker::resolve(desc) / anymaker::cell_of(desc).
 // FN:() server.tick (server)  [direct, via_caller]
-inline constexpr func_desc server_tick{"() server.tick (server)", "53 55 56 57 41 54 41 55 41 56 48 81 ec 50 03 00 00 48 89 8c 24 50 02 00 00 48 8d 01 48 8b 15 d5", {"48 81 ec 78 2c 00 00 48 8b 05 32 04 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f 84 fd 03 00 00 48 8d", {1192u}, 1}, "", 0u, -1};
+inline constexpr func_desc server_tick{"() server.tick (server)", "53 55 56 57 41 54 41 55 41 56 48 81 ec 50 03 00 00 48 89 8c 24 50 02 00 00 48 8d 01 48 8b 15 dd", {"48 81 ec 78 2c 00 00 48 8b 05 32 04 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f 84 fd 03 00 00 48 8d", {1192u}, 1}, "", 0u, -1};
 inline constexpr int server_tick_vslot = -1;  // zero-based slot in server's method table, -1 if not virtual
 // FN:() client.tick (client, const f64, const bool, frontend_ui, settings)  [direct, via_caller]
 inline constexpr func_desc client_tick{"() client.tick (client, const f64, const bool, frontend_ui, settings)", "53 55 56 57 48 81 ec a8 01 00 00 4c 8b 94 24 f0 01 00 00 48 89 8c 24 d0 00 00 00 48 89 94 24 d8", {"53 55 48 81 ec 98 00 00 00 48 8d 4c 24 58 48 8b 05 cb 05 00 00 ff 10 48 8b 05 ca 05 00 00 f2 0f", {1704u}, 1}, "", 0u, -1};
@@ -135,7 +135,7 @@ inline constexpr uint32_t off_server_scene_entity__m_id = 0x40;  // F:server_sce
 inline constexpr uint32_t off_server_scene_entity__m_transform = 0x48;  // F:server_scene.entity::m_transform : mat34
 inline constexpr uint32_t off_server_scene_vehicle__m_id = 0x40;  // F:server_scene.vehicle::m_id : s32
 inline constexpr uint32_t off_server_scene_peer__m_unique_identifier = 0x18;  // F:server_scene.peer::m_unique_identifier : string
-inline constexpr uint32_t off_server_scene_peer__m_authority_actor = 0x19b8;  // F:server_scene.peer::m_authority_actor : ptr<server_scene.actor>
+inline constexpr uint32_t off_server_scene_peer__m_authority_actor = 0x19d8;  // F:server_scene.peer::m_authority_actor : ptr<server_scene.actor>
 inline constexpr uint32_t off_server_scene_actor_damage_src__m_actor_id_src = 0x0;  // F:server_scene.actor_damage_src::m_actor_id_src : s32
 inline constexpr uint32_t off_server_scene_actor_damage_src__m_type = 0x4;  // F:server_scene.actor_damage_src::m_type : e_actor_damage_type
 inline constexpr uint32_t off_server_scene_actor_damage_src__m_position = 0x8;  // F:server_scene.actor_damage_src::m_position : vec3

@@ -6,8 +6,9 @@ the SHA-256 of `game.exe` and `bin/game.gcl` with
 on any other build. When Steam updates the game, work through this page. Most of it
 is one script; the rest is review, a Windows build and an in-game test.
 
-The last port, 0.1.23 / Steam build 25755694 to 0.1.24 / Steam build 25826614
-(API 0.34.1 to 0.35.0), is the worked example below.
+The last port, 0.1.24 / Steam build 25826614 to 0.1.25 / Steam build 25904830
+(API 0.36.0 to 0.37.0), is the worked example below. Its SDK root is kept in
+the project files as `sdk/reference-0.1.25`, the previous SDK for the next update.
 
 ## 1. Capture the new build
 
@@ -29,7 +30,7 @@ or Linux.
 ```powershell
 python native/tools/game_update.py --game-dir "C:/Program Files (x86)/Steam/steamapps/common/Anymaker" `
     --previous-sdk <previous SDK root> --work build/game-update `
-    --api-version 0.35.0 --api-revision 36
+    --api-version 0.37.0 --api-revision 40
 ```
 
 Run it once without `--apply` to read the report, then again with `--apply` (add
@@ -39,8 +40,9 @@ Run it once without `--apply` to read the report, then again with `--apply` (add
    app manifest, and both SHA-256 hashes;
 2. regenerates the experimental SDK into `<work>/sdk`
    ([`regenerate.py`](../../sdk/experimental/tools/regenerate.py)). Runtime evidence
-   from the old build is set aside. Runtime-only native RVAs are carried over only when
-   the nearest static natives on both sides kept their RVAs
+   from the old build is set aside. Runtime-only native RVAs (`$string_*`, `$ref_*`)
+   are carried over when the nearest static natives on both sides kept their RVAs or all
+   moved by the same amount, including RVAs that were themselves carried last time
    ([`carry_natives.py`](../../sdk/experimental/tools/carry_natives.py));
 3. audits every exact byte pattern in `native/`
    ([`game_update_audit.py`](../../native/tools/game_update_audit.py)) and, with
@@ -52,7 +54,13 @@ Run it once without `--apply` to read the report, then again with `--apply` (add
 6. copies the generated SDK headers and system docs into `sdk/experimental/`;
 7. writes the build identity: `runtime_build_identity.h`, `runtime_build_guard.inc`,
    `BUILD_MANIFEST.json` and, with `--api-version`, the AnyAPI DLL version in
-   `native/CMakeLists.txt`.
+   `native/CMakeLists.txt`;
+8. with `--api-version`, plans the release
+   ([`port_release_plan.py`](../../native/tools/port_release_plan.py)): every catalog mod
+   that must be rebuilt (it uses the experimental SDK, or includes a file whose patterns
+   the port rewrote) gets a patch version bump with `--apply`, and
+   `<work>/release-plan.json` lists the tag, every package to ship, the `release.json`
+   `Packages` overrides and the `add_game_build.py` command for the other mods.
 
 Re-running it is safe: a second `--apply` on an up-to-date tree changes nothing.
 
@@ -71,6 +79,13 @@ Open `<work>/audit/pattern_audit.md`. Each pattern has one state:
 | stale | Did not match the previous build either | Nothing new; legacy telemetry |
 | missing | Not found, no previous function identified | Usually stale; check the name |
 
+The report ends with **Offsets to check**: number literals in our code that equal a
+dependency cell (`code_end + 8*index`) of a function whose size changed, in files that use
+that pattern. Each one is probably a cell that must move by the size change. Write such
+offsets as `NAME_END + index*8` with a `NAME_END` constant next to the pattern (for
+example `ST_CONTAINER_END`): `--apply` rewrites `NAME_END` constants of resized and
+shifted patterns, so the offsets follow by themselves.
+
 Then check these, which the audit cannot see:
 
 - **Field offsets in C++.** Compare layouts between the two SDKs
@@ -80,6 +95,10 @@ Then check these, which the audit cannot see:
   `client` after offset 3768, `client_scene.actor_character` after 5088,
   `main_menu`, gamepad data and creatures. None of AnyAPI's or the mods' offsets fell
   in the moved ranges.
+- **Field offsets of the peer.** 0.1.25 added a tooltip field to the peer's inspection
+  data, which moved `client_scene.peer` fields after 2960 by 16 and the server peer's
+  authority actor from +0x1998 to +0x19d8 (seen in the `changed` diff of a legacy event
+  body). `native_players.inc` and `legacy_server_use_resolution.inc` read those.
 - **Hook slots.** Wherever code validates a dependency cell and then replaces a cell, both offsets
   must move together. In 0.35.0 the inventory title dependency moved to `+0x6430` but its hook stayed
   on `+0x6438` (now a one-argument helper), which crashed the game when a container inventory
@@ -118,7 +137,9 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-Then install the candidate and test each mod in game. The first launch log
+Then install the candidate, launch Anymaker from Steam (the manager's Play gate refuses an
+unreleased API) and test each mod in game. Always open a storage container's inventory:
+the 0.35.0 port crashed there. The first launch log
 (`anymaker_modding.log`) should show the build guard matching and every service
 installing; a missing hook names its pattern.
 
@@ -133,11 +154,12 @@ At release (see [Publishing](publishing.md)):
 - Add the new fingerprint to every unchanged mod:
 
   ```powershell
-  python native/tools/add_game_build.py --version 0.1.24 --steam-build 25826614 `
-      --exe <game.exe sha256> --gcl <game.gcl sha256> --release-json AnyAPI,EngineSound,AnyMirror --apply
+  python native/tools/add_game_build.py --version 0.1.25 --steam-build 25904830 `
+      --exe <game.exe sha256> --gcl <game.gcl sha256> --skip anymirror,enginesound,gpspart,thirdperson --apply
   ```
 
-  `--release-json` prints the `Packages` overrides for the releases above.
+  `<work>/release-plan.json` prints this exact command and holds the `Packages`
+  overrides for the releases above.
 - The manager downloads whatever API the live catalog lists, so it needs no release for
   a game update. Its bundled API (the offline fallback) refreshes with the next manager
   release: copy the root `catalog.json` to `manager/publishing/catalog.json`, put the API

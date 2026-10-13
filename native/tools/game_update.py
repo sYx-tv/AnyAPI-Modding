@@ -17,6 +17,8 @@ work folder of this tool's previous run). Steps, stopping at the first failure:
   5. re-bind the experimental-SDK mods (rebind_mod_bindings.py)
   6. copy the generated SDK headers and system docs into sdk/experimental/
   7. write the build identity (runtime_build_identity.h, runtime_build_guard.inc, BUILD_MANIFEST.json)
+  8. with --api-version: bump the experimental-SDK mods and write <work>/release-plan.json
+     (port_release_plan.py)
 
 Without --apply nothing in the repo changes: every step reports what it would do. Read
 <work>/audit/pattern_audit.md afterwards. Patterns marked changed, moved or missing, and the offset
@@ -187,6 +189,11 @@ def main():
             (r'(if\(target STREQUAL "dinput8"\)\r?\n    set\(ANYAPI_VERSION_COMMA ")[\d,]+(")', r'\g<1>%s,%s,%s,0\g<2>' % tuple(c)),
             (r'(if\(target STREQUAL "dinput8"\)\r?\n    set\(ANYAPI_VERSION_COMMA "[\d,]+"\)\r?\n    set\(ANYAPI_VERSION_TEXT ")[\d.]+', r'\g<1>' + a.api_version)],
             a.apply)
+
+    if a.api_version:
+        step('plan the release (mod version bumps, packages, catalog)')
+        run([HERE / 'port_release_plan.py', '--version', ident['version'], '--steam-build', ident['build'], '--exe', ident['exe'],
+             '--gcl', ident['gcl'], '--api-version', a.api_version, '--out', work] + (['--apply'] if a.apply else []))
 
     print('\nDone. Next: read %s, then follow docs/development/game-updates.md from "Review by hand".'
           % (work / 'audit' / 'pattern_audit.md'))

@@ -10,15 +10,15 @@
 // "sensor" category (the sandbox and creative sensor container). World loot spawns items whose tech_tier equals
 // the loot level being generated; a new world starts at loot level 1 and each bunker's end sequence
 // (dungeon_<n>_end_sequence -> dungeon_manager.complete_dungeon) raises it by one, so tier 4 loot starts
-// generating the moment the 3rd bunker is triggered to explode (game code, Anymaker 0.1.24). Single player only for now: the definition
+// generating the moment the 3rd bunker is triggered to explode (game code, Anymaker 0.1.25). Single player only for now: the definition
 // is added on both the server and the client scene of this game, and every player would need the mod.
 //
 // How: the part definition is embedded below (gpspart_logic.h), written to "AnyAPI and Modding/GpsPart" and added
 // to the game's vehicle component definitions right after the game adds its own. The compass sensor's server
 // tick and get_data_f64 are hooked; they only change anything for parts whose definition id is gps_sensor.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (gpspart_bindings.h): Anymaker 0.1.24 /
-// Steam build 25826614 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (gpspart_bindings.h): Anymaker 0.1.25 /
+// Steam build 25904830 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"

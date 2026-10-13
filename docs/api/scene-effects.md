@@ -13,7 +13,7 @@ scene antialiasing and the HUD. The HUD is never touched.
 ## How tone mapping is replaced
 
 The game tone maps every frame with a fixed chain, decoded from
-`pipeline_postprocess` on Anymaker 0.1.24:
+`pipeline_postprocess` on Anymaker 0.1.25:
 
 ```
 display = saturation 1.15 ( contrast 1.12 around 0.45 ( gamma 1/2.2 ( ACES fit ( 0.85 * hdr ))))
