@@ -1,6 +1,6 @@
 # Scene antialiasing integration
 
-Target: Anymaker 0.1.24 / Steam build 25826614. Version 0.28.0 includes SMAA 1x and Enhanced SMAA. Live logs confirm
+Target: Anymaker 0.1.25 / Steam build 25904830. Version 0.28.0 includes SMAA 1x and Enhanced SMAA. Live logs confirm
 Enhanced SMAA Ultra at 2560 × 1440; residual aliasing remains.
 
 ## Placement

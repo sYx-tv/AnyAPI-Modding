@@ -77,6 +77,35 @@ def collect():
     return rows, rvas
 
 
+LITERAL = re.compile(r'\b(0x[0-9a-fA-F]{3,5}|[1-9]\d{2,4})\b')
+
+
+def stale_offset_literals(report):
+    """(file, line, literal, function, new value) for literals that equal an old dependency cell offset."""
+    cells = {}
+    for row in report:
+        if 'dependency_cells' not in row:
+            continue
+        old_end, new_end, n = row['dependency_cells']
+        for k in range(n):
+            cells.setdefault(old_end + 8 * k, []).append((row['name'], row.get('function') or row['name'], new_end + 8 * k))
+    hits = []
+    for path, text in sources():
+        if path.name.endswith('_bindings.h'):
+            continue
+        # only files that use the pattern: a literal elsewhere is a coincidence
+        used = {name for v in cells.values() for name, _, _ in v if re.search(r'\b%s\b' % re.escape(name), text)}
+        for no, line in enumerate(text.splitlines(), 1):
+            if '{0x' in line.replace(' ', '') and line.count(',') > 16:
+                continue  # a byte pattern, not code
+            for m in LITERAL.finditer(line):
+                for name, fn, new in cells.get(int(m[1], 0), []):
+                    if name not in used:
+                        continue
+                    hits.append((path.name, no, m[1], fn.split(' (')[0].replace('|', '/'), hex(new) if m[1].startswith('0x') else str(new)))
+    return hits
+
+
 def normalize(code):
     out = []
     for i in MD.disasm(code, 0):
@@ -221,6 +250,8 @@ def main():
         same_insn = nh['insn'] == oh['insn'] and nh['consts'] == oh['consts']
         same_relocs = hashlib.sha1('\n'.join('%d %s' % x for x in cur.relocs).encode()).hexdigest() == prev['relocs_sha1']
         row.update(code_end_old=old_end, code_end_new=new_end, same_instructions=same_insn, same_relocations=same_relocs)
+        if old_end != new_end:
+            row['dependency_cells'] = (old_end, new_end, len(cur.relocs))
         if len(body) >= old_end and hashlib.sha1(body[:old_end]).hexdigest() != oh['raw']:
             # The bytes never matched the previous build either (left over from an older game build).
             row.update(status='stale', note='did not match the previous build either; not a regression')
@@ -256,6 +287,9 @@ def main():
             row['candidate_bytes'] = encode(new_body, 'min')
         report.append(row)
 
+    # Our code addresses dependency cells as code_end + 8*k. When code_end moves, every literal
+    # still pointing at an old cell offset is a likely stale offset (the 0.35.2 container crash).
+    literal_hits = stale_offset_literals(report)
     counts = {}
     for row in report:
         counts[row['status']] = counts.get(row['status'], 0) + 1
@@ -281,6 +315,14 @@ def main():
                 note += ' code_end %d -> %d' % (x['code_end_old'], x['code_end_new'])
             lines.append('| %s | %s | %s | %s |' % (x['file'], x['name'], (x.get('function') or '').replace('|', '/'), note.strip()))
         lines.append('')
+    if literal_hits:
+        lines += ['## Offsets to check', '',
+                  'Literals equal to a dependency cell offset (`code_end + 8*k`) of a function whose code size changed.',
+                  'Each one probably needs the new value; check the pattern it is used with.', '',
+                  '| Where | Literal | Function | New value if it is that cell |', '|---|---|---|---|']
+        lines += ['| %s:%d | %s | %s | %s |' % h for h in literal_hits]
+        lines.append('')
+        counts['offsets_to_check'] = len(literal_hits)
     (a.out / 'pattern_audit.md').write_text('\n'.join(lines), encoding='utf-8')
     print(json.dumps(counts))
     if a.apply:
@@ -297,6 +339,13 @@ def main():
                     text = nl.join(','.join(vals[i:i + 16]) + ',' for i in range(0, len(vals), 16))
                     lead, trail = nl, nl
                 raw = raw[:s] + lead + text + trail + raw[e:]
+            # NAME_END constants that hold the old code size follow the new one.
+            for x in report:
+                if x['file'] == name and 'dependency_cells' in x and x['status'] in ('resized', 'shifted'):
+                    old_end, new_end, _ = x['dependency_cells']
+                    raw, n = re.subn(r'(\b%s_END\s*=\s*)%d\b' % (re.escape(x['name']), old_end), r'\g<1>%d' % new_end, raw)
+                    if n:
+                        print('  %s_END %d -> %d' % (x['name'], old_end, new_end))
             path.write_bytes(raw.encode('utf-8'))
         print('rewrote', sum(len(v) for v in edits.values()), 'patterns in', len(edits), 'files')
 

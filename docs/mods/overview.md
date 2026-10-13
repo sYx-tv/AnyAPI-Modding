@@ -14,15 +14,15 @@ keeps working defaults when it is absent.
 | [AnyGraphics](graphics.md) | 0.29.3 | API 0.32.0 | Native graphics presets, scene SMAA, volumetric fog and light beams | None; lives in Settings → Graphics |
 | [AnyClock](clock.md) | 1.0.0 | API 0.30.0 | Temporary game-time popup | AnyHelpers settings and controls |
 | [AnyQuickWheel](quick-wheel.md) | 1.1.0 | API 0.31.0 | Hold-to-open construction-tool wheel | AnyHelpers settings and controls |
-| [AnyBalance](balance.md) | 1.2.0 | API 0.33.0 (fluid mass: 0.34.0); on Anymaker 0.1.24, API 0.35.1 | Centre-of-mass overlay, mass and size with the Properties Tool | AnyHelpers settings |
-| [EngineSound](engine-sound.md) | 0.2.1 | API 0.34.0 | Engine sound presets and a Custom tuner in the Properties Tool, synced in co-op | None |
-| [AnyMirror](mirror.md) | 1.0.0 | API 0.34.0 | Mirrored edge building with either edge tool, a toggleable mirror wall and keybinds | AnyHelpers settings and controls |
-| [GpsPart](gps.md) | 1.0.0 | API 0.35.0; single player | A new GPS Sensor part: position, heading, pitch, roll, speed, acceleration and waypoint outputs for the data port and microcontroller | None |
-| [ThirdPerson](third-person.md) | 0.1.0 | API 0.35.0 | Third-person camera on F5 with an adjustable follow distance (Alt + mouse wheel) | AnyHelpers settings and controls |
+| [AnyBalance](balance.md) | 1.2.0 | API 0.33.0 (fluid mass: 0.34.0); on Anymaker 0.1.25, API 0.35.1 | Centre-of-mass overlay, mass and size with the Properties Tool | AnyHelpers settings |
+| [EngineSound](engine-sound.md) | 0.2.2 | API 0.34.0 | Engine sound presets and a Custom tuner in the Properties Tool, synced in co-op | None |
+| [AnyMirror](mirror.md) | 1.1.1 | API 0.34.0 | Mirrored edge building with either edge tool, a toggleable mirror wall and keybinds | AnyHelpers settings and controls |
+| [GpsPart](gps.md) | 1.0.1 | API 0.35.0; single player | A new GPS Sensor part: position, heading, pitch, roll, speed, acceleration and waypoint outputs for the data port and microcontroller | None |
+| [ThirdPerson](third-person.md) | 0.1.1 | API 0.35.0 | Third-person camera on F5 with an adjustable follow distance (Alt + mouse wheel) | AnyHelpers settings and controls |
 
 All mods are in the published catalog ([`catalog.json`](../../catalog.json)).
-All versions target Anymaker 0.1.24 / Steam build 25826614. On that build every mod needs AnyAPI 0.35.0 or newer (AnyBalance needs 0.35.1, and 0.35.2 fixes a container inventory crash);
-Anymaker 0.1.23 keeps AnyAPI 0.34.1.
+All versions target Anymaker 0.1.25 / Steam build 25904830. On that build every mod needs AnyAPI 0.37.0 or newer, and the experimental-SDK mods need their 0.1.25 builds
+(AnyMirror 1.1.1, EngineSound 0.2.2, GpsPart 1.0.1, ThirdPerson 0.1.1). Anymaker 0.1.24 keeps AnyAPI 0.36.0 and 0.1.23 keeps 0.34.1.
 
 ## Prototypes
 

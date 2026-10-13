@@ -58,10 +58,10 @@ int main() {
     register_region(server);register_region(peer);register_region(state);register_region(actor);register_region(decoy);register_region(ref);register_region(item);register_region(scene);
     actor_ptr=(uintptr_t)actor;inventory_ptr=actor_ptr+0x780;ref_ptr=(uintptr_t)ref;scene_ptr=(uintptr_t)scene;
     int32_t id=42,bad_id=100;std::memcpy(actor+0x40,&id,4);std::memcpy(decoy+0x40,&bad_id,4);
-    pointer_at(peer,0x698,(uintptr_t)state);pointer_at(state,0x1998,actor_ptr);pointer_at(state,0x19B8,(uintptr_t)decoy);
+    pointer_at(peer,0x698,(uintptr_t)state);pointer_at(state,0x19d8,actor_ptr);pointer_at(state,0x19F8,(uintptr_t)decoy);
     pointer_at(server,0xA0,scene_ptr);pointer_at(ref,0x20,(uintptr_t)item);pointer_at(item,0x88,1);
     auto first=resolve_server_use_item(server,peer,42,7);assert(first.resolved && first.server_actor==actor_ptr && first.server_item==(uintptr_t)item);assert(fallback_calls==0 && g_server_use_inventory_offset_match==1);
-    pointer_at(state,0x1998,(uintptr_t)decoy);auto second=resolve_server_use_item(server,peer,42,7);assert(second.resolved && fallback_calls==1);
+    pointer_at(state,0x19d8,(uintptr_t)decoy);auto second=resolve_server_use_item(server,peer,42,7);assert(second.resolved && fallback_calls==1);
     allow_fallback=false;int previous_calls=inventory_calls;auto third=resolve_server_use_item(server,peer,42,7);assert(!third.resolved && inventory_calls==previous_calls);
     std::cout<<"PASS: current peer offset resolves; wrong readable actor falls back; rejected ID never reaches inventory getter\n";
 }

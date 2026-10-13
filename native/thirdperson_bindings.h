@@ -1,5 +1,5 @@
 #pragma once
-// ThirdPerson game bindings, generated for Anymaker 0.1.24 / Steam build 25826614 with
+// ThirdPerson game bindings, generated for Anymaker 0.1.25 / Steam build 25904830 with
 //   python tools/bind.py --reference reference --signature "<signature>" --out <file>.hpp
 // run against the 0.1.24 SDK reference, one call per signature below.
 // Experimental: located by code signature, not reviewed as an AnyAPI service.

@@ -1,6 +1,6 @@
 # AnyGraphics
 
-AnyGraphics is a native graphics mod for Anymaker 0.1.24. The current release is
+AnyGraphics is a native graphics mod for Anymaker 0.1.25. The current release is
 **0.30.0**, which needs **AnyAPI 0.36.0** for TAA, sharpening, beam shaping,
 tone mapping and colour looks, and the GPU cost readout (older APIs keep the 0.29 feature set; TAA choices
 fall back to SMAA). Its controls live inside

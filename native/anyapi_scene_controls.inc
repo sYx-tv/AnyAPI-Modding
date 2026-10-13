@@ -83,7 +83,8 @@ static void ssao_hook(void* self,void* camera){((SsaoFn)ssao_cell.original())(se
 #endif
 }
 static void composite_hook(void* renderer,void* scene){composite_renderer=renderer;composite_scene=scene;((SceneFn)composite_cell.original())(renderer,scene);composite_renderer=composite_scene=nullptr;}
-static const unsigned char COMPOSITE[]={0x53,0x55,0x56,0x48,0x81,0xec,0x20,0x02,0,0,0x48,0x89,0x8c,0x24,0xc0,0x01,0,0,0x48,0x89,0x94,0x24,0xc8,0x01,0,0,0x48,0x8b,0x05,0xaf,0x0c,0};
+static const unsigned char COMPOSITE[]={0x53,0x55,0x56,0x48,0x81,0xec,0x20,0x02,0,0,0x48,0x89,0x8c,0x24,0xc0,0x01,0,0,0x48,0x89,0x94,0x24,0xc8,0x01,0,0,0x48,0x8b,0x05,0xa7,0x0c,0};
+static constexpr size_t COMPOSITE_END=3272;
 static const unsigned char SSAO[]={0x53,0x55,0x48,0x81,0xec,0xc8,0,0,0,0x48,0x89,0x4c,0x24,0x60,0x48,0x89,0x54,0x24,0x68,0x48,0x8d,0x44,0x24,0x70,0x48,0x8d,0x19,0x48,0x8b,0x2d,0xde,0x01};
 static const unsigned char ADDITIVE[]={0x53,0x55,0x56,0x57,0x41,0x54,0x48,0x81,0xec,0x50,0x01,0,0,0x48,0x89,0x8c,0x24,0xe8,0,0,0,0x48,0x89,0x94,0x24,0xf0,0,0,0,0x48,0x8b,0x05};
 static const unsigned char RECORD_COMMANDS[]={0x53,0x55,0x56,0x48,0x81,0xec,0x10,0x02,0,0,0x48,0x89,0x8c,0x24,0xb0,0x01,0,0,0x48,0x89,0x94,0x24,0xb8,0x01,0,0,0x48,0x8b,0x05,0x07,0x0a,0};
@@ -110,7 +111,7 @@ static DWORD WINAPI worker(void*){for(unsigned attempt=0;attempt<120&&!ready;++a
  auto light=resolve_unique_cell(record,2600,33,ADDITIVE,sizeof(ADDITIVE));if(light&&lighting_cell.install(light,(void*)lighting_hook)){scene_lighting::available=true;scene_effects::available=true;log_line(ANY_LOG_INFO,"framework","SCENE_LIGHTING resolved=1 location=HDR_AFTER_ADDITIVE_BEFORE_BLOOM_TONEMAP_HUD experimental=1");}
  // _record_commands_composite runs the game's SSAO from its own call cell.
  auto composite=resolve_unique_cell(record,2600,28,COMPOSITE,sizeof(COMPOSITE));uintptr_t composite_body{};
- if(composite&&safe_read_memory(uintptr_t(composite),&composite_body,8)&&composite_body){auto ssao=resolve_cell(composite_body,3280,6,SSAO,sizeof(SSAO));
+ if(composite&&safe_read_memory(uintptr_t(composite),&composite_body,8)&&composite_body){auto ssao=resolve_cell(composite_body,COMPOSITE_END,6,SSAO,sizeof(SSAO));
   if(ssao&&composite_cell.install(composite,(void*)composite_hook)){if(ssao_cell.install(ssao,(void*)ssao_hook)){scene_effects::ao_available=true;log_line(ANY_LOG_INFO,"framework","SCENE_AO resolved=1 location=COMPOSITE_AFTER_NATIVE_SSAO");}else composite_cell.remove();}}
  if(!scene_effects::ao_available)log_line(ANY_LOG_WARN,"framework","SCENE_AO unavailable=1 native_ssao_kept=1");
  scene_effects::install_distance(resolve_cell,scan_exact);scene_effects::install_photo(record);

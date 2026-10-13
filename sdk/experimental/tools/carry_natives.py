@@ -2,10 +2,11 @@
 
 Some natives (the `$string_*` helpers) have no static thunk store, so their RVA only comes from a
 runtime probe (validation/probe.py). After a game update, sdk_codegen.py stops on them until a new
-probe runs. If the --neighbours nearest statically known natives on both sides kept exactly the
-same RVA, the code between them kept its size, and the previous RVA very likely still holds. This tool
-copies such RVAs into the new natives.json as static evidence, with the neighbours as the basis.
-A later probe overwrites them with runtime evidence.
+probe runs. If the --neighbours nearest statically known natives on both sides moved by the same
+amount (often zero), the code between them kept its size, and the previous RVA plus that shift very
+likely holds. This tool copies such RVAs into the new natives.json as static evidence, with the
+neighbours as the basis. An RVA carried by an earlier run counts as a previous RVA too, so the chain
+survives updates with no probe in between. A later probe overwrites them with runtime evidence.
 
     python tools/carry_natives.py --old <previous json> --new <new json> [--neighbours 1] [--max-gap 0x20000]
 
@@ -36,19 +37,21 @@ def main():
     carried, left = [], []
     for o in old:
         n = by_sig.get(o['sig'])
-        rt = (o.get('runtime') or {}).get('rva')
+        rt = (o.get('runtime') or {}).get('rva') or \
+            (o.get('thunk_rva') if str(o.get('basis', '')).startswith('previous build runtime RVA') else None)
         if not n or n.get('thunk_rva') or not rt:
             continue
         r = int(rt, 16)
         below = sorted(p for p in pairs if p[0] < r)[-a.neighbours:]
         above = sorted(p for p in pairs if p[0] > r)[:a.neighbours]
         near = below + above
-        if len(below) == len(above) == a.neighbours and above[-1][0] - below[0][0] <= a.max_gap \
-                and all(x == y for x, y in near):
-            n['thunk_rva'] = rt
+        shifts = {y - x for x, y in near}
+        if len(below) == len(above) == a.neighbours and above[-1][0] - below[0][0] <= a.max_gap and len(shifts) == 1:
+            shift = shifts.pop()
+            n['thunk_rva'] = '%#x' % (r + shift)
             n['evidence'] = 'static'
-            n['basis'] = ('previous build runtime RVA %s carried over: the %d nearest statically known natives on '
-                          'each side (%#x-%#x) kept identical RVAs' % (rt, a.neighbours, below[0][0], above[-1][0]))
+            n['basis'] = ('previous build runtime RVA %s carried over (shifted %+#x): the %d nearest statically known '
+                          'natives on each side (%#x-%#x) moved by the same amount' % (rt, shift, a.neighbours, below[0][0], above[-1][0]))
             carried.append(o['sig'])
         else:
             left.append(o['sig'])

@@ -49,7 +49,7 @@ static ServerUseResolvedItem resolve_server_use_item(
         InterlockedIncrement64(&g_server_use_peer_state_nonzero);
 
         if(safe_read_memory(
-            peer_actor_state+0x1998,
+            peer_actor_state+0x19d8,
             &server_actor_rpm,
             sizeof(server_actor_rpm)
         )) {
@@ -57,7 +57,7 @@ static ServerUseResolvedItem resolve_server_use_item(
         }
 
         if(safe_read_native(
-            peer_actor_state+0x1998,
+            peer_actor_state+0x19d8,
             &server_actor_native,
             sizeof(server_actor_native)
         )) {

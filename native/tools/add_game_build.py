@@ -3,7 +3,7 @@
 After a game update, mods that only use AnyAPI services keep working with the new API build,
 so their existing ZIPs stay as they are and only gain the new fingerprint:
 
-    python native/tools/add_game_build.py --version 0.1.24 --steam-build 25826614
+    python native/tools/add_game_build.py --version 0.1.25 --steam-build 25904830
         --exe <game.exe sha256> --gcl <game.gcl sha256> [--skip enginesound,anymirror] [--apply]
 
 Packages built on the experimental SDK embed the old build's hashes and are skipped by default
