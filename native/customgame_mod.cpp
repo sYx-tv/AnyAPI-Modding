@@ -184,18 +184,23 @@ void apply_globals(const Config* c) {
     set(g_bool[gNoZombies], enemies_on(v, kZombies) ? g_bool[gNoZombies].def : true);
     set(g_bool[gNoCreatures], enemies_on(v, kCreatures) ? g_bool[gNoCreatures].def : true);
     g_globals_custom = true;
-    // One line per changed global, so a test log shows exactly what the world runs with.
+    // Every changed global, a few per line (the log truncates long lines), so a test log shows what the world runs with.
     std::string changed;
-    char item[128];
+    int items = 0;
+    char item[160];
+    auto flush = [&] { if (!changed.empty()) { log(0, "applied: %s", changed.c_str()); changed.clear(); } };
     auto note = [&](const char* name, double from, double to) {
         if (from == to) return;
         snprintf(item, sizeof item, "%s%s %g -> %g", changed.empty() ? "" : ", ", name, from, to);
-        changed += item;
+        if (changed.size() + strlen(item) > 400) flush();
+        if (changed.empty() && item[0] == ',') changed += item + 2; else changed += item;
+        ++items;
     };
     for (auto& g : g_f64) if (g.p) note(g.name, g.def, *g.p);
     for (auto& g : g_s32) if (g.p) note(g.name, g.def, *g.p);
     for (auto& g : g_bool) if (g.p) note(g.name, g.def, *g.p);
-    log(0, "applied: %s", changed.empty() ? "no game values changed" : changed.c_str());
+    flush();
+    if (!items) log(0, "applied: no game values changed");
 }
 
 GameDefaults game_defaults() {
