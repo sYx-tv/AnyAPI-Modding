@@ -199,7 +199,8 @@ set_loot_level_t fn_set_loot_level;
 prop_bool_set_t fn_prop_bool_set;
 prop_f64_set_t fn_prop_f64_set;
 anymaker::cell_hook h_ui, h_generate, h_tick, h_tick_loading, h_client_tick, h_weather, h_particles;
-anymaker::cell_hook h_tick_spawn, h_spawn_zones, h_sleeping, h_destroy_horde, h_spawn_horde;
+anymaker::cell_hook h_tick_spawn, h_spawn_zones, h_sleeping, h_destroy_horde, h_spawn_horde, h_integrate;
+anymaker::cell_hook h_dungeon_generate, h_dungeon_creatures, h_dungeon_loot;
 
 // ------------------------------------------------------------------ menu -> world hand-off
 std::mutex g_pending_mutex;
@@ -236,6 +237,7 @@ std::atomic<int> g_host_weather{-1};    // weather lock from the host's own conf
 std::atomic<int> g_host_precipitation{-1};
 std::atomic<ULONGLONG> g_host_seen{0};  // last server tick; a stale host config must not leak into a joined world
 std::atomic<bool> g_sandbox_spawns{false};   // the host's world forces zombies or creatures on in Sandbox
+std::atomic<bool> g_sandbox_bunkers{false};  // the host's world adds bunkers to Sandbox
 
 void hk_generate_new_game(uint8_t* scene) {
     auto original = reinterpret_cast<scene_fn_t>(h_generate.original);
@@ -248,6 +250,7 @@ void hk_generate_new_game(uint8_t* scene) {
     }
     apply_globals(custom ? &cfg : nullptr);   // world generation already spawns loot and enemies
     g_sandbox_spawns = custom && sandbox_spawns(cfg);
+    g_sandbox_bunkers = custom && sandbox_bunkers(cfg);
     original(scene);
     if (!scene) return;
     int32_t seed = rd<int32_t>(scene, off::scene_seed);
@@ -316,6 +319,7 @@ void server_tick(uint8_t* scene, uint8_t* server, bool loading) {
         apply_globals(s.active ? &s.world.config : nullptr);
         set_players(server, s.active ? &s.world.config : nullptr);
         g_sandbox_spawns = s.active && sandbox_spawns(s.world.config);
+        g_sandbox_bunkers = s.active && sandbox_bunkers(s.world.config);
         g_host_weather = s.active ? int(s.world.config[kWeather]) : -1;
         g_host_precipitation = s.active ? int(s.world.config[kPrecipitation]) : -1;
         if (s.active) {
@@ -361,8 +365,8 @@ void hk_server_tick_loading(uint8_t* scene, uint8_t* server) {
 // it is written raw (no replication) and put back before they return. All of them run on the server thread.
 struct CareerScope {
     int32_t* mode = nullptr;
-    explicit CareerScope(uint8_t* scene) {
-        if (!g_sandbox_spawns || !scene) return;
+    explicit CareerScope(uint8_t* scene, const std::atomic<bool>& when = g_sandbox_spawns) {
+        if (!when || !scene) return;
         auto* m = reinterpret_cast<int32_t*>(scene + off::scene_gamemode);
         if (*m == 2) { mode = m; *m = 0; }
     }
@@ -378,6 +382,26 @@ void hk_tick_spawn(void* manager, uint8_t* scene, const void* positions, const d
 void hk_spawn_zones(void* tile, uint8_t* scene) { CareerScope career(scene); reinterpret_cast<scene_arg_t>(h_spawn_zones.original)(tile, scene); }
 void hk_sleeping(void* vehicle, uint8_t* scene) { CareerScope career(scene); reinterpret_cast<scene_arg_t>(h_sleeping.original)(vehicle, scene); }
 void hk_spawn_horde(void* manager, uint8_t* scene) { CareerScope career(scene); reinterpret_cast<scene_arg_t>(h_spawn_horde.original)(manager, scene); }
+// Tile loading skips spawn zones and sleeping actors in Sandbox before it ever calls them.
+using integrate_t = void (*)(bool* ret, void* task, uint8_t* scene, void* container);
+void hk_integrate(bool* ret, void* task, uint8_t* scene, void* container) {
+    CareerScope career(scene);
+    reinterpret_cast<integrate_t>(h_integrate.original)(ret, task, scene, container);
+}
+// Bunkers: Sandbox generates them with destroyed entrances and no loot or guards.
+using dungeon_tile_t = void (*)(void* tile, uint8_t* scene, const void* transform, const int32_t* arg);
+void hk_dungeon_generate(void* manager, uint8_t* scene) {
+    CareerScope career(scene, g_sandbox_bunkers);
+    reinterpret_cast<scene_arg_t>(h_dungeon_generate.original)(manager, scene);
+}
+void hk_dungeon_creatures(void* tile, uint8_t* scene, const void* transform, const int32_t* variety) {
+    CareerScope career(scene, g_sandbox_bunkers);
+    reinterpret_cast<dungeon_tile_t>(h_dungeon_creatures.original)(tile, scene, transform, variety);
+}
+void hk_dungeon_loot(void* tile, uint8_t* scene, const void* transform, const int32_t* level) {
+    CareerScope career(scene, g_sandbox_bunkers);
+    reinterpret_cast<dungeon_tile_t>(h_dungeon_loot.original)(tile, scene, transform, level);
+}
 void hk_destroy_horde(bool* ret, void* controller, uint8_t* scene) {
     CareerScope career(scene);
     reinterpret_cast<destroy_horde_t>(h_destroy_horde.original)(ret, controller, scene);
@@ -759,12 +783,15 @@ void install() {
     bool particles = hook(h_particles, b::weather_particles_create, (void*)&hk_particles_create);
     int sandbox = hook(h_tick_spawn, b::creature_tick_spawn, (void*)&hk_tick_spawn) + hook(h_spawn_zones, b::populate_actor_spawn_zones, (void*)&hk_spawn_zones)
                 + hook(h_sleeping, b::spawn_sleeping_actors, (void*)&hk_sleeping) + hook(h_spawn_horde, b::spawn_horde, (void*)&hk_spawn_horde)
-                + hook(h_destroy_horde, b::is_destroy_horde, (void*)&hk_destroy_horde);
+                + hook(h_destroy_horde, b::is_destroy_horde, (void*)&hk_destroy_horde) + hook(h_integrate, b::tile_task_integrate, (void*)&hk_integrate);
+    int bunkers = hook(h_dungeon_generate, b::dungeon_generate, (void*)&hk_dungeon_generate)
+                + hook(h_dungeon_creatures, b::dungeon_populate_creatures, (void*)&hk_dungeon_creatures)
+                + hook(h_dungeon_loot, b::dungeon_generate_loot, (void*)&hk_dungeon_loot);
     g_ready = true;
     log(0, "Ready: menu %d, start %d, world binding %d, world ticks %d/%d, loot tier %d, time override %d, "
-           "player weather sync %d, weather lock %d, rain density %d, sandbox enemies %d/5",
+           "player weather sync %d, weather lock %d, rain density %d, sandbox enemies %d/6, sandbox bunkers %d/3",
         ui, fn_start_new_game != nullptr, gen, tick, loading, fn_set_loot_level != nullptr,
-        fn_prop_bool_set && fn_prop_f64_set, client, weather, particles, sandbox);
+        fn_prop_bool_set && fn_prop_f64_set, client, weather, particles, sandbox, bunkers);
     if (!ui || !fn_start_new_game) log(2, "the Custom Game button cannot start a game on this build");
 }
 }  // namespace
@@ -778,6 +805,8 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyM
     g_dir = std::filesystem::path(h->plugin_directory) / L"CustomGame";
     out->shutdown = [](void*) {
         g_stop = true;
+        h_dungeon_loot.remove((void*)&hk_dungeon_loot); h_dungeon_creatures.remove((void*)&hk_dungeon_creatures);
+        h_dungeon_generate.remove((void*)&hk_dungeon_generate); h_integrate.remove((void*)&hk_integrate);
         h_destroy_horde.remove((void*)&hk_destroy_horde); h_spawn_horde.remove((void*)&hk_spawn_horde);
         h_sleeping.remove((void*)&hk_sleeping); h_spawn_zones.remove((void*)&hk_spawn_zones); h_tick_spawn.remove((void*)&hk_tick_spawn);
         h_particles.remove((void*)&hk_particles_create); h_weather.remove((void*)&hk_get_weather_data);

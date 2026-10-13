@@ -38,7 +38,7 @@ enum Id {
     kMode, kDaySpeed, kStartHour, kStartTier, kMaxPlayers,
     kHunger, kThirst, kStaminaDrain, kStaminaRecover, kBreath, kSoak, kDry, kCorpseTime, kLostBodyTime, kColdest, kHottest,
     kZombies, kCreatures, kHordeSize, kMaxEnemies, kSight, kHearing, kSafeRadius,
-    kLoot, kWeather, kPrecipitation, kJoints,
+    kLoot, kWeather, kPrecipitation, kJoints, kBunkers,
     kCount
 };
 
@@ -66,6 +66,7 @@ inline constexpr double longer[] = {25, 50, 75, 100, 150, 200, 300, 500};
 inline constexpr double duration[] = {25, 50, 100, 200, 400, 800};
 inline constexpr double degrees[] = {-30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30};
 inline constexpr double on_off[] = {-1, 1, 0};
+inline constexpr double normal_on[] = {-1, 1};
 inline constexpr double amount[] = {0, 25, 50, 75, 100, 150, 200, 300};
 inline constexpr double enemies[] = {25, 50, 75, 100, 150, 200, 300};
 inline constexpr double senses[] = {25, 50, 75, 100, 125, 150, 200, 300};
@@ -105,6 +106,7 @@ inline const Setting kSettings[kCount] = {
     {"weather", "Weather", "Lock the weather, or leave it changing as normal.", kWorld, kFmtWeather, CG_LIST(weather), 0, false},
     {"precipitation", "Rain and snow density", "How many rain drops and snowflakes you see. Looks only.", kWorld, kFmtPercent, CG_LIST(precipitation), 100, true},
     {"joints", "Joint strength", "How much force it takes to break hinges, latches, pins and rails.", kWorld, kFmtJoints, CG_LIST(joints), 100, false},
+    {"bunkers", "Bunkers", "Normal follows the mode (Sandbox has none). On adds closed bunkers with loot to Sandbox; their zombies follow the Zombies setting. New worlds only.", kWorld, kFmtOnOff, CG_LIST(normal_on), -1, false},
 };
 #undef CG_LIST
 
@@ -251,6 +253,7 @@ inline int32_t scaled_count(int32_t base, double percent, int32_t minimum) {
 // Zombies and creatures: Normal follows the mode (Sandbox spawns none), On forces them on even in Sandbox.
 inline bool enemies_on(const Config& c, int id) { return c[id] > 0 || (c[id] < 0 && c.mode() != 2); }
 // Sandbox gates its spawners on the mode, so forcing enemies on there means running them as Career.
+inline bool sandbox_bunkers(const Config& c) { return c.mode() == 2 && c[kBunkers] > 0; }
 inline bool sandbox_spawns(const Config& c) { return c.mode() == 2 && (enemies_on(c, kZombies) || enemies_on(c, kCreatures)); }
 
 // The game rolls loot as rand(0, max(capacity, table weight)) < table weight, so a lower capacity means fuller spots.

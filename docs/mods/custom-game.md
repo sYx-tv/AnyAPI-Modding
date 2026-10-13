@@ -38,6 +38,7 @@ The page remembers the last settings you started with. The **Presets** tab saves
 | | Weather | Normal, Always clear, cloudy, rain, storm, fog | |
 | | Rain and snow density | 0% to 100% | Looks only |
 | | Joint strength | 25% to 500%, Unbreakable | Hinges, latches, pins and rails |
+| | Bunkers | Normal for the mode, On | On adds closed bunkers with loot to Sandbox (new worlds only); their zombies follow the Zombies setting |
 
 ## Multiplayer
 
@@ -71,6 +72,8 @@ The files are plain `key=value` text. Hand edits snap to the nearest menu step.
 - Sandbox switches its spawners off by checking the mode. When zombies or creatures are set to On in a Sandbox world,
   the mod runs those spawners (`creature_manager._tick_spawn`, tile spawn zones, sleeping actors, hordes) with the
   mode reading Career for the duration of the call.
+- Tile loading (`environment_tile_task.integrate`) also skips spawn zones in Sandbox, so it is run the same way.
+- Bunkers in Sandbox run `dungeon_manager.generate` and the bunker tiles' creature and loot generation as Career.
 - Every changed game value is written to `anymaker_modding.log` as `name default -> new` when a world starts.
 
 ## Known limits

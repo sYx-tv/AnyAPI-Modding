@@ -52,6 +52,10 @@ int main() {
     e.v[kMode] = 0; e.v[kZombies] = 0; assert(!enemies_on(e, kZombies) && !sandbox_spawns(e));
     assert(value_text(kZombies, -1, d) == "Normal for the mode" && value_text(kCreatures, 0, d) == "Off");
 
+    // Bunkers only change Sandbox.
+    Config k; assert(!sandbox_bunkers(k)); k.v[kBunkers] = 1; assert(!sandbox_bunkers(k)); k.v[kMode] = 2; assert(sandbox_bunkers(k));
+    k.v[kBunkers] = -1; assert(!sandbox_bunkers(k) && value_text(kBunkers, 1, d) == "On");
+
     // Loot: the game's capacity is a denominator, so more loot means a smaller capacity.
     assert(near(loot_capacity(20, 500), 4) && near(loot_capacity(20, 25), 80) && near(loot_capacity(20, 100), 20));
 
