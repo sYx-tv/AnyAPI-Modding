@@ -15,11 +15,12 @@
 //
 // Controls: F7 toggles the editor in a world (rebindable in Controls under MapEditor when AnyHelpers is installed).
 //
-// EXPERIMENTAL and diagnostic. Anymaker 0.1.24 / Steam build 25826614 only (mapeditor_bindings.h). The first runs
+// EXPERIMENTAL and diagnostic. Anymaker 0.1.25 / Steam build 25904830 only (mapeditor_bindings.h). The first runs
 // log the file paths the game uses and which path store reads absolute paths; read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
+#include "anyapi_build_v1.h"
 #include "anyapi_gpu_draw_v1.h"
 #include "anyapi_ui_state_v1.h"
 #include "anyhelpers_settings_v1.h"
@@ -68,7 +69,7 @@ void toast(const wchar_t* fmt, ...) {
 }
 bool gameplay() { AnyUiSnapshotV1 s; return ui && ui->copy(&s) && s.kind == ANY_UI_GAMEPLAY; }
 
-// ------------------------------------------------------------------ game types (0.1.24 reference layouts)
+// ------------------------------------------------------------------ game types (0.1.25 reference layouts)
 struct gstring { const char* p; int32_t len; int32_t reserved; };      // string, 16 bytes
 struct gpath { int32_t store; int32_t pad; gstring path; };            // file.path, 24 bytes; store: 0 embedded, 1 system, 2 rom, 3 user
 static_assert(sizeof(gstring) == 16 && sizeof(gpath) == 24);
@@ -105,6 +106,8 @@ std::string safe_name(const char* text) {
 }
 
 // A new pack is a full copy of the stock tiles, made once in the background.
+std::string g_game_build;   // Steam build from anyapi.build, set in AnyAPI_ModReady before any pack is prepared
+
 void prepare_pack(std::string name) {
     if (name.empty()) { std::lock_guard l(g_pack_mutex); g_pack_tiles.clear(); return; }
     g_copying = true;
@@ -116,7 +119,7 @@ void prepare_pack(std::string name) {
         fs::copy(stock, tiles, fs::copy_options::recursive | fs::copy_options::skip_existing, ec);
         if (ec) { log(2, "could not copy the stock tiles into the map pack: %s", ec.message().c_str()); g_copying = false; return; }
         if (FILE* f = _wfopen((pack / L"map.json").c_str(), L"wb")) {
-            fprintf(f, "{\n  \"format\": 1,\n  \"name\": \"%s\",\n  \"base\": \"stock\",\n  \"game_build\": \"25826614\"\n}\n", name.c_str());
+            fprintf(f, "{\n  \"format\": 1,\n  \"name\": \"%s\",\n  \"base\": \"stock\",\n  \"game_build\": \"%s\"\n}\n", name.c_str(), g_game_build.c_str());
             fclose(f);
         }
     }
@@ -372,6 +375,11 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyM
 }
 extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
     auto services = AnyAPI_Services(); if (!services) return;
+    if (auto build = static_cast<const AnyBuildV1*>(services->query("anyapi.build", 1));
+        build && build->struct_size == sizeof(*build) && build->version == 1 && build->copy) {
+        AnyBuildInfoV1 info;
+        if (build->copy(&info)) g_game_build.assign(info.steam_build, strnlen(info.steam_build, sizeof(info.steam_build)));
+    }
     ui = static_cast<const AnyUiStateV1*>(services->query("anyapi.ui_state", 1));
     if (!ui || ui->struct_size != sizeof(*ui) || ui->version != 1 || !ui->copy) { ui = nullptr; log(2, "ui_state unavailable; MapEditor is off"); return; }
     controls = static_cast<const ModControlsV1*>(services->query("anyhelpers.controls", 1));
