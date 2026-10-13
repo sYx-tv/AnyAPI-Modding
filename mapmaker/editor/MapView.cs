@@ -6,11 +6,25 @@ using System.Windows.Forms;
 namespace AnyMapMaker {
  // Top-down view of the world. +X is east (right), +Z is north (up). Drag with the right or
  // middle mouse button to pan, scroll to zoom, left click to select a tile.
+ public enum Tool {Select,Terrain,Height,Road,Fence,Prop,Building,Loot,Enemy,Erase}
+
  public sealed class MapView : Control {
   public MapPack Pack; public MapScene Scene;
   public TileKey? Hovered, Selected;
   public event Action<TileKey?> SelectionChanged;
   public event Action<string> StatusChanged;
+  // Editing. The form does the edit; the view reports where. Positions are world metres (x, z).
+  public Tool Tool=Tool.Select;
+  public double EraseRadius=8;
+  public event Action<TileKey,MouseButtons,Keys> TilePainted;          // terrain / height: once per triangle per stroke
+  public event Action<double,double,double?> Placed;                     // point tools: x, z, rotation from a drag (null = none)
+  public event Action<double,double,double,double> LineDrawn;            // fence: from, to
+  public event Action<List<Vec3>> RoadFinished;                           // road: clicked points (Enter / double click)
+  public event Action<double,double> Erased;                             // erase: centre (drag repeats)
+  public event Action StrokeEnded;
+  public readonly List<Vec3> RoadPoints=new List<Vec3>();
+  bool stroking; Point strokeStart; double strokeX,strokeZ; Point mouse;
+  readonly HashSet<TileKey> strokeTiles=new HashSet<TileKey>();
   double centerX, centerZ, scale=0.02; // pixels per metre
   Point dragStart; double dragCX, dragCZ; bool dragging;
   int minHeight, maxHeight;
@@ -107,9 +121,32 @@ namespace AnyMapMaker {
      if(scale>0.6&&m.Layer!="junctions")TextRenderer.DrawText(g,m.Label,Font,new Point((int)p.X+6,(int)p.Y-6),Color.FromArgb(230,235,243));
     }
    }
+   DrawPreview(g);
    DrawOutline(g,Hovered,Color.FromArgb(160,255,255,255),1);
    DrawOutline(g,Selected,Color.FromArgb(255,214,102),2.5f);
    DrawScaleBar(g);
+  }
+  void DrawPreview(Graphics g){
+   using(var pen=new Pen(Color.FromArgb(255,214,102),2){DashStyle=DashStyle.Dash}){
+    if(Tool==Tool.Road&&RoadPoints.Count>0){
+     var pts=new List<PointF>();foreach(var p in RoadPoints)pts.Add(ToScreen(p.X,p.Z));pts.Add(mouse);
+     if(pts.Count>1)g.DrawLines(pen,pts.ToArray());
+     foreach(var p in pts)g.FillEllipse(Brushes.Gold,p.X-3,p.Y-3,6,6);
+    }
+    if(stroking&&(Tool==Tool.Fence||Tool==Tool.Prop||Tool==Tool.Building||Tool==Tool.Loot)){
+     var a=ToScreen(strokeX,strokeZ);g.DrawLine(pen,a,mouse);
+    }
+   }
+   if(Tool==Tool.Erase){
+    float r=(float)Math.Max(3,EraseRadius*scale);
+    using(var pen=new Pen(Color.FromArgb(255,90,100),1.5f))g.DrawEllipse(pen,mouse.X-r,mouse.Y-r,r*2,r*2);
+   }
+  }
+  public void ClearRoad(){RoadPoints.Clear();Invalidate();}
+  public void FinishRoad(){if(RoadPoints.Count>=2&&RoadFinished!=null)RoadFinished(new List<Vec3>(RoadPoints));RoadPoints.Clear();Invalidate();}
+  void PaintAt(Point p,MouseButtons b){
+   double x,z;ToWorld(p,out x,out z);var k=Grid.At(x,z);
+   if(strokeTiles.Add(k)&&TilePainted!=null)TilePainted(k,b,ModifierKeys);
   }
   bool OnScreen(PointF[] sp){foreach(var p in sp)if(p.X>-50&&p.Y>-50&&p.X<Width+50&&p.Y<Height+50)return true;return false;}
   void DrawOutline(Graphics g,TileKey? key,Color color,float width){
@@ -131,13 +168,42 @@ namespace AnyMapMaker {
    if(e.Button==MouseButtons.Right||e.Button==MouseButtons.Middle){dragging=true;dragStart=e.Location;dragCX=centerX;dragCZ=centerZ;Cursor=Cursors.SizeAll;}
    else if(e.Button==MouseButtons.Left&&Pack!=null){
     double x,z;ToWorld(e.Location,out x,out z);var k=Grid.At(x,z);
-    Selected=Pack.Get(k)!=null?(TileKey?)k:null;Invalidate();
-    if(SelectionChanged!=null)SelectionChanged(Selected);
+    if(Tool==Tool.Select||Tool==Tool.Terrain||Tool==Tool.Height){
+     Selected=Pack.Get(k)!=null?(TileKey?)k:null;Invalidate();
+     if(SelectionChanged!=null)SelectionChanged(Selected);
+    }
+    stroking=true;strokeStart=e.Location;strokeX=x;strokeZ=z;strokeTiles.Clear();
+    if(Tool==Tool.Terrain||Tool==Tool.Height)PaintAt(e.Location,e.Button);
+    else if(Tool==Tool.Erase&&Erased!=null)Erased(x,z);
+    else if(Tool==Tool.Road){RoadPoints.Add(new Vec3(x,0,z));Invalidate();}
    }
   }
-  protected override void OnMouseUp(MouseEventArgs e){dragging=false;Cursor=Cursors.Default;}
+  protected override void OnMouseDoubleClick(MouseEventArgs e){if(Tool==Tool.Road&&e.Button==MouseButtons.Left)FinishRoad();}
+  protected override bool IsInputKey(Keys k){return k==Keys.Enter||k==Keys.Escape||k==Keys.Back||base.IsInputKey(k);}
+  protected override void OnKeyDown(KeyEventArgs e){
+   if(Tool!=Tool.Road)return;
+   if(e.KeyCode==Keys.Enter)FinishRoad();
+   else if(e.KeyCode==Keys.Escape)ClearRoad();
+   else if(e.KeyCode==Keys.Back&&RoadPoints.Count>0){RoadPoints.RemoveAt(RoadPoints.Count-1);Invalidate();}
+  }
+  protected override void OnMouseUp(MouseEventArgs e){
+   dragging=false;Cursor=Cursors.Default;
+   if(!stroking||e.Button!=MouseButtons.Left)return;
+   stroking=false;
+   double x,z;ToWorld(e.Location,out x,out z);
+   bool moved=Math.Abs(e.X-strokeStart.X)+Math.Abs(e.Y-strokeStart.Y)>6;
+   if(Tool==Tool.Fence&&moved&&LineDrawn!=null)LineDrawn(strokeX,strokeZ,x,z);
+   else if((Tool==Tool.Prop||Tool==Tool.Building||Tool==Tool.Loot||Tool==Tool.Enemy)&&Placed!=null)
+    Placed(strokeX,strokeZ,moved?(double?)MapEditor.Angle(x-strokeX,z-strokeZ):null);
+   if(StrokeEnded!=null)StrokeEnded();
+   Invalidate();
+  }
   protected override void OnMouseMove(MouseEventArgs e){
+   mouse=e.Location;
    if(dragging){centerX=dragCX-(e.X-dragStart.X)/scale;centerZ=dragCZ+(e.Y-dragStart.Y)/scale;Invalidate();return;}
+   if(stroking&&(Tool==Tool.Terrain||Tool==Tool.Height))PaintAt(e.Location,MouseButtons.Left);
+   if(stroking&&Tool==Tool.Erase&&Erased!=null){double ex,ez;ToWorld(e.Location,out ex,out ez);Erased(ex,ez);}
+   if(Tool!=Tool.Select)Invalidate();
    if(Pack==null)return;
    double x,z;ToWorld(e.Location,out x,out z);var k=Grid.At(x,z);
    if(Hovered==null||!Hovered.Value.Equals(k)){Hovered=k;Invalidate();}
