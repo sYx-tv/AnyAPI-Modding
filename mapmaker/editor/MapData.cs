@@ -30,7 +30,8 @@ namespace AnyMapMaker {
   public bool Equals(TileKey o){return X==o.X&&Z==o.Z&&T==o.T;}
   public override bool Equals(object o){return o is TileKey&&Equals((TileKey)o);}
   public override int GetHashCode(){return (X*73856093)^(Z*19349663)^(T*83492791);}
-  public string FileName {get{return "tile_"+X+"_"+Z+"_"+T+".json";}}
+  // The game pads x and z to three digits (tile_091_111_0.json).
+  public string FileName {get{return "tile_"+X.ToString("D3")+"_"+Z.ToString("D3")+"_"+T+".json";}}
   static readonly Regex Name=new Regex(@"^tile_(-?\d+)_(-?\d+)_(\d)\.json$",RegexOptions.IgnoreCase);
   public static bool TryParse(string fileName,out TileKey key){
    key=new TileKey();var m=Name.Match(fileName);if(!m.Success)return false;

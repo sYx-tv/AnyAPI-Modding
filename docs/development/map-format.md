@@ -1,37 +1,41 @@
 # Custom maps: how the world is stored, and the map pack format
 
 Research notes for the [MapEditor mod](../mods/map-editor.md) and the optional Map Maker viewer (`mapmaker/`), for Anymaker 0.1.24 (Steam 25826614).
-Sources are the regenerated SDK reference (types, fields and natives) and `native/generate_road_graph.py`,
-whose maths is validated against the shipped roads. Items marked **to confirm** wait on a
-`mapmaker/tools/survey_world_data.py` run against the installed game.
+Sources are the regenerated SDK reference (types, fields and natives), `native/generate_road_graph.py`, and a
+read of the installed game's `rom/data` on 2026-10-13. The grid maths below put all 136,159 placed points
+(building spots, props, loot) inside their own tile.
 
 ## How the game builds its world
 
 The world is a grid of triangles. There is no heightmap and no single world file.
 
-- **One JSON file per triangle**: `rom/data/tiles/0/tile_<x>_<z>_<t>.json`. Missing files are open
-  ocean (**to confirm**).
+- **One JSON file per triangle**: `rom/data/tiles/0/tile_<x>_<z>_<t>.json` (x and z zero-padded to three
+  digits, e.g. `tile_091_111_0.json`). The stock world has 2,550 tiles with x 0-148 and z 0-140; everything
+  without a file is open ocean. `rom/data/tile_scene.json` lists streaming chunks (`bounds_center`, `bounds_radius`).
 - **Grid maths.** Cell `(x, z)` is the parallelogram spanned by `(512, 0, 0)` and `(256, 0, 256·√3)`
   (globals `g_tile_grid_x_dir`, `g_tile_grid_y_dir`). `t = 0` is its lower-left triangle and `t = 1` the
   upper-right one. A tile's origin is
   `(512x + 256z + (t ? 512 : 256), height · 32, 256·√3 · (z + (t ? 2/3 : 1/3)))`.
-- **Terrain** comes from a library of authored terrain pieces (`environment_tile_definition`: a mesh,
-  three corner heights and three edge identifiers). Each tile names its piece (`definition_name`), an
-  `orientation` (0-2) and a `height` in 32 m steps. Neighbouring pieces must have matching edges; the
+- **Terrain** comes from a library of 272 authored terrain pieces in `rom/data/tile_definitions.json`
+  (`name`, `meshes` per LOD, `edge_a/b/c` edge identifiers; e.g. `tile_flat_a`, `tile_mountain_d_in`,
+  `shallow_k`, `shipyard_d`). Each tile names its piece (`definition_name`), an `orientation` (0-2, omitted when 0)
+  and a `height` in 32 m steps (-6 to 12 in the stock world, omitted when 0). Neighbouring pieces must have matching edges; the
   developers' editor has a "generate matching tiles" helper for this (`chunk_edit_panel.generate_matching_tiles`).
-- **Roads and paths** are cubic Bézier links (`junction_links`: `pos_a`, `pos_b`, `dir_a`, `dir_b`,
-  `type`) in world coordinates, joined by **junctions** (`junctions`: `definition_name`, tile-local
-  `position`, `normal`, `rotation`) whose shapes come from `tile_junction_definitions.json`. Road meshes
-  are generated in game from the link type (`path_link_definition`).
-- **Placed things** per tile (in-memory names; the JSON keys are **to confirm**):
-  - `prop_spawn_zones`: prop id, position, rotation. Props (light poles, fences, barriers...) come from
-    the prop definitions (`prop_definition`: mesh, mass, zones). The developers' prop editor has a
-    fence mode that repeats a prop along a line.
-  - `spawn_zones`: building spots (position, rotation, `size`, `foundation`, `filter`). At world creation,
-    `server_scene.world_data.build` assigns a building to each spot from the seed, so houses are the
-    game's own buildings placed on spots.
-  - `loot_spawn_zones`, `actor_spawn_zones` (with patrol waypoints), `dead_drop_spawn_zones`.
-  - `vegetation_positions` (trees, **to confirm**).
+- **Roads, railways and paths** are cubic Bézier links (`junction_links`: `pos_a`, `pos_b`, `dir_a`, `dir_b`,
+  `normal_a`, `normal_b`, `type`) in world coordinates. Types: `road`, `road_b`, `road_c`, `road_d`, `train_a`,
+  `train_b`, `train_flyover_a`, `train_flyover_b`. They join at **junctions** (`junctions`: `definition_name`,
+  tile-local `position`, `normal`, `rotation`) whose shapes (crossings, T-junctions, flyovers, tank traps...) are
+  the 220 entries of `tile_junction_definitions.json`; its `path_link_definitions` give each link type's mesh.
+- **Placed things** per tile (positions are world coordinates, rotations `rot` in radians):
+  - `prop_spawn_zones`: `def`, `pos`, `rot`. 122,000 props from the 136 in `rom/data/prop_definitions.json`
+    (`name`, mesh, collision `zones`, `mass`). Fences are rows of posts and panels (`fence_post_a`,
+    `fence_panel_d`...); also barriers, containers, pallets, dividers, pipes.
+  - `spawn_zones`: building spots with `pos`, `rot`, `size` (1-5), optional `foundation` (one of 52
+    `spawn_zone_foundation_definitions`, e.g. `2a`) and `filter`: `house`, `town`, `industrial`, `farm`,
+    `roadside`, `office`, `research`, `gas_station`, `sawmill`. At world creation, `server_scene.world_data.build`
+    picks a building for each spot from the seed; buildings live in `rom/data/buildings/*.data` + `.meta`.
+  - `loot_spawn_zones` (`pos`, `rot`, rarely `def`), `actor_spawn_zones` (`pos`, patrol `waypoints`),
+    `dead_drop_spawn_zones` (`pos`, `rot`), and `nearest_ocean_pos`.
 - **Loading.** Tiles stream in around players on worker threads (`*_environment_tile_task.execute`).
   Every client loads tiles from its own install, so all players need the same map.
 - **Saves.** A save stores per-tile vehicles, actors, floor items, props and so on

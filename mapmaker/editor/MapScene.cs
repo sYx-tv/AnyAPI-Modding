@@ -59,8 +59,8 @@ namespace AnyMapMaker {
       Vec3 p;if(!Vec3.TryRead(Either(o,"position","pos"),out p))continue;
       string layer=kv.Key=="junctions"||kv.Key=="pathway_junctions"?"junctions":Find(kv.Key).Key;
       var m=new Marker{Tile=tile.Key,Layer=layer,Position=p,Source=o,
-       Label=o.Str("definition_id")??o.Str("definition_name")??o.Str("definition")??o.Str("filter")??o.Str("foundation")??o.Str("type")??kv.Key};
-      if(o.Has("rotation_y")){m.RotationY=o.Num("rotation_y",0);m.HasRotation=true;}else if(o.Has("rotation")){m.RotationY=o.Num("rotation",0);m.HasRotation=true;}
+       Label=o.Str("def")??o.Str("definition_id")??o.Str("definition_name")??o.Str("definition")??o.Str("filter")??o.Str("foundation")??o.Str("type")??kv.Key};
+      foreach(var rk in new[]{"rot","rotation_y","rotation"})if(o.Has(rk)){m.RotationY=o.Num(rk,0);m.HasRotation=true;break;}
       raw.Add(m);
      }
     }
