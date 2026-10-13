@@ -1,8 +1,8 @@
 # CustomGame
 
 > CustomGame hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.24 / Steam build 25826614 and turns itself off on any other build.
-> CustomGame 0.1.0 requires AnyAPI 0.36.0 or newer on that build; install it from the manager.
+> so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
+> CustomGame 0.1.0 requires AnyAPI 0.37.0 or newer on that build; install it from the manager.
 
 CustomGame adds a **Custom Game** button to the New Game screen. It opens a settings page; **Start game** then
 creates a normal Career, Creative (dome) or Sandbox world with your settings applied. The settings are saved with
@@ -85,5 +85,5 @@ The files are plain `key=value` text. Hand edits snap to the nearest menu step.
   protects you while you are inside it.
 - A world started with a higher tier skips the loot of the earlier tiers, the same way finishing bunkers does.
 - With a fixed day speed or start time, the game's developer time controls are overridden.
-- The field offsets come from the 0.1.24 SDK reference; after a game update, re-check them as well as the
+- The field offsets come from the 0.1.25 SDK reference; after a game update, re-check them as well as the
   bindings in `native/customgame_bindings.h`.

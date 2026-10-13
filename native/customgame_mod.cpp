@@ -18,7 +18,7 @@
 // - Starting loot tier calls server_scene.set_loot_level once, on the first tick of a new world, the way finishing a
 //   bunker does.
 //
-// EXPERIMENTAL. Uses the experimental SDK (customgame_bindings.h): Anymaker 0.1.24 / Steam build 25826614 only.
+// EXPERIMENTAL. Uses the experimental SDK (customgame_bindings.h): Anymaker 0.1.25 / Steam build 25904830 only.
 // First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
@@ -45,7 +45,7 @@ constexpr const char* kModId = "customgame";
 constexpr int kPresetCount = 3;
 constexpr ULONGLONG kPendingLifetimeMs = 180000;   // a Start game click must reach world generation within this
 
-// Field offsets (0.1.24 reference layouts, metadata; server_scene tick verified from server.tick's increment).
+// Field offsets (0.1.25 reference layouts, unchanged since 0.1.24, metadata; server_scene tick verified from server.tick's increment).
 namespace off {
 constexpr ptrdiff_t scene_tick = 0x40;                     // s32, +1 per server tick (reference label: m_version)
 constexpr ptrdiff_t scene_seed = 0x48 + 0x18;              // m_world_seed: master property_s32, _m_value
