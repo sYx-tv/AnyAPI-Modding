@@ -23,6 +23,7 @@ The page remembers the last settings you started with. The **Presets** tab saves
 | | Day cycle speed | Normal, Frozen, 0.25x to 8x | Normal keeps the game's rules (Sandbox time stands still) |
 | | Start time | Game default, 00:00 to 23:00 | |
 | | Starting loot tier | 1 to 5 | Set once when the world starts; finishing bunkers still raises it. Sandbox has no loot |
+| | Map | Normal world, installed map packs | Shown when the CustomMap mod is installed. The pack is saved with the world |
 | | Max players | 2 to 20 | The game's own limit is 6. Kept in place even when the multiplayer host screen sets its own count; above 6 is untested |
 | Survival | Hunger, thirst, stamina drain, clothes soak speed | Off, 25% to 400% | Off means it never happens |
 | | Stamina recovery, clothes dry speed | 25% to 400% | |
@@ -75,6 +76,9 @@ The files are plain `key=value` text. Hand edits snap to the nearest menu step.
   mode reading Career for the duration of the call.
 - Tile loading (`environment_tile_task.integrate`) also skips spawn zones in Sandbox, so it is run the same way.
 - Bunkers in Sandbox run `dungeon_manager.generate` and the bunker tiles' creature and loot generation as Career.
+- The Map setting uses the CustomMap mod's `custommap.maps` service
+  ([`custommap_v1.h`](../../sdk/include/custommap_v1.h)). The pack is selected when **Start game** is clicked and
+  again before each world loads its tiles, and the normal world is selected for every other world.
 - Every changed game value is written to `anymaker_modding.log` as `name default -> new` when a world starts.
 
 ## Known limits

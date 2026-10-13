@@ -28,11 +28,12 @@ int main() {
 
     // Files round-trip, ignore junk and unknown keys, and snap hand edits.
     WorldFile w; w.config = c; w.seed = -123456; w.tier_applied = true; w.config.v[kJoints] = kUnbreakable; w.config.v[kStartHour] = 7;
+    w.map = "My Island 2";
     WorldFile back;
     assert(parse(serialize(w, true), back));
-    assert(back.seed == -123456 && back.tier_applied && back.config[kJoints] == kUnbreakable && back.config[kStartHour] == 7);
+    assert(back.seed == -123456 && back.tier_applied && back.config[kJoints] == kUnbreakable && back.config[kStartHour] == 7 && back.map == "My Island 2");
     for (int i = 0; i < kCount; ++i) assert(back.config[i] == w.config[i]);
-    assert(parse("# x\r\nfoo=3\nhunger=abc\nthirst=190\r\n", back) && back.config[kThirst] == 200 && back.config[kHunger] == 100 && back.seed == 0);
+    assert(parse("# x\r\nfoo=3\nhunger=abc\nthirst=190\r\n", back) && back.config[kThirst] == 200 && back.config[kHunger] == 100 && back.seed == 0 && back.map.empty());
     assert(!parse("nothing here\n", back));
     WorldFile preset; preset.config = c;
     assert(serialize(preset, false).find("seed=") == std::string::npos);

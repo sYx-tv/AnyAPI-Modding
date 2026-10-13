@@ -138,11 +138,13 @@ inline void step(Config& c, int id, int delta) {
 inline void snap(Config& c) { for (int i = 0; i < kCount; ++i) c.v[i] = kSettings[i].values[value_index(i, c.v[i])]; }
 
 // ------------------------------------------------------------------ file format: "key=value" lines
-// Extra keys: "seed", "tier_applied" (world files only). Unknown keys are ignored.
+// Extra keys: "seed", "tier_applied" (world files only) and "map" (a CustomMap pack name, empty for the normal world).
+// Unknown keys are ignored.
 struct WorldFile {
     Config config;
     int32_t seed = 0;
     bool tier_applied = false;
+    std::string map;
 };
 inline std::string serialize(const WorldFile& w, bool world) {
     std::string out = "# CustomGame settings. Edit with care: values snap to the nearest menu step.\n";
@@ -151,6 +153,7 @@ inline std::string serialize(const WorldFile& w, bool world) {
         snprintf(line, sizeof line, "seed=%d\ntier_applied=%d\n", int(w.seed), w.tier_applied ? 1 : 0);
         out += line;
     }
+    out += "map=" + w.map + "\n";
     for (int i = 0; i < kCount; ++i) {
         snprintf(line, sizeof line, "%s=%.17g\n", kSettings[i].key, w.config.v[i]);
         out += line;
@@ -171,6 +174,7 @@ inline bool parse(const std::string& text, WorldFile& w) {
         size_t eq = line.find('=');
         if (eq == std::string::npos) continue;
         std::string key = line.substr(0, eq), value = line.substr(eq + 1);
+        if (key == "map") { w.map = value; continue; }
         char* stop = nullptr;
         double number = std::strtod(value.c_str(), &stop);
         if (stop == value.c_str() || !std::isfinite(number)) continue;

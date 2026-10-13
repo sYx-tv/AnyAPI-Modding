@@ -23,6 +23,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
+#include "custommap_v1.h"
 #include "anyapi_gpu_draw_v1.h"
 #include "anyapi_experimental.hpp"
 #include "customgame_bindings.h"
@@ -63,6 +64,7 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 std::atomic<bool> g_stop{false}, g_ready{false};
 std::filesystem::path g_dir;   // <mods>/CustomGame
+std::atomic<const CustomMapsV1*> g_maps{nullptr};   // the CustomMap mod's map packs, when it is installed
 
 void log(int level, const char* fmt, ...) {
     if (!host.log) return;
@@ -241,9 +243,27 @@ anymaker::cell_hook h_dungeon_generate, h_dungeon_creatures, h_dungeon_loot;
 // ------------------------------------------------------------------ menu -> world hand-off
 std::mutex g_pending_mutex;
 Config g_pending;
+std::string g_pending_map;        // the map pack selected for the pending world, "" for the normal world
 ULONGLONG g_pending_at = 0;       // 0: nothing pending
 std::atomic<int> g_start_request{-1};
 std::atomic<ULONGLONG> g_new_game_seen{0};
+
+// Points CustomMap at a world's map pack ("" = the normal world) before the game generates or streams its tiles.
+// Returns the pack actually in use: "" when it is missing or CustomMap is not installed.
+std::string select_map(const std::string& name, const char* why) {
+    const CustomMapsV1* maps = g_maps.load();
+    if (!maps || !maps->select) {
+        if (!name.empty()) log(1, "%s: map pack \"%s\" needs the CustomMap mod; using the normal world", why, name.c_str());
+        return {};
+    }
+    if (maps->select(name.c_str())) {
+        if (!name.empty()) log(0, "%s: map pack \"%s\" selected", why, name.c_str());
+        return name;
+    }
+    log(1, "%s: map pack \"%s\" is missing or could not be loaded; using the normal world", why, name.c_str());
+    maps->select("");
+    return {};
+}
 
 void hk_update_ui_new_game(void* fui, const double* dt, void* settings, void* ui_data) {
     reinterpret_cast<ui_new_game_t>(h_ui.original)(fui, dt, settings, ui_data);
@@ -279,11 +299,13 @@ void hk_generate_new_game(uint8_t* scene) {
     auto original = reinterpret_cast<scene_fn_t>(h_generate.original);
     bool custom = false;
     Config cfg;
+    std::string map;
     {
         std::lock_guard lock(g_pending_mutex);
-        if (g_pending_at && GetTickCount64() - g_pending_at < kPendingLifetimeMs) { custom = true; cfg = g_pending; }
+        if (g_pending_at && GetTickCount64() - g_pending_at < kPendingLifetimeMs) { custom = true; cfg = g_pending; map = g_pending_map; }
         g_pending_at = 0;
     }
+    map = select_map(map, "new world");   // a native New Game button gets the normal world
     apply_globals(custom ? &cfg : nullptr);   // world generation already spawns loot and enemies
     g_sandbox_spawns = custom && sandbox_spawns(cfg);
     g_sandbox_bunkers = custom && sandbox_bunkers(cfg);
@@ -297,6 +319,7 @@ void hk_generate_new_game(uint8_t* scene) {
     if (custom) {
         g_generated_world.config = cfg;
         g_generated_world.seed = seed;
+        g_generated_world.map = map;
         bool saved = write_text(world_path(seed), serialize(g_generated_world, true));
         log(saved ? 0 : 2, "new custom world, seed %d: settings %s %ls", seed, saved ? "saved to" : "could NOT be saved to",
             world_path(seed).c_str());
@@ -348,7 +371,9 @@ void server_tick(uint8_t* scene, uint8_t* server, bool loading) {
             WorldFile w;
             s.active = load_config(world_path(seed), w);
             if (s.active) s.world = w;
-            log(0, "world seed %d: %s", seed, s.active ? "CustomGame settings found" : "no CustomGame settings, normal rules");
+            log(0, "world seed %d (after %d loading ticks): %s", seed, s.waits,
+                s.active ? "CustomGame settings found" : "no CustomGame settings, normal rules");
+            select_map(s.active ? s.world.map : std::string(), "loaded world");
         }
         s.settled = true;
         s.tier_pending = s.active && s.world.config[kStartTier] > 1 && !s.world.tier_applied;
@@ -492,7 +517,7 @@ void hk_particles_create(void* particles) {
 
 // ------------------------------------------------------------------ the page
 struct Rect { float x, y, w, h; bool in(float px, float py) const { return px >= x && py >= y && px < x + w && py < y + h; } };
-enum HitKind { kHitNone, kHitOpen, kHitTab, kHitMinus, kHitPlus, kHitValue, kHitBack, kHitReset, kHitStart, kHitSave, kHitLoad, kHitScroll };
+enum HitKind { kHitNone, kHitOpen, kHitTab, kHitMinus, kHitPlus, kHitValue, kHitBack, kHitReset, kHitStart, kHitSave, kHitLoad, kHitScroll, kHitMap };
 struct Hit { Rect r; HitKind kind; int arg; };
 
 std::mutex g_ui_mutex;   // render and input threads
@@ -500,6 +525,8 @@ bool g_open = false;
 int g_tab = 0;           // 0..kCategoryCount-1, kCategoryCount = presets
 float g_scroll = 0, g_scroll_max = 0;
 Config g_edit;
+std::string g_edit_map;                  // "" = the normal world
+std::vector<std::string> g_map_names;    // installed CustomMap packs, read when the page opens
 std::vector<Hit> g_hits;
 float g_mouse_x = -1, g_mouse_y = -1;
 uint32_t g_frame_w = 1920, g_frame_h = 1080;
@@ -516,6 +543,24 @@ void refresh_presets() {
         g_preset_exists[i] = load_config(preset_path(i), w);
         g_preset_summary[i] = g_preset_exists[i] ? summary(w.config) : "Empty";
     }
+}
+void refresh_maps() {
+    g_map_names.clear();
+    const CustomMapsV1* maps = g_maps.load();
+    if (!maps || !maps->count || !maps->name) return;
+    uint32_t n = maps->count();
+    char name[260];
+    for (uint32_t i = 0; i < n && i < 256; ++i)
+        if (maps->name(i, name, sizeof name) && name[0]) g_map_names.push_back(name);
+}
+bool map_row_shown() { return g_maps.load() != nullptr; }
+std::string map_label(const std::string& name) { return name.empty() ? "Normal world" : name; }
+void step_map(int delta) {
+    // "" (the normal world) first, then the packs; a pack that disappeared counts as the normal world.
+    int count = int(g_map_names.size()) + 1, at = 0;
+    for (int i = 0; i < int(g_map_names.size()); ++i) if (g_map_names[i] == g_edit_map) at = i + 1;
+    at = std::clamp(at + delta, 0, count - 1);
+    g_edit_map = at ? g_map_names[at - 1] : std::string();
 }
 void toast(const std::string& text) { g_toast = text; g_toast_until = GetTickCount64() + 2200; }
 
@@ -581,6 +626,7 @@ void draw_page(float W, float H, float s) {
         if (sel) rect({r.x, r.y, 4 * s, r.h}, kAccent);
         int changed = 0;
         if (t < kCategoryCount) for (int i = 0; i < kCount; ++i) changed += kSettings[i].category == t && i != kMode && !g_edit.is_default(i);
+        if (t == kGeneral && map_row_shown() && !g_edit_map.empty()) ++changed;
         std::string label = t < kCategoryCount ? kCategoryNames[t] : "Presets";
         if (changed) label += "  \xE2\x80\xA2 " + std::to_string(changed);
         text({r.x + 16 * s, r.y, r.w - 20 * s, r.h}, label, 18 * s, sel ? kAccent : kText, ANY_GPU_VCENTER | ANY_GPU_NOWRAP | ANY_GPU_BOLD);
@@ -620,6 +666,35 @@ void draw_page(float W, float H, float s) {
                 g_hits.push_back({minus, kHitMinus, i});
                 g_hits.push_back({plus, kHitPlus, i});
                 g_hits.push_back({value, kHitValue, i});
+            }
+            y += row_h + gap; content += row_h + gap;
+        }
+        if (g_tab == kGeneral && map_row_shown()) {
+            Rect r{list.x, y, list.w, row_h};
+            if (r.y + r.h > list.y && r.y < list.y + list.h) {
+                bool changed = !g_edit_map.empty();
+                rect(r, hovered(r) ? kRowHover : kRow, 6 * s);
+                if (changed) rect({r.x, r.y, 4 * s, r.h}, kAccent);
+                float stepper_w = std::min(360 * s, r.w * 0.45f);
+                std::string help = g_map_names.empty() ? "No map packs installed (CustomMap reads <game>\\AnyAPI and Modding\\maps)."
+                                                       : "Play on a custom map pack instead of the normal world. New worlds only.";
+                text({r.x + 18 * s, r.y + 8 * s, r.w - stepper_w - 30 * s, 28 * s}, "Map", 18 * s, kText, ANY_GPU_VCENTER | ANY_GPU_NOWRAP | ANY_GPU_BOLD);
+                text({r.x + 18 * s, r.y + 36 * s, r.w - stepper_w - 30 * s, 24 * s}, help, 13.5f * s, kMuted, ANY_GPU_VCENTER | ANY_GPU_NOWRAP);
+                Rect sr{r.x + r.w - stepper_w - 14 * s, r.y + (row_h - 42 * s) / 2, stepper_w, 42 * s};
+                Rect minus{sr.x, sr.y, 42 * s, sr.h}, plus{sr.x + sr.w - 42 * s, sr.y, 42 * s, sr.h};
+                Rect value{sr.x + 46 * s, sr.y, sr.w - 92 * s, sr.h};
+                int at = 0;
+                for (int k = 0; k < int(g_map_names.size()); ++k) if (g_map_names[k] == g_edit_map) at = k + 1;
+                bool can_down = at > 0, can_up = at < int(g_map_names.size());
+                rect(minus, hovered(minus) && can_down ? 0xff36404c : kButton, 6 * s, can_down ? 1 : 0.4f);
+                rect(plus, hovered(plus) && can_up ? 0xff36404c : kButton, 6 * s, can_up ? 1 : 0.4f);
+                text(minus, "\xE2\x97\x80", 16 * s, can_down ? kText : kMuted, ANY_GPU_CENTER | ANY_GPU_VCENTER | ANY_GPU_NOWRAP);
+                text(plus, "\xE2\x96\xB6", 16 * s, can_up ? kText : kMuted, ANY_GPU_CENTER | ANY_GPU_VCENTER | ANY_GPU_NOWRAP);
+                rect(value, 0xff12161b, 6 * s);
+                text(value, map_label(g_edit_map), 17 * s, changed ? kAccent : kText, ANY_GPU_CENTER | ANY_GPU_VCENTER | ANY_GPU_NOWRAP | ANY_GPU_BOLD);
+                g_hits.push_back({minus, kHitMap, -1});
+                g_hits.push_back({plus, kHitMap, +1});
+                g_hits.push_back({value, kHitMap, 0});
             }
             y += row_h + gap; content += row_h + gap;
         }
@@ -684,8 +759,10 @@ const Hit* hit_at() {
 void open_page() {
     g_open = true; g_scroll = 0;
     WorldFile w;
-    if (load_config(last_path(), w)) g_edit = w.config;
+    if (load_config(last_path(), w)) { g_edit = w.config; g_edit_map = w.map; }
     refresh_presets();
+    refresh_maps();
+    if (std::find(g_map_names.begin(), g_map_names.end(), g_edit_map) == g_map_names.end()) g_edit_map.clear();
     if (host.capture_input) host.capture_input(1);
     log(0, "Custom Game page opened");
 }
@@ -698,10 +775,11 @@ void click(const Hit& h, int button) {
     case kHitMinus: step(g_edit, h.arg, -1); break;
     case kHitPlus: step(g_edit, h.arg, +1); break;
     case kHitValue: step(g_edit, h.arg, button == 2 ? -1 : +1); break;
+    case kHitMap: step_map(h.arg ? h.arg : button == 2 ? -1 : +1); break;
     case kHitBack: close_page(); break;
-    case kHitReset: { int mode = g_edit.mode(); g_edit.reset(); g_edit.v[kMode] = mode; toast("Settings reset to the game's defaults"); break; }
+    case kHitReset: { int mode = g_edit.mode(); g_edit.reset(); g_edit.v[kMode] = mode; g_edit_map.clear(); toast("Settings reset to the game's defaults"); break; }
     case kHitSave: {
-        WorldFile w; w.config = g_edit;
+        WorldFile w; w.config = g_edit; w.map = g_edit_map;
         bool ok = write_text(preset_path(h.arg), serialize(w, false));
         refresh_presets();
         toast(ok ? "Saved to preset " + std::to_string(h.arg + 1) : "Could not save the preset");
@@ -709,18 +787,19 @@ void click(const Hit& h, int button) {
     }
     case kHitLoad: {
         WorldFile w;
-        if (load_config(preset_path(h.arg), w)) { g_edit = w.config; toast("Loaded preset " + std::to_string(h.arg + 1)); }
+        if (load_config(preset_path(h.arg), w)) { g_edit = w.config; g_edit_map = w.map; toast("Loaded preset " + std::to_string(h.arg + 1)); }
         break;
     }
     case kHitStart: {
-        WorldFile w; w.config = g_edit;
+        WorldFile w; w.config = g_edit; w.map = g_edit_map;
         write_text(last_path(), serialize(w, false));
+        std::string map = select_map(g_edit_map, "Start pressed");   // before the game starts generating the world
         {
             std::lock_guard lock(g_pending_mutex);
-            g_pending = g_edit; g_pending_at = GetTickCount64();
+            g_pending = g_edit; g_pending_map = map; g_pending_at = GetTickCount64();
         }
         g_start_request = g_edit.mode();
-        log(0, "Start pressed: %s", summary(g_edit).c_str());
+        log(0, "Start pressed: %s%s%s", summary(g_edit).c_str(), map.empty() ? "" : ", map ", map.c_str());
         close_page();
         break;
     }
@@ -850,6 +929,11 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
         gpu = nullptr; log(2, "GPU drawing unavailable: the Custom Game button cannot be shown");
     } else if (!services->input_filter || !services->input_filter(input, nullptr, 40)) {
         log(2, "input filter unavailable: the Custom Game page cannot take clicks");
+    }
+    if (auto* maps = static_cast<const CustomMapsV1*>(services->query("custommap.maps", 1));
+        maps && maps->struct_size >= sizeof(CustomMapsV1) && maps->version == 1 && maps->count && maps->name && maps->select) {
+        g_maps = maps;
+        log(0, "CustomMap found: the Map setting is available");
     }
     std::thread(install).detach();   // resolving scans game memory; keep it off the loader and frame threads
 }
