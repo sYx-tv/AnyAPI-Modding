@@ -199,6 +199,9 @@ function(anyapi_version_resource target product)
   elseif(target STREQUAL "GpsPart")
     set(ANYAPI_VERSION_COMMA "1,0,1,0")
     set(ANYAPI_VERSION_TEXT "1.0.1")
+  elseif(target STREQUAL "CustomMap")
+    set(ANYAPI_VERSION_COMMA "0,1,0,0")
+    set(ANYAPI_VERSION_TEXT "0.1.0")
   elseif(target STREQUAL "ThirdPerson")
     set(ANYAPI_VERSION_COMMA "0,1,2,0")
     set(ANYAPI_VERSION_TEXT "0.1.2")
@@ -476,6 +479,12 @@ add_library(ThirdPerson SHARED thirdperson_mod.cpp)
 target_include_directories(ThirdPerson PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
 target_compile_options(ThirdPerson PRIVATE /W3 /EHsc /utf-8)
 anyapi_version_resource(ThirdPerson ThirdPerson)
+
+# CustomMap: plays worlds built from Map Maker map packs (chosen on the Custom Game page), through the experimental SDK.
+add_library(CustomMap SHARED custommap_mod.cpp)
+target_include_directories(CustomMap PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
+target_compile_options(CustomMap PRIVATE /W3 /EHsc /utf-8)
+anyapi_version_resource(CustomMap CustomMap)
 
 # Public experimental SDK: compile all generated layouts and opt-in examples.
 add_executable(experimental_sdk_test tests/experimental_sdk_test.cpp)
