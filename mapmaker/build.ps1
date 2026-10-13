@@ -9,6 +9,8 @@ $refs=@('System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Form
 $compilerArgs=@('/nologo','/target:winexe','/platform:x64','/optimize+',('/out:'+$exe))
 $compilerArgs += $refs | ForEach-Object {'/reference:'+$_}
 $compilerArgs += Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'editor') -Filter '*.cs' | ForEach-Object {$_.FullName}
+# The manager's theme and buttons, so the Map Maker looks like the AnyAPI Manager.
+$compilerArgs += @('Theme.cs','ModernButton.cs') | ForEach-Object {Join-Path $PSScriptRoot "..\manager\$_"}
 & $compiler @compilerArgs
 if($LASTEXITCODE -ne 0){throw 'Map Maker compilation failed.'}
 Write-Output $exe

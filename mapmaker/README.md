@@ -3,7 +3,7 @@
 A Windows map editor for Anymaker. It saves map packs into the game folder; the
 [CustomMap mod](../docs/mods/custom-map.md) plays them (pick the map on CustomGame's Custom Game page).
 
-**Status: 0.2.2.** Open the stock world, a map pack, or a new blank island, then edit it with the tools on the left:
+**Status: 0.3.0.** It looks like the AnyAPI Manager (it compiles in the manager's `Theme.cs` and `ModernButton.cs`) and follows the Windows display scale. Start with New island, Open (lists your maps) or More, Open the stock world, then edit with the tools on the left:
 
 | Tool | What it does |
 | --- | --- |
@@ -32,7 +32,7 @@ powershell -ExecutionPolicy Bypass -File mapmaker\build.ps1
 ```
 
 The editor finds the game in the default Steam folder, or asks for it once (File > Choose game folder).
-It only reads the game folder. Map packs are saved to `<game>\AnyAPI and Modding\maps\<map name>`.
+It finds the game the way the manager does (Steam's uninstall entry, then every Steam library) and only reads the game folder. Save always writes to `<game>\AnyAPI and Modding\maps\<map name>`, where the Custom Game page lists it, so there is no folder to pick; renaming a saved map renames its folder. More, Export a copy puts a copy anywhere else.
 
 Controls: scroll to zoom, drag with the right or middle mouse button to pan, left click a tile to
 inspect it. Edit the tile's JSON on the right and press **Apply tile changes**.

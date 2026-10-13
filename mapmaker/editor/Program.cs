@@ -14,7 +14,7 @@ namespace AnyMapMaker {
    //   --render <tiles folder or map pack> <out.png> [width height]
    if(args.Length>=2&&args[0]=="--self-test")return SelfTest(args[1]);
    if(args.Length>=2&&args[0]=="--ui-shot"){
-    MainForm.Headless=true;Application.EnableVisualStyles();var f=new MainForm{Size=new Size(1400,900)};f.Show();f.Demo();Application.DoEvents();
+    MainForm.Headless=true;try{SetProcessDPIAware();}catch{}AnyApiManager.Theme.InitScale();Application.EnableVisualStyles();var f=new MainForm{Size=new Size(1400,900)};f.Show();f.Demo();Application.DoEvents();
     for(int i=0;i<20;i++){Application.DoEvents();System.Threading.Thread.Sleep(50);}
     using(var bmp=new Bitmap(f.Width,f.Height))using(var g=Graphics.FromImage(bmp)){g.CopyFromScreen(f.Location,Point.Empty,f.Size);bmp.Save(args[1],ImageFormat.Png);}
     return 0;
@@ -22,8 +22,9 @@ namespace AnyMapMaker {
    if(args.Length>=1&&args[0]=="--edit-test")return EditTest(args.Length>=2?args[1]:null);
    if(args.Length>=3&&args[0]=="--render")return Render(args[1],args[2],args.Length>=5?int.Parse(args[3]):2048,args.Length>=5?int.Parse(args[4]):2048);
    try{SetProcessDPIAware();}catch{}
+   AnyApiManager.Theme.InitScale();
    Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
-   Application.ThreadException+=(s,e)=>MessageBox.Show("Something went wrong:\n\n"+e.Exception.Message,"Map Maker",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+   Application.ThreadException+=(s,e)=>ThemedDialog.Tell(null,"Something went wrong",e.Exception.Message);
    Application.Run(new MainForm());return 0;
   }
 

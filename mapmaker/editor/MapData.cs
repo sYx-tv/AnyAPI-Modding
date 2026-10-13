@@ -171,12 +171,28 @@ namespace AnyMapMaker {
     var m=Regex.Match(File.ReadAllText(manifest),"\"buildid\"\\s+\"(\\d+)\"");return m.Success?m.Groups[1].Value:"";
    }catch{return "";}
   }}
+  // Same search as the AnyAPI Manager: Steam's uninstall entry for the game, then every Steam library.
   public static string Guess(){
-   foreach(var root in new[]{Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),@"C:\Program Files (x86)",@"D:\SteamLibrary",@"E:\SteamLibrary"}){
-    if(string.IsNullOrEmpty(root))continue;
-    foreach(var candidate in new[]{Path.Combine(root,"Steam","steamapps","common","Anymaker"),Path.Combine(root,"steamapps","common","Anymaker")})
-     if(new GameInstall(candidate).Valid)return candidate;
+   const string app="4435340";
+   foreach(string key in new[]{@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App "+app,@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App "+app}){
+    string location=RegistryText(key,"InstallLocation");if(!string.IsNullOrEmpty(location)&&new GameInstall(location).Valid)return location;
    }
+   var roots=new List<string>();
+   foreach(string steam in new[]{RegistryText(@"HKEY_CURRENT_USER\Software\Valve\Steam","SteamPath"),RegistryText(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam","InstallPath"),RegistryText(@"HKEY_LOCAL_MACHINE\SOFTWARE\Valve\Steam","InstallPath")})if(!string.IsNullOrEmpty(steam))roots.Add(steam.Replace('/','\\'));
+   foreach(var pf in new[]{Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)})if(!string.IsNullOrEmpty(pf))roots.Add(Path.Combine(pf,"Steam"));
+   foreach(var root in roots.ToArray())foreach(string vdf in new[]{"steamapps/libraryfolders.vdf","config/libraryfolders.vdf"}){
+    try{string file=Path.Combine(root,vdf);if(!File.Exists(file))continue;foreach(Match m in Regex.Matches(File.ReadAllText(file),"\"path\"\\s+\"([^\"]+)\""))roots.Add(m.Groups[1].Value.Replace("\\\\","\\"));}catch{}
+   }
+   foreach(var root in new[]{@"D:\SteamLibrary",@"E:\SteamLibrary"})roots.Add(root);
+   foreach(var root in roots){string path=Path.Combine(root,"steamapps","common","Anymaker");if(new GameInstall(path).Valid)return path;}
+   return null;
+  }
+  static string RegistryText(string key,string name){try{return Microsoft.Win32.Registry.GetValue(key,name,null) as string;}catch{return null;}}
+  // Accepts what people pick: the Anymaker folder, its bin folder, or a Steam library that holds it.
+  public static string Resolve(string picked){
+   if(string.IsNullOrEmpty(picked))return null;
+   foreach(var c in new[]{picked,Path.Combine(picked,"Anymaker"),Path.Combine(picked,"common","Anymaker"),Path.Combine(picked,"steamapps","common","Anymaker"),Path.GetDirectoryName(picked)??""})
+    if(c!=""&&new GameInstall(c).Valid)return c;
    return null;
   }
   // Ids from a definitions file, for palettes (props, junctions, road types).
