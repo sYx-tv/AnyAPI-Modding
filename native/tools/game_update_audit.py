@@ -80,6 +80,11 @@ def collect():
 LITERAL = re.compile(r'\b(0x[0-9a-fA-F]{3,5}|[1-9]\d{2,4})\b')
 
 
+def twin_note(functions):
+    return 'TWINS: the bytes match %d functions (%s); check every use that requires a unique match' % (
+        len(functions), ', '.join(sorted(f.sig for f in functions))[:400])
+
+
 def stale_offset_literals(report):
     """(file, line, literal, function, new value) for literals that equal an old dependency cell offset."""
     cells = {}
@@ -223,6 +228,9 @@ def main():
             if was and not was & {f.sig for f in hits}:
                 row.update(status='changed', note='now matches %s; it used to match %s' % (
                     row['function'] or '%d functions' % len(hits), ', '.join(sorted(was))))
+            elif len(was) == 1 and len(hits) > 1:
+                # A unique pattern gained a byte-identical twin: code that requires one match stops.
+                row.update(status='changed', note=twin_note(hits))
             report.append(row)
             continue
         cands = [f for f in old_by_prefix.get(body[:16], []) if prefix_of(f)] or \
@@ -263,10 +271,13 @@ def main():
         else:
             new_len = len(body) - old_end + new_end
         new_body = cur.blob[:new_len]
+        twins = [f for f in new_by_prefix.get(new_body[:16], []) if f.blob.startswith(new_body)] if len(new_body) >= 16 else []
         if same_insn and same_relocs:
             row['status'] = 'refreshable' if old_end == new_end else 'resized'
             row['changed_bytes'] = sum(x != y for x, y in zip(body, new_body)) + abs(len(body) - len(new_body))
             edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
+            if len(twins) > 1:
+                row['note'] = twin_note(twins)
         else:
             row['status'] = 'changed'
             old_code, new_code = body[:min(len(body), oh['insn_size'])], cur.blob[:nh['insn_size']]
@@ -276,6 +287,8 @@ def main():
                 row['number_changes'] = displacement_changes(old_code, new_code)
                 row['offset_hints'] = offset_hints(row['number_changes'])
                 edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
+                if len(twins) > 1:
+                    row['note'] = twin_note(twins)
             row['constants_changed'] = sum(x != y for x, y in zip(oh['const_windows'], nh['const_windows'])) + \
                 abs(len(oh['const_windows']) - len(nh['const_windows']))
             d = list(difflib.unified_diff(normalize(old_code), normalize(new_code), 'previous', 'current', lineterm='', n=2))

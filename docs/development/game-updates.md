@@ -106,6 +106,8 @@ Then check these, which the audit cannot see:
 - **Twin functions.** Identical editor-tool functions can diverge by a byte between builds. In
   0.1.24 AnyBalance's `HOVER_OVERLAY` bytes went on matching the microcontroller tool instead
   of the Properties tool, so the API hooked the wrong tool; the audit now reports that as `changed`.
+  In 0.1.25 the two became byte-identical, so AnyBalance's unique-match check failed; the audit
+  now also reports a pattern that gains an identical twin as `changed` with a `TWINS` note.
 - **Enum values** the mods hard-code (`e_localization_string`, `e_audio_effect`): check
   them in the new `json/types.json`.
 - **`game.exe` addresses** that are not byte patterns, such as the graphics context
