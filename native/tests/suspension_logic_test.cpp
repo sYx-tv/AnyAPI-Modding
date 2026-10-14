@@ -16,9 +16,15 @@ size_t count(const std::string& s, const std::string& what) {
 }  // namespace
 
 int main() {
-    // Four parts, paired with each other, bearing limits wide open.
+    // Six parts: the pairs, bearing limits wide open, then the hub (a wheel) and the coupler (a torque interface).
     std::string json = definitions_json();
-    assert(count(json, "\"id\": ") == 4);
+    assert(count(json, "\"class\": ") == 6);
+    assert(json.find("\"id\": \"rigid_wheel_hub\", \"name\": \"Rigid Wheel Hub\"") != std::string::npos);
+    assert(json.find("\"id\": \"drive_coupler\", \"name\": \"Drive Coupler\"") != std::string::npos);
+    assert(count(json, "\"class\": \"wheel\"") == 1 && count(json, "\"class\": \"interface_torque\"") == 1);
+    assert(json.find("@") == std::string::npos);
+    std::string no_hub = definitions_json(false);
+    assert(count(no_hub, "\"class\": ") == 5 && no_hub.find("rigid_wheel_hub") == std::string::npos);
     assert(json.find("\"hinge_definition_id_other\": \"bearing_ring\"") != std::string::npos);
     assert(json.find("\"hinge_definition_id_other\": \"bearing_pin\"") != std::string::npos);
     assert(json.find("\"rail_definition_id_other\": \"suspension_slider\"") != std::string::npos);
@@ -30,6 +36,11 @@ int main() {
     assert(depth == 0);
     assert(is_suspension_slider_id("suspension_slider", 17) && !is_suspension_slider_id("suspension_rail", 15));
     assert(!is_suspension_slider_id("rail_slider", 11));
+    assert(part_kind("rigid_wheel_hub", 15) == PartKind::rigid_wheel_hub && part_kind("drive_coupler", 13) == PartKind::drive_coupler);
+    assert(part_kind("suspension_slider", 17) == PartKind::suspension_slider && part_kind("wheel", 5) == PartKind::other);
+    // The hub keeps a shorter stock travel, else 2 cm; junk falls back to 2 cm.
+    assert(near(hub_suspension_length(0.3), kHubSuspensionLength, 0) && near(hub_suspension_length(0.01), 0.01, 0));
+    assert(near(hub_suspension_length(NAN), kHubSuspensionLength, 0) && near(hub_suspension_length(-1), kHubSuspensionLength, 0));
 
     // A 300 kg share at 2 Hz: k = 300 (4 pi)^2 = 47.4 kN/m; sag 6.2 cm whatever the mass.
     Spring s = spring_for(300, 2.0, 0.5);

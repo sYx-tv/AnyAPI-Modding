@@ -27,6 +27,8 @@ constexpr const char* kBearingPin = "bearing_pin";
 constexpr const char* kBearingRing = "bearing_ring";
 constexpr const char* kSuspensionRail = "suspension_rail";
 constexpr const char* kSuspensionSlider = "suspension_slider";
+constexpr const char* kRigidWheelHub = "rigid_wheel_hub";
+constexpr const char* kDriveCoupler = "drive_coupler";
 constexpr double kPi = 3.141592653589793;
 
 inline bool same_id(const char* id, size_t length, const char* want) {
@@ -34,6 +36,24 @@ inline bool same_id(const char* id, size_t length, const char* want) {
     return id && length == n && std::char_traits<char>::compare(id, want, n) == 0;
 }
 inline bool is_suspension_slider_id(const char* id, size_t length) { return same_id(id, length, kSuspensionSlider); }
+
+// What a definition is to this mod, from its id.
+enum class PartKind { other, suspension_slider, rigid_wheel_hub, drive_coupler };
+inline PartKind part_kind(const char* id, size_t length) {
+    if (same_id(id, length, kSuspensionSlider)) return PartKind::suspension_slider;
+    if (same_id(id, length, kRigidWheelHub)) return PartKind::rigid_wheel_hub;
+    if (same_id(id, length, kDriveCoupler)) return PartKind::drive_coupler;
+    return PartKind::other;
+}
+
+// ------------------------------------------------------------------------------------------- rigid wheel hub
+// A wheel's suspension travel, spring and steering come from code-side tuning (vehicle_element_definition.wheel,
+// one global per stock wheel id), not from the JSON. The Rigid Wheel Hub uses a copy of the stock wheel's with the
+// travel cut to almost nothing; the wheel stays a wheel (grip, steering, brake, tyres) but rides rigidly on its body.
+constexpr double kHubSuspensionLength = 0.02;          // metres; enough for the wheel to keep finding the ground
+inline double hub_suspension_length(double stock) {
+    return std::isfinite(stock) && stock > 0 && stock < kHubSuspensionLength ? stock : kHubSuspensionLength;
+}
 
 // ------------------------------------------------------------------------------------------- spring tuning
 // Each Suspension Slider has Stiffness and Damping rows in the Properties Tool, 0 to 1 in steps of 0.1 like the
@@ -141,8 +161,10 @@ inline SaveMap decode_sliders(const std::string& text) {
 }
 
 // ------------------------------------------------------------------------------------------- definitions
-// Stock meshes for now: the bearing looks like the hinge, the suspension like the rail.
-inline std::string definitions_json() {
+// Stock meshes for now: the bearing looks like the hinge, the suspension like the rail, the hub like the wheel and
+// the coupler like the torque interface.
+// with_hub false leaves the hub out (its tuning could not be found, and a wheel without tuning would crash).
+inline std::string definitions_json(bool with_hub = true) {
     std::string pi = "3.141592653589793";
     return std::string("{\n  \"definitions\": [\n") +
         // Bearing pin: the hinge pin with no swing limits.
@@ -189,7 +211,11 @@ inline std::string definitions_json() {
         "\"tags_generated\": \"interactable,\", \"inspection_geometry\": [], \"data_descriptors\": [], \"tech_tier\": 2, "
         "\"spawn_probability\": 0.5, \"loot_group\": \"mechanical\", \"constraint_orientations\": [], "
         "\"force_emitter_element_rotor\": {\"blades\": []}, \"rail_slider_definition_id_other\": \"" + kSuspensionRail + "\", "
-        "\"rail_slider_is_parent\": true}\n" +
+        "\"rail_slider_is_parent\": true},\n" +
+        // Rigid wheel hub: the stock wheel (same meshes, faces and links); its tuning is swapped in code.
+        (with_hub ? std::string("    ") + R"json({"id": )json" + "\"" + kRigidWheelHub + "\"" + R"json(, "name": "Rigid Wheel Hub", "description": "The wheel hub with no suspension: fits the same wheel items, drives from its torque face, steers up to 32 degrees from the steering links and brakes from the brake link. Mount it on a suspension slider for your own suspension, and carry drive across with a drive coupler.", "class": "wheel", "zones": [{"bounds_min": [-2, -1, 0], "bounds_max": [2, 5, 1]}, {"bounds_min": [-2, -1, 4], "bounds_max": [2, 2, 4]}, {"bounds_min": [-2, -1, 2], "bounds_max": [2, 4, 3]}], "interaction_zones": [{"bounds_min": [-0.1, 0.0, 0.36], "bounds_max": [0.1, 0.2, 0.43999999999999995]}], "surfaces": [{"pos": [0, 3, 0], "size": [1, 3], "dir": 4, "gender": 2, "type": "port"}, {"id": "torque", "dir": 4, "type": "torque"}, {"pos": [0, 2, 0], "dir": 4, "gender": 2, "type": "mechanical"}, {"pos": [2, 0, 0], "dir": 4, "gender": 2, "type": "mechanical"}, {"pos": [-2, 0, 0], "dir": 4, "gender": 2, "type": "mechanical"}, {"pos": [0, 1, 0], "dir": 4, "gender": 2, "type": "port"}], "logic_nodes": [{"id": "steering_pos", "pos": [-2, 0, 0], "direction": 4, "type": "mechanical_in"}, {"id": "steering_neg", "pos": [2, 0, 0], "direction": 4, "type": "mechanical_in"}, {"id": "brake", "pos": [0, 2, 0], "direction": 4, "type": "mechanical_in"}], "mesh_static": {"mesh_path": "meshes/components/wheel_hub_a_base.mesh"}, "meshes_dynamic": [{"path": "meshes/components/wheel_hub_a_pivot.mesh", "pos": [0.0, 0.1, 0.29]}, {"path": "meshes/components/wheel_hub_a_hub.mesh", "pos": [0.0, 0.1, 0.29]}, {"path": "meshes/components/wheel_hub_a_axel.mesh", "preview_rot": [1.0, 0.0, 0.0, 0.0, 0.9410143691718643, -0.3383666015020959, 0.0, 0.3383666015020959, 0.9410143691718643]}, {"path": "meshes/components/wheel_hub_a_arm_upper.mesh", "pos": [0.0, 0.23, -0.01]}, {"path": "meshes/components/wheel_hub_a_arm_lower.mesh", "pos": [0.0, -0.07, -0.01]}, {"path": "meshes/components/wheel_hub_a_piston_body.mesh", "pos": [0.0, 0.4, 0.08], "preview_rot": [1.0, 0.0, 0.0, 0.0, 0.9643004949084248, -0.26481041429552377, 0.0, 0.26481041429552377, 0.9643004949084248]}, {"path": "meshes/components/wheel_hub_a_piston_rod.mesh", "pos": [0.0, 0.0, 0.19334572112937815], "preview_rot": [1.0, 0.0, 0.0, 0.0, 0.9590627745303383, -0.28319356368069093, 0.0, 0.28319356368069093, 0.9590627745303383]}, {"path": "meshes/components/wheel_hub_a_steering_rod_lower.mesh", "pos": [-0.16, 0.0, 0.0], "preview_rot": [0.9983978348009168, -0.02001176238692802, -0.052927240916283966, 3.469446951953614e-18, 0.9353725756816859, -0.35366388656831893, 0.05658412732243231, 0.3530972585970867, 0.9338739542927519]}, {"path": "meshes/components/wheel_hub_a_steering_rod_upper.mesh", "pos": [-0.14, 0.1, 0.27], "preview_rot": [0.9961681854826986, -0.03016191147901514, -0.08209266305852102, 0.00039294106730445867, 0.9401837523456422, -0.3406675174163011, 0.08745737149849309, 0.3393298850988521, 0.9365929944481618]}, {"path": "meshes/components/wheel_hub_a_steering_rod_lower.mesh", "pos": [0.16, 0.0, 0.0], "preview_rot": [0.9996822551623706, 0.009501766319265737, 0.023347487023038505, -0.0003589226234638672, 0.9315051221906235, -0.3637280282122645, -0.025204362480079717, 0.3636040755677054, 0.931212551645717]}, {"path": "meshes/components/wheel_hub_a_steering_rod_upper.mesh", "pos": [0.14, 0.1, 0.27], "preview_rot": [0.9939989241345727, 0.03542335431483986, 0.10349553028221868, 0.0005109523272550748, 0.9446025951661288, -0.32821589865991263, -0.1093886545626721, 0.32629913143387324, 0.9389158636845308]}, {"path": "meshes/components/wheel_hub_a_hub_b.mesh", "pos": [0.0, 0.1, 0.29]}], "bounds_override_min": [-8, -8, 0], "bounds_override_max": [8, 6, 9], "category": "wheel", "tags_generated": "interactable,mechanical,port,torque,", "inspection_geometry": [], "mateable_port_types": 2, "data_descriptors": [{"type": "type_f64_output", "name": "brake_factor"}, {"type": "type_f64_output", "name": "rps"}], "tech_tier": 2, "spawn_probability": 0.5, "loot_group": "mechanical", "constraint_orientations": [], "force_emitter_element_rotor": {"blades": []}})json" + ",\n" : std::string()) +
+        // Drive coupler: the stock torque interface; its tick never drops the connection.
+        "    " + R"json({"id": )json" + "\"" + kDriveCoupler + "\"" + R"json(, "name": "Drive Coupler", "description": "A torque interface that stays joined. Connects face to face with another drive coupler or torque interface like the stock one, then keeps the drive joined however far the bodies move, so drive can cross a suspension slider or a bearing.", "class": "interface_torque", "zones": [{}], "interaction_zones": [], "surfaces": [{"dir": 2}, {}, {"dir": 1}, {"dir": 3}, {"dir": 5}, {"id": "torque", "dir": 4, "type": "torque"}], "logic_nodes": [], "mesh_static": {"mesh_path": "meshes/components/interface_torque_b.mesh"}, "meshes_dynamic": [], "category": "torque", "tags_generated": "torque,", "inspection_geometry": [{"shape": 1, "p0": [0.0, 0.0, -0.5], "p1": [0.0, 0.0, 0.5], "radius": 0.009}], "data_descriptors": [], "tech_tier": 2, "spawn_probability": 0.5, "loot_group": "mechanical", "constraint_orientations": [], "force_emitter_element_rotor": {"blades": []}, "landing_gear_retractable_fold_direction": [1.0, 0.0, 0.0]})json" + "\n" +
         "  ]\n}\n";
 }
 

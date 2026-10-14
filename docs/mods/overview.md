@@ -32,7 +32,7 @@ Built from source only, not in the catalog yet. They use the experimental SDK.
 | --- | --- | --- |
 | [AnyLights](lights.md) | Light colours and flash patterns in the Properties Tool, with data port and microcontroller channels | AnyHelpers settings |
 | [AnyEngineParts](engine-parts.md) | Exhaust-driven turbochargers (2x2x2 to 5x5x2) with blow-off valves, wastegate antilag and boost channels, and a stretchable 1-4 rotor rotary engine, each with synthesized sounds; single player | Rotary works alongside EngineSound |
-| [AnySuspension](suspension.md) | A free-spinning Bearing and a sprung Suspension Rail and Slider for building your own running gear; single player | |
+| [AnySuspension](suspension.md) | A free-spinning Bearing, a sprung Suspension Rail and Slider, a Rigid Wheel Hub and a Drive Coupler for building your own running gear; single player | |
 
 See [validation status](../development/validation.md) for tested behavior and limits,
 including what has and has not been checked in multiplayer.

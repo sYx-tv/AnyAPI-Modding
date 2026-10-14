@@ -10,6 +10,10 @@
 // Each slider has Stiffness and Damping rows in the Properties Tool (0 to 1, like the stock wheel's). The rest
 // position and those values are saved with each world.
 //
+// Rigid Wheel Hub: the stock wheel with its code-side tuning swapped for a copy with almost no travel, so it rides on
+// a suspension slider. Drive Coupler: the stock torque interface whose joined tick (the 4 cm gap check) is skipped,
+// so drive crosses a moving joint.
+//
 // Single player / host: the definitions are added on this game's server and client scene, and every player needs the
 // mod. The spring runs on the server, so clients only see the motion.
 //
@@ -57,6 +61,13 @@ constexpr ptrdiff_t slider_constraint = 544;         // rail_slider._m_constrain
 constexpr ptrdiff_t slider_rail = 560;               // rail_slider.m_connected_component (ptr<rail>)
 constexpr ptrdiff_t vehicle_id = 64;                 // server_scene.vehicle.m_id (s32, saved)
 constexpr ptrdiff_t vehicle_physics = 2320;          // server_scene.vehicle.m_physics (physics.object)
+constexpr ptrdiff_t wheel_tuning = 488;              // server wheel: m_element_wheel (480) .m_definition (+8)
+constexpr ptrdiff_t client_component_definition = 176;   // client_scene.vehicle_component.m_definition
+constexpr ptrdiff_t client_wheel_tuning = 232;       // client wheel: m_element_wheel (224) .m_definition (+8)
+constexpr ptrdiff_t torque_connected = 552;          // interface_torque.m_connected_component (ptr, null: not joined)
+// vehicle_element_definition.wheel (the code-side wheel tuning), 320 bytes.
+constexpr size_t wheel_tuning_size = 320;
+constexpr ptrdiff_t tuning_suspension_length = 176, tuning_stiffness = 184, tuning_damping = 192;   // f64
 // Jolt's SliderConstraint (game.exe: physics.constraint.slider.set_motor writes these). A physics handle holds a
 // pointer at +8 to the slot that holds the Jolt object.
 constexpr ptrdiff_t jolt_has_limits = 0xa0;          // bool
@@ -98,22 +109,23 @@ double now_seconds() {
 }
 
 std::recursive_mutex g_mutex;                        // definition cache (server and main thread)
-std::unordered_map<const void*, bool> g_is_slider;   // definition pointer -> suspension slider?
+std::unordered_map<const void*, PartKind> g_kinds;   // definition pointer -> what it is to this mod
 
-bool slider_definition(const void* definition) {
-    if (!definition) return false;
+PartKind kind_of(const void* definition) {
+    if (!definition) return PartKind::other;
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
-    auto found = g_is_slider.find(definition);
-    if (found != g_is_slider.end()) return found->second;
-    bool yes = false;
+    auto found = g_kinds.find(definition);
+    if (found != g_kinds.end()) return found->second;
+    PartKind kind = PartKind::other;
     if (readable(static_cast<const uint8_t*>(definition) + off::definition_id, sizeof(anymaker::gc_string_view))) {
         auto& id = at<anymaker::gc_string_view>(definition, off::definition_id);
         if (id.data && id.length > 0 && id.length < 64 && readable(id.data, size_t(id.length)))
-            yes = is_suspension_slider_id(id.data, size_t(id.length));
+            kind = part_kind(id.data, size_t(id.length));
     }
-    g_is_slider[definition] = yes;
-    return yes;
+    g_kinds[definition] = kind;
+    return kind;
 }
+bool slider_definition(const void* definition) { return kind_of(definition) == PartKind::suspension_slider; }
 const void* pointer_at(const void* base, ptrdiff_t offset) {
     if (!base || !readable(static_cast<const uint8_t*>(base) + offset, 8)) return nullptr;
     return at<const void*>(base, offset);
@@ -153,6 +165,7 @@ anymaker::cell_hook h_add_definitions;
 self_fn_t g_file_ctor, g_file_dtor;
 file_load_t g_file_load;
 std::string g_json_path;                            // absolute, backslashes
+bool g_with_hub = false;                            // the Rigid Wheel Hub is offered only with its hooks in
 
 // Writes the definition file into "AnyAPI and Modding/AnySuspension".
 bool write_definition_file() {
@@ -166,7 +179,7 @@ bool write_definition_file() {
     dir += L"\\AnySuspension";
     CreateDirectoryW(dir.c_str(), nullptr);
     std::wstring file = dir + L"\\anysuspension_parts.json";
-    std::string json = definitions_json();
+    std::string json = definitions_json(g_with_hub);
     bool ok = write_file(file, json.data(), json.size());
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
@@ -205,7 +218,7 @@ bool add_ours(void* container, const std::string& text) {
 thread_local bool t_adding = false;
 void hk_add_definitions(void* container, const void* file) {
     reinterpret_cast<add_definitions_t>(h_add_definitions.original)(container, file);
-    if (!t_adding) { std::lock_guard<std::recursive_mutex> lock(g_mutex); g_is_slider.clear(); }   // definitions may move
+    if (!t_adding) { std::lock_guard<std::recursive_mutex> lock(g_mutex); g_kinds.clear(); }   // definitions may move
     if (!g_ready.load() || t_adding || !container || already_added(container)) return;
     t_adding = true;
     std::string forward = g_json_path;
@@ -214,7 +227,7 @@ void hk_add_definitions(void* container, const void* file) {
     t_adding = false;
     static std::atomic<int> logs{6};
     if (logs.fetch_sub(1) > 0)
-        log(ok ? 0 : 2, ok ? "Bearing, Bearing Ring, Suspension Rail and Suspension Slider added to the game's parts (%s)"
+        log(ok ? 0 : 2, ok ? "AnySuspension parts added to the game's parts (%s)"
                            : "could not load the AnySuspension definitions from %s", g_json_path.c_str());
 }
 
@@ -471,6 +484,89 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     spring_tick(self, vehicle);
 }
 
+// ------------------------------------------------------------------------------------- rigid wheel hub
+// The game gives a wheel its tuning (travel, spring, steering range, tyres) by definition id, on the server in
+// vehicle_element_definition.wheel.assign_definition and on the client in the wheel's create; an id it does not know
+// gets none. The hub gets a copy of the stock wheel's with almost no travel. The client builds the wheel from the
+// pointer inside create and skips setting it for an unknown id, so it is set before create runs.
+const void* g_stock_wheel_tuning;                    // g_wheel_definition_wheel
+const void* g_hub_tuning;
+std::once_flag g_hub_once;
+const void* hub_tuning() {
+    std::call_once(g_hub_once, [] {
+        auto* stock = static_cast<const uint8_t*>(g_stock_wheel_tuning);
+        if (!readable(stock, off::wheel_tuning_size)) return;
+        // Never freed: wheels keep pointing at it. Its tyre list shares the stock global's, which lives as long.
+        auto* copy = static_cast<uint8_t*>(HeapAlloc(GetProcessHeap(), 0, off::wheel_tuning_size));
+        if (!copy) { g_hub_tuning = stock; return; }
+        std::memcpy(copy, stock, off::wheel_tuning_size);
+        double length = at<double>(stock, off::tuning_suspension_length);
+        at<double>(copy, off::tuning_suspension_length) = hub_suspension_length(length);
+        log(0, "rigid wheel hub: travel %.3f m (stock wheel %.3f m, stiffness %.1f, damping %.1f)",
+            at<double>(copy, off::tuning_suspension_length), length, at<double>(stock, off::tuning_stiffness), at<double>(stock, off::tuning_damping));
+        g_hub_tuning = copy;
+    });
+    return g_hub_tuning;
+}
+
+using assign_t = void (*)(void* const* component);
+anymaker::cell_hook h_assign;
+void hk_assign(void* const* component) {
+    reinterpret_cast<assign_t>(h_assign.original)(component);
+    void* self = component && readable(component, 8) ? *component : nullptr;
+    if (!self || kind_of(pointer_at(self, off::component_definition)) != PartKind::rigid_wheel_hub) return;
+    if (const void* tuning = hub_tuning(); tuning && readable(static_cast<uint8_t*>(self) + off::wheel_tuning, 8))
+        at<const void*>(self, off::wheel_tuning) = tuning;
+}
+
+using client_create_t = void (*)(void* self, const void* container, void* vehicle, void* grid);
+anymaker::cell_hook h_client_create;
+void hk_client_create(void* self, const void* container, void* vehicle, void* grid) {
+    if (self && kind_of(pointer_at(self, off::client_component_definition)) == PartKind::rigid_wheel_hub)
+        if (const void* tuning = hub_tuning(); tuning && readable(static_cast<uint8_t*>(self) + off::client_wheel_tuning, 8))
+            at<const void*>(self, off::client_wheel_tuning) = tuning;
+    reinterpret_cast<client_create_t>(h_client_create.original)(self, container, vehicle, grid);
+}
+
+// ------------------------------------------------------------------------------------- drive coupler
+// A joined torque interface's tick only checks the gap between the faces and disconnects past 4 cm. While a drive
+// coupler is one side of a joint, both sides skip that tick, so the drive stays joined as the bodies move apart.
+using torque_tick_t = void (*)(void* self, void* vehicle, void* scene);
+anymaker::cell_hook h_torque_tick;
+void hk_torque_tick(void* self, void* vehicle, void* scene) {
+    if (self && g_ready.load()) {
+        const void* other = pointer_at(self, off::torque_connected);
+        if (other && (kind_of(pointer_at(self, off::component_definition)) == PartKind::drive_coupler ||
+                      kind_of(pointer_at(other, off::component_definition)) == PartKind::drive_coupler)) return;
+    }
+    reinterpret_cast<torque_tick_t>(h_torque_tick.original)(self, vehicle, scene);
+}
+
+// The hub needs both wheel hooks and the stock tuning; without them it is left out of the parts.
+bool install_hub() {
+    using namespace anymaker::experimental;
+    g_stock_wheel_tuning = global(bind::g_wheel_definition_wheel);
+    void** assign = hook_cell(bind::wheel_assign_definition);
+    void** create = hook_cell(bind::client_wheel_create);
+    if (!readable(g_stock_wheel_tuning, off::wheel_tuning_size) || !assign || !create) {
+        log(1, "Rigid Wheel Hub unavailable (tuning %d, wheel hooks %d/%d); it is left out of the parts",
+            readable(g_stock_wheel_tuning, off::wheel_tuning_size), !!assign, !!create);
+        return false;
+    }
+    if (!h_assign.install(assign, (void*)&hk_assign)) { log(1, "wheel definition hook not installed; Rigid Wheel Hub left out"); return false; }
+    if (!h_client_create.install(create, (void*)&hk_client_create)) {
+        h_assign.remove((void*)&hk_assign);
+        log(1, "client wheel hook not installed; Rigid Wheel Hub left out");
+        return false;
+    }
+    return true;
+}
+void install_coupler() {
+    void** tick = anymaker::experimental::hook_cell(bind::interface_torque_tick);
+    if (!tick || !h_torque_tick.install(tick, (void*)&hk_torque_tick))
+        log(1, "torque interface tick hook not installed; drive couplers drop past 4 cm like the stock torque interface");
+}
+
 // ------------------------------------------------------------------------------------- install (background thread)
 bool executable(const void* p) {
     MEMORY_BASIC_INFORMATION r{};
@@ -573,18 +669,23 @@ void install_hooks() {
         g_file_ctor = fctor; g_file_dtor = fdtor; g_file_load = fload; g_string_ctor = sc;
         g_get_definition = reinterpret_cast<get_definition_t>(function(bind::definitions_get_by_id));
         if (!g_get_definition) log(1, "definition lookup not found; the parts may be added twice if another mod re-adds definitions");
+        g_with_hub = install_hub();
         if (!write_definition_file()) { log(2, "could not write the AnySuspension definition file; AnySuspension is off"); return; }
         if (!add_cell_ok(add) || !h_add_definitions.install(add, (void*)&hk_add_definitions)) {
             log(2, "the definitions hook cell was taken or changed; AnySuspension is off");
             return;
         }
         install_spring();
+        install_coupler();
         g_ready = true;
         log(0, "Ready after %d s. Load or start a world to add the parts (definitions %s).", attempt, g_json_path.c_str());
         return;
     }
 }
 void remove_hooks() {
+    h_torque_tick.remove((void*)&hk_torque_tick);
+    h_client_create.remove((void*)&hk_client_create);
+    h_assign.remove((void*)&hk_assign);
     h_properties.remove((void*)&hk_properties);
     h_tick.remove((void*)&hk_tick);
     h_add_definitions.remove((void*)&hk_add_definitions);

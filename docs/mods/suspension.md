@@ -4,16 +4,18 @@
 > so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
 > **Prototype, single player only** for now: built from source, not in the catalog yet.
 
-AnySuspension adds two pairs of parts for building your own running gear, like Trailmakers' bearing and straight
-suspension.
+AnySuspension adds parts for building your own running gear, like Trailmakers' bearing and straight suspension:
+two pairs of joint parts, a wheel hub with no suspension of its own, and a torque link that stays joined.
 
 | Part | Pairs with | What it does |
 | --- | --- | --- |
 | **Bearing** | Bearing Ring | Like the Hinge Pin and Hinge Knuckle with no stops: the ring's body spins freely all the way round. |
 | **Suspension Rail** | Suspension Slider | Like the Rail and Rail Slider, but the slider is sprung: it springs back to where you placed it. |
+| **Rigid Wheel Hub** | | The stock Wheel hub with almost no suspension travel (2 cm): same wheel items, drive, steering and brake. |
+| **Drive Coupler** | Drive Coupler or Torque Interface | The Torque Interface that never disconnects: drive keeps flowing as the bodies move. |
 
 They are built and connected exactly like the stock pairs. Place the ring on the bearing (or the slider on the rail)
-in the editor to start the new body, and interact with the bearing or the slider to connect or release it. Both are
+in the editor to start the new body, and interact with the bearing or the slider to connect or release it. All are
 `tech_tier 2` loot in the mechanical group, like the stock rail.
 
 ## Suspension
@@ -36,6 +38,16 @@ bodies, shared between all the suspension sliders holding it up.
 | Stiffness | 0.5 | Ride frequency from 1 Hz (0, soft, 25 cm sag) to 4 Hz (1, race car, 1.5 cm sag); 0.5 is 2.5 Hz. |
 | Damping | 0.5 | How quickly bouncing dies away: 0.1 of critical at 0 (bouncy) to critical at 1 (no overshoot). |
 
+## Driven, steered suspension
+
+1. Put a Suspension Rail and Slider on the chassis, as above.
+2. Build a **Rigid Wheel Hub** on the slider's body and fit a wheel to it. Steering and brake links work as on the
+   stock hub. Its own Stiffness and Damping rows (Properties Tool, like any wheel) barely matter with 2 cm of travel:
+   the Suspension Slider is the suspension.
+3. To drive it, run the engine's shaft to a **Drive Coupler** on the chassis, face to face with a Drive Coupler on
+   the slider's body, and shaft from there to the hub's torque face. The pair joins like stock Torque Interfaces
+   (faces touching) and then stays joined however the suspension moves.
+
 ## How it works
 
 - The game's parts are JSON definitions. The bearing pair is the hinge pin pair with its swing limits opened to
@@ -48,4 +60,11 @@ bodies, shared between all the suspension sliders holding it up.
 - The rest position is kept along the rail, so it does not drift when the game rebuilds the joint on load. It is
   stored with the slider's Stiffness and Damping in `%APPDATA%\Anymaker\working\anysuspension_sliders.json`, which the game copies into each save.
 
-Stock meshes for now: the bearing looks like the hinge, the suspension like the rail.
+- A wheel's travel, spring and steering range come from tuning in the game code, chosen by the hub's id; an id the
+  game does not know gets none. The mod gives the Rigid Wheel Hub a copy of the stock Wheel's tuning with the travel
+  cut to 2 cm, on the server and on the client. If that cannot be set up the hub is left out of the parts.
+- A joined Torque Interface's server tick only checks the gap between the faces and disconnects past 4 cm. While
+  either side is a Drive Coupler, the mod skips that check.
+
+Stock meshes for now: the bearing looks like the hinge, the suspension like the rail, the hub like the Wheel and
+the coupler like the Torque Interface.
