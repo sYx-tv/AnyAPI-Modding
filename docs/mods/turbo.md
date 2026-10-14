@@ -87,8 +87,8 @@ wear at all. The times below are for full boost the whole time:
 - **Heat.** Exhaust heats the turbine and the shaft heats with speed (four times as much with no oil). With oil
   a turbo at full boost sits around 140 °C; dry it climbs to about 400 °C. Above 250 °C it wears faster, the
   hotter the faster.
-- **Air filter.** The **Turbo Air Filter** (small pipe, 1 cell) and **Turbo Air Filter (Large)** (large pipe,
-  2x2x2) are cone filters. Pipe the neck to the turbo's intake. Clean air makes the turbo wear four times slower.
+- **Air filter.** The **Turbo Air Filter** (small pipe, 2x2x2) and **Turbo Air Filter (Large)** (large pipe,
+  3x3x3) are cone filters. Pipe the neck to the turbo's intake. Clean air makes the turbo wear four times slower.
   A filter clogs slowly as it works, about 10 hours of full boost to go fully dirty, and a clogged filter costs up to 15% of the boost. Place a new one to replace it. A new
   filter starts with a red element and steel caps, and both paint.
 - **Condition.** Down to half, the turbo performs like new. Below that its boost falls (to 60% near the end),

@@ -9,4 +9,6 @@ the data port outputs rpm, power, torque and the latest peak. See [Dyno](../mods
 
 **New looks:** blow-off valves have a slim "race port" body with a slotted vent crown, and wastegates a finned actuator can with two boost nipples. Paint works as before: the first colour on the body, the second on the cap.
 
+**Bigger air filters:** the small filter is now 2x2x2 cells (small pipe) and the large 3x3x3 (large pipe). Filters already on a build take more room and may need moving out a cell.
+
 Guide: [AnyEngineParts](../mods/engine-parts.md).

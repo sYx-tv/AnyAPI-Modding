@@ -337,19 +337,20 @@ int main() {
     // Air filter and intercooler meshes: readable, both paint markers, inside their cells.
     for (int large = 0; large < 2; ++large) {
         std::vector<std::vector<uint8_t>> meshes{build_air_filter_mesh(stock, large, "f")};
-        for (int tile = 0; tile < 3 && !large; ++tile) meshes.push_back(build_intercooler_tile(stock, tile, "i"));
+        for (int style = 0; style < kIntercoolerStyleCount && !large; ++style)   // every look: tiles 0, 1, 2
+            for (int tile = 0; tile < 3; ++tile) meshes.push_back(build_intercooler_tile(stock, tile, "i", style));
         for (size_t k = 0; k < meshes.size(); ++k) {
             MeshLayout m; assert(parse_mesh(meshes[k], m) && m.vertices > 50);
             std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), meshes[k].data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
             bool paint0 = false, paint1 = false;
             double lo[3], hi[3];
-            if (k == 0) { for (int j = 0; j < 3; ++j) { lo[j] = -kCell / 2; hi[j] = (large ? 1.5 : 0.5) * kCell; } }
+            if (k == 0) { for (int j = 0; j < 3; ++j) { lo[j] = -kCell / 2; hi[j] = (air_filter_cells(large) - 0.5) * kCell; } }
             else { lo[0] = lo[1] = lo[2] = -kCell / 2; hi[0] = hi[2] = kCell / 2; hi[1] = 1.5 * kCell; }   // one cell wide, two tall
             for (auto& p : v) {
                 for (int j = 0; j < 3; ++j) assert(p.pos[j] >= lo[j] - 0.003 && p.pos[j] <= hi[j] + 0.003);
                 paint0 = paint0 || (p.rgba[0] == 153 && p.rgba[1] == 0); paint1 = paint1 || (p.rgba[0] == 153 && p.rgba[1] == 38);
             }
-            assert((paint0 && paint1) || k == 2);             // the middle intercooler tile is all core
+            assert((paint0 && paint1) || (k > 0 && (k - 1) % 3 == 1));   // the middle intercooler tiles are all core
         }
     }
     return 0;
