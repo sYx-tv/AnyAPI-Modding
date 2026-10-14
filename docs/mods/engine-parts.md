@@ -13,12 +13,14 @@ AnyEngineParts adds engine parts to the game, in one mod (`AnyEngineParts.dll`):
   intercooler. Hot boost air now costs every engine power and can knock it.
 - A [rotary engine](rotary.md), stretchable from 1 to 4 rotors in the small engine's footprint, with its own
   housing mesh and synthesized sound. It works alongside EngineSound.
+- A [Dyno](dyno.md) sensor part that records power and torque pulls and draws them on screen.
 
 It replaces the separate Turbo and Rotary prototypes. The part ids are unchanged, so vehicles built with those
 load as before. Remove `Turbo.dll` and `Rotary.dll` when installing it, or their parts are hooked twice.
 
-The two halves start on their own: if one cannot find the game functions it needs, the other still works. Their
-lines in `anymaker_modding.log` keep the tags `turbo` and `rotary`.
+Each part set starts on its own: if one cannot find the game functions it needs, the others still work. Their
+lines in `anymaker_modding.log` keep the tags `turbo`, `rotary` and `dyno`.
 
 Source: [`engine_parts_mod.cpp`](../../native/engine_parts_mod.cpp), which starts
-[`turbo_mod.cpp`](../../native/turbo_mod.cpp) and [`rotary_mod.cpp`](../../native/rotary_mod.cpp).
+[`turbo_mod.cpp`](../../native/turbo_mod.cpp), [`rotary_mod.cpp`](../../native/rotary_mod.cpp) and
+[`dyno_mod.cpp`](../../native/dyno_mod.cpp).

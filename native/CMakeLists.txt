@@ -200,8 +200,8 @@ function(anyapi_version_resource target product)
     set(ANYAPI_VERSION_COMMA "1,0,2,0")
     set(ANYAPI_VERSION_TEXT "1.0.2")
   elseif(target STREQUAL "AnyEngineParts")
-    set(ANYAPI_VERSION_COMMA "0,1,1,0")
-    set(ANYAPI_VERSION_TEXT "0.1.1")
+    set(ANYAPI_VERSION_COMMA "0,2,0,0")
+    set(ANYAPI_VERSION_TEXT "0.2.0")
   elseif(target STREQUAL "ThirdPerson")
     set(ANYAPI_VERSION_COMMA "0,1,3,0")
     set(ANYAPI_VERSION_TEXT "0.1.3")
@@ -474,9 +474,9 @@ add_executable(gpspart_logic_test tests/gpspart_logic_test.cpp)
 target_compile_options(gpspart_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME gpspart_logic COMMAND gpspart_logic_test)
 
-# AnyEngineParts: turbochargers, blow-off valves and wastegate (turbo_*) and the rotary engine (rotary_*) in one DLL,
+# AnyEngineParts: turbochargers, blow-off valves and wastegate (turbo_*), the rotary engine (rotary_*) and the Dyno (dyno_*) in one DLL,
 # through the experimental SDK.
-add_library(AnyEngineParts SHARED engine_parts_mod.cpp turbo_mod.cpp rotary_mod.cpp)
+add_library(AnyEngineParts SHARED engine_parts_mod.cpp turbo_mod.cpp rotary_mod.cpp dyno_mod.cpp)
 target_include_directories(AnyEngineParts PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
 target_compile_options(AnyEngineParts PRIVATE /W3 /EHsc /utf-8)
 anyapi_version_resource(AnyEngineParts AnyEngineParts)
@@ -493,6 +493,9 @@ anyapi_version_resource(ThirdPerson ThirdPerson)
 add_executable(rotary_logic_test tests/rotary_logic_test.cpp)
 target_compile_options(rotary_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME rotary_logic COMMAND rotary_logic_test)
+add_executable(dyno_logic_test tests/dyno_logic_test.cpp)
+target_compile_options(dyno_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME dyno_logic COMMAND dyno_logic_test)
 
 # Public experimental SDK: compile all generated layouts and opt-in examples.
 add_executable(experimental_sdk_test tests/experimental_sdk_test.cpp)
