@@ -202,6 +202,9 @@ function(anyapi_version_resource target product)
   elseif(target STREQUAL "AnyEngineParts")
     set(ANYAPI_VERSION_COMMA "0,1,0,0")
     set(ANYAPI_VERSION_TEXT "0.1.0")
+  elseif(target STREQUAL "AnySuspension")
+    set(ANYAPI_VERSION_COMMA "0,1,0,0")
+    set(ANYAPI_VERSION_TEXT "0.1.0")
   elseif(target STREQUAL "ThirdPerson")
     set(ANYAPI_VERSION_COMMA "0,1,3,0")
     set(ANYAPI_VERSION_TEXT "0.1.3")
@@ -493,6 +496,16 @@ anyapi_version_resource(ThirdPerson ThirdPerson)
 add_executable(rotary_logic_test tests/rotary_logic_test.cpp)
 target_compile_options(rotary_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME rotary_logic COMMAND rotary_logic_test)
+
+# AnySuspension: a free-spinning bearing (hinge pin and knuckle clones with no stops) and a straight spring suspension
+# (rail and rail slider clones whose slider joint motor is set to a spring), through the experimental SDK.
+add_library(AnySuspension SHARED suspension_mod.cpp)
+target_include_directories(AnySuspension PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
+target_compile_options(AnySuspension PRIVATE /W3 /EHsc /utf-8)
+anyapi_version_resource(AnySuspension AnySuspension)
+add_executable(suspension_logic_test tests/suspension_logic_test.cpp)
+target_compile_options(suspension_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME suspension_logic COMMAND suspension_logic_test)
 
 # Public experimental SDK: compile all generated layouts and opt-in examples.
 add_executable(experimental_sdk_test tests/experimental_sdk_test.cpp)

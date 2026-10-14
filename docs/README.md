@@ -15,7 +15,7 @@
 [AnyStorage](mods/storage.md) · [AnyMap](mods/map.md) ([rendering](mods/map-rendering.md)) ·
 [AnyGraphics](mods/graphics.md) · [AnyClock](mods/clock.md) ·
 [AnyQuickWheel](mods/quick-wheel.md) · [AnyBalance](mods/balance.md) · [EngineSound](mods/engine-sound.md) · [AnyMirror](mods/mirror.md) · [GpsPart](mods/gps.md) · [ThirdPerson](mods/third-person.md) ·
-Prototypes: [AnyLights](mods/lights.md) · [AnyEngineParts](mods/engine-parts.md) ([turbos](mods/turbo.md), [rotary](mods/rotary.md))
+Prototypes: [AnyLights](mods/lights.md) · [AnyEngineParts](mods/engine-parts.md) ([turbos](mods/turbo.md), [rotary](mods/rotary.md)) · [AnySuspension](mods/suspension.md)
 
 ## Developer reference
 
