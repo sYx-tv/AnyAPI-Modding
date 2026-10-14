@@ -1064,7 +1064,7 @@ bool write_definition_file() {
         std::string path = blow_off_mesh_path(large != 0);              // meshes/components/turbo_<id>.mesh
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_blow_off_mesh(stock, large != 0, name.c_str());
+        std::vector<uint8_t> mesh = build_blow_off_mesh(stock, large != 0, name.c_str(), kBlowOffStyle);
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         bov_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
@@ -1074,7 +1074,7 @@ bool write_definition_file() {
         std::string path = wastegate_mesh_path(large != 0);
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_wastegate_mesh(stock, large != 0, name.c_str());
+        std::vector<uint8_t> mesh = build_wastegate_mesh(stock, large != 0, name.c_str(), kWastegateStyle);
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         wg_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }

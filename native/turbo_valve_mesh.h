@@ -169,9 +169,10 @@ inline std::vector<uint8_t> encode_valve_mesh(const std::vector<uint8_t>& stock,
 // The pipe sizes the game draws for a small and a large gas node.
 inline double valve_pipe_radius(bool large) { return large ? 0.046 : 0.019; }
 
-// Looks the valves come in (style argument); the mod builds kValveStyle. 0 classic, 1 finned, 2 bell (BOV) or hyper
-// (wastegate), 3 pancake (BOV) or bracket (wastegate), 4 race port (BOV) or billet (wastegate).
+// Looks the valves come in (style argument): 0 classic, 1 finned, 2 bell (BOV) or hyper (wastegate), 3 pancake (BOV)
+// or bracket (wastegate), 4 race port (BOV) or billet (wastegate). The mod builds Nate's picks (2026-10-14).
 constexpr int kValveStyleCount = 5;
+constexpr int kBlowOffStyle = 4, kWastegateStyle = 1;
 
 // `count` thin rings around a body of radius r between w0 and w1, as cooling fins.
 inline void fins(MeshBuilder& b, int axis, const double c[3], double r, double w0, double w1, int count, const uint8_t col[3]) {

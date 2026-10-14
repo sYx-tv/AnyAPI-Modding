@@ -49,7 +49,7 @@ Two companion parts, in the gas parts with the turbos:
   pipe, for the 4x4 and 5x5). Inline: pipe the turbo's boost outlet into its **plain end** (it shows as *Gas
   node*) and its **blue-ringed end** (*Air node*) into the engine's air intake. Boost passes straight through.
   When you lift off the throttle, boost trapped in the pipe is higher than the turbo can hold; the valve vents it
-  out of its trumpet, so the turbo keeps its spin. Without
+  out of the vent slots in its crown, so the turbo keeps its spin. Without
   one the compressor **surges**: the boost pushes back through it and the turbo loses speed fast. Properties
   Tool: **Stiffness** (0-50 kPa, default 5), the extra boost it holds before opening. Up to 15 kPa it stops
   surge completely; stiffer springs let more and more surge through while they vent (at 50 the turbo surges
