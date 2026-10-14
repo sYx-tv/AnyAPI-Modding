@@ -1,7 +1,7 @@
 #pragma once
 // Air filter and intercooler meshes, built at start-up like the valves' (turbo_valve_mesh.h), in the same stock look.
 //
-//   air filter, small: 2 x 2 x 2 cells, small pipe; large: 3 x 3 x 3 cells, large pipe. The neck goes down to the gas node
+//   air filter, small: 1 cell, small pipe; large: 2 x 2 x 2 cells, large pipe. The neck goes down to the gas node
 //     (direction 2), then a clamp band, a base cap, a pleated cone element (first colour) and a top cap (second
 //     colour) with a bright badge.
 //   intercooler: three tiles the game strings together along x (turbo_intercooler_<x>_0_0): tile 0 the left cell
@@ -44,29 +44,21 @@ inline void pleated_cone(MeshBuilder& b, int axis, const double c[3], double r0,
     }
 }
 
-// Cells along each side of an air filter: the small (small pipe) is 2 x 2 x 2, the large (large pipe) 3 x 3 x 3.
-inline int air_filter_cells(bool large) { return large ? 3 : 2; }
-
-// Builds the small or large cone air filter. The part's cells run 0..n-1 from its origin cell; the gas node sits under
-// the origin cell (small pipe) or under the 2 x 2 cells at the origin (large pipe), so the neck rises from there into
-// the element's base, which is wide enough to cover it.
+// Builds the small or large cone air filter.
 inline std::vector<uint8_t> build_air_filter_mesh(const std::vector<uint8_t>& stock, bool large, const char* new_name) {
     MeshLayout m;
     if (!parse_mesh(stock, m)) return {};
-    const int n = air_filter_cells(large);
-    const double u = n * kCell / 2, c0 = (n - 1) * kCell / 2, rp = valve_pipe_radius(large);
-    const double centre[3] = {c0, c0, c0}, nk = large ? kCell / 2 : 0;
-    const double neck[3] = {nk, c0, nk};
+    const double u = large ? kCell : kCell / 2, c0 = large ? kCell / 2 : 0, rp = valve_pipe_radius(large);
+    const double centre[3] = {c0, c0, c0};
     MeshBuilder b;
     // port frame under the part and the neck up into the filter
-    oct(b, 1, neck, rp * 1.32, rp * 1.32, -u, -u + 0.07 * n * kCell, kValveIron);
-    oct(b, 1, neck, rp * 0.72, rp * 0.72, -u - 0.002, -u + 0.001, kValveHole);
-    oct(b, 1, neck, rp, rp, -u + 0.07 * n * kCell, -0.62 * u, kValveMid);
-    oct(b, 1, neck, rp * 1.15, rp * 1.15, -0.62 * u, -0.5 * u, kValveAlloy);           // clamp band
-    const double rb = 0.9 * u, rt = 0.66 * u;                                            // element: base and top radius
-    const double cap = std::min(0.99 * u, std::max(rb * 1.04, std::sqrt(2.0) * (c0 - nk) + rp * 1.25));   // covers the neck
-    b.frustum_phase(1, centre, cap, cap, -0.5 * u, -0.4 * u, kValvePaint1, 24, 0);       // base cap
-    pleated_cone(b, 1, centre, rb, rt, -0.4 * u, 0.72 * u, large ? 24 : 20, 0.12, kValvePaint0);
+    oct(b, 1, centre, rp * 1.32, rp * 1.32, -u, -u + 0.14 * u, kValveIron);
+    oct(b, 1, centre, rp * 0.72, rp * 0.72, -u - 0.002, -u + 0.001, kValveHole);
+    oct(b, 1, centre, rp, rp, -u + 0.14 * u, -0.62 * u, kValveMid);
+    oct(b, 1, centre, rp * 1.15, rp * 1.15, -0.62 * u, -0.5 * u, kValveAlloy);         // clamp band
+    const double rb = 0.8 * u, rt = 0.6 * u;                                             // element: base and top radius
+    b.frustum_phase(1, centre, rb * 1.04, rb * 1.04, -0.5 * u, -0.4 * u, kValvePaint1, 24, 0);   // base cap
+    pleated_cone(b, 1, centre, rb, rt, -0.4 * u, 0.72 * u, 18, 0.12, kValvePaint0);
     b.frustum_phase(1, centre, rt * 0.95, rt * 0.95, -0.4 * u, 0.72 * u, kCoreDark, 18, 0);   // the dark inside, seen between pleats
     b.frustum_phase(1, centre, rt * 1.05, rt * 0.9, 0.72 * u, 0.86 * u, kValvePaint1, 24, 0);  // top cap
     b.frustum_phase(1, centre, rt * 0.42, rt * 0.42, 0.86 * u, 0.9 * u, kValveAlloy, 24, 0);    // badge
@@ -78,7 +70,7 @@ inline std::vector<uint8_t> build_air_filter_mesh(const std::vector<uint8_t>& st
 // along x, so styles 1-4 run their fins up the full height (they stretch cleanly) and keep every detail that must not
 // stretch (inlets, brackets) within the bottom or top cell.
 constexpr int kIntercoolerStyleCount = 5;
-constexpr int kIntercoolerStyle = 0;
+constexpr int kIntercoolerStyle = 2, kIntercoolerRoundStyle = 4;   // Nate's picks: the race core and the round-tank part
 static const uint8_t kCoreSilver[3] = {168, 170, 172}, kFinDark[3] = {58, 60, 64}, kCoreBlack[3] = {22, 22, 24};
 
 // Builds one intercooler tile (0 left end, 1 middle, 2 right end). Like a car's: an end tank on each side and the

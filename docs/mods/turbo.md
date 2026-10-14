@@ -87,8 +87,8 @@ wear at all. The times below are for full boost the whole time:
 - **Heat.** Exhaust heats the turbine and the shaft heats with speed (four times as much with no oil). With oil
   a turbo at full boost sits around 140 °C; dry it climbs to about 400 °C. Above 250 °C it wears faster, the
   hotter the faster.
-- **Air filter.** The **Turbo Air Filter** (small pipe, 2x2x2) and **Turbo Air Filter (Large)** (large pipe,
-  3x3x3) are cone filters. Pipe the neck to the turbo's intake. Clean air makes the turbo wear four times slower.
+- **Air filter.** The **Turbo Air Filter** (small pipe, 1 cell) and **Turbo Air Filter (Large)** (large pipe,
+  2x2x2) are cone filters. Pipe the neck to the turbo's intake. Clean air makes the turbo wear four times slower.
   A filter clogs slowly as it works, about 10 hours of full boost to go fully dirty, and a clogged filter costs up to 15% of the boost. Place a new one to replace it. A new
   filter starts with a red element and steel caps, and both paint.
 - **Condition.** Down to half, the turbo performs like new. Below that its boost falls (to 60% near the end),
@@ -104,7 +104,9 @@ scales with the air's density against 30 °C air, so hot boost makes less power 
 air over 90 °C also knocks a boosted engine, which slowly damages it. Without an intercooler, full boost
 costs a damage step about every 6 to 7 minutes.
 
-The **Turbo Intercooler** fixes that. Like the radiator, it has no pipes of its own: snap gas ports onto its faces,
+An intercooler fixes that. There are two, which work the same and differ only in looks: the **Turbo Intercooler
+(Race Core)**, a black core with bright fins and an inlet stub on each tank, and the **Turbo Intercooler (Round
+Tank)**, a slim silver core between round tanks. Like the radiator, it has no pipes of its own: snap gas ports onto its faces,
 small or large, wherever suits the build. Run one from the turbo's boost and one to the engine's air intake. All its
 ports share one volume of air, so the boost passes straight through. It has an end tank on each side, like a car's,
 and stretches like the radiator: wider one cell at a time (the tanks stay at the ends) and taller. A bigger core cools better, and so does slower air: a 3x2 core takes about

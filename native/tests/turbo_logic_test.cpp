@@ -84,7 +84,7 @@ int main() {
     {   // with every mesh built the parts use theirs; the intercooler points at its first tile
         bool all[4] = {true, true, true, true}, two[2] = {true, true}, one = true;
         std::string full = definitions_json(all, two, two, two, &one);
-        assert(full.find("turbo_turbo_air_filter_large.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_0_0_0.mesh") != std::string::npos && full.find("\"mode_x\": \"tile\"") != std::string::npos &&
+        assert(full.find("turbo_turbo_air_filter_large.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_0_0_0.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_round_0_0_0.mesh") != std::string::npos && full.find("Turbo Intercooler (Round Tank)") != std::string::npos && full.find("\"mode_x\": \"tile\"") != std::string::npos &&
                full.find("radiator_a_0_0_0.mesh") == std::string::npos);
         // the oil ports come after the four gas nodes, so saved gas links keep their meaning
         size_t entry = full.find("\"name\": \"Turbo 3x3\"");
@@ -110,7 +110,7 @@ int main() {
     assert(depth == 0 && square == 0 && !in_string);
     assert(json.find("\"id\": \"turbo_blow_off_valve\"") != std::string::npos && json.find("\"type_f64_input\", \"name\": \"open\"") != std::string::npos);
     assert(valve_from_id("turbo_wastegate", 15) == kWastegate && valve_from_id("turbo_blow_off_valve", 20) == kBlowOff && valve_from_id("turbo_blow_off_valve_large", 26) == kBlowOffLarge && valve_from_id("turbo", 5) == kNoValve &&
-           valve_from_id("turbo_wastegate_large", 21) == kWastegateLarge && valve_from_id("turbo_intercooler", 17) == kIntercooler && valve_from_id("turbo_air_filter_large", 22) == kAirFilterLarge);
+           valve_from_id("turbo_wastegate_large", 21) == kWastegateLarge && valve_from_id("turbo_intercooler", 17) == kIntercooler && valve_from_id("turbo_intercooler_round", 23) == kIntercooler && valve_from_id("turbo_air_filter_large", 22) == kAirFilterLarge);
     assert(wastegate_move(1, 3, 1, 50, 50, 1.0 / 60, true) > wastegate_move(1, 3, 1, 50, 50, 1.0 / 60) * 2);   // the large wastegate flows more
     assert(valve_channel_index("open", 4) == kValveOpen && valve_channel_index("pressure", 8) == kValvePressure && valve_channel_index("x", 1) < 0);
     // Valves.
@@ -344,7 +344,7 @@ int main() {
             std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), meshes[k].data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
             bool paint0 = false, paint1 = false;
             double lo[3], hi[3];
-            if (k == 0) { for (int j = 0; j < 3; ++j) { lo[j] = -kCell / 2; hi[j] = (air_filter_cells(large) - 0.5) * kCell; } }
+            if (k == 0) { for (int j = 0; j < 3; ++j) { lo[j] = -kCell / 2; hi[j] = (large ? 1.5 : 0.5) * kCell; } }
             else { lo[0] = lo[1] = lo[2] = -kCell / 2; hi[0] = hi[2] = kCell / 2; hi[1] = 1.5 * kCell; }   // one cell wide, two tall
             for (auto& p : v) {
                 for (int j = 0; j < 3; ++j) assert(p.pos[j] >= lo[j] - 0.003 && p.pos[j] <= hi[j] + 0.003);
