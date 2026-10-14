@@ -39,8 +39,8 @@ inline void pleated_cone(MeshBuilder& b, int axis, const double c[3], double r0,
         if (l == 0) continue;
         uint32_t q[4];
         for (int j = 0; j < 4; ++j) q[j] = b.vertex(p[j][0], p[j][1], p[j][2], nn[0] / l, nn[1] / l, nn[2] / l, col);
-        if (dot >= 0) { b.tri(q[0], q[3], q[1]); b.tri(q[1], q[3], q[2]); }
-        else { b.tri(q[0], q[1], q[3]); b.tri(q[1], q[2], q[3]); }
+        if (dot >= 0) { b.tri(q[0], q[1], q[3]); b.tri(q[1], q[2], q[3]); }     // counter-clockwise from outside
+        else { b.tri(q[0], q[3], q[1]); b.tri(q[1], q[3], q[2]); }
     }
 }
 

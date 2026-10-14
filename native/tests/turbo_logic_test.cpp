@@ -212,10 +212,12 @@ int main() {
         assert(int(std::lround(v[3].pos[1] / kCell)) == port(n, kColdOut).y && near(v[3].pos[2], (n - 0.5) * kCell, 1e-5));
         assert(int(std::lround(v[7].pos[1] / kCell)) == port(n, kHotIn).y && near(v[7].pos[2], -0.5 * kCell, 1e-5));
     }
-    // Valve meshes: readable, inside their cells (the cap may rise a little), with both paint markers.
+    // Valve meshes, every style: readable, inside their cells (the cap may rise a little), with both paint markers,
+    // and every face wound clockwise seen from outside like the stock meshes (the game culls the other side).
+    for (int style = 0; style < kValveStyleCount; ++style)
     for (int large = 0; large < 2; ++large)
         for (int wg = 0; wg < 2; ++wg) {
-            std::vector<uint8_t> mesh = wg ? build_wastegate_mesh(stock, large, "v") : build_blow_off_mesh(stock, large, "v");
+            std::vector<uint8_t> mesh = wg ? build_wastegate_mesh(stock, large, "v", style) : build_blow_off_mesh(stock, large, "v", style);
             MeshLayout m; assert(parse_mesh(mesh, m) && m.vertices > 100);
             std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), mesh.data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
             double lo = -kCell / 2 - 0.003, hi = (large ? 1.5 : 0.5) * kCell + 0.003;
@@ -225,6 +227,15 @@ int main() {
                 paint0 = paint0 || (p.rgba[0] == 153 && p.rgba[1] == 0); paint1 = paint1 || (p.rgba[0] == 153 && p.rgba[1] == 38);
             }
             assert(paint0 && paint1);
+            std::vector<uint32_t> idx(m.indices); std::memcpy(idx.data(), mesh.data() + m.index_bytes + 4, idx.size() * 4);
+            for (size_t t = 0; t + 2 < idx.size(); t += 3) {
+                const MeshVertex &a = v[idx[t]], &b = v[idx[t + 1]], &c = v[idx[t + 2]];
+                double e1[3], e2[3], dot = 0;
+                for (int j = 0; j < 3; ++j) { e1[j] = b.pos[j] - a.pos[j]; e2[j] = c.pos[j] - a.pos[j]; }
+                double n[3] = {e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]};
+                for (int j = 0; j < 3; ++j) dot += n[j] * (a.normal[j] + b.normal[j] + c.normal[j]);
+                assert(dot <= 1e-12);
+            }
         }
     // Sounds: the replicated factor survives the one-byte trip, and every voice renders finite, audible audio.
     {
