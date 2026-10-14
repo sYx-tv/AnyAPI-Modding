@@ -1,4 +1,4 @@
-// AnySuspension logic tests: definitions JSON, spring tuning, rest positions and the rest file.
+// AnySuspension logic tests: definitions JSON, spring tuning, rest positions and the slider file.
 #include "../suspension_logic.h"
 #include <cassert>
 #include <cmath>
@@ -54,14 +54,21 @@ int main() {
     assert(near(target_from_rest(-1.0, -0.1, 0.2), -0.1, 1e-12));     // clamped to the rail's ends
     assert(near(target_from_rest(5.0, -0.1, 0.2), 0.2, 1e-12));
 
-    // Rest file round trip; junk is skipped.
-    RestMap m;
-    m[RestKey{12, 34}] = 0.15;
-    m[RestKey{-1, 7}] = 1.25;
-    RestMap back = decode_rest(encode_rest(m));
-    assert(back.size() == 2 && near(back[(RestKey{12, 34})], 0.15, 1e-6) && near(back[(RestKey{-1, 7})], 1.25, 1e-6));
-    RestMap junk = decode_rest("{\"version\": 1, \"rest\": {\"x:1\": 2, \"3:4\": \"no\", \"5:6\": 0.5}}");
-    assert(junk.size() == 1 && near(junk[(RestKey{5, 6})], 0.5, 1e-9));
+    // Properties Tool factors: 0-1 like the stock wheel's rows.
+    assert(near(frequency_from_factor(0), 1.0, 1e-12) && near(frequency_from_factor(1), 4.0, 1e-12) && near(frequency_from_factor(0.5), 2.5, 1e-12));
+    assert(near(frequency_from_factor(7), 4.0, 1e-12) && near(frequency_from_factor(NAN), 1.0, 1e-12));
+    assert(near(damping_from_factor(0), 0.1, 1e-12) && near(damping_from_factor(1), 1.0, 1e-12));
+
+    // Slider file round trip; junk is skipped.
+    SaveMap m;
+    m[RestKey{12, 34}] = SliderSave{0.15, 0.7, 0.3};
+    m[RestKey{-1, 7}] = SliderSave{1.25, 0.5, 0.5};
+    SaveMap back = decode_sliders(encode_sliders(m));
+    assert(back.size() == 2);
+    assert(near(back[(RestKey{12, 34})].rest, 0.15, 1e-6) && near(back[(RestKey{12, 34})].stiffness, 0.7, 1e-6) && near(back[(RestKey{12, 34})].damping, 0.3, 1e-6));
+    assert(near(back[(RestKey{-1, 7})].rest, 1.25, 1e-6));
+    SaveMap junk = decode_sliders("{\"version\": 2, \"sliders\": {\"x:1\": [2, 0, 0], \"3:4\": \"no\", \"8:9\": [1, 2], \"5:6\": [0.5, 3, -1]}}");
+    assert(junk.size() == 1 && near(junk[(RestKey{5, 6})].rest, 0.5, 1e-9) && near(junk[(RestKey{5, 6})].stiffness, 1, 1e-9) && near(junk[(RestKey{5, 6})].damping, 0, 1e-9));
     std::printf("suspension logic: ok\n");
     return 0;
 }

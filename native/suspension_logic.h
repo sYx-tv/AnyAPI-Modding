@@ -36,13 +36,16 @@ inline bool same_id(const char* id, size_t length, const char* want) {
 inline bool is_suspension_slider_id(const char* id, size_t length) { return same_id(id, length, kSuspensionSlider); }
 
 // ------------------------------------------------------------------------------------------- spring tuning
-// Mod Settings (AnyHelpers): ride frequency in Hz and damping as a fraction of critical. Defaults feel like a firm
-// road car; without AnyHelpers they stay at the defaults.
-constexpr double kDefaultFrequency = 2.0, kMinFrequency = 0.5, kMaxFrequency = 6.0;
-constexpr double kDefaultDamping = 0.5, kMinDamping = 0.05, kMaxDamping = 2.0;
+// Each Suspension Slider has Stiffness and Damping rows in the Properties Tool, 0 to 1 in steps of 0.1 like the
+// stock wheel's. Stiffness sets the ride frequency (1 to 4 Hz) and damping the fraction of critical (0.1 to 1).
+constexpr double kDefaultStiffness = 0.5, kDefaultDamping = 0.5;          // 2.5 Hz, 0.55 of critical
+constexpr double kMinFrequency = 1.0, kMaxFrequency = 4.0;
+constexpr double kMinDamping = 0.1, kMaxDamping = 1.0;
 constexpr double kGravity = 9.81;
 
 inline double clamp(double v, double lo, double hi) { return std::isfinite(v) ? (v < lo ? lo : v > hi ? hi : v) : lo; }
+inline double frequency_from_factor(double stiffness) { return kMinFrequency + (kMaxFrequency - kMinFrequency) * clamp(stiffness, 0, 1); }
+inline double damping_from_factor(double damping) { return kMinDamping + (kMaxDamping - kMinDamping) * clamp(damping, 0, 1); }
 
 // The spring is set by stiffness (N/m) and damping (N s/m) rather than by Jolt's frequency mode: Jolt measures that
 // frequency against the constraint's effective mass, which is mostly the light wheel side, so a heavy body would sit
@@ -76,32 +79,35 @@ inline double target_from_rest(double rail_rest, double limit_min, double limit_
 }
 inline double rest_from_position(double position, double limit_min) { return position - limit_min; }
 
-// ------------------------------------------------------------------------------------------- saved rest positions
+// ------------------------------------------------------------------------------------------- saved slider settings
 // Kept in a small file in the game's working folder, which the game copies into each save and back out on load
-// (the way AnyEngineParts keeps turbo wear). Keyed by the slider's vehicle id and component id, both saved by the
-// game. File: {"version": 1, "rest": {"12:34": 0.150000}}
+// (the way AnyEngineParts keeps turbo wear; adding to the game's own save data breaks it). Keyed by the slider's
+// vehicle id and component id, both saved by the game. Rest is metres along the rail; stiffness and damping are the
+// Properties Tool values. File: {"version": 2, "sliders": {"12:34": [0.150000, 0.5000, 0.5000]}}
 struct RestKey {
     int32_t vehicle = 0, component = 0;
     bool operator<(const RestKey& o) const { return vehicle != o.vehicle ? vehicle < o.vehicle : component < o.component; }
 };
-using RestMap = std::map<RestKey, double>;
+struct SliderSave { double rest = 0, stiffness = kDefaultStiffness, damping = kDefaultDamping; };
+using SaveMap = std::map<RestKey, SliderSave>;
 
-inline std::string encode_rest(const RestMap& rest) {
-    std::string out = "{\"version\": 1, \"rest\": {";
+inline std::string encode_sliders(const SaveMap& sliders) {
+    std::string out = "{\"version\": 2, \"sliders\": {";
     bool first = true;
-    char line[96];
-    for (auto& [k, v] : rest) {
-        if (!std::isfinite(v)) continue;
-        std::snprintf(line, sizeof line, "%s\n  \"%d:%d\": %.6f", first ? "" : ",", int(k.vehicle), int(k.component), v);
+    char line[128];
+    for (auto& [k, v] : sliders) {
+        if (!std::isfinite(v.rest)) continue;
+        std::snprintf(line, sizeof line, "%s\n  \"%d:%d\": [%.6f, %.4f, %.4f]", first ? "" : ",", int(k.vehicle), int(k.component), v.rest,
+                      clamp(v.stiffness, 0, 1), clamp(v.damping, 0, 1));
         out += line;
         first = false;
     }
     return out + "\n}}\n";
 }
 
-// Reads every "<vehicle>:<component>": value pair; anything else is skipped.
-inline RestMap decode_rest(const std::string& text) {
-    RestMap out;
+// Reads every "<vehicle>:<component>": [rest, stiffness, damping] entry; anything else is skipped.
+inline SaveMap decode_sliders(const std::string& text) {
+    SaveMap out;
     size_t i = 0;
     while ((i = text.find('"', i)) != std::string::npos) {
         size_t end = text.find('"', i + 1);
@@ -116,11 +122,20 @@ inline RestMap decode_rest(const std::string& text) {
         if (!p || *p) continue;
         size_t colon = text.find_first_not_of(" \t\r\n", i);
         if (colon == std::string::npos || text[colon] != ':') continue;
-        const char* start = text.c_str() + colon + 1;
-        char* stop = nullptr;
-        double value = std::strtod(start, &stop);
-        if (stop == start || !std::isfinite(value)) continue;
-        out[RestKey{int32_t(vehicle), int32_t(component)}] = value;
+        size_t open = text.find_first_not_of(" \t\r\n", colon + 1);
+        if (open == std::string::npos || text[open] != '[') continue;
+        double v[3];
+        const char* at = text.c_str() + open + 1;
+        bool ok = true;
+        for (int n = 0; n < 3 && ok; ++n) {
+            char* stop = nullptr;
+            v[n] = std::strtod(at, &stop);
+            ok = stop != at && std::isfinite(v[n]);
+            at = stop;
+            while (ok && n < 2 && (*at == ' ' || *at == ',' || *at == '\n' || *at == '\r' || *at == '\t')) ++at;
+        }
+        if (!ok) continue;
+        out[RestKey{int32_t(vehicle), int32_t(component)}] = SliderSave{v[0], clamp(v[1], 0, 1), clamp(v[2], 0, 1)};
     }
     return out;
 }
@@ -156,7 +171,7 @@ inline std::string definitions_json() {
         // Suspension rail: the rail, paired with the suspension slider.
         "    {\"id\": \"" + kSuspensionRail + "\", \"name\": \"Suspension Rail\", "
         "\"description\": \"Place a suspension slider on it in the editor to start a sprung body. Stretch it to set the "
-        "travel. The slider springs back to where you placed it; stiffness and damping are in Mod Settings.\", "
+        "travel. The slider springs back to where you placed it; set its stiffness and damping with the Properties Tool.\", "
         "\"class\": \"rail\", \"zones\": [{\"is_physics\": false}], \"interaction_zones\": [], \"surfaces\": [{\"dir\": 2}], "
         "\"logic_nodes\": [], \"mesh_static\": {\"mesh_path\": \"meshes/components/linear_rail_a.mesh\"}, \"meshes_dynamic\": [], "
         "\"mode_z\": \"stretch\", \"interval\": [0, 0, 1], \"ext_max\": [10, 10, 32], \"category\": \"connector\", "
@@ -166,7 +181,7 @@ inline std::string definitions_json() {
         // Suspension slider: the rail slider with a spring.
         "    {\"id\": \"" + kSuspensionSlider + "\", \"name\": \"Suspension Slider\", "
         "\"description\": \"Pairs with a suspension rail: place one on the other in the editor to start a sprung body. "
-        "Springs back to where you placed it along the rail. Interact to attach to a rail within one voxel, or to release.\", "
+        "Springs back to where you placed it along the rail. Stiffness and damping in the Properties Tool. Interact to attach to a rail within one voxel, or to release.\", "
         "\"class\": \"rail_slider\", \"zones\": [{\"is_physics\": false}], "
         "\"interaction_zones\": [{\"bounds_min\": [-0.04, -0.04, -0.04], \"bounds_max\": [0.04, 0.04, 0.04]}], "
         "\"surfaces\": [{\"dir\": 3}, {}, {\"dir\": 1}], \"logic_nodes\": [], "

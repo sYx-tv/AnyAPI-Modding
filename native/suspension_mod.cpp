@@ -6,8 +6,9 @@
 // Suspension: a rail and slider pair cloned from the game's rail and rail slider. The game's slider joint (Jolt)
 // has a motor; on each server tick of a suspension slider this mod sets that motor to a spring and damper that pulls
 // the slider back to where it was placed along the rail. Stiffness follows the heavier body's mass shared between
-// the suspension sliders holding it, so every vehicle sags about the same: g / (2 pi f)^2, 6 cm at the default 2 Hz.
-// Ride frequency and damping are in Mod Settings (AnyHelpers). The rest position is saved with each world.
+// the suspension sliders holding it, so every vehicle sags about the same: g / (2 pi f)^2, 4 cm at the default 2.5 Hz.
+// Each slider has Stiffness and Damping rows in the Properties Tool (0 to 1, like the stock wheel's). The rest
+// position and those values are saved with each world.
 //
 // Single player / host: the definitions are added on this game's server and client scene, and every player needs the
 // mod. The spring runs on the server, so clients only see the motion.
@@ -19,7 +20,6 @@
 #include <windows.h>
 #include "anyapi_services_v1.h"
 #include "anyapi_experimental.hpp"
-#include "anyhelpers_settings_v1.h"
 #include "suspension_bindings.h"
 #include "suspension_logic.h"
 #include <atomic>
@@ -218,43 +218,11 @@ void hk_add_definitions(void* container, const void* file) {
                            : "could not load the AnySuspension definitions from %s", g_json_path.c_str());
 }
 
-// ------------------------------------------------------------------------------------- settings (AnyHelpers)
-const AnyHelpersSettingsV1* g_settings = nullptr;
-uint64_t g_frequency_token = 0, g_damping_token = 0, g_settings_revision = UINT64_MAX;
-double g_frequency = kDefaultFrequency, g_damping = kDefaultDamping;
-
-void register_settings() {
-    auto services = AnyAPI_Services();
-    auto* s = services ? static_cast<const AnyHelpersSettingsV1*>(services->query("anyhelpers.settings", 1)) : nullptr;
-    if (!s || s->struct_size != sizeof(*s) || s->version != 1 || !s->register_setting || !s->get || !s->revision) return;
-    AnyModSettingV1 d;
-    d.kind = ANY_SETTING_NUMBER;
-    d.mod_id = kModId; d.mod_name = "AnySuspension";
-    d.setting_id = "ride_frequency"; d.label = "Suspension stiffness (Hz)";
-    d.description = "How fast a sprung body bounces. Higher is stiffer and sags less: 1 Hz is soft (25 cm sag), 2 Hz is firm (6 cm), 4 Hz is a race car (1.5 cm).";
-    d.order = 0; d.default_number = kDefaultFrequency; d.minimum = kMinFrequency; d.maximum = kMaxFrequency; d.step = 0.1;
-    g_frequency_token = s->register_setting(&d);
-    d.setting_id = "damping"; d.label = "Suspension damping";
-    d.description = "How quickly bouncing dies away. 1 stops without overshoot; lower bounces more, higher feels stiff over bumps.";
-    d.order = 1; d.default_number = kDefaultDamping; d.minimum = kMinDamping; d.maximum = kMaxDamping; d.step = 0.05;
-    g_damping_token = s->register_setting(&d);
-    if (g_frequency_token || g_damping_token) g_settings = s;
-}
-void read_settings() {
-    if (!g_settings) return;
-    uint64_t revision = g_settings->revision();
-    if (revision == g_settings_revision) return;
-    g_settings_revision = revision;
-    AnySettingValueV1 v;
-    if (g_frequency_token && g_settings->get(g_frequency_token, &v)) g_frequency = clamp(v.number, kMinFrequency, kMaxFrequency);
-    if (g_damping_token && g_settings->get(g_damping_token, &v)) g_damping = clamp(v.number, kMinDamping, kMaxDamping);
-    log(0, "suspension settings: %.2f Hz, damping %.2f (sag %.1f cm)", g_frequency, g_damping, static_sag(g_frequency) * 100.0);
-}
-
-// ------------------------------------------------------------------------------------- saved rest positions
+// ------------------------------------------------------------------------------------- saved slider settings
 // In a file in the game's working folder (suspension_logic.h). The game swaps that folder's contents when a world
 // loads, so the file is watched: a new file (or none) means another world.
-RestMap g_rest;
+SaveMap g_rest;
+uint64_t g_rest_generation = 1;                      // bumped whenever the file is (re)loaded or dropped
 std::wstring g_rest_path;                            // empty: rest positions are kept for this session only
 struct FileStamp { bool exists = false; FILETIME created{}, written{}; uint64_t size = 0; };
 FileStamp g_rest_stamp;
@@ -276,13 +244,13 @@ bool same_stamp(const FileStamp& a, const FileStamp& b) {
 void init_rest_path() {
     wchar_t buf[MAX_PATH];
     DWORD n = GetEnvironmentVariableW(L"APPDATA", buf, MAX_PATH);
-    if (!n || n >= MAX_PATH) { log(1, "APPDATA not set; suspension rest positions are not saved"); return; }
+    if (!n || n >= MAX_PATH) { log(1, "APPDATA not set; suspension sliders are not saved"); return; }
     std::wstring dir = std::wstring(buf) + L"\\Anymaker\\working";
     if (GetFileAttributesW(dir.c_str()) == INVALID_FILE_ATTRIBUTES && GetFileAttributesW((std::wstring(buf) + L"\\Anymaker").c_str()) == INVALID_FILE_ATTRIBUTES) {
-        log(1, "the game's user folder (%%APPDATA%%\\Anymaker) was not found; suspension rest positions are not saved");
+        log(1, "the game's user folder (%%APPDATA%%\\Anymaker) was not found; suspension sliders are not saved");
         return;
     }
-    g_rest_path = dir + L"\\anysuspension_rest.json";
+    g_rest_path = dir + L"\\anysuspension_sliders.json";
 }
 // Reloads when the world changed under us; writes ours a second after it changed. Server tick.
 void sync_rest(double now) {
@@ -291,22 +259,23 @@ void sync_rest(double now) {
     FileStamp s = stamp_of(g_rest_path);
     if (!same_stamp(s, g_rest_stamp)) {
         if (s.exists) {
-            g_rest = decode_rest(read_file(g_rest_path));
-            log(0, "suspension rest positions loaded: %zu sliders", g_rest.size());
+            g_rest = decode_sliders(read_file(g_rest_path));
+            log(0, "suspension sliders loaded: %zu", g_rest.size());
         } else if (g_rest_stamp.exists) {
             g_rest.clear();                              // another world, without any yet
-            log(0, "suspension rest file gone (another world); starting fresh");
+            log(0, "suspension slider file gone (another world); starting fresh");
         }
         g_rest_stamp = s;
         g_rest_dirty = false;
+        ++g_rest_generation;
         return;
     }
     if (!g_rest_dirty || now - g_rest_written < 1.0) return;
-    std::string text = encode_rest(g_rest);
+    std::string text = encode_sliders(g_rest);
     std::wstring temp = g_rest_path + L".tmp";
     if (!write_file(temp, text.data(), text.size()) || !MoveFileExW(temp.c_str(), g_rest_path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
         static std::atomic<int> logs{3};
-        if (logs.fetch_sub(1) > 0) log(1, "could not write the suspension rest file (error %lu)", GetLastError());
+        if (logs.fetch_sub(1) > 0) log(1, "could not write the suspension slider file (error %lu)", GetLastError());
         g_rest_written = now;
         return;
     }
@@ -337,7 +306,12 @@ struct SliderState {
     double last_seen = 0;
     bool layout_checked = false, layout_ok = false;
     int logs = 0;
+    double* setting = nullptr;                       // [stiffness, damping], Properties Tool values: process heap, never
+                                                     // freed (the Properties Tool holds pointers to them)
+    double saved[2] = {-1, -1};                      // what the slider file holds for them
+    uint64_t generation = 0;                         // the slider file generation they were loaded from
 };
+std::recursive_mutex g_slider_mutex;                 // ticks (server thread) and Properties Tool rows
 std::unordered_map<const void*, SliderState> g_sliders;                              // keyed by slider component
 std::unordered_map<const void*, std::unordered_map<const void*, double>> g_carried; // heavy vehicle -> sliders, last seen
 double g_last_sweep = 0;
@@ -350,12 +324,37 @@ int springs_carrying(const void* heavy, const void* slider, double now) {
     return n;
 }
 
+RestKey key_of(const void* self, const void* vehicle) {
+    return RestKey{vehicle ? at<int32_t>(vehicle, off::vehicle_id) : 0, at<int32_t>(self, off::component_id)};
+}
+
+// The slider's Stiffness and Damping, loaded from the slider file when it (re)loads, or the defaults. Changes made
+// with the Properties Tool are written back.
+SliderState& slider_state(const void* self, const void* vehicle) {
+    SliderState& st = g_sliders[self];
+    if (!st.setting) {
+        st.setting = static_cast<double*>(HeapAlloc(GetProcessHeap(), 0, 2 * sizeof(double)));
+        if (st.setting) { st.setting[0] = kDefaultStiffness; st.setting[1] = kDefaultDamping; }
+    }
+    if (st.setting && vehicle && st.generation != g_rest_generation) {
+        st.generation = g_rest_generation;
+        auto found = g_rest.find(key_of(self, vehicle));
+        if (found != g_rest.end()) {
+            st.setting[0] = found->second.stiffness; st.setting[1] = found->second.damping;
+            st.saved[0] = st.setting[0]; st.saved[1] = st.setting[1];
+        }
+    }
+    return st;
+}
+
 void spring_tick(void* self, void* vehicle) {
     double now = now_seconds();
-    read_settings();
+    std::lock_guard<std::recursive_mutex> lock(g_slider_mutex);
     sync_rest(now);
-    SliderState& st = g_sliders[self];
+    SliderState& st = slider_state(self, vehicle);
     st.last_seen = now;
+    double stiffness = st.setting ? clamp(st.setting[0], 0, 1) : kDefaultStiffness;
+    double damping_factor = st.setting ? clamp(st.setting[1], 0, 1) : kDefaultDamping;
     const uint8_t* handle = static_cast<const uint8_t*>(self) + off::slider_constraint;
     uint8_t* jolt = readable(handle, 16) ? jolt_slider(handle) : nullptr;
     if (!jolt) { st.jolt = nullptr; return; }       // not attached to a rail
@@ -378,14 +377,20 @@ void spring_tick(void* self, void* vehicle) {
     g_get_position(&position, handle);
     if (!std::isfinite(position)) return;
 
-    RestKey key{at<int32_t>(vehicle, off::vehicle_id), at<int32_t>(self, off::component_id)};
+    RestKey key = key_of(self, vehicle);
     auto found = g_rest.find(key);
     bool fresh = found == g_rest.end();
     if (fresh) {
-        found = g_rest.emplace(key, rest_from_position(position, has_limits ? lo : 0.0)).first;
+        found = g_rest.emplace(key, SliderSave{rest_from_position(position, has_limits ? lo : 0.0), stiffness, damping_factor}).first;
+        st.saved[0] = stiffness; st.saved[1] = damping_factor;
         g_rest_dirty = true;
+    } else if (stiffness != st.saved[0] || damping_factor != st.saved[1]) {   // changed with the Properties Tool
+        found->second.stiffness = st.saved[0] = stiffness;
+        found->second.damping = st.saved[1] = damping_factor;
+        g_rest_dirty = true;
+        log(0, "slider %d: stiffness %.1f (%.2f Hz), damping %.1f", key.component, stiffness, frequency_from_factor(stiffness), damping_factor);
     }
-    double target = has_limits ? target_from_rest(found->second, lo, hi) : found->second;
+    double target = has_limits ? target_from_rest(found->second.rest, lo, hi) : found->second.rest;
 
     const void* rail = pointer_at(self, off::slider_rail);
     const void* rail_vehicle = rail ? pointer_at(rail, off::component_vehicle) : nullptr;
@@ -394,10 +399,10 @@ void spring_tick(void* self, void* vehicle) {
     int carried = springs_carrying(heavy, self, now);
     double share = sprung_share(mass_slider, mass_rail, carried);
     if (!(share > 0)) share = 100.0;                 // masses unreadable: a light default rather than none
-    Spring spring = spring_for(share, g_frequency, g_damping);
+    double frequency = frequency_from_factor(stiffness), ratio = damping_from_factor(damping_factor);
+    Spring spring = spring_for(share, frequency, ratio);
 
-    double frequency = g_frequency, damping = g_damping;
-    g_set_motor(handle, &frequency, &damping, &target);   // position motor, target clamped to the rail's ends
+    g_set_motor(handle, &frequency, &ratio, &target);   // position motor, target clamped to the rail's ends
     at<uint8_t>(jolt, off::jolt_spring_mode) = 1;        // stiffness and damping in N/m and N s/m
     at<float>(jolt, off::jolt_spring_value) = float(spring.stiffness);
     at<float>(jolt, off::jolt_spring_damping) = float(spring.damping);
@@ -406,19 +411,56 @@ void spring_tick(void* self, void* vehicle) {
         st.jolt = jolt;
         if (st.logs++ < 6)
             log(0, "slider %d on vehicle %d: %s rest %.3f m along the rail (position %.3f, limits %s%.3f to %.3f), target %.3f; "
-                   "masses %.0f kg (slider side) / %.0f kg (rail side), %d spring%s share %.0f kg: %.0f N/m, %.0f N s/m",
-                key.component, key.vehicle, fresh ? "new," : "saved", found->second, position, has_limits ? "" : "none, ", lo, hi, target,
-                mass_slider, mass_rail, carried, carried == 1 ? "" : "s", share, spring.stiffness, spring.damping);
+                   "masses %.0f kg (slider side) / %.0f kg (rail side), %d spring%s share %.0f kg; stiffness %.1f (%.2f Hz) damping %.1f: %.0f N/m, %.0f N s/m",
+                key.component, key.vehicle, fresh ? "new," : "saved", found->second.rest, position, has_limits ? "" : "none, ", lo, hi, target,
+                mass_slider, mass_rail, carried, carried == 1 ? "" : "s", share, stiffness, frequency, damping_factor, spring.stiffness, spring.damping);
     }
     if (now - g_last_sweep > 2.0) {                  // sliders gone from the scene stop ticking
         g_last_sweep = now;
         for (auto it = g_sliders.begin(); it != g_sliders.end();)
-            if (now - it->second.last_seen > 2.0) it = g_sliders.erase(it); else ++it;
+            if (now - it->second.last_seen > 30.0) it = g_sliders.erase(it); else ++it;
         for (auto it = g_carried.begin(); it != g_carried.end();) {
-            for (auto s = it->second.begin(); s != it->second.end();) if (now - s->second > 2.0) s = it->second.erase(s); else ++s;
+            for (auto c = it->second.begin(); c != it->second.end();) if (now - c->second > 2.0) c = it->second.erase(c); else ++c;
             if (it->second.empty()) it = g_carried.erase(it); else ++it;
         }
     }
+}
+
+// ------------------------------------------------------------------------------------- Properties Tool
+// A Suspension Slider shows Stiffness and Damping rows, 0 to 1 in steps of 0.1, like the stock wheel's. The rail
+// slider class has no rows of its own, so its method-table slot holds the base (empty) get_properties, whose cell
+// every class without rows shares: the hook passes everything else straight through.
+using get_properties_t = void (*)(void* self, void* properties);
+using add_f64_range_t = void (*)(void* properties, const int32_t* label, double* const* value, const double* min, const double* max, const double* step);
+constexpr int kAddPropertyF64RangeSlot = 10;          // server_scene.peer.property_data method table
+enum : int32_t { kLocStiffness = 351, kLocDamping = 352 };   // e_localization_string property_stiffness, property_damping
+anymaker::cell_hook h_properties;
+
+void* container_method(void* container, int slot) {
+    if (!container || !anymaker::readable(container, 8)) return nullptr;
+    auto ti = anymaker::typeinfo_of(container);
+    if (!ti.p || !anymaker::readable(ti.p + 0x80, 8) || !ti.table() || !anymaker::readable(ti.table() + slot, 8)) return nullptr;
+    return ti.method(slot);
+}
+
+void hk_properties(void* self, void* properties) {
+    reinterpret_cast<get_properties_t>(h_properties.original)(self, properties);
+    if (!self || !properties || !g_ready.load() || !slider_definition(pointer_at(self, off::component_definition))) return;
+    double* setting = nullptr;
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_slider_mutex);
+        setting = slider_state(self, pointer_at(self, off::component_vehicle)).setting;
+    }
+    auto add = setting ? reinterpret_cast<add_f64_range_t>(container_method(properties, kAddPropertyF64RangeSlot)) : nullptr;
+    if (!add) return;
+    double min = 0, max = 1, step = 0.1;
+    int32_t label = kLocStiffness;
+    add(properties, &label, &setting, &min, &max, &step);
+    double* damping = setting + 1;
+    label = kLocDamping;
+    add(properties, &label, &damping, &min, &max, &step);
+    static std::atomic<int> logs{4};
+    if (logs.fetch_sub(1) > 0) log(0, "slider %d: Stiffness and Damping rows added (%.1f, %.1f)", at<int32_t>(self, off::component_id), setting[0], setting[1]);
 }
 
 using tick_t = void (*)(void* self, void* vehicle, void* scene);
@@ -501,6 +543,9 @@ void install_spring() {
     g_get_mass = reinterpret_cast<get_mass_t>(get_mass);
     init_rest_path();
     if (!h_tick.install(tick, (void*)&hk_tick)) { log(1, "rail slider tick hook not installed; suspension sliders run free"); return; }
+    void** properties = hook_cell(bind::rail_slider_get_properties);
+    if (!properties || !h_properties.install(properties, (void*)&hk_properties))
+        log(1, "Properties Tool rows unavailable; suspension sliders use stiffness %.1f and damping %.1f", kDefaultStiffness, kDefaultDamping);
     log(0, "suspension spring on");
 }
 
@@ -540,6 +585,7 @@ void install_hooks() {
     }
 }
 void remove_hooks() {
+    h_properties.remove((void*)&hk_properties);
     h_tick.remove((void*)&hk_tick);
     h_add_definitions.remove((void*)&hk_add_definitions);
 }
@@ -554,7 +600,6 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyM
     return true;
 }
 extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
-    suspension::register_settings();                 // Mod Settings rows (AnyHelpers)
     // Resolving scans game memory: keep it off the loader and frame threads.
     std::thread([] { suspension::install_hooks(); }).detach();
 }

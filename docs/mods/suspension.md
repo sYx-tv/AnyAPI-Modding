@@ -21,22 +21,20 @@ in the editor to start the new body, and interact with the bearing or the slider
 1. Place a **Suspension Rail** on the chassis, pointing along the travel you want (usually up and down). Stretch it:
    its length is the suspension's travel.
 2. Place a **Suspension Slider** on it where you want the wheel side to sit. That spot is the slider's rest
-   position, and it is saved with the world.
+   position. It and the slider's Properties Tool values are saved with the world.
 3. Build the wheel side on the slider's body.
 
 The slider's joint has a spring and damper that pull it back to its rest position, and it stops at the rail's ends.
-The load makes it settle a little past the rest position: about `9.81 / (2 pi f)^2`, 6 cm at the default 2 Hz.
+The load makes it settle a little past the rest position: about `9.81 / (2 pi f)^2`, 4 cm at the default 2.5 Hz.
 Every vehicle sags by about the same amount, whatever its weight. The spring is set from the heavier of the two
 bodies, shared between all the suspension sliders holding it up.
 
-**Mod Settings** (AnyHelpers):
+**Properties Tool**: click a Suspension Slider, like a stock wheel, to set its own rows (0 to 1 in steps of 0.1):
 
-| Setting | Default | Range | Effect |
-| --- | --- | --- | --- |
-| Suspension stiffness (Hz) | 2.0 | 0.5 to 6 | How fast a sprung body bounces. 1 Hz is soft (25 cm sag), 4 Hz a race car (1.5 cm). |
-| Suspension damping | 0.5 | 0.05 to 2 | How quickly bouncing dies away. 1 stops without overshoot. |
-
-Without AnyHelpers the defaults apply.
+| Row | Default | Effect |
+| --- | --- | --- |
+| Stiffness | 0.5 | Ride frequency from 1 Hz (0, soft, 25 cm sag) to 4 Hz (1, race car, 1.5 cm sag); 0.5 is 2.5 Hz. |
+| Damping | 0.5 | How quickly bouncing dies away: 0.1 of critical at 0 (bouncy) to critical at 1 (no overshoot). |
 
 ## How it works
 
@@ -45,8 +43,9 @@ Without AnyHelpers the defaults apply.
   The definitions are written to `AnyAPI and Modding/AnySuspension/anysuspension_parts.json` and added at start-up.
 - The game's slider joint has a motor (the Rail Ballscrew Slider uses it to hold position). On every server tick of
   a Suspension Slider, the mod sets that motor to a position spring: the target is the rest position, the stiffness
-  `k = m (2 pi f)^2` and the damping `2 zeta sqrt(k m)`, where `m` is the sprung mass share.
+  `k = m (2 pi f)^2` and the damping `2 zeta sqrt(k m)`, where `m` is the sprung mass share, `f` comes from
+  Stiffness and `zeta` from Damping.
 - The rest position is kept along the rail, so it does not drift when the game rebuilds the joint on load. It is
-  stored in `%APPDATA%\Anymaker\working\anysuspension_rest.json`, which the game copies into each save.
+  stored with the slider's Stiffness and Damping in `%APPDATA%\Anymaker\working\anysuspension_sliders.json`, which the game copies into each save.
 
 Stock meshes for now: the bearing looks like the hinge, the suspension like the rail.
