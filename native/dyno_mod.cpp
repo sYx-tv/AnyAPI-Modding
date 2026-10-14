@@ -570,16 +570,19 @@ void install_hooks() {
         if (!load_cell) load_cell = route::cell(bind::definition_file_load);
         if (!g_file_load && load_cell && code_is(*load_cell, kSigFileLoad)) g_file_load = reinterpret_cast<file_load_t>(*load_cell);
         if (!g_string_ctor) g_string_ctor = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
-        if (!engine) { void** c = route::cell(bind::engine_tick); void* entry = route::function(bind::engine_tick); if (c && entry && *c == entry) engine = c; }
+        if (!engine) {                           // the game's engine tick, or Turbo's hook on it (hot boost air), to chain onto
+            void** c = route::cell(bind::engine_tick); void* entry = route::function(bind::engine_tick);
+            if (c && entry && anymaker::readable(c, 8) && (*c == entry || in_other_module(*c))) engine = c;
+        }
         if (!tick) tick = hook_cell(bind::altitude_tick);
         if (!get) get = hook_cell(bind::altitude_get_data_f64);
         if (!g_vehicle_transform) g_vehicle_transform = reinterpret_cast<transform_t>(function(bind::server_vehicle_get_transform));
         if (!g_component_transform) g_component_transform = reinterpret_cast<transform_t>(function(bind::server_component_get_transform));
         bool core = add && g_file_ctor && g_file_dtor && g_file_load && g_string_ctor && engine && tick && get;
         if (!core) {
-            if (attempt == 179)
-                log(2, "could not locate the game functions (add=%d file=%d/%d/%d string=%d engine=%d sensor=%d/%d)", !!add, !!g_file_ctor, !!g_file_dtor,
-                    !!g_file_load, !!g_string_ctor, !!engine, !!tick, !!get);
+            if (attempt == 5 || attempt == 179)
+                log(attempt == 179 ? 2 : 1, "%s (add=%d file=%d/%d/%d string=%d engine=%d sensor=%d/%d)", attempt == 179 ? "could not locate the game functions; Dyno is off" : "still looking for the game functions",
+                    !!add, !!g_file_ctor, !!g_file_dtor, !!g_file_load, !!g_string_ctor, !!engine, !!tick, !!get);
             continue;
         }
         g_get_definition = reinterpret_cast<get_definition_t>(function(bind::definitions_get_by_id));

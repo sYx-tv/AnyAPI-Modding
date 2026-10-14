@@ -24,7 +24,7 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyM
     dyno::init(*h);
     out->id = "anyengineparts";
     out->input = dyno::on_input;
-    out->shutdown = [](void*) { turbo::shutdown(); rotary::shutdown(); dyno::shutdown(); };
+    out->shutdown = [](void*) { dyno::shutdown(); rotary::shutdown(); turbo::shutdown(); };   // last hooked, first removed
     return true;
 }
 extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
