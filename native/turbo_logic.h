@@ -459,9 +459,12 @@ constexpr const char* kValveMeshPath = "meshes/components/gas_port_a.mesh";
 // Air filter: a cone filter for the compressor intake. It is a gas vent to the game (class gas_vent / gas_vent_b,
 // so it draws outside air like one); a turbo whose intake pipe has one on it counts as filtered.
 inline std::string air_filter_entry(bool large, const std::string& mesh) {
-    std::string surfaces = large
-        ? "{\"size\": [2, 2]}, {\"pos\": [0, 0, 1], \"size\": [2, 2], \"dir\": 5}, {\"size\": [2, 2], \"dir\": 4}, {\"pos\": [1, 0, 0], \"size\": [2, 2], \"dir\": 1}, {\"size\": [2, 2], \"dir\": 2}"
-        : "{}, {\"dir\": 1}, {\"dir\": 2}, {\"dir\": 4}, {\"dir\": 5}";
+    // The small filter is 3 x 3 x 3 cells and the large 4 x 4 x 4 (as turbo_upkeep_mesh.h's air_filter_cells), its pipe in
+    // the middle of the bottom face: the small pipe under cell 1, the large (2 x 2, anchored at its low corner) under
+    // cells 1..2. Every face but the top takes other parts.
+    const std::string n = large ? "4" : "3", last = large ? "3" : "2", size = "\"size\": [" + n + ", " + n + "]";
+    std::string surfaces = "{" + size + "}, {\"pos\": [0, 0, " + last + "], " + size + ", \"dir\": 5}, {" + size + ", \"dir\": 4}, {\"pos\": [" + last +
+        ", 0, 0], " + size + ", \"dir\": 1}, {" + size + ", \"dir\": 2}";
     std::string description = std::string("Cone air filter for a Turbo's compressor intake, ") + (large ? "large pipe (4x4 and 5x5 turbos)" : "small pipe (2x2 and 3x3 turbos)") +
         ". Pipe its neck to the turbo's intake (front centre). Clean air makes the turbo wear several times slower. It clogs slowly "
         "with use and a clogged filter costs a little boost; place a new one to replace it.";
@@ -470,14 +473,14 @@ inline std::string air_filter_entry(bool large, const std::string& mesh) {
         "      \"name\": \"" + (large ? "Turbo Air Filter (Large)" : "Turbo Air Filter (Small)") + "\",\n" +
         "      \"description\": \"" + description + "\",\n" +
         "      \"class\": \"" + (large ? "gas_vent_b" : "gas_vent") + "\",\n" +
-        "      \"zones\": [" + (large ? "{\"bounds_max\": [1, 1, 1]}" : "{}") + "],\n" +
+        "      \"zones\": [{\"bounds_max\": [" + last + ", " + last + ", " + last + "]}],\n" +
         "      \"interaction_zones\": [],\n" +
         "      \"surfaces\": [" + surfaces + "],\n" +
-        "      \"logic_nodes\": [{\"direction\": 2, \"type\": \"gas\"" + (large ? ", \"size\": 1" : "") + "}],\n" +
+        "      \"logic_nodes\": [{\"pos\": [1, 0, 1], \"direction\": 2, \"type\": \"gas\"" + (large ? ", \"size\": 1" : "") + "}],\n" +
         "      \"mesh_static\": {\"mesh_path\": \"" + mesh + "\"},\n" +
         "      \"meshes_dynamic\": [],\n" +
         "      \"category\": \"gas\",\n" +
-        "      \"inspection_geometry\": [{" + (large ? "\"p1\": [1.0, 1.0, 1.0]" : "") + "}],\n" +
+        "      \"inspection_geometry\": [{\"p1\": [" + last + ".0, " + last + ".0, " + last + ".0]}],\n" +
         "      \"data_descriptors\": [],\n" +
         "      \"tech_tier\": 3,\n" +
         "      \"spawn_probability\": 0.1,\n" +

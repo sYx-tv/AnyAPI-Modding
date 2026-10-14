@@ -344,7 +344,7 @@ int main() {
             std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), meshes[k].data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
             bool paint0 = false, paint1 = false;
             double lo[3], hi[3];
-            if (k == 0) { for (int j = 0; j < 3; ++j) { lo[j] = -kCell / 2; hi[j] = (large ? 1.5 : 0.5) * kCell; } }
+            if (k == 0) { for (int j = 0; j < 3; ++j) { lo[j] = -kCell / 2; hi[j] = (air_filter_cells(large) - 0.5) * kCell; } }
             else { lo[0] = lo[1] = lo[2] = -kCell / 2; hi[0] = hi[2] = kCell / 2; hi[1] = 1.5 * kCell; }   // one cell wide, two tall
             for (auto& p : v) {
                 for (int j = 0; j < 3; ++j) assert(p.pos[j] >= lo[j] - 0.003 && p.pos[j] <= hi[j] + 0.003);

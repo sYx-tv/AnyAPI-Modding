@@ -11,4 +11,6 @@ the data port outputs rpm, power, torque and the latest peak. See [Dyno](../mods
 
 **Two intercoolers:** the intercooler is now the **Race Core** (black core, bright fins, inlet stubs), and a second, the **Round Tank** (slim silver core between round tanks), works the same. Both keep even fins however tall they are stretched. Intercoolers already placed become the Race Core.
 
+**Bigger air filters, pipe centred:** the small filter is now 3x3x3 and the large 4x4x4, each with its pipe in the middle of the bottom face.
+
 Guide: [AnyEngineParts](../mods/engine-parts.md).
