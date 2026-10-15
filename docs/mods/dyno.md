@@ -11,7 +11,8 @@ anywhere on a vehicle; an orange bar chart on its top tells it apart from the Co
 
 1. Start the engine and get near the vehicle (within 40 m). The Dyno panel appears in the top right of the screen.
 2. Hold the throttle fully down (90 % or more). The panel shows **REC** and draws the pull as the RPM climbs.
-3. Let off. A pull that covered at least 1,500 RPM over at least a second is kept.
+3. Let off, or let the engine reach the 8,000 RPM fuel cut, which ends the pull like a real dyno run. A pull that
+   covered at least 1,500 RPM over at least a second is kept. The next pull starts once you have let off.
 
 The last three pulls stay on the graph so you can compare builds: the oldest is grey, then blue, and the newest
 orange. **Solid lines are power, dashed lines are torque**, and the red line is the game's 8,000 RPM fuel cut. Beside

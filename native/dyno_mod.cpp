@@ -221,12 +221,16 @@ void hk_add_definitions(void* container, const void* file) {
 
 // ------------------------------------------------------------------------------------- server ticks
 void hk_engine_tick(void* self, void* vehicle, void* scene) {
+    // The engine speed the tick makes its power at: the game reads m_rps first and only sets the new speed at the end.
+    // Read after the tick, an engine bouncing on the fuel cut showed power above 8,000 RPM.
+    bool feed = self && vehicle && dyno_ticking() &&
+                anymaker::readable(static_cast<uint8_t*>(self) + off::engine_rps, off::engine_energy + 8 - off::engine_rps);
+    double rps_before = feed ? at<double>(self, off::engine_rps) : 0;
     reinterpret_cast<engine_tick_t>(h_engine_tick.original)(self, vehicle, scene);
-    if (!self || !vehicle || !dyno_ticking()) return;   // nothing to feed: keep the engine tick cheap
-    if (!anymaker::readable(static_cast<uint8_t*>(self) + off::engine_rps, off::engine_energy + 8 - off::engine_rps)) return;
+    if (!feed) return;                              // nothing to feed: keep the engine tick cheap
     EngineSample s;
     s.engines = 1;
-    s.rps = at<double>(self, off::engine_rps);
+    s.rps = rps_before;
     s.watts = at<double>(self, off::engine_energy) * kTicksPerSecond;
     s.throttle = at<double>(self, off::engine_throttle);
     s.boost = at<double>(self, off::engine_boost);

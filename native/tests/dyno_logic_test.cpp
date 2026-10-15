@@ -27,7 +27,8 @@ void pull(Recorder& r, double from, double to, double rate, double boost = 1.0, 
     while (rpm < to) {
         EngineSample s; s.engines = 1; s.rps = rpm / 60; s.throttle = 1; s.boost = boost; s.temperature_c = 90 + rpm / 200;
         s.watts = game_watts(rpm, boost, 1); s.knock = knock;
-        assert(!r.feed(s, dt));
+        bool kept = r.feed(s, dt);
+        assert(!kept || rpm >= kAtCutRpm);            // a pull is kept when it reaches the fuel cut
         rpm += rate * dt;
     }
     EngineSample off; off.engines = 1; off.rps = rpm / 60; off.throttle = 0;
@@ -58,6 +59,32 @@ int main() {
     assert(r.count == 2 && r.latest()->number == 2 && r.latest()->knocked() && near(r.latest()->boost_peak, 1.6, 1e-9));
     r.latest()->peak_power(w, rpm);
     assert(near(w, 1600 * 1.6, 1e-6));
+
+    // Bouncing on the fuel cut while a turbo keeps spooling adds nothing: the sweep ended at the cut.
+    {
+        Recorder lim;
+        double rpm = 2000;
+        const double dt = 1.0 / 60;
+        for (; rpm < 7990; rpm += 1500 * dt) {
+            EngineSample s; s.engines = 1; s.rps = rpm / 60; s.throttle = 1; s.watts = game_watts(rpm, 1.0, 1);
+            lim.feed(s, dt);
+        }
+        for (int i = 0; i < 600; ++i) {               // 10 s on the limiter, boost rising to 1.3
+            double boost = 1.0 + 0.3 * i / 600.0;
+            EngineSample s; s.engines = 1; s.throttle = 1; s.boost = boost;
+            bool fuelled = i % 2 == 0;
+            s.rps = (fuelled ? 7995.0 : 8040.0) / 60;
+            s.watts = fuelled ? 1600 * boost : 0;
+            assert(!lim.feed(s, dt) && !lim.active);
+        }
+        assert(lim.count == 1);                       // kept when it reached the cut
+        EngineSample off; off.engines = 1; off.rps = 7000.0 / 60; off.throttle = 0;
+        assert(!lim.feed(off, dt));
+        const Run& run = *lim.latest();
+        double w, at;
+        run.peak_power(w, at);
+        assert(run.hi <= 80 && near(w, 1600, 1e-6) && near(run.boost_peak, 1.0, 1e-9) && run.seconds < 4.5);
+    }
 
     // Too short a sweep (1,000 RPM) or too short a time is dropped; part throttle never starts a pull.
     pull(r, 3000, 4000, 1500);
@@ -90,7 +117,7 @@ int main() {
     pull(mid, 5000, 8000, 1500);                         // carries straight on: the throttle never came off
     assert(mid.count == 1 && mid.latest()->number == 1 && mid.latest()->lo == 20);
 
-    // A pull held at the limiter for minutes ends at the time cap and is kept.
+    // A pull held at the limiter for minutes is kept once, when it reaches the cut.
     Recorder held;
     for (int i = 0; i < 60 * 100; ++i) {
         EngineSample s; s.engines = 1; s.throttle = 1; s.rps = std::min(7990.0, 2000 + i * 25.0) / 60; s.watts = game_watts(s.rps * 60, 1, 1);

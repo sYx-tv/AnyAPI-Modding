@@ -10,6 +10,12 @@
 // A pull: the throttle held at 90 % or more. Samples go into 100 RPM bins (averaged), and when the throttle comes off
 // the pull is kept if it covered at least 1,500 RPM over at least a second. The last three pulls are kept, oldest
 // first, so builds can be compared.
+//
+// A pull also ends when it reaches the fuel cut, like a real dyno run stops at the limiter. Bouncing on it, the engine
+// makes power only on the ticks that start under 8,000 RPM, and a turbo still spooling there kept raising those last
+// bins (Nate's first rotary pulls, 2026-10-15). The next pull starts once the throttle has come off. The mod gives each
+// sample the RPM the engine had when it made that power (read before the game's engine tick): read after, the
+// bounce showed up as power at 8,600 to 8,900 RPM.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -24,6 +30,8 @@ constexpr double kTicksPerSecond = 60.0;     // m_display_torque is energy per t
 constexpr int kBinRpm = 100, kMaxRpm = 9000, kBins = kMaxRpm / kBinRpm + 1;
 constexpr int kRunsKept = 3;
 constexpr double kFullThrottle = 0.9, kMinSpanRpm = 1500, kMinSeconds = 1.0, kMaxSeconds = 90.0;
+constexpr double kFuelCutRpm = 8000;          // the game's engines make no power above it
+constexpr double kAtCutRpm = kFuelCutRpm - 60;   // a sample this close counts as reaching the cut
 
 inline double torque_nm(double watts, double rps) { return rps > 0.5 ? watts / (2 * kPi * rps) : 0.0; }
 
@@ -66,6 +74,7 @@ struct Recorder {
     int count = 0;
     Run current;
     bool active = false;
+    bool wait_lift = false;                  // the last pull ended at the fuel cut: wait for the throttle to come off
     uint32_t next_number = 1;
     EngineSample live;                       // the latest tick, for the readout
 
@@ -82,6 +91,10 @@ struct Recorder {
         if (!(dt > 0) || dt > 0.25) dt = 1.0 / kTicksPerSecond;
         double rpm = s.rps * 60.0;
         bool full = s.engines > 0 && s.throttle >= kFullThrottle && std::isfinite(rpm) && rpm > 0 && std::isfinite(s.watts);
+        if (wait_lift) {
+            if (!full) wait_lift = false;
+            return false;
+        }
         if (!active) {
             if (!full) return false;
             current = Run{};
@@ -99,6 +112,7 @@ struct Recorder {
         current.boost_peak = std::max(current.boost_peak, s.boost);
         current.temperature_peak = std::max(current.temperature_peak, s.temperature_c);
         if (std::isfinite(s.knock)) current.knock_peak = std::max(current.knock_peak, s.knock);
+        if (rpm >= kAtCutRpm && s.watts > 0) { wait_lift = true; return finish(); }
         return false;
     }
 
