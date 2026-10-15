@@ -90,7 +90,7 @@ struct Sweep {
 // firing, how hard, and the turbo's size.
 enum class Voice { kTurbo, kBlowOff, kAntilag, kSupercharger };
 
-// A supercharger's voice follows the engine with no lag: the whine of its step-up gears (straight cut, a buzzy tone
+// A supercharger's voice follows the engine closely: the whine of its step-up gears (straight cut, a buzzy tone
 // with harmonics that wavers with the gear mesh), its impeller's thin whistle above it and the air it gulps. The
 // level it gets is its pulley's speed over the fastest a belt turns it (the large Engine Wheel at the engine's
 // 8,000 RPM fuel cut); on the medium wheel the fuel cut is kBlowerMediumCut. The large one sings lower.
@@ -146,7 +146,7 @@ struct Synth {
     // A turbo that is already blown when first heard (loaded, or driven into range) stays quiet.
     bool blown_known = false, was_blown = false;
     double heard = 0, blow_age = 1e9, blow_pitch = 0, screech_phase = 0, boom_phase = 0;
-    double gear_phase = 0, mesh_phase = 0, gear_pitch = 0;   // supercharger gear whine
+    double gear_phase = 0, mesh_phase = 0, gear_pitch = 0, glide = 0;   // supercharger gear whine
     struct Ping { double age = 1e9, f = 0, decay = 0, gain = 0, p1 = 0, p2 = 0; } pings[6];
     uint32_t rng = 0x12345678u;
     BandPass hiss, click, whoosh, whoosh_low, rumble, bang_body, bang_low, crackle, blow_crack, blow_low, blow_smoke;
@@ -225,10 +225,19 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool 
     const bool blower = s.voice == Voice::kSupercharger;
     const BlowerVoice bv = blower_voice(s.size >= 4);
     if (blower) blown = false;
+    // A supercharger's level arrives in steps (one byte, at the network's pace) and its pitch spans thousands of Hz,
+    // so each step was a jump you could hear. Two gentle stages turn the steps into one smooth slide (about 0.1 s
+    // behind the engine). A turbo's spool already moves smoothly.
+    const double k_glide = 1.0 - std::exp(-dt / 0.04), k_spool = 1.0 - std::exp(-dt / 0.05);
     for (int i = 0; i < n; ++i) {
         double v = 0;
         if (s.voice == Voice::kTurbo || blower) {
-            s.spool += (target - s.spool) * (1.0 - std::exp(-dt / (blower ? 0.015 : 0.05)));
+            if (blower) {
+                s.glide += (target - s.glide) * k_glide;
+                s.spool += (s.glide - s.spool) * k_glide;
+            } else {
+                s.spool += (target - s.spool) * k_spool;
+            }
             // Spool whistle: a whine that rises with shaft speed, the air rushing through, and intake hiss.
             double f = blower ? bv.whistle_base + bv.whistle_span * s.spool : c.base + c.span * s.spool;
             s.pitch = s.pitch <= 0 ? f : s.pitch + (f - s.pitch) * 0.002;
@@ -270,9 +279,12 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool 
                 if (s.mesh_phase > two_pi) s.mesh_phase -= two_pi;
                 double g = s.gear_phase;
                 double whine = std::sin(g) + 0.45 * std::sin(2 * g + 0.4) + 0.22 * std::sin(3 * g + 1.1);
-                // As loud as it gets by the medium wheel's fuel cut; overdriven it only climbs in pitch.
+                // As loud as it gets by the medium wheel's fuel cut; overdriven it only climbs in pitch. A faint
+                // whine from idle up, fading to silence as the pulley stops (below about 300 engine RPM on the
+                // medium wheel), so a supercharger at rest makes no sound.
                 double drive = std::min(1.0, s.spool / kBlowerMediumCut);
-                double gear_loud = std::pow(0.06 + 0.94 * drive, 1.3) * (1.0 + 0.22 * std::sin(s.mesh_phase)) * (1.0 - 0.3 * s.surge_env);
+                double turning = std::min(1.0, drive / 0.04);
+                double gear_loud = turning * std::pow(0.06 + 0.94 * drive, 1.3) * (1.0 + 0.22 * std::sin(s.mesh_phase)) * (1.0 - 0.3 * s.surge_env);
                 double air_loud = std::pow(drive, 1.6) * (1.0 - 0.35 * s.surge_env) * (1.0 - 0.4 * s.pulse_gain * body);
                 v += bv.gear_gain * gear_loud * whine;
                 v += air_loud * bv.whistle_gain * (std::sin(s.phase1) + 0.4 * std::sin(s.phase2));

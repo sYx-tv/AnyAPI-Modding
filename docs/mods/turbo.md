@@ -214,9 +214,10 @@ Turbos and blow-off valves have their own sounds in place of the impeller hum, m
 - **Antilag**: irregular gunshot bangs and crackles from the wastegate while antilag fires; deeper on bigger turbos.
 - **Blowing up**: once, when a turbo wears out: a crack and a boom, shrapnel pinging, the wheel screeching to a stop
   and a hiss of boost and smoke. A turbo that was already blown when you load in stays quiet.
-- **Supercharger whine**: the buzz of its straight-cut step-up gears, there from idle and rising with the engine with
-  no lag, the impeller's thin whistle above it and the gulp of air. The large one sings lower. It surges and blows off
-  like a turbo.
+- **Supercharger whine**: the buzz of its straight-cut step-up gears, there from idle and sliding up with the engine,
+  the impeller's thin whistle above it and the gulp of air. It fades to silence when the belt stops. The large one
+  sings lower. Off the throttle it surges like a turbo unless a blow-off valve on its outlet pipe vents the boost, just
+  as real centrifugal superchargers need a bypass valve.
 
 The wastegate is otherwise silent. Sounds follow the vehicle volume slider and are heard by every player near the part.
 With AnyHelpers installed, **Mod Settings > AnyEngineParts > Turbo volume** sets how loud the turbo sounds, blow-off

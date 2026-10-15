@@ -49,6 +49,14 @@ of the first. One turbo still gives the game's full 2x; a compound goes past it,
 part's box with nothing drawn in it, so a gas port snapped there looked half off. The model now covers every cell, at
 any size. Growing one no longer stretches its inlet stubs or rails: it repeats whole cells both ways.
 
+**New rotary look:** the Rotary now has a flat deck over its rotor housings and full-height covers at each end, so every
+mounting face is flat and flush like the small engine's. Manifolds of any size, large ones included, now sit flush on
+the top, the sides and the ends. Paint works as before: the first colour on the housings, the second on the covers,
+plates and deck.
+
+**Supercharger whine:** a placed supercharger no longer hums faintly when its pulley is still; the whine fades out as
+the belt stops. It also slides smoothly with the engine now, where before you could hear its pitch step.
+
 **Intercoolers:** the turbo now looks for its intercooler past an inline blow-off valve too, and also through the part each
 gas port is snapped onto. In testing, a turbo never found its intercooler, so its boost air stayed hot. If a boosting turbo
 still finds none, the log lists the parts on its boost pipe so the cause shows up.

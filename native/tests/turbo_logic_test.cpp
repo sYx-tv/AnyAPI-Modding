@@ -582,7 +582,7 @@ int main() {
         assert(name(0, 1) == "Supercharged" && name(0, 2) == "Twin supercharged" && name(0, 5) == "5 superchargers");
         assert(name(1, 1) == "Twincharged" && name(2, 1) == "Twincharged: 2 turbos, 1 supercharger" && name(1, 2, true) == "Twincharged: 1 turbo, 2 superchargers");
     }
-    {   // the gear whine: follows the pulley at once, louder and higher with speed; the large one sings lower
+    {   // the gear whine: follows the pulley, louder and higher with speed; the large one sings lower
         auto loudness = [](bool big, double rps) {
             Synth sy; sy.voice = Voice::kSupercharger; sy.size = big ? 4 : 2;
             std::vector<int16_t> pcm(kSampleRate / 2);
@@ -594,6 +594,40 @@ int main() {
         };
         auto idle = loudness(false, 800 / 60.0 * kBeltMedium), high = loudness(false, 7000 / 60.0 * kBeltMedium), big = loudness(true, 7000 / 60.0 * kBeltMedium);
         assert(idle.first > 50 && high.first > 2 * idle.first && high.second > 3 * idle.second && big.second < high.second && big.first > 50);
+        // Silent at rest, and silent again moments after the pulley stops (Nate heard a faint whine from parked ones).
+        assert(loudness(false, 0).first < 1 && loudness(true, 0).first < 1);
+        for (int big2 = 0; big2 < 2; ++big2) {
+            Synth sy; sy.voice = Voice::kSupercharger; sy.size = big2 ? 4 : 2;
+            std::vector<int16_t> pcm(kSampleRate / 4);
+            render(sy, blower_sound_level(5000 / 60.0 * kBeltMedium), false, pcm.data(), int(pcm.size()));
+            render(sy, 0, false, pcm.data(), int(pcm.size()));
+            render(sy, 0, false, pcm.data(), int(pcm.size()));
+            render(sy, 0, false, pcm.data(), int(pcm.size()));
+            int peak = 0;
+            for (int16_t v : pcm) peak = std::max(peak, std::abs(int(v)));
+            assert(peak <= 1);
+        }
+        // Smooth, not steppy (Nate): the level arrives one byte at a time, a step every 60 ms as the engine revs; the
+        // pitch slides between steps instead of jumping, and still keeps up with the engine.
+        for (int big2 = 0; big2 < 2; ++big2) {
+            Synth sy; sy.voice = Voice::kSupercharger; sy.size = big2 ? 4 : 2;
+            std::vector<int16_t> pcm(960);
+            double byte = 40, last = 0, most = 0, total = 0;
+            for (int f = 0; f < 120; ++f) {
+                if (f % 3 == 0) byte += 1;
+                double level = 0; bool surging = false, blown = false;
+                decode_turbo_factor(byte / 255.0, level, surging, blown);
+                render(sy, level, false, pcm.data(), int(pcm.size()));
+                if (f >= 30) { double d = sy.gear_pitch - last; most = std::max(most, d); total += d; }
+                last = sy.gear_pitch;
+            }
+            double mean = total / 90;
+            assert(mean > 0 && most < 1.6 * mean);
+            double level = 0; bool surging = false, blown = false;
+            decode_turbo_factor(byte / 255.0, level, surging, blown);
+            BlowerVoice bv = blower_voice(big2 != 0);
+            assert(std::abs(sy.gear_pitch - (bv.gear_base + bv.gear_span * level)) < 3 * bv.gear_span / 124.0);
+        }
         assert(near(blower_sound_level(kBlowerSoundRps * 2), 1) && near(blower_sound_level(-kBlowerSoundRps / 2), 0.5));
         double spool = 0; bool surging = false, blown = true;
         decode_turbo_factor(encode_turbo_factor(blower_sound_level(4000 / 60.0 * kBeltMedium), false), spool, surging, blown);
