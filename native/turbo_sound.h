@@ -14,19 +14,22 @@ namespace turbo {
 
 constexpr int kSampleRate = 48000;
 
-// The impeller's replicated speed factor (0-1, sent as one byte, so steps of 1/255) carries a turbo's spool and
-// surge: 0-0.5 is spool, 0.51-1 is spool while surging. A blow-off valve sends 0 when shut, else 0.5-1 for how
-// hard it vents.
-inline double encode_turbo_factor(double spool, bool surging) {
+// The impeller's replicated speed factor (0-1, sent as one byte, so steps of 1/255) carries a turbo's spool, surge and
+// whether it has blown: bytes 0-124 are spool, 127 is a blown turbo (126-128 read as blown, whichever way the game
+// rounds), and 0.51-1 is spool while surging. A blow-off valve sends 0 when shut, else 0.5-1 for how hard it vents.
+inline double encode_turbo_factor(double spool, bool surging, bool blown = false) {
+    if (blown) return 127.0 / 255.0;
     double s = std::isfinite(spool) ? (spool < 0 ? 0 : spool > 1 ? 1 : spool) : 0;
-    return surging ? 0.51 + 0.49 * s : 0.5 * s;
+    return surging ? 0.51 + 0.49 * s : s * 124.0 / 255.0;
 }
-inline void decode_turbo_factor(double factor, double& spool, bool& surging) {
+inline void decode_turbo_factor(double factor, double& spool, bool& surging, bool& blown) {
     double f = std::isfinite(factor) ? (factor < 0 ? 0 : factor > 1 ? 1 : factor) : 0;
     surging = f > 0.505;
-    spool = surging ? (f - 0.51) / 0.49 : f * 2.0;
+    blown = !surging && f * 255.0 > 125.5;
+    spool = surging ? (f - 0.51) / 0.49 : blown ? 0.0 : f * 255.0 / 124.0;
     spool = spool < 0 ? 0 : spool > 1 ? 1 : spool;
 }
+inline void decode_turbo_factor(double factor, double& spool, bool& surging) { bool blown; decode_turbo_factor(factor, spool, surging, blown); }
 // Blow-off sounds the valve can make, picked in the Properties Tool ("Sound effect").
 enum BlowOffSound { kWhoosh = 0, kFlutter = 1, kChirp = 2, kDump = 3, kBlowOffSoundCount = 4 };
 // A blow-off valve sends 0 when shut. Open, it sends one byte b = 51 * (sound + 1) + sub, where sub carries the
@@ -118,8 +121,13 @@ struct Synth {
     double flutter_phase = 0, flutter_rate = 32, flutter_depth = 0.6, pop_age = 1, open_age = 0;
     double bang_env = 0, bang_clock = 1, bang_age = 1, bang_gain = 0, bang_period = 0.1, bang_pitch = 90, thump_phase = 0, crackle_age = 1;
     bool was_open = false;
+    // Blowing up (turbo voice): once, when a turbo the client has been hearing for a while goes from working to blown.
+    // A turbo that is already blown when first heard (loaded, or driven into range) stays quiet.
+    bool blown_known = false, was_blown = false;
+    double heard = 0, blow_age = 1e9, blow_pitch = 0, screech_phase = 0, boom_phase = 0;
+    struct Ping { double age = 1e9, f = 0, decay = 0, gain = 0, p1 = 0, p2 = 0; } pings[6];
     uint32_t rng = 0x12345678u;
-    BandPass hiss, click, whoosh, whoosh_low, rumble, bang_body, bang_low, crackle;
+    BandPass hiss, click, whoosh, whoosh_low, rumble, bang_body, bang_low, crackle, blow_crack, blow_low, blow_smoke;
     Sweep chirp, chirp_low, air, bov_chirp;
     bool init = false;
     double noise() {                   // white noise, -1..1
@@ -128,9 +136,50 @@ struct Synth {
     }
 };
 
-// Renders n samples. Turbo voice: level = spool 0-1, flag = surging. Blow-off voice: flag = venting, level = how
-// hard (0-1), in the synth's sound, voiced for the turbo size venting through it.
-inline void render(Synth& s, double level, bool flag, int16_t* out, int n) {
+// Blowing up: a sharp crack and a deep boom, shrapnel pinging round the housing, the wheel screeching to a stop and
+// a hiss of boost and oil smoke that dies away over a couple of seconds. Bigger turbos boom deeper and longer.
+constexpr double kBlowSeconds = 3.0;
+inline double blow_sample(Synth& s, double bov_pitch, double bov_length, double dt) {
+    const double two_pi = 6.283185307179586, t = s.blow_age;
+    if (t > kBlowSeconds) return 0;
+    double nz = s.noise();
+    double crack = t < 0.0006 ? t / 0.0006 : std::exp(-(t - 0.0006) / 0.014);
+    s.boom_phase += two_pi * 52.0 * bov_pitch * (1.0 + 2.2 * std::exp(-t / 0.025)) * dt;
+    if (s.boom_phase > two_pi) s.boom_phase -= two_pi;
+    double boom = (t < 0.003 ? t / 0.003 : 1.0) * std::exp(-t / (0.22 * bov_length));
+    double v = 2.6 * crack * (0.6 * nz + 1.8 * s.blow_crack.run(nz)) + 2.2 * boom * (std::sin(s.boom_phase) + 0.9 * s.blow_low.run(nz));
+    // Shrapnel: bright pings, thick at first, thinning out.
+    if (0.5 + 0.5 * s.noise() < 70.0 * std::exp(-t / 0.18) * dt)
+        for (auto& p : s.pings)
+            if (p.age > 6 * p.decay) {
+                p.age = 0; p.f = 2400.0 + 4200.0 * (0.5 + 0.5 * s.noise()); p.decay = 0.03 + 0.06 * (0.5 + 0.5 * s.noise());
+                p.gain = (0.25 + 0.35 * (0.5 + 0.5 * s.noise())) * (0.4 + 0.6 * std::exp(-t / 0.3)); p.p1 = p.p2 = 0;
+                break;
+            }
+    for (auto& p : s.pings) {
+        if (p.age > 6 * p.decay) continue;
+        p.p1 += two_pi * p.f * dt; p.p2 += two_pi * p.f * 2.76 * dt;
+        if (p.p1 > two_pi) p.p1 -= two_pi;
+        if (p.p2 > two_pi) p.p2 -= two_pi;
+        v += p.gain * std::exp(-p.age / p.decay) * (std::sin(p.p1) + 0.5 * std::sin(p.p2));
+        p.age += dt;
+    }
+    // The wheel: its whistle drops away fast, grinding.
+    double f = s.blow_pitch * (0.12 + 0.88 * std::exp(-t / 0.22));
+    s.screech_phase += two_pi * f * dt;
+    if (s.screech_phase > two_pi) s.screech_phase -= two_pi;
+    double grind = 0.6 + 0.4 * s.noise();
+    v += 0.45 * std::exp(-t / 0.5) * grind * std::sin(s.screech_phase);
+    // Boost and smoke hissing out.
+    double smoke = (t < 0.03 ? t / 0.03 : 1.0) * std::exp(-t / (0.8 * bov_length));
+    v += 0.9 * smoke * s.blow_smoke.run(nz);
+    return v;
+}
+
+// Renders n samples. Turbo voice: level = spool 0-1, flag = surging, blown = the turbo has blown (the first time it
+// turns true it plays the blow-up). Blow-off voice: flag = venting, level = how hard (0-1), in the synth's sound,
+// voiced for the turbo size venting through it.
+inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool blown = false) {
     const Character c = character(s.size);
     // A blow-off valve on a bigger turbo dumps more air: lower, longer and, for the flutter, slower.
     const double bov_pitch = s.size <= 2 ? 1.25 : s.size == 4 ? 0.91 : s.size >= 5 ? 0.77 : 1.0;
@@ -139,7 +188,14 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n) {
         s.hiss.set(c.hiss_hz, 0.9); s.click.set(6500.0, 0.7);
         s.whoosh.set(3600.0 * bov_pitch, 0.7); s.whoosh_low.set(1400.0 * bov_pitch, 0.8); s.rumble.set(500.0 * bov_pitch, 0.8);
         s.bang_body.set(1500.0 * bov_pitch, 0.6); s.bang_low.set(260.0 * bov_pitch, 0.9); s.crackle.set(4200.0, 0.8);
+        s.blow_crack.set(2200.0 * bov_pitch, 0.5); s.blow_low.set(140.0 * bov_pitch, 0.8); s.blow_smoke.set(2600.0 * bov_pitch, 0.6);
         s.init = true; s.tuned_size = s.size;
+    }
+    if (s.voice == Voice::kTurbo) {
+        if (!s.blown_known) { s.blown_known = true; s.was_blown = blown; }
+        if (blown && !s.was_blown && s.heard > 1.0) { s.blow_age = 0; s.blow_pitch = s.pitch > 0 ? s.pitch : c.base; }
+        s.was_blown = blown;
+        s.heard += double(n) / kSampleRate;
     }
     double target = std::isfinite(level) ? (level < 0 ? 0 : level > 1 ? 1 : level) : 0;
     const double dt = 1.0 / kSampleRate, two_pi = 6.283185307179586;
@@ -182,6 +238,7 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n) {
             v += loud * c.air_gain * 4.0 * s.air.run(s.noise(), std::min(s.pitch * 0.85, 16000.0), 5.0);
             v += c.hiss_gain * s.spool * s.spool * s.hiss.run(s.noise());
             v += c.puff_gain * puffs;
+            if (s.blow_age <= kBlowSeconds) { v += blow_sample(s, bov_pitch, bov_length, dt); s.blow_age += dt; }
         } else if (s.voice == Voice::kAntilag) {
             // Antilag: fuel lit in the exhaust manifold keeps the turbo spinning off throttle. Irregular gunshot bangs
             // (a sharp crack, a low thump that drops in pitch) with crackles in between; harder antilag bangs

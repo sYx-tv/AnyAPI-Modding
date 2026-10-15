@@ -13,4 +13,38 @@ the data port outputs rpm, power, torque and the latest peak. See [Dyno](../mods
 
 **Bigger air filters, pipe centred:** the small filter is now 3x3x3 and the large 4x4x4, each with its pipe in the middle of the bottom face.
 
+**Turbos blow up at 0%:** a worn-out turbo now blows with a bang, shrapnel and smoke, and goes sooty. It makes no boost
+and chokes the engine's air, so the engine runs on in limp mode (about a third of its power at most) until you replace
+the turbo. The tooltip's **Condition** now shows a percentage, 100% new down to 0% blown; it used to show no value.
+
+**Turbo ports fixed:**
+- The 4x4 and 5x5 boost outlet and turbine inlet sat half off the part. They now sit on it: the outlet one cell below
+  the top corner, the inlet across both cells of the bottom corner, each on a flange block. **On a vehicle built with
+  0.1.0, re-lay the pipe on those two ports** (move it down a cell, or across a cell for the inlet).
+- The 2x2's oil ports shared cells with its gas ports; they now sit one row back. Every turbo now shows its oil ports
+  as brass-ringed fittings underneath.
+- Every opening lines up with its pipe: the 2x2's intake and exhaust out moved to where their pipes join, and the
+  5x5's eye moved onto its large pipe.
+- No data-port mounts under the 4x4 and 5x5 intake and exhaust pipes, and the wastegates lost stray mounts that
+  floated off the part.
+
+**Fixes from a full review:**
+- A rare crash at startup: a hook could be called in the moment before it knew where to pass the call on. It now
+  knows first. This was in the shared modding SDK, so every part (and any mod rebuilt with it) is covered.
+- The Dyno could crash the game after reloading a save with two Dynos wired to a microcontroller, or after one
+  stopped ticking for a few seconds. Dynos now keep their data port memory for the whole session.
+- The Dyno's **Knock** row now means knock (a turbo's hot boost air). Low oil or an overheating engine used to show
+  as knock on every pull.
+- The Dyno's `clear_runs` input clears once each time it goes high, and clearing (or holding F6) keeps the pull being
+  recorded. It used to wipe everything every second while held.
+- The Dyno graph's torque labels now sit on the grid lines.
+- Twin turbos sharing one blow-off valve: the second turbo surged on every lift. Both now see the valve open.
+- A turbo whose oil ports the game would not make counted as running dry (fast wear, then a blow-up) with nothing to
+  pipe. It now counts as oil fed, like a build without oil ports.
+- `boost_limit` now caps boost as the `boost` output reads it, as this guide always said; it capped the absolute
+  intake pressure, about 10 kPa lower. **If you wired it, boost now goes about 10 kPa higher for the same number.**
+- `power_multiplier` now includes what hot boost air costs, so it matches the power the engine gets.
+- A parked Rotary hands its sound voice back to the game after two seconds of silence.
+- The three parts start on their own: one still looking for its game functions no longer delays the others.
+
 Guide: [AnyEngineParts](../mods/engine-parts.md).

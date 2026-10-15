@@ -288,9 +288,11 @@ struct cell_hook {
         if (!c || !replacement || (uintptr_t(c)%8) || !readable(c, 8) || cell) return false;
         MEMORY_BASIC_INFORMATION region{};if(!VirtualQuery(c,&region,sizeof(region)) || !(region.Protect & (PAGE_READWRITE|PAGE_WRITECOPY|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY)))return false;
         void* cur = *c;
-        if (InterlockedCompareExchangePointer(c, replacement, cur) != cur) return false;
+        // Set `original` before the swap publishes the hook: another thread can call through the cell
+        // the moment it changes, and the hook chains through `original`.
         cell = c;
         original = cur;
+        if (InterlockedCompareExchangePointer(c, replacement, cur) != cur) { cell = nullptr; original = nullptr; return false; }
         return true;
     }
     // Restores only if nobody re-hooked on top of us; otherwise leaves the cell alone and returns false.

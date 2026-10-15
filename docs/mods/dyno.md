@@ -16,13 +16,14 @@ anywhere on a vehicle; an orange bar chart on its top tells it apart from the Co
 The last three pulls stay on the graph so you can compare builds: the oldest is grey, then blue, and the newest
 orange. **Solid lines are power, dashed lines are torque**, and the red line is the game's 8,000 RPM fuel cut. Beside
 the graph are each pull's peak power and the latest pull's peak torque, boost, engine temperature and whether the
-engine knocked.
+engine knocked. Knock is the turbos' knock from hot boost air (see [Turbo](turbo.md)); the game's other engine damage,
+from low oil or overheating, is not counted as knock.
 
 A pull can be made on the road or with the wheels off the ground: the game's engine makes the same power at a given
 RPM either way, so the numbers match.
 
 **F6** hides or shows the panel (rebind it in Controls under AnyEngineParts). **Hold F6 for a second** to forget the
-pulls.
+kept pulls (a pull being recorded carries on).
 
 ## What it measures
 
@@ -49,7 +50,7 @@ Power at the wheels is not measured yet.
 | `peak_hp`, `peak_rpm` | Output | The latest pull's peak power and the RPM it came at |
 | `peak_torque_nm` | Output | The latest pull's peak torque |
 | `run_count` | Output | Pulls kept, 0 to 3 |
-| `clear_runs` | Input | Above 0.5 forgets the kept pulls |
+| `clear_runs` | Input | Going above 0.5 forgets the kept pulls (once each time; a pull being recorded carries on) |
 
 ## Getting it
 

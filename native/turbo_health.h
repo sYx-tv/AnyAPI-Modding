@@ -38,7 +38,7 @@ struct UpkeepInputs {
 };
 struct UpkeepState {
     double temperature = 20;     // turbo body, C
-    double condition = 1;        // 1 new, 0 seized
+    double condition = 1;        // 1 new, 0 blown
 };
 struct UpkeepStep {
     double oil_out_c = 20;       // temperature of the oil leaving the turbo
@@ -86,13 +86,16 @@ inline UpkeepStep upkeep(UpkeepState& st, const UpkeepInputs& in) {
 }
 
 // What the turbo can still do. Above half condition it is as good as new; below, its boost falls to 60% at the
-// end; at 0 it has seized (no boost, the shaft does not turn).
+// end; at 0 it has blown (no boost, the shaft does not turn, and the intake chokes: kBlownFlowShare in turbo_logic.h).
 inline double condition_head_factor(double condition) {
     double c = std::clamp(std::isfinite(condition) ? condition : 1.0, 0.0, 1.0);
     if (c <= 0) return 0;
     return c >= 0.5 ? 1.0 : 0.6 + 0.8 * c;
 }
 inline bool bearing_whine(double condition) { return std::isfinite(condition) && condition < 0.2 && condition > 0; }
+// Worn right out (upkeep snaps the last 0.1% to 0). A turbo that reaches it during a tick blows up; one loaded at 0
+// is already blown.
+inline bool turbo_blown(double condition) { return std::isfinite(condition) && condition <= 0; }
 // A dirty filter restricts the intake: full boost down to 85% when fully clogged.
 inline double filter_head_factor(bool filter, double condition) {
     return filter ? 0.85 + 0.15 * std::clamp(std::isfinite(condition) ? condition : 1.0, 0.0, 1.0) : 1.0;

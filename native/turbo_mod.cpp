@@ -22,6 +22,7 @@
 #include "anyhelpers_settings_v1.h"
 #include "turbo_bindings.h"
 #include "route_cell.h"
+#include "engine_parts_shared.h"
 #include "turbo_logic.h"
 #include "turbo_mesh.h"
 #include "turbo_sound.h"
@@ -130,7 +131,8 @@ create_node_t g_create_node_bound;   // located by code; cross-checked against t
 property_set_t g_property_set;
 string_ctor_t g_string_ctor;
 get_definition_t g_get_definition;
-// Oil ports (all or nothing: without them a turbo counts as oil fed, so it never wears for want of oil).
+// Oil ports. Without them (these not found, or the game not binding a turbo's oil nodes) a turbo counts as oil fed,
+// so it never wears for want of oil.
 self_fn_t g_liquid_ctor, g_liquid_dtor, g_liquid_node_ctor, g_liquid_node_dtor;
 liquid_create_t g_liquid_create;
 liquid_tick_t g_liquid_tick;
@@ -161,6 +163,7 @@ struct Turbo {
     Spec spec;
     HotSide* hot = nullptr;
     OilSide* oil = nullptr;
+    bool oil_ports = false;                          // its oil nodes bound (oil_bound): without, it counts as oil fed
     UpkeepState up;                                  // its temperature (the condition lives in g_wear, saved)
     double oil_lps = 0;                              // smoothed
     double last_upkeep_log = -1e9;
@@ -186,7 +189,8 @@ struct ValvePart {
     double last_tick = 0;                             // seconds (now_seconds) of its last own server tick
 };
 std::unordered_map<const void*, ValvePart> g_valves;
-std::unordered_set<const void*> g_painted_parts;    // air filters and intercoolers given their starting colours (they have no create hook)
+std::unordered_map<const void*, int32_t> g_painted_parts;   // air filters and intercoolers given their starting colours (they have
+                                                     // no create hook): address -> component id, as the game reuses addresses
 std::unordered_map<const void*, int> g_definition_size;   // definition pointer -> 2-5, or 0 for other parts
 std::recursive_mutex g_mutex;                        // tick, create, destroy and data lookups (recursive: game calls made
                                                      // under it may come back through our hooks)
@@ -324,6 +328,8 @@ bool write_file(const std::wstring& path, const void* data, size_t size);
 // Builds the oil side like the stock fuel manifold builds its liquid port: a liquid content sized for the part and a
 // liquid node bound to liquid logic node 0 (oil in) and 1 (oil out), registered in the vehicle's liquid container.
 void* liquid_container_of(void* vehicle) { return static_cast<uint8_t*>(vehicle) + off::vehicle_liquid_nodes; }
+// Both oil nodes bound to the part's liquid logic nodes: pipes can reach them.
+bool oil_bound(OilSide* oil) { return oil && at<int32_t>(oil->node[0], off::node_node_index) >= 0 && at<int32_t>(oil->node[1], off::node_node_index) >= 0; }
 OilSide* create_oil_side(void* component, void* vehicle) {
     if (!g_oil_ready) return nullptr;
     void* container = liquid_container_of(vehicle);
@@ -344,6 +350,9 @@ OilSide* create_oil_side(void* component, void* vehicle) {
         void* flood = nullptr; int32_t index = i; void* content = oil->content[i]; bool expandable = false;
         create_node(container, oil->node[i], component, &flood, &index, &content, &expandable);
     }
+    if (!oil_bound(oil))
+        log(1, "the game did not find a turbo's oil logic nodes (indices %d, %d); that turbo counts as oil fed", at<int32_t>(oil->node[0], off::node_node_index),
+            at<int32_t>(oil->node[1], off::node_node_index));
     static std::atomic<int> logs{6};
     if (logs.fetch_sub(1) > 0)
         log(0, "oil ports: nodes %d/%d, contents %.3f/%.3f L", at<int32_t>(oil->node[0], off::node_node_index), at<int32_t>(oil->node[1], off::node_node_index),
@@ -468,9 +477,10 @@ constexpr StartColours kValveColours{{kPaletteBrightSteel, kPaletteBrightRed}, {
 constexpr StartColours kFilterColours{{kPaletteBrightRed, kPaletteBrightSteel}, {{204, 44, 36}, {236, 236, 231}}};   // element, caps
 constexpr StartColours kCoolerColours{{kPaletteBrightSteel, kPaletteSteel}, {{236, 236, 231}, {197, 199, 196}}};     // tanks, end caps
 
-// Gives a newly placed part its starting colours in paint slots 0 and 1. A new part has every slot at the same
-// default; a part that was painted (or whose saved colours are already in) is left alone.
-void default_paint(void* self, int32_t slot0, int32_t slot1) {
+// Sets paint slots 0 and 1, as the paint tool would (the property's modified flag sends it to the clients). With
+// only_new, only a newly placed part, whose slots all hold the same default; a part that was painted (or whose saved
+// colours are already in) is left alone.
+void set_paint(void* self, int32_t slot0, int32_t slot1, bool only_new) {
     auto* colors = static_cast<uint8_t*>(self) + off::component_colors;
     if (!anymaker::readable(colors, 16)) return;
     auto* buffer = at<uint8_t*>(colors, 0);
@@ -480,10 +490,10 @@ void default_paint(void* self, int32_t slot0, int32_t slot1) {
     bool fresh = true;
     for (int32_t k = 1; k < count; ++k) fresh = fresh && at<int32_t>(buffer + size_t(k) * size_t(size), off::property_s32_value) == first;
     static std::atomic<int> logs{6};
-    if (logs.fetch_sub(1) > 0)
+    if (only_new && logs.fetch_sub(1) > 0)
         log(0, "component %d colours: slot 0 = %d, slot 1 = %d (%s)", at<int32_t>(self, off::component_id), first,
             at<int32_t>(buffer + size_t(size), off::property_s32_value), fresh ? "new: starting colours applied" : "painted: kept");
-    if (!fresh) return;
+    if (only_new && !fresh) return;
     const int32_t want[2] = {slot0, slot1};
     for (int k = 0; k < 2; ++k) {
         uint8_t* property = buffer + size_t(k) * size_t(size);
@@ -491,6 +501,20 @@ void default_paint(void* self, int32_t slot0, int32_t slot1) {
         at<bool>(property, off::property_modified) = true;
     }
 }
+void default_paint(void* self, int32_t slot0, int32_t slot1) { set_paint(self, slot0, slot1, true); }
+// True the first time a part without a create hook is seen. The address alone is not enough: the game reuses a freed
+// part's address for a new part, which then needs its starting colours too, so the component id is kept with it.
+bool first_sight(const void* part) {
+    const auto* id_at = static_cast<const uint8_t*>(part) + off::component_id;
+    int32_t id = anymaker::readable(id_at, 4) ? at<int32_t>(part, off::component_id) : -1;
+    auto [it, added] = g_painted_parts.try_emplace(part, id);
+    if (added) return true;
+    if (it->second == id) return false;
+    it->second = id;
+    return true;
+}
+// A blown turbo goes sooty: both housings dark (palette 63, a burnt dark brown).
+constexpr int32_t kPaletteSoot = 63;
 
 void hk_create(void* self, void* vehicle) {
     reinterpret_cast<create_t>(h_create.original)(self, vehicle);
@@ -521,6 +545,7 @@ void hk_create(void* self, void* vehicle) {
     default_paint(self, kTurboColours.slot[0], kTurboColours.slot[1]);
     t.hot = create_hot_side(self, vehicle);
     t.oil = create_oil_side(self, vehicle);
+    t.oil_ports = oil_bound(t.oil);
     static std::atomic<int> logs{8};
     if (logs.fetch_sub(1) > 0 && t.hot)
         log(0, "Turbo %dx%d created (component %d): hot side nodes %d/%d, contents %.2f/%.2f L, impeller contents %.2f/%.2f L", n, n, at<int32_t>(self, off::component_id),
@@ -588,11 +613,14 @@ bool vent_blow_off_valves(void* turbo, int size, double excess, double dt, doubl
         if (found == g_valves.end() || !is_blow_off(found->second.kind)) return;
         // Inline valves join the boost pipe through both ports; the old layout only through its inlet.
         if (!g_bov_inline && node != static_cast<uint8_t*>(component) + off::pump_node_a) return;
-        if (found->second.vented_by) return;          // once per tick (an inline valve shows up through both ports)
+        if (found->second.vented_by == turbo) return; // once per tick (an inline valve shows up through both ports)
         double setting = found->second.setting ? *found->second.setting : kBlowOffDefaultKpa;
         // Once open it stays open through the lift: between puffs the boost sits under the spring, and counting
         // those ticks as surge made it chatter surge, vent, surge as the spool ran down.
         if (now < found->second.open_until) { spring_kpa = latched ? std::max(spring_kpa, setting) : setting; latched = true; }
+        // Twin turbos on one boost pipe: the other already vented this tick's excess through it. It is open for this
+        // one too (latched above), and venting again would take the same boost twice.
+        if (found->second.vented_by) return;
         void* in = static_cast<uint8_t*>(component) + off::pump_content_0;
         double want = blow_off_vent(excess, setting, at<double>(in, off::content_volume), dt, found->second.kind == kKindBlowOffLarge);
         if (want <= 0) return;
@@ -705,6 +733,9 @@ void publish_valve(void* self, ValvePart& v, double litres, double dt) {
 // bring a sleeping valve's flow, open state and sound up to date (and hand it anything vented through it).
 void publish_sleeping_valves(double dt) {
     double now = now_seconds();
+    static double last = 0;                           // every turbo calls this: once per server tick is enough
+    if (now - last < dt * 0.5) return;
+    last = now;
     for (auto& [self, v] : g_valves) {
         if (now - v.last_tick < 0.1) continue;
         double litres = 0;
@@ -740,7 +771,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
         in.volume[i] = contents[i] ? at<double>(contents[i], off::content_volume) : 0.0;
     }
     if (contents[kHotIn]) in.exhaust_temperature = at<double>(contents[kHotIn], off::content_temperature);
-    in.dt = g_delta_time && std::isfinite(*g_delta_time) ? *g_delta_time : 1.0 / 60.0;
+    in.dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;
     // Upkeep, from what the last ticks left: its condition and any air filter on the compressor intake.
     double now_s = now_seconds();
     sync_wear(now_s);
@@ -751,8 +782,9 @@ void hk_tick(void* self, void* vehicle, void* scene) {
         if (!filter && component && is_air_filter(part_kind(component))) filter = component;
     });
     double* filter_condition = filter ? &wear_of('f', vehicle, filter) : nullptr;
-    if (filter && g_painted_parts.insert(filter).second) default_paint(filter, kFilterColours.slot[0], kFilterColours.slot[1]);
+    if (filter && first_sight(filter)) default_paint(filter, kFilterColours.slot[0], kFilterColours.slot[1]);
     t.state.health = condition_head_factor(condition) * filter_head_factor(filter != nullptr, filter_condition ? *filter_condition : 1.0);
+    t.state.blown = turbo_blown(condition);           // worn out: no boost, a choked intake (limp mode)
     ValvePart* antilag = antilag_wastegate(t);
     in.antilag = antilag != nullptr;
     in.bov_venting = vent_blow_off_valves(self, t.size, (in.pressure[kColdOut] - in.pressure[kColdIn]) - head_for(t.state, in.pressure[kColdIn]), in.dt, in.bov_spring_kpa);
@@ -780,7 +812,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
         for (int k = 0; k < coolers; ++k) if (seen[k] == cooler) return;   // one per intercooler, however many ports it has
         seen[coolers++] = cooler;
         cells += cooler_cells(cooler);
-        if (g_painted_parts.insert(cooler).second) default_paint(cooler, kCoolerColours.slot[0], kCoolerColours.slot[1]);
+        if (first_sight(cooler)) default_paint(cooler, kCoolerColours.slot[0], kCoolerColours.slot[1]);
     });
     double cooling = intercooler_effectiveness(cells, t.state.intake_flow);
     double air_c = kAmbientC + compressor_heat(o.head, kMaxHead) * (1.0 - cooling);
@@ -788,7 +820,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     // Oil: what comes in the oil port passes through (as engine oil pressure would push it) and leaves hotter.
     constexpr double kOilPassLps = 0.8;
     double oil_c = kAmbientC, pollution = 0, oil_now = 0, moved = 0;
-    if (t.oil) {
+    if (t.oil && t.oil_ports) {
         void* oil_in = t.oil->content[0];
         void* oil_out = t.oil->content[1];
         double still = 0;
@@ -804,8 +836,8 @@ void hk_tick(void* self, void* vehicle, void* scene) {
             if (!std::isfinite(moved) || moved < 0) moved = 0;
             oil_now = moved * share / in.dt;
         }
-    } else if (!g_oil_ready) {
-        oil_now = kOilFullFlow;                       // this build has no oil ports: count it as fed
+    } else {
+        oil_now = kOilFullFlow;                       // no oil ports (none in this build, or the game would not make them: logged)
     }
     t.oil_lps += (oil_now - t.oil_lps) * std::min(1.0, in.dt / 0.5);
     UpkeepInputs ui;
@@ -818,6 +850,12 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     condition = t.up.condition;
     if (filter_condition && us.filter_wear > 0) *filter_condition = std::max(0.0, *filter_condition - us.filter_wear);
     if (condition != was || us.filter_wear > 0) g_wear_dirty = true;
+    if (!turbo_blown(was) && turbo_blown(condition)) {   // it just wore out: it blows (the clients hear it go, turbo_sound.h)
+        t.state.blown = true;
+        set_paint(self, kPaletteSoot, kPaletteSoot, false);
+        log(1, "Turbo %dx%d id %d BLEW UP (worn out at %.0f C, oil %.2f L/s, %s): no boost and a choked intake until it is replaced",
+            t.size, t.size, at<int32_t>(self, off::component_id), t.up.temperature, t.oil_lps, filter ? "filtered" : "no air filter");
+    }
     if (t.oil && moved > 0) {                         // the oil leaving carries the turbo's heat, and it ages a little
         void* oil_out = t.oil->content[1];
         double held = std::max(at<double>(oil_out, off::content_volume), moved);
@@ -836,6 +874,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     t.state.slots[kCondition] = condition;
     t.state.slots[kAirFiltered] = filter ? 1.0 : 0.0;
     t.state.slots[kBoostAirTemperature] = air_c;
+    t.state.slots[kPowerMultiplier] = boost_factor_for_air(t.state.slots[kPowerMultiplier], air_c);   // as the engine gets it (hk_remap)
     static std::atomic<int> upkeep_logs{120};
     if (t.state.spool > 0.05 && now_s - t.last_upkeep_log >= 10.0 && upkeep_logs.fetch_sub(1) > 0) {
         t.last_upkeep_log = now_s;
@@ -847,7 +886,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     at<double>(self, off::pump_display_power) = o.power;
     at<double>(self, off::pump_flow) = o.compressor_move;
     t.boost = std::max(0.0, in.pressure[kColdOut] - in.pressure[kColdIn]);
-    double sound = encode_turbo_factor(t.state.spool, t.state.surging);   // the clients' turbo sound (turbo_sound.h)
+    double sound = encode_turbo_factor(t.state.spool, t.state.surging, t.state.blown);   // the clients' turbo sound (turbo_sound.h)
     g_property_set(static_cast<uint8_t*>(self) + off::pump_factor_speed, &sound);
     static std::atomic<int> event_logs{60};
     if (t.state.surging != t.was_surging || in.bov_venting != t.was_venting) {
@@ -906,27 +945,21 @@ using to_pascals_t = void (*)(double* ret, const double* value);
 using add_entry_t = void (*)(void* data, const int32_t* label, const anymaker::gc_string_view* value, const int32_t* icon, const int32_t* color);
 anymaker::cell_hook h_tooltip;
 build_tooltip_t g_component_tooltip;
-units_t g_units_flow, g_units_frequency, g_units_pressure, g_units_temperature;
+units_t g_units_flow, g_units_frequency, g_units_pressure, g_units_temperature, g_units_percentage;
 to_pascals_t g_to_pascals;
 self_fn_t g_string_dtor;
 constexpr int kAddTooltipEntrySlot = 68;             // server_scene.peer.inspection_data.vehicle method table
 enum : int32_t { kLocCondition = 203, kLocTemperature = 212, kLocSpeed = 197, kLocFlow = 207, kLocPressure = 215, kLocBoost = 234, kLocStiffness = 351, kLocSoundEffect = 324 };   // e_localization_string
 enum : int32_t { kIconCondition = 6, kIconFlow = 16, kIconPressure = 30, kIconSpeed = 33, kIconTemperature = 37 };         // inspection_util.e_tooltip_icon
+enum : int32_t { kColorDefault = 0, kColorMissing = 1 };   // inspection_util.e_tooltip_color (missing: the stock "no air filter" row)
 
-void add_entry(void* data, add_entry_t add, int32_t label, int32_t icon, units_t format, double value) {
+// The value text comes from the game's own formatter, which builds a game string the tooltip can keep. Text made with
+// $string_ctor_cstr is only a view of the caller's buffer (it stores the pointer, copies nothing), so a row made from
+// a stack buffer showed an empty Condition: the buffer was gone by the time the tooltip was sent.
+void add_entry(void* data, add_entry_t add, int32_t label, int32_t icon, units_t format, double value, int32_t color = kColorDefault) {
     anymaker::gc_string_view text{};
     g_string_ctor(&text, "");                        // a valid empty string, as the stock builder's $string_ctor gives
     format(&text, &value);
-    int32_t color = 0;
-    add(data, &label, &text, &icon, &color);
-    g_string_dtor(&text);
-}
-
-// A row whose value is plain text (the condition as a percentage).
-void add_text_entry(void* data, add_entry_t add, int32_t label, int32_t icon, const char* value) {
-    anymaker::gc_string_view text{};
-    g_string_ctor(&text, value);
-    int32_t color = 0;
     add(data, &label, &text, &icon, &color);
     g_string_dtor(&text);
 }
@@ -965,10 +998,13 @@ void hk_tooltip(void* self, void* data) {
     add_entry(data, add, kLocFlow, kIconFlow, g_units_flow, flow);
     add_entry(data, add, kLocSpeed, kIconSpeed, g_units_frequency, rps);
     add_entry(data, add, kLocBoost, kIconPressure, g_units_pressure, pascals);
-    // Upkeep: how worn the turbo is and how hot it runs. Shown from the first tick, so a new turbo reads 100 %.
-    char percent[16];
-    std::snprintf(percent, sizeof percent, "%.1f %%", std::clamp(std::isfinite(condition) ? condition : 1.0, 0.0, 1.0) * 100.0);
-    add_text_entry(data, add, kLocCondition, kIconCondition, percent);
+    // Upkeep: how worn the turbo is (100% new, 0% blown) and how hot it runs, as the stock air and oil filters show their
+    // condition (units.percentage rounds to whole percent). A worn turbo reads at least 1% until it blows.
+    if (g_units_percentage) {
+        double c = std::clamp(std::isfinite(condition) ? condition : 1.0, 0.0, 1.0);
+        bool blown = !(c > 0);
+        add_entry(data, add, kLocCondition, kIconCondition, g_units_percentage, blown ? 0.0 : std::max(c, 0.01), blown ? kColorMissing : kColorDefault);
+    }
     if (g_units_temperature && std::isfinite(temperature_c)) add_entry(data, add, kLocTemperature, kIconTemperature, g_units_temperature, temperature_c);
 }
 
@@ -1014,7 +1050,7 @@ using file_load_t = void (*)(bool* ret, void* file, const void* path);
 anymaker::cell_hook h_add_definitions;
 self_fn_t g_file_ctor, g_file_dtor;
 file_load_t g_file_load;
-std::string g_json_path;                            // absolute, backslashes
+std::string g_json_path, g_json_forward;            // absolute, backslashes / slashes; set before g_ready, then fixed
 
 std::vector<uint8_t> read_file(const std::wstring& path) {
     std::vector<uint8_t> data;
@@ -1108,6 +1144,8 @@ bool write_definition_file() {
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
     if (n > 1) WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, g_json_path.data(), n, nullptr, nullptr);
+    g_json_forward = g_json_path;
+    for (char& c : g_json_forward) if (c == '\\') c = '/';
     return ok && !g_json_path.empty();
 }
 
@@ -1122,14 +1160,11 @@ bool already_added(void* container) {
 }
 
 // Loads our JSON into a fresh vehicle_component_definition_file and hands it to the container. The path's
-// characters must outlive the call ($string_ctor_cstr makes a non-owning view), so they are static. Another mod's
-// hook may sit under ours on this cell (GpsPart hooks it too); calling down through it is fine because every
+// characters must outlive the call ($string_ctor_cstr makes a non-owning view): they are g_json_path or
+// g_json_forward, which never change once Turbo is ready, so the main and server threads can both add. Another
+// mod's hook may sit under ours on this cell (GpsPart hooks it too); calling down through it is fine because every
 // mod checks whether its parts are already in the container before adding them.
-bool add_ours(void* container, const std::string& text) {
-    static std::string kept[4];
-    static int next;
-    std::string& chars = kept[next++ % 4];
-    chars = text;
+bool add_ours(void* container, const std::string& chars) {
     GamePath path{kStoreSystem, 0, {}};
     g_string_ctor(&path.path, chars.c_str());
     alignas(16) uint8_t file[64]{};
@@ -1147,9 +1182,7 @@ void hk_add_definitions(void* container, const void* file) {
     if (!t_adding) { std::lock_guard<std::recursive_mutex> lock(g_mutex); g_definition_size.clear(); }   // definitions may move
     if (!g_ready.load() || t_adding || !container || already_added(container)) return;
     t_adding = true;
-    std::string forward = g_json_path;
-    for (char& c : forward) if (c == '\\') c = '/';
-    bool ok = add_ours(container, g_json_path) || add_ours(container, forward);
+    bool ok = add_ours(container, g_json_path) || add_ours(container, g_json_forward);
     t_adding = false;
     static std::atomic<int> logs{6};
     if (logs.fetch_sub(1) > 0) log(ok ? 0 : 2, ok ? "Turbo parts added to the game's parts (%s)" : "could not load the Turbo definitions from %s", g_json_path.c_str());
@@ -1253,7 +1286,7 @@ void stream_sound(void* self, int kind, const double* dt) {
     ClientVoice& v = g_voices[self];
     v.last_tick = now;
     double factor = at<double>(self, off::client_factor_speed), level = 0;
-    bool flag = false;
+    bool flag = false, blown = false;
     if (is_blow_off(kind)) {
         v.synth.voice = Voice::kBlowOff;
         decode_blow_off_factor(factor, flag, level, v.synth.sound, v.synth.size);
@@ -1264,7 +1297,7 @@ void stream_sound(void* self, int kind, const double* dt) {
     } else {
         v.synth.voice = Voice::kTurbo;
         v.synth.size = kind;
-        decode_turbo_factor(factor, level, flag);
+        decode_turbo_factor(factor, level, flag, blown);
     }
     double matrix[12]{};
     g_world_transform(matrix, self);
@@ -1307,7 +1340,7 @@ void stream_sound(void* self, int kind, const double* dt) {
     if (want <= 0) return;
     int n = int(std::min<long long>(want, kSampleRate / 5));
     g_pcm.resize(size_t(n));
-    render(v.synth, level, flag, g_pcm.data(), n);
+    render(v.synth, level, flag, g_pcm.data(), n, blown);
     if (double gain = turbo_volume(); gain != 1.0)
         for (auto& sample : g_pcm) sample = int16_t(std::clamp(std::lround(sample * gain), -32768L, 32767L));
     GameBuffer buffer{nullptr, 0, 0};
@@ -1388,6 +1421,7 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     double dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;
     double knock = knock_damage(intake, t_boost_factor, dt);
     if (knock > 0 && anymaker::readable(static_cast<uint8_t*>(self) + off::engine_damage_factor, 8)) at<double>(self, off::engine_damage_factor) += knock;
+    if (knock > 0) dyno::note_knock(self, knock);     // the Dyno's "Knock" row
     static std::atomic<int> logs{40};
     static std::atomic<int64_t> last_ms{-1000000};
     int64_t ms = int64_t(now_seconds() * 1000);
@@ -1397,17 +1431,25 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     }
 }
 
+// A function inside a loaded DLL other than the game: another hook sitting on the cell.
+bool in_other_module(const void* fn) {
+    HMODULE m = nullptr;
+    return fn && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)fn, &m) &&
+           m && m != GetModuleHandleW(nullptr);
+}
 void install_intake_air() {
     using namespace anymaker::experimental;
     void** tick = route::cell(bind::engine_tick);
     void* entry = route::function(bind::engine_tick);
     void** remap = route::cell(bind::math_remap);
-    bool ok = tick && entry && *tick == entry && remap && *remap && route::executable(*remap);
+    // The engine tick cell holds the game's function, or the Dyno's hook on it (any start order works).
+    bool tick_ok = tick && entry && anymaker::readable(tick, 8) && (*tick == entry || in_other_module(*tick));
+    bool ok = tick_ok && remap && *remap && route::executable(*remap);
     if (ok && h_remap.install(remap, (void*)&hk_remap)) {
         if (h_engine_tick.install(tick, (void*)&hk_engine_tick)) { log(0, "hot boost air on: intercoolers matter to every engine"); return; }
         h_remap.remove((void*)&hk_remap);
     }
-    log(1, "hot boost air off (engine tick %d/%d/%d, remap %d); engines ignore intake temperature", !!tick, !!entry, tick && entry && *tick == entry, !!remap);
+    log(1, "hot boost air off (engine tick %d/%d/%d, remap %d); engines ignore intake temperature", !!tick, !!entry, tick_ok, !!remap);
 }
 
 // ------------------------------------------------------------------------------------- install (background thread)
@@ -1542,6 +1584,7 @@ void install_hooks() {
                     attempt == 179 ? "could not locate" : "still looking for", roots, !!add, !!create, !!destroy, !!tick, !!get, !!fctor, !!fdtor, !!fload, !!cctor, !!cdtor, !!ccreate, !!cmodify, !!cmove, !!nctor, !!ndtor, !!pset, !!sc);
             continue;
         }
+        std::lock_guard install_lock(engine_parts::install_mutex());   // one AnyEngineParts part hooks at a time
         if (!destroy_slot_matches(*destroy)) return;
         g_file_ctor = fctor; g_file_dtor = fdtor; g_file_load = fload;
         g_content_ctor = cctor; g_content_dtor = cdtor; g_node_ctor = nctor; g_node_dtor = ndtor;
@@ -1553,6 +1596,7 @@ void install_hooks() {
         g_units_frequency = reinterpret_cast<units_t>(route::function(bind::units_frequency));
         g_units_pressure = reinterpret_cast<units_t>(route::function(bind::units_pressure));
         g_units_temperature = reinterpret_cast<units_t>(route::function(bind::units_temperature));   // optional: no row without it
+        g_units_percentage = reinterpret_cast<units_t>(route::function(bind::units_percentage));     // optional too (Condition)
         g_to_pascals = reinterpret_cast<to_pascals_t>(route::function(bind::pressure_to_pascals));
         g_string_dtor = reinterpret_cast<self_fn_t>(native(anymaker::sym::string_dtor_rva));
         bool tooltip_ok = tooltip && g_component_tooltip && g_units_flow && g_units_frequency && g_units_pressure && g_to_pascals && g_string_dtor;
@@ -1570,6 +1614,8 @@ void install_hooks() {
         if (!tooltip_ok || !h_tooltip.install(tooltip, (void*)&hk_tooltip))
             log(1, "turbo tooltip unavailable (tooltip=%d base=%d units=%d/%d/%d pascals=%d string=%d); turbos show the stock impeller tooltip",
                 !!tooltip, !!g_component_tooltip, !!g_units_flow, !!g_units_frequency, !!g_units_pressure, !!g_to_pascals, !!g_string_dtor);
+        else if (!g_units_percentage || !g_units_temperature)
+            log(1, "turbo tooltip without its %s row (game formatter not found)", !g_units_percentage ? "Condition" : "Temperature");
         install_inline_valves();
         install_oil();
         install_intake_air();

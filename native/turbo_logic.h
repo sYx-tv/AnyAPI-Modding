@@ -32,6 +32,11 @@ constexpr double kAntilagSpool = 0.8;     // antilag holds the shaft at this spo
 constexpr double kAntilagMinFlow = 0.03;  // exhaust flow (fraction of rated) that shows the engine is running
 constexpr double kSurgeSpool = 0.15;      // below this spool a backflow is just boost bleeding off, not surge
 constexpr double kSurgeTau = 0.4;         // surge stalls the wheel: extra spool decay time constant, seconds
+// A turbo worn to 0% blows: the shaft stops and the wrecked compressor wheel blocks most of the intake. The engine still
+// breathes through it, but only this share of a working turbo's flow: about a third of the air a matched engine (one
+// whose exhaust spools it fully) wants at full revs without boost, so it idles and crawls but makes about a third of
+// its power at most: limp mode. Replace the turbo to get the power back.
+constexpr double kBlownFlowShare = 0.12;
 
 // One turbo size: N x N face, 2 cells thick (cold side cell x = 0, hot side cell x = 1).
 struct Spec {
@@ -95,10 +100,10 @@ inline constexpr ChannelInfo kChannels[kChannelCount] = {
     {"boost", false},               // boost over the air outside, kPa (game scale; full boost is about 88)
     {"boost_psi", false},           // the same in psi (full boost is about 12.8)
     {"antilag", false},             // 1 while antilag (from a wastegate) is firing to hold the spool, else 0
-    {"boost_limit", true},          // input: cap intake pressure (kPa, game scale); 0 = no cap
+    {"boost_limit", true},          // input: cap boost (over the air outside, kPa, game scale, like `boost`); 0 = no cap
     {"oil_flow", false},            // L/s of oil through the turbo (0.5 or more cools it fully)
     {"turbo_temperature", false},   // C; above 250 it wears fast
-    {"condition", false},           // 1 new, 0 seized; below 0.5 it loses boost
+    {"condition", false},           // 1 new, 0 blown; below 0.5 it loses boost
     {"air_filter", false},          // 1 with an air filter on the compressor intake, else 0
     {"boost_air_temperature", false},   // C, the boost air after any intercooler (what the engine breathes)
 };
@@ -113,15 +118,28 @@ inline int channel_index(const char* name, size_t length) {
 // Where the ports sit, in cells. Axial ports use the cell at the centre of the face (rounded down on even
 // sizes, as the stock large impeller does); tangential ports sit at the top far corner (cold outlet, +z) and
 // bottom near corner (hot inlet, -z), where the scaled housings put their outlet stubs.
+// A large pipe (4x4 and 5x5) is 2 x 2 cells, anchored at its low corner: across the two axes other than the one it
+// faces (y and z for the axial ports; x and y for the z-facing ones, so it takes both of the part's cells along x).
+// The stock large impeller (turbo_d) anchors its +z outlet one cell below the top the same way.
 struct Port { int x, y, z, dir; };
 inline Port port(int n, Node node) {
     int c = (n - 1) / 2, top = n - 1;
+    bool large = spec(n).large_pipe;
     switch (node) {
-    case kColdIn: return {0, c, c, 0};      // x_neg: front, axial
-    case kColdOut: return {0, top, top, 5}; // z_pos
-    case kHotIn: return {1, 0, 0, 4};       // z_neg
-    default: return {1, c, c, 1};           // x_pos: back, axial
+    case kColdIn: return {0, c, c, 0};                          // x_neg: front, axial
+    case kColdOut: return {0, large ? top - 1 : top, top, 5};   // z_pos
+    case kHotIn: return {large ? 0 : 1, 0, 0, 4};              // z_neg
+    default: return {1, c, c, 1};                               // x_pos: back, axial
     }
+}
+// The cells a port's pipe end covers on the part's face: 1 x 1 for a small pipe, 2 x 2 for a large one.
+inline bool port_covers(int n, Node node, int x, int y, int z) {
+    Port p = port(n, node);
+    int span = spec(n).large_pipe ? 2 : 1;
+    auto in = [&](int v, int lo) { return v >= lo && v < lo + span; };
+    if (p.dir <= 1) return x == p.x && in(y, p.y) && in(z, p.z);
+    if (p.dir <= 3) return y == p.y && in(x, p.x) && in(z, p.z);
+    return z == p.z && in(x, p.x) && in(y, p.y);
 }
 
 inline std::string fmt(double v) {
@@ -129,18 +147,21 @@ inline std::string fmt(double v) {
 }
 inline std::string description(int n) {
     Spec s = spec(n);
-    return "Exhaust-driven turbocharger, " + std::to_string(n) + "x" + std::to_string(n) + "x2. Front: compressor intake (centre) and "
-        "compressor outlet (top) - feed an air manifold. Back: turbine inlet (bottom) from the exhaust manifold and turbine "
-        "exhaust out (centre) - vent it. Full boost (98 kPa, double engine power) needs about " + fmt(s.rated_flow) +
+    return "Exhaust-driven turbocharger, " + std::to_string(n) + "x" + std::to_string(n) + "x2. Cold side (front): compressor intake in "
+        "the middle of the face, compressor outlet at the top facing sideways - feed an air manifold. Hot side (back): turbine "
+        "exhaust out in the middle - vent it; turbine inlet at the bottom facing the other side, from the exhaust manifold. Full boost (98 kPa, double engine power) needs about " + fmt(s.rated_flow) +
         " L/s of exhaust; boost starts near " + fmt(s.rated_flow * kSpoolStart) + " L/s. Bigger turbos move more air with less back pressure but have more lag. " +
         (s.large_pipe ? "Large pipe." : "Small pipe.") +
         " Underneath: oil in (front) and oil out (back) - circulate engine oil through it with an oil cooler and oil filter. "
-        "It wears with use: much faster without oil flow, without an air filter on its intake, or running hot.";
+        "It wears with use: much faster without oil flow, without an air filter on its intake, or running hot. Its Condition "
+        "shows in the tooltip; at 0% it blows and chokes the engine's air (limp mode) until you replace it.";
 }
 
 // Oil: feed in under the compressor housing, drain out under the turbine housing, both under the centre. They come
 // after the four gas nodes (saved links refer to logic nodes by position, so the old ones keep their meaning).
-inline Port oil_port(int n, bool in) { return {in ? 0 : 1, 0, (n - 1) / 2, 2}; }
+// No stock part puts a gas node and a liquid node in one cell, so on the 2x2 (where the centre row holds the gas
+// intake and the turbine nodes) they sit one row further back, in cells of their own.
+inline Port oil_port(int n, bool in) { return {in ? 0 : 1, 0, n == 2 ? 1 : (n - 1) / 2, 2}; }
 inline std::string oil_node(int n, bool in) {
     Port p = oil_port(n, in);
     return "{\"id\": \"" + std::string(in ? "oil_in" : "oil_out") + "\", \"pos\": [" + std::to_string(p.x) + ", " + std::to_string(p.y) + ", " + std::to_string(p.z) + "], \"direction\": 2, \"type\": \"liquid\"}";
@@ -155,13 +176,14 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
         Port p = port(n, which);
         return "{\"pos\": [" + std::to_string(p.x) + ", " + std::to_string(p.y) + ", " + std::to_string(p.z) + "], \"direction\": " + std::to_string(p.dir) + ", \"type\": \"gas\"" + pipe + "}";
     };
-    // Mounting faces for a data port: every front and back face cell except the axial pipe cell.
-    std::string surfaces = "{\"id\": \"torque\", \"pos\": [0, 0, " + std::to_string(top) + "], \"dir\": 2, \"type\": \"torque\"}";
-    Port axial = port(n, kColdIn);
+    // Mounting faces for a data port: every front and back face cell except under the axial pipes (2 x 2 cells for a
+    // large pipe). The torque mount the impeller class asks for sits under the front far corner, clear of the oil
+    // feed (on the 2x2, whose oil feed takes that cell, under the front near corner).
+    std::string surfaces = "{\"id\": \"torque\", \"pos\": [0, 0, " + std::to_string(n == 2 ? 0 : top) + "], \"dir\": 2, \"type\": \"torque\"}";
     for (int x = 0; x < 2; ++x)
         for (int y = 0; y < n; ++y)
             for (int z = 0; z < n; ++z) {
-                if (y == axial.y && z == axial.z) continue;
+                if (port_covers(n, x ? kHotOut : kColdIn, x, y, z)) continue;
                 surfaces += ",\n        {\"pos\": [" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": " + std::to_string(x) + ", \"gender\": 2, \"type\": \"port\"}";
             }
     std::string descriptors;
@@ -219,7 +241,8 @@ struct State {
     double intake_flow = 0;      // smoothed L/s
     bool surging = false;
     bool antilag_firing = false;  // antilag is lighting fuel in the exhaust to hold the spool (throttle off)
-    double health = 1;            // share of its head the turbo can still make (wear, clogged filter; turbo_health.h); 0 seized
+    double health = 1;            // share of its head the turbo can still make (wear, clogged filter; turbo_health.h)
+    bool blown = false;           // worn to 0%: no boost, a choked intake (kBlownFlowShare)
     double slots[kChannelCount]{};
 };
 
@@ -234,10 +257,10 @@ inline double power_multiplier(double intake_pressure) {
 }
 
 // The compressor's head for the current spool and boost limit (pressure units over its inlet).
-inline double head_for(const State& st, double inlet_pressure) {
+inline double head_for(const State& st, double /*inlet_pressure*/) {
     double head = kMaxHead * st.spool * std::clamp(finite_or(st.health, 1.0), 0.0, 1.0);
-    double limit = finite_or(st.slots[kBoostLimit], 0.0);
-    if (limit > 0) head = std::min(head, std::max(0.0, limit / kKpaPerUnit - inlet_pressure));
+    double limit = finite_or(st.slots[kBoostLimit], 0.0);   // boost, as the `boost` output reads it
+    if (limit > 0) head = std::min(head, limit / kKpaPerUnit);
     return head;
 }
 
@@ -258,16 +281,17 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
     double target = clamp01((st.exhaust_flow / s.rated_flow - kSpoolStart) / (1.0 - kSpoolStart));
     // Antilag: when the exhaust alone would let the shaft slow, fuel burnt in the manifold keeps it spinning.
     // It needs the engine running (some exhaust to light).
-    st.antilag_firing = in.antilag && target < kAntilagSpool && st.exhaust_flow > kAntilagMinFlow * s.rated_flow;
+    bool dead = st.blown || !(st.health > 0);     // the shaft no longer turns
+    st.antilag_firing = !dead && in.antilag && target < kAntilagSpool && st.exhaust_flow > kAntilagMinFlow * s.rated_flow;
     if (st.antilag_firing) target = kAntilagSpool;
-    if (!(st.health > 0)) target = 0;             // seized: the shaft no longer turns
+    if (dead) target = 0;
     double tau = target > st.spool ? s.spool_up_s : s.spool_down_s;
     st.spool += (target - st.spool) * (1.0 - std::exp(-dt / tau));
     st.spool = clamp01(st.spool);
     // Cold side: a centrifugal compressor with the spool's head, like the stock impeller but far more flow.
     out.head = head_for(st, p[kColdIn]);
     double net = out.head - (p[kColdOut] - p[kColdIn]);
-    out.compressor_move = capped(s.compressor_coeff * net * dt, in.volume[kColdIn], in.volume[kColdOut]);
+    out.compressor_move = capped(s.compressor_coeff * (st.blown ? kBlownFlowShare : 1.0) * net * dt, in.volume[kColdIn], in.volume[kColdOut]);
     // Surge: boost pushing back through a spinning compressor (throttle off, no blow-off valve). The flow stalls and
     // reverses in pulses, which slows the wheel hard. A venting blow-off valve takes that boost instead.
     st.surging = false;
@@ -378,7 +402,7 @@ inline std::string blow_off_entry(bool large, const std::string& mesh) {
     std::string box = large ? "[1, 1, 1]" : "[0, 0, 0]";
     std::string description = std::string("Inline blow-off valve for a Turbo, ") + (large ? "large pipe (4x4 and 5x5 turbos)" : "small pipe (2x2 and 3x3 turbos)") +
         ". Pipe the turbo's compressor outlet into its plain end and its blue-ringed Air end into the air manifold. When you lift "
-        "off the throttle it vents the trapped boost out of its trumpet so the turbo does not surge and keeps its spin. Paint the "
+        "off the throttle it vents the trapped boost out through its top so the turbo does not surge and keeps its spin. Paint the "
         "body and the cap separately. Properties Tool: Stiffness (kPa of extra boost before it opens) and Sound effect (0 whoosh, 1 flutter, 2 chirp, "
         "3 dump). Outputs open (0/1), flow (L/s) and pressure (kPa).";
     return std::string("    {\n") +
@@ -416,11 +440,9 @@ inline std::string wastegate_entry(bool large, const std::string& mesh) {
         "(0 to 1, from a data link or microcontroller) lets exhaust bypass the turbine, which caps boost. Its antilag input (1 on, "
         "0 off) burns fuel in the exhaust off throttle so the turbo stays spooled, with bangs and pops. Outputs flow (L/s) and "
         "pressure (kPa). Paint the can and the cap separately.";
-    // Data ports on the -x, -z and +z faces of every cell; the torque node (unused) on top.
-    // The radiator's mounting faces, and the (unused) torque node the impeller class asks for, on top.
-    std::string surfaces = "{\"id\": \"torque\", \"pos\": [0, 1, 0], \"dir\": 3, \"type\": \"torque\"}, "
-        "{\"pos\": [1, 0, 0], \"size\": [1, 2], \"dir\": 1, \"gender\": 2, \"type\": \"port\"}, {\"pos\": [-1, 0, 0], \"size\": [1, 2], \"gender\": 2, \"type\": \"port\"}, "
-        "{\"pos\": [-1, 1, 0], \"size\": [3, 1], \"dir\": 3, \"gender\": 2, \"type\": \"port\"}, {\"pos\": [-1, 0, 0], \"size\": [3, 1], \"dir\": 2, \"gender\": 2, \"type\": \"port\"}";
+    // Data ports on the -x, -z and +z faces of every cell (not the -y inlet or the +x outlet face); the torque node the
+    // impeller class asks for (unused) on top.
+    std::string surfaces = std::string("{\"id\": \"torque\", \"pos\": [0, ") + (large ? "1" : "0") + ", 0], \"dir\": 3, \"type\": \"torque\"}";
     for (int x = 0; x <= (large ? 1 : 0); ++x)
         for (int y = 0; y <= (large ? 1 : 0); ++y)
             for (int z = 0; z <= (large ? 1 : 0); ++z) {

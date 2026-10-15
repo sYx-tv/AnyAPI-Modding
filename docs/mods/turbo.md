@@ -7,17 +7,19 @@
 Turbo adds four exhaust-driven turbochargers: **Turbo 2x2**, **3x3**, **4x4** and **5x5**. Each is N cells wide,
 N tall and 2 thick. The front cell is the stock impeller's compressor housing, scaled to the size; the back cell is
 the turbine housing, the same impeller mirrored. A new turbo starts with a steel cold side and a cast-iron hot side,
-and the paint tool colours each side on its own, like any stock part.
+and the paint tool colours each side on its own, like any stock part. Every opening on the housing sits exactly where
+its pipe joins: on the 4x4 and 5x5 the boost outlet and the turbine inlet are large pipes that span both cells, so a
+cast flange block carries them across the top and bottom corners.
 
 ## Hooking one up
 
 | Port | Where | Connect to |
 | --- | --- | --- |
-| Intake in (cold side) | Middle of the front face | Nothing needed: it draws from the open air. A pipe here can only add air. |
-| Boost out (cold side) | Top corner of the front housing, facing sideways | The engine's air intake |
-| Exhaust in (hot side) | Bottom corner of the back housing, facing the other way | The engine's exhaust |
-| Exhaust out (hot side) | Middle of the back face | A gas vent (the tailpipe) |
-| Oil in, oil out | Underneath, side by side | The engine's oil, through an oil cooler (see [Upkeep](#upkeep-oil-air-filter-heat-and-wear)) |
+| Intake in (cold side) | Middle of the front face (the 2x2: its lower near cell; the 5x5: just above and beyond the centre, where its large pipe fits) | Nothing needed: it draws from the open air. A pipe here can only add air. |
+| Boost out (cold side) | Top far corner, facing sideways (4x4 and 5x5: across both cells, the cell below the top) | The engine's air intake |
+| Exhaust in (hot side) | Bottom near corner, facing the other way (4x4 and 5x5: across both cells) | The engine's exhaust |
+| Exhaust out (hot side) | Middle of the back face, opposite the intake | A gas vent (the tailpipe) |
+| Oil in, oil out | Underneath, a brass-ringed port under each housing (the 2x2: under the far row) | The engine's oil, through an oil cooler (see [Upkeep](#upkeep-oil-air-filter-heat-and-wear)) |
 
 Exhaust flowing from the hot inlet to the hot outlet spins the shaft. The shaft's spool sets how much pressure
 the cold side pushes into the engine's intake. Engines already turn intake pressure into power: ambient gives
@@ -91,8 +93,11 @@ wear at all. The times below are for full boost the whole time:
   4x4x4) are cone filters, the pipe in the middle of the bottom. Pipe the neck to the turbo's intake. Clean air makes the turbo wear four times slower.
   A filter clogs slowly as it works, about 10 hours of full boost to go fully dirty, and a clogged filter costs up to 15% of the boost. Place a new one to replace it. A new
   filter starts with a red element and steel caps, and both paint.
-- **Condition.** Down to half, the turbo performs like new. Below that its boost falls (to 60% near the end),
-  and at 0 it has seized: no boost, and the shaft no longer turns. A new turbo is at 1.
+- **Condition.** Down to half, the turbo performs like new. Below that its boost falls (to 60% near the end).
+  At 0% it **blows up**: a bang, shrapnel and a hiss of smoke, and both housings go sooty. A blown turbo makes no boost
+  and its wrecked compressor chokes the engine's air: the engine still runs through it, but gets only about a third of
+  the air it wants at full revs (for an engine matched to the turbo), so it idles and crawls in limp mode. Replace the
+  turbo (a new one starts at 100%) to get the power back. The tooltip shows the condition (see below).
 - Wear is saved with each world, in `anyengineparts_wear.json` in the game's working folder, which the game copies
   into the save slot. A turbo moved to another vehicle (split or welded) starts fresh.
 
@@ -126,6 +131,8 @@ Turbos and blow-off valves have their own sounds in place of the impeller hum, m
   and deep.
 
 - **Antilag**: irregular gunshot bangs and crackles from the wastegate while antilag fires; deeper on bigger turbos.
+- **Blowing up**: once, when a turbo wears out: a crack and a boom, shrapnel pinging, the wheel screeching to a stop
+  and a hiss of boost and smoke. A turbo that was already blown when you load in stays quiet.
 
 The wastegate is otherwise silent. Sounds follow the vehicle volume slider and are heard by every player near the part.
 With AnyHelpers installed, **Mod Settings > AnyEngineParts > Turbo volume** sets how loud all of them are, from 0 to
@@ -134,7 +141,8 @@ With AnyHelpers installed, **Mod Settings > AnyEngineParts > Turbo volume** sets
 ## Tooltip
 
 Looking at a turbo shows its intake flow, turbine speed and boost (the pressure it adds over the intake), in the
-game's own units, then its **condition** (100 % new, 0 % seized) and **temperature** (see Upkeep).
+game's own units, then its **condition** (100% new, 0% blown, in whole percent like the stock filters; a worn turbo
+reads at least 1% until it blows, and a blown one shows 0% in the game's warning colour) and **temperature** (see Upkeep).
 
 ## Data channels
 
@@ -146,7 +154,7 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | `boost` | Output | Boost over the air outside, kPa (full boost is about 88) |
 | `boost_psi` | Output | The same in psi (full boost is about 12.8), for a boost gauge |
 | `exhaust_pressure` | Output | Pressure at the hot inlet, kPa |
-| `power_multiplier` | Output | The engine power multiplier this boost gives, 1 to 2 |
+| `power_multiplier` | Output | The engine power multiplier this boost gives, 1 to 2, after what hot boost air costs |
 | `spool` | Output | Shaft spool, 0 to 1 |
 | `rpm` | Output | Shaft speed |
 | `exhaust_flow`, `intake_flow` | Output | Hot-side and cold-side flow, L/s |
@@ -155,10 +163,10 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | `antilag` | Output | 1 while antilag is firing to hold the spool, else 0 |
 | `oil_flow` | Output | Oil through the turbo, L/s (0.5 or more cools it fully) |
 | `turbo_temperature` | Output | The turbo's temperature, °C (above 250 it wears faster) |
-| `condition` | Output | 1 new, 0 seized; below 0.5 it loses boost |
+| `condition` | Output | 1 new, 0 blown; below 0.5 it loses boost |
 | `air_filter` | Output | 1 with an air filter on the intake, else 0 |
 | `boost_air_temperature` | Output | The boost air after any intercooler, °C (what the engine breathes) |
-| `boost_limit` | Input | A wastegate: caps boost at this pressure in kPa (0 or unwired: no cap) |
+| `boost_limit` | Input | A wastegate: caps boost (as the `boost` output reads it) at this pressure in kPa (0 or unwired: no cap) |
 
 ## Getting it
 
@@ -202,6 +210,6 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 - The hot side's gas is not saved; it refills from the pipes after loading. Saves that contain a turbo need
   AnyEngineParts installed to load it.
 
-Source: [`turbo_mod.cpp`] (built into `AnyEngineParts.dll`)(../../native/turbo_mod.cpp), bindings in
+Source: [`turbo_mod.cpp`](../../native/turbo_mod.cpp) (built into `AnyEngineParts.dll`), bindings in
 [`turbo_bindings.h`](../../native/turbo_bindings.h), tests in
 [`tests/turbo_logic_test.cpp`](../../native/tests/turbo_logic_test.cpp).

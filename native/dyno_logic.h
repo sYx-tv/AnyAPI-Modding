@@ -27,9 +27,10 @@ constexpr double kFullThrottle = 0.9, kMinSpanRpm = 1500, kMinSeconds = 1.0, kMa
 
 inline double torque_nm(double watts, double rps) { return rps > 0.5 ? watts / (2 * kPi * rps) : 0.0; }
 
-// One tick of a vehicle's engines, summed (power) or the highest (the rest).
+// One tick of a vehicle's engines, summed (power, knock) or the highest (the rest). knock is the knock damage Turbo's
+// hot boost air did this tick (0 without it); the game's other engine damage (low oil, overheating) is not knock.
 struct EngineSample {
-    double rps = 0, watts = 0, throttle = 0, boost = 1, temperature_c = 0, damage = 0;
+    double rps = 0, watts = 0, throttle = 0, boost = 1, temperature_c = 0, knock = 0;
     int engines = 0;
 };
 
@@ -37,7 +38,7 @@ struct Run {
     double sum[kBins]{};
     int count[kBins]{};
     int lo = kBins, hi = -1;                 // first and last bin with samples
-    double seconds = 0, boost_peak = 1, temperature_peak = 0, damage_start = 0, damage_end = 0;
+    double seconds = 0, boost_peak = 1, temperature_peak = 0, knock_peak = 0;
     uint32_t number = 0;
 
     bool has(int bin) const { return bin >= 0 && bin < kBins && count[bin] > 0; }
@@ -45,7 +46,7 @@ struct Run {
     static double bin_rpm(int bin) { return double(bin) * kBinRpm; }
     double span_rpm() const { return hi >= lo ? double(hi - lo) * kBinRpm : 0.0; }
     bool valid() const { return span_rpm() >= kMinSpanRpm && seconds >= kMinSeconds; }
-    bool knocked() const { return damage_end - damage_start > 1e-9; }
+    bool knocked() const { return knock_peak > 0; }
     void peak_power(double& watts_out, double& rpm_out) const {
         watts_out = 0; rpm_out = 0;
         for (int b = lo; b <= hi; ++b) if (has(b) && watts(b) > watts_out) { watts_out = watts(b); rpm_out = bin_rpm(b); }
@@ -68,7 +69,12 @@ struct Recorder {
     uint32_t next_number = 1;
     EngineSample live;                       // the latest tick, for the readout
 
-    void clear() { *this = Recorder{}; }
+    // Forgets the kept pulls; a pull being recorded carries on and becomes pull 1.
+    void clear() {
+        for (Run& run : runs) run = Run{};
+        count = 0;
+        next_number = 1;
+    }
 
     // Returns true when this tick finished a kept pull.
     bool feed(const EngineSample& s, double dt) {
@@ -79,7 +85,6 @@ struct Recorder {
         if (!active) {
             if (!full) return false;
             current = Run{};
-            current.damage_start = current.damage_end = s.damage;
             active = true;
         }
         if (!full || current.seconds > kMaxSeconds) return finish();
@@ -93,7 +98,7 @@ struct Recorder {
         current.seconds += dt;
         current.boost_peak = std::max(current.boost_peak, s.boost);
         current.temperature_peak = std::max(current.temperature_peak, s.temperature_c);
-        current.damage_end = std::max(current.damage_end, s.damage);
+        if (std::isfinite(s.knock)) current.knock_peak = std::max(current.knock_peak, s.knock);
         return false;
     }
 
@@ -174,7 +179,7 @@ constexpr const char* kStockMeshPath = "meshes/components/compass_sensor_a.mesh"
 constexpr const char* kDynoMeshName = "anyengineparts_dyno_sensor_a";
 constexpr const char* kDynoMeshPath = "meshes/components/anyengineparts_dyno_sensor_a.mesh";
 
-// The part: a 1-cell sensor of the game's altitude sensor class (nothing else hooks that class), shaped like the
+// The part: a 1 x 2 x 1 sensor of the game's altitude sensor class (nothing else hooks that class), shaped like the
 // compass sensor, with the dyno's data channels. tech_tier 3 and the "sensor" category, like the turbos' tier.
 inline std::string definition_json(const std::string& mesh_path = kStockMeshPath) {
     std::string descriptors;

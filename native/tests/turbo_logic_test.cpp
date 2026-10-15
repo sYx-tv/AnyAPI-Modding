@@ -67,10 +67,34 @@ int main() {
     // Channels.
     for (int i = 0; i < kChannelCount; ++i) assert(channel_index(kChannels[i].name, std::strlen(kChannels[i].name)) == i && kChannels[i].input == (i == kFirstInput));
     assert(channel_index("pressure", 8) < 0);
-    // Ports: inside the part, axial ones on the front and back faces.
+    // Ports: inside the part, axial ones on the front and back faces. A large pipe end (2 x 2 cells) lies wholly on the
+    // part's face too: it covers exactly 4 of the part's cells, all on the face it points out of.
     for (int n = kMinSize; n <= kMaxSize; ++n)
-        for (int k = 0; k < kNodeCount; ++k) { Port p = port(n, Node(k)); assert(p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y < n && p.z >= 0 && p.z < n); }
-    assert(port(3, kColdIn).dir == 0 && port(3, kHotOut).dir == 1 && port(3, kColdIn).y == 1 && port(4, kColdOut).y == 3 && port(5, kHotIn).z == 0);
+        for (int k = 0; k < kNodeCount; ++k) {
+            Port p = port(n, Node(k)); assert(p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y < n && p.z >= 0 && p.z < n);
+            int covered = 0;
+            for (int x = 0; x < 2; ++x)
+                for (int y = 0; y < n; ++y)
+                    for (int z = 0; z < n; ++z)
+                        if (port_covers(n, Node(k), x, y, z)) {
+                            ++covered;
+                            int face[6] = {x, 1 - x, y, n - 1 - y, z, n - 1 - z};   // distance to the face each direction points out of
+                            assert(face[p.dir] == 0);
+                        }
+            assert(covered == (spec(n).large_pipe ? 4 : 1));
+        }
+    assert(port(3, kColdIn).dir == 0 && port(3, kHotOut).dir == 1 && port(3, kColdIn).y == 1 && port(3, kColdOut).y == 2 && port(4, kColdOut).y == 2 &&
+           port(5, kColdOut).y == 3 && port(3, kHotIn).x == 1 && port(4, kHotIn).x == 0 && port(5, kHotIn).z == 0);
+    // The stock large impeller (turbo_d, 2 cells thick) anchors its large +z outlet the same way: [0, top - 1, top].
+    assert(port(5, kColdOut).x == 0 && port(5, kColdOut).z == 4);
+    // Oil ports: under the part (small liquid nodes), the feed under the cold side and the drain under the hot side,
+    // each in a cell no gas node touches (no stock part mixes gas and liquid nodes in one cell).
+    for (int n = kMinSize; n <= kMaxSize; ++n)
+        for (bool in : {true, false}) {
+            Port o = oil_port(n, in);
+            assert(o.y == 0 && o.dir == 2 && o.x == (in ? 0 : 1) && o.z >= 0 && o.z < n);
+            for (int k = 0; k < kNodeCount; ++k) assert(!port_covers(n, Node(k), o.x, o.y, o.z));
+        }
     // Definitions file: four entries, four gas nodes each, the stock class, balanced braces.
     bool built[4] = {true, true, false, true}, bov_built[2] = {false, true}, wg_built[2] = {true, false};
     std::string json = definitions_json(built, bov_built, wg_built);
@@ -144,8 +168,9 @@ int main() {
     { State st; Plant pl; run(st, spec(2), pl, 40, 30, 10); assert(pl.hot_in / pl.cap > 4.0); }
     // The same flow on a 5x5 is too little for full boost.
     { State st; Plant pl; run(st, spec(5), pl, 25, 20, 20); assert(st.spool < 0.4); }
-    // Boost limit (kPa, game scale) caps the intake pressure.
-    { State st; st.slots[kBoostLimit] = 49; Plant pl; Spec s = spec(3); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.5, 20); assert(p < 5.05 && p > 3.5); }
+    // Boost limit (kPa, game scale) caps the boost the `boost` output reads (the docs: "caps boost at this pressure").
+    { State st; st.slots[kBoostLimit] = 49; Plant pl; Spec s = spec(3); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.5, 20);
+      assert(p < 6.05 && p > 4.5 && st.slots[kBoost] < 49.5 && st.slots[kBoost] > 35); }
     // Boost outputs: over the air outside, in kPa and psi (full boost about 88 kPa, 12.8 psi).
     { State st; Plant pl; Spec s = spec(3); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.9, 20);
       assert(near(st.slots[kBoost], (p - 1) * kKpaPerUnit, 2.5) && near(st.slots[kBoostPsi], st.slots[kBoost] * 0.1450377, 1e-9) && st.slots[kBoostPsi] > 10); }
@@ -200,17 +225,56 @@ int main() {
     assert(build_turbo_mesh(stock, 1, "x").empty() && build_turbo_mesh(std::vector<uint8_t>(10), 3, "x").empty());
     for (int n = kMinSize; n <= kMaxSize; ++n) {
         std::vector<uint8_t> mesh = build_turbo_mesh(stock, n, "turbocharger");
-        MeshLayout m; assert(parse_mesh(mesh, m) && m.vertices == 8 && m.indices == 12);
+        MeshLayout m; assert(parse_mesh(mesh, m) && m.vertices > 8 && m.indices > 12);   // the impeller's 2 x 4, then the mod's own pieces
         std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), mesh.data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
         uint32_t idx[12]; std::memcpy(idx, mesh.data() + m.index_bytes + 4, sizeof idx);
         assert(idx[0] == 0 && idx[1] == 1 && idx[2] == 2 && idx[6] == 4 && idx[7] == 6 && idx[8] == 5);
         double c = (n - 1) * kCell / 2, s = n / 3.0;
         assert(near(v[0].pos[0], -0.04, 1e-6) && near(v[0].pos[1], c - 0.12 * s, 1e-5) && near(v[2].pos[2], c + 0.12 * s, 1e-5));
         assert(near(v[4].pos[0], kCell + 0.04, 1e-6) && near(v[4].pos[1], c + 0.12 * s, 1e-5) && near(v[4].normal[0], 1, 1e-6));
-        assert(v[0].rgba[0] == 153 && v[0].rgba[1] == 0 && v[4].rgba[0] == 153 && v[4].rgba[1] == 38 && v[7].rgba[0] == 51);   // paint markers 1 and 2
-        // Cold outlet stub lands in the top cell on the +z face; hot inlet stub in the bottom cell on -z.
-        assert(int(std::lround(v[3].pos[1] / kCell)) == port(n, kColdOut).y && near(v[3].pos[2], (n - 0.5) * kCell, 1e-5));
-        assert(int(std::lround(v[7].pos[1] / kCell)) == port(n, kHotIn).y && near(v[7].pos[2], -0.5 * kCell, 1e-5));
+        assert(v[0].rgba[0] == 153 && v[0].rgba[1] == 0 && v[4].rgba[0] == 153 && v[4].rgba[1] == 38 &&
+               v[7].rgba[0] == (spec(n).large_pipe ? 153 : 51));   // paint markers 1 and 2; a large turbo paints its stub ends over (flange blocks)
+        // Cold outlet stub lands under the outlet's pipe end on the +z face (top cell); hot inlet stub under the inlet's on -z.
+        assert(port_covers(n, kColdOut, 0, int(std::lround(v[3].pos[1] / kCell)), n - 1) && near(v[3].pos[2], (n - 0.5) * kCell, 1e-5));
+        assert(port_covers(n, kHotIn, 1, int(std::lround(v[7].pos[1] / kCell)), 0) && near(v[7].pos[2], -0.5 * kCell, 1e-5));
+        // Everything stays in the part's cells (openings and fittings at most a couple of millimetres proud), each oil
+        // port has its brass ring under it, and every gas port that the stock opening misses gets a hole of its own,
+        // centred on the pipe end.
+        std::vector<MeshVertex> all(m.vertices); std::memcpy(all.data(), mesh.data() + m.vertex_bytes + 4, all.size() * sizeof(MeshVertex));
+        const double edge = 0.5 * kCell + 0.0025;
+        for (auto& x : all) assert(x.pos[0] >= -edge && x.pos[0] <= kCell + edge && x.pos[1] >= -edge && x.pos[1] <= (n - 1) * kCell + edge && x.pos[2] >= -edge && x.pos[2] <= (n - 1) * kCell + edge);
+        auto has = [&](const uint8_t col[3], const double at[3], double r) {
+            for (auto& x : all)
+                if (x.rgba[0] == col[0] && x.rgba[1] == col[1] && x.rgba[2] == col[2] && std::hypot(x.pos[0] - at[0], x.pos[1] - at[1], x.pos[2] - at[2]) < r) return true;
+            return false;
+        };
+        for (bool in : {true, false}) { Port o = oil_port(n, in); const double at[3] = {o.x * kCell, -0.5 * kCell, o.z * kCell}; assert(has(kOilBrass, at, 0.02)); }
+        double at[3];
+        for (Node k : {kColdIn, kColdOut, kHotIn, kHotOut}) {
+            port_face_centre(n, k, at);
+            bool own = n == 2 ? (k == kColdIn || k == kHotOut) : spec(n).large_pipe && (k == kColdOut || k == kHotIn);
+            if (own) assert(has(kValveHole, at, 0.003));   // the hole's centre vertex
+        }
+    }
+    // The real impeller (when the game files are here): the 5x5's eye moves onto its off-centre pipe; the 3x3's stays.
+    {
+        std::FILE* f = std::fopen("/mnt/user-data/uploads/Anymaker/rom/meshes/components/turbo_a.mesh", "rb");
+        if (f) {
+            std::vector<uint8_t> real;
+            for (int ch; (ch = std::fgetc(f)) != EOF;) real.push_back(uint8_t(ch));
+            std::fclose(f);
+            for (int n = kMinSize; n <= kMaxSize; ++n) {
+                std::vector<uint8_t> mesh = build_turbo_mesh(real, n, "t");
+                MeshLayout m; assert(parse_mesh(mesh, m));
+                std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), mesh.data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
+                double eye[3]; port_face_centre(n, kColdIn, eye);
+                double sum[2] = {0, 0}; int count = 0;   // the eye's black hole, on the cold side
+                for (size_t i = 0; i < v.size() / 2 && i < 584; ++i)
+                    if (v[i].rgba[0] == 0 && v[i].rgba[1] == 0 && v[i].rgba[2] == 0 && v[i].pos[0] < -0.02f && v[i].pos[2] < (n - 1) * kCell - 0.01) { sum[0] += v[i].pos[1]; sum[1] += v[i].pos[2]; ++count; }
+                if (n == 2) assert(count == 0);       // filled in: the mod's own opening is at the pipe
+                else assert(count > 0 && near(sum[0] / count, eye[1], 0.002) && near(sum[1] / count, eye[2], 0.002));
+            }
+        }
     }
     // Valve meshes, every style: readable, inside their cells (the cap may rise a little), with both paint markers,
     // and every face wound clockwise seen from outside like the stock meshes (the game culls the other side).
@@ -246,6 +310,15 @@ int main() {
             assert(!surging && near(got, spool, 0.01));
             decode_turbo_factor(byte(encode_turbo_factor(spool, true)), got, surging);
             assert(surging && near(got, spool, 0.01));
+            for (double nudge : {-1.0, 0.0, 1.0}) {               // blown reads as blown whichever way the byte rounds;
+                bool blown;                                     // full spool and the weakest surge never do
+                decode_turbo_factor(byte(encode_turbo_factor(spool, i % 2 == 0, true)) + nudge / 255.0, got, surging, blown);
+                assert(blown && !surging && got == 0);
+                decode_turbo_factor(byte(encode_turbo_factor(1.0, false)) + nudge / 255.0, got, surging, blown);
+                assert(!blown && !surging && got > 0.98);
+                decode_turbo_factor(byte(encode_turbo_factor(0.0, true)) + nudge / 255.0, got, surging, blown);
+                assert(!blown && surging && got < 0.01);
+            }
             for (int k = 0; k < kBlowOffSoundCount; ++k)
                 for (int z = kMinSize; z <= kMaxSize; ++z)
                     for (double nudge : {-1.0, 0.0, 1.0}) {          // the game may round the byte either way
@@ -256,9 +329,9 @@ int main() {
                         assert(!open && level == 0 && sound == k && size == z);   // shut keeps the last sound for the tail
                     }
         }
-        auto peak = [](Synth& s, double level, bool flag, int samples) {
+        auto peak = [](Synth& s, double level, bool flag, int samples, bool blown = false) {
             std::vector<int16_t> pcm(static_cast<size_t>(samples));
-            render(s, level, flag, pcm.data(), samples);
+            render(s, level, flag, pcm.data(), samples, blown);
             int p = 0; for (int16_t x : pcm) p = std::max(p, std::abs(int(x)));
             return p;
         };
@@ -286,6 +359,17 @@ int main() {
             Synth al; al.voice = Voice::kAntilag; al.size = z; assert(peak(al, 0, false, 4800) == 0);
             assert(peak(al, 0.5, true, 48000) > 8000);
             peak(al, 0, false, 3 * 48000); assert(peak(al, 0, false, 4800) < 50);
+        }
+        for (int z = kMinSize; z <= kMaxSize; ++z) {         // blowing up: one loud bang as it goes, then it dies away for good
+            Synth t; t.size = z;
+            for (int k = 0; k < 15; ++k) peak(t, 1, false, 4800);   // heard spooled up for 1.5 s, in game-sized chunks
+            assert(peak(t, 0, false, 9600, true) > 20000);
+            for (int k = 0; k < 40; ++k) peak(t, 0, false, 4800, true);
+            assert(peak(t, 0, false, 4800, true) < 50);
+            Synth loaded; loaded.size = z;                      // already blown when first heard: silent
+            for (int k = 0; k < 30; ++k) assert(peak(loaded, 0, false, 4800, true) == 0);
+            Synth early; early.size = z;                        // blowing in the first second it is heard: no bang (it may be the
+            peak(early, 0, false, 4800); assert(peak(early, 0, false, 9600, true) < 50);   // replicated value arriving late)
         }
         Synth wild; peak(wild, std::nan(""), true, 4800); assert(peak(wild, 0.5, false, 4800) <= 32767);
     }

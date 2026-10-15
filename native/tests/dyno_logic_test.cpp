@@ -21,12 +21,12 @@ double game_watts(double rpm, double boost, double throttle, double size = 4) {
 }
 
 // Drives one pull: throttle on from `from` RPM, rising `rate` RPM per second to `to`, then off.
-void pull(Recorder& r, double from, double to, double rate, double boost = 1.0, double damage_step = 0) {
-    double rpm = from, damage = 0;
+void pull(Recorder& r, double from, double to, double rate, double boost = 1.0, double knock = 0) {
+    double rpm = from;
     const double dt = 1.0 / 60;
     while (rpm < to) {
         EngineSample s; s.engines = 1; s.rps = rpm / 60; s.throttle = 1; s.boost = boost; s.temperature_c = 90 + rpm / 200;
-        s.watts = game_watts(rpm, boost, 1); damage += damage_step; s.damage = damage;
+        s.watts = game_watts(rpm, boost, 1); s.knock = knock;
         assert(!r.feed(s, dt));
         rpm += rate * dt;
     }
@@ -77,6 +77,18 @@ int main() {
     assert(r.count == 3 && r.runs[0].number == 2 && r.runs[2].number == 4);
     r.clear();
     assert(r.count == 0 && !r.latest() && r.next_number == 1);
+
+    // Clearing mid-pull keeps the pull being recorded; it becomes pull 1.
+    Recorder mid;
+    pull(mid, 2000, 8000, 1500);
+    for (int i = 0; i < 120; ++i) {
+        EngineSample s; s.engines = 1; s.throttle = 1; s.rps = (2000 + i * 25.0) / 60; s.watts = game_watts(s.rps * 60, 1, 1);
+        mid.feed(s, 1.0 / 60);
+        if (i == 60) mid.clear();
+    }
+    assert(mid.active && mid.count == 0);
+    pull(mid, 5000, 8000, 1500);                         // carries straight on: the throttle never came off
+    assert(mid.count == 1 && mid.latest()->number == 1 && mid.latest()->lo == 20);
 
     // A pull held at the limiter for minutes ends at the time cap and is kept.
     Recorder held;

@@ -27,6 +27,7 @@
 #include "route_cell.h"
 #include "dyno_logic.h"
 #include "dyno_mesh.h"
+#include "engine_parts_shared.h"
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
@@ -63,7 +64,6 @@ constexpr ptrdiff_t component_definition = 312;      // server_scene.vehicle_com
 constexpr ptrdiff_t definition_id = 0;               // vehicle_component_definition.m_id (string)
 constexpr ptrdiff_t engine_rps = 1424;               // server_scene.vehicle_component.engine.m_rps (f64)
 constexpr ptrdiff_t engine_temperature = 1432;       // m_temperature (f64, C)
-constexpr ptrdiff_t engine_damage_factor = 1456;     // m_damage_factor (f64)
 constexpr ptrdiff_t engine_throttle = 1472;          // m_display_throttle (f64)
 constexpr ptrdiff_t engine_boost = 1496;             // m_display_air_pressure_factor (f64, 1..2)
 constexpr ptrdiff_t engine_energy = 1536;            // m_display_torque (f64): energy this tick
@@ -90,19 +90,25 @@ transform_t g_vehicle_transform, g_component_transform;
 anymaker::cell_hook h_add_definitions, h_engine_tick, h_sensor_tick, h_get_f64;
 
 // ------------------------------------------------------------------------------------- shared state
-struct EngineEntry { const void* vehicle = nullptr; EngineSample sample; double time = 0; };
+struct EngineEntry { const void* vehicle = nullptr; EngineSample sample; double time = 0, knock = 0, knock_time = -1e9; };
 struct Dyno {
     Recorder recorder;
     double slots[kChannelCount]{};
     double position[3]{};
-    bool placed = false;
-    double last_tick = 0, last_clear_input = 0;
+    bool placed = false, clear_held = false;
+    double last_tick = 0;
 };
 std::mutex g_mutex;                                   // server thread (ticks, data) and render thread
 std::unordered_map<const void*, EngineEntry> g_engines;
-std::unordered_map<const uint8_t*, Dyno> g_dynos;     // keyed by server component
-std::unordered_map<const void*, bool> g_is_dyno;      // definition pointer -> dyno_sensor?
+// Keyed by server component. Entries are never erased: microcontrollers keep pointers into their slots (hk_get_f64)
+// until their next rebuild, so a Dyno that stops ticking keeps its entry (a few KB) for the rest of the session.
+std::unordered_map<const uint8_t*, Dyno> g_dynos;
+std::unordered_map<const void*, bool> g_is_dyno;      // definition pointer -> dyno_sensor? (cleared on each add)
 double g_last_sweep = 0;
+// When a Dyno last ticked (ms, now_seconds clock). Engine ticks are only noted while one did in the last 5 s.
+std::atomic<int64_t> g_dyno_tick_ms{INT64_MIN / 2};
+int64_t now_ms() { return int64_t(now_seconds() * 1000); }
+bool dyno_ticking() { return now_ms() - g_dyno_tick_ms.load(std::memory_order_relaxed) < 5000; }
 
 bool is_dyno(const uint8_t* sensor) {
     if (!sensor || !anymaker::readable(sensor + off::component_definition, 8)) return false;
@@ -122,7 +128,7 @@ bool is_dyno(const uint8_t* sensor) {
 // ------------------------------------------------------------------------------------- part definition
 struct GamePath { int32_t store; uint32_t pad; anymaker::gc_string_view path; };
 static_assert(sizeof(GamePath) == 24, "file.path");
-std::string g_json_path;                              // absolute, backslashes
+std::string g_json_path, g_json_forward;              // absolute, backslashes / slashes; set before g_ready, then fixed
 thread_local bool t_adding = false;
 
 std::vector<uint8_t> read_file(const std::wstring& path) {
@@ -173,6 +179,8 @@ bool write_definition_file() {
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
     if (n > 1) WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, g_json_path.data(), n, nullptr, nullptr);
+    g_json_forward = g_json_path;
+    for (char& c : g_json_forward) if (c == '\\') c = '/';
     return ok && !g_json_path.empty();
 }
 
@@ -186,12 +194,9 @@ bool already_added(void* container) {
 }
 
 // Loads our JSON into a fresh vehicle_component_definition_file and hands it to the container. The path's
-// characters must outlive the call (the string view does not own them), so they are static.
-bool add_ours(void* container, const std::string& text) {
-    static std::string kept[4];
-    static int next;
-    std::string& chars = kept[next++ % 4];
-    chars = text;
+// characters must outlive the call (the string view does not own them): they are g_json_path or g_json_forward,
+// which never change once the part is ready, so the main and server threads can both add.
+bool add_ours(void* container, const std::string& chars) {
     GamePath path{kStoreSystem, 0, {}};
     g_string_ctor(&path.path, chars.c_str());
     alignas(16) uint8_t file[64]{};
@@ -207,10 +212,9 @@ bool add_ours(void* container, const std::string& text) {
 
 void hk_add_definitions(void* container, const void* file) {
     reinterpret_cast<add_definitions_t>(h_add_definitions.original)(container, file);
+    if (!t_adding) { std::lock_guard lock(g_mutex); g_is_dyno.clear(); }   // definitions may move (as Turbo and Rotary)
     if (!g_ready.load() || t_adding || !container || already_added(container)) return;
-    std::string forward = g_json_path;
-    for (char& c : forward) if (c == '\\') c = '/';
-    bool ok = add_ours(container, g_json_path) || add_ours(container, forward);
+    bool ok = add_ours(container, g_json_path) || add_ours(container, g_json_forward);
     static std::atomic<int> logs{6};
     if (logs.fetch_sub(1) > 0) log(ok ? 0 : 2, ok ? "Dyno part added to the game's parts (%s)" : "could not load the Dyno definition from %s", g_json_path.c_str());
 }
@@ -218,7 +222,8 @@ void hk_add_definitions(void* container, const void* file) {
 // ------------------------------------------------------------------------------------- server ticks
 void hk_engine_tick(void* self, void* vehicle, void* scene) {
     reinterpret_cast<engine_tick_t>(h_engine_tick.original)(self, vehicle, scene);
-    if (!self || !vehicle || !anymaker::readable(static_cast<uint8_t*>(self) + off::engine_rps, off::engine_energy + 8 - off::engine_rps)) return;
+    if (!self || !vehicle || !dyno_ticking()) return;   // nothing to feed: keep the engine tick cheap
+    if (!anymaker::readable(static_cast<uint8_t*>(self) + off::engine_rps, off::engine_energy + 8 - off::engine_rps)) return;
     EngineSample s;
     s.engines = 1;
     s.rps = at<double>(self, off::engine_rps);
@@ -226,10 +231,8 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     s.throttle = at<double>(self, off::engine_throttle);
     s.boost = at<double>(self, off::engine_boost);
     s.temperature_c = at<double>(self, off::engine_temperature);
-    s.damage = at<double>(self, off::engine_damage_factor);
-    for (double* v : {&s.rps, &s.watts, &s.throttle, &s.boost, &s.temperature_c, &s.damage}) if (!std::isfinite(*v)) *v = 0;
+    for (double* v : {&s.rps, &s.watts, &s.throttle, &s.boost, &s.temperature_c}) if (!std::isfinite(*v)) *v = 0;
     std::lock_guard lock(g_mutex);
-    if (g_dynos.empty()) return;                    // nothing to feed: keep the engine tick cheap
     auto& e = g_engines[self];
     e.vehicle = vehicle; e.sample = s; e.time = now_seconds();
 }
@@ -246,7 +249,7 @@ EngineSample vehicle_sample(const void* vehicle, double now) {
         sum.throttle = std::max(sum.throttle, s.throttle);
         sum.boost = std::max(sum.boost, s.boost);
         sum.temperature_c = std::max(sum.temperature_c, s.temperature_c);
-        sum.damage += s.damage;
+        if (now - e.knock_time < 0.25) sum.knock += e.knock;
     }
     if (sum.engines == 0) sum.boost = 1;
     return sum;
@@ -258,22 +261,24 @@ void hk_sensor_tick(uint8_t* sensor, void* vehicle, void* scene) {
     std::lock_guard lock(g_mutex);
     if (!is_dyno(sensor)) return;
     double now = now_seconds();
-    bool fresh = !g_dynos.count(sensor);
-    Dyno& d = g_dynos[sensor];
+    g_dyno_tick_ms.store(int64_t(now * 1000), std::memory_order_relaxed);
+    Dyno& d = g_dynos[sensor];                      // may already exist: a data channel connected first
+    bool fresh = !(d.last_tick > 0) || now - d.last_tick > 5.0;
     double dt = d.last_tick > 0 ? now - d.last_tick : 1.0 / kTicksPerSecond;
     d.last_tick = now;
-    if (d.slots[kClearRuns] > 0.5 && now - d.last_clear_input > 1.0) {   // microcontroller input
-        d.last_clear_input = now;
+    bool clear_held = d.slots[kClearRuns] > 0.5;    // microcontroller input: clears once each time it goes high
+    if (clear_held && !d.clear_held) {
         d.recorder.clear();
         log(0, "pulls cleared by the data port");
     }
+    d.clear_held = clear_held;
     EngineSample s = vehicle_sample(vehicle, now);
     if (d.recorder.feed(s, dt)) {
         double w, rpm, nm, nm_rpm;
         d.recorder.latest()->peak_power(w, rpm);
         d.recorder.latest()->peak_torque(nm, nm_rpm);
-        log(0, "pull %u kept: %.1f hp at %.0f rpm, %.0f N.m at %.0f rpm, boost %.2f, %.1f s", d.recorder.latest()->number, w / kWattsPerHp, rpm, nm, nm_rpm,
-            d.recorder.latest()->boost_peak, d.recorder.latest()->seconds);
+        log(0, "pull %u kept: %.1f hp at %.0f rpm, %.0f N.m at %.0f rpm, boost %.2f, %.1f s%s", d.recorder.latest()->number, w / kWattsPerHp, rpm, nm, nm_rpm,
+            d.recorder.latest()->boost_peak, d.recorder.latest()->seconds, d.recorder.latest()->knocked() ? ", knocked" : "");
     }
     double clear = d.slots[kClearRuns];
     fill_outputs(d.recorder, d.slots);
@@ -290,13 +295,28 @@ void hk_sensor_tick(uint8_t* sensor, void* vehicle, void* scene) {
             d.placed = true;
         }
     }
-    if (fresh) log(0, "Dyno on a vehicle at (%.1f, %.1f, %.1f), %d engine(s) running", d.position[0], d.position[1], d.position[2], s.engines);
-    if (now - g_last_sweep > 2.0) {                 // parts and engines gone from the scene stop ticking
+    if (fresh) {
+        static std::atomic<int> logs{12};
+        if (logs.fetch_sub(1) > 0) log(0, "Dyno on a vehicle at (%.1f, %.1f, %.1f), %d engine(s) running", d.position[0], d.position[1], d.position[2], s.engines);
+    }
+    if (now - g_last_sweep > 2.0) {                 // engines gone from the scene stop ticking (Dynos stay: see g_dynos)
         g_last_sweep = now;
-        for (auto it = g_dynos.begin(); it != g_dynos.end();) it = now - it->second.last_tick > 5.0 ? g_dynos.erase(it) : std::next(it);
         for (auto it = g_engines.begin(); it != g_engines.end();) it = now - it->second.time > 5.0 ? g_engines.erase(it) : std::next(it);
     }
 }
+
+}  // namespace
+
+// Turbo's engine tick hook reports knock (hot boost air) here, after the game's tick, whichever of the two hooks sits
+// on top of the other. Only noted while a Dyno is ticking.
+void note_knock(const void* engine, double knock) {
+    if (!engine || !(knock > 0) || !std::isfinite(knock) || !dyno_ticking()) return;
+    std::lock_guard lock(g_mutex);
+    auto& e = g_engines[engine];
+    e.knock = knock; e.knock_time = now_seconds();
+}
+
+namespace {
 
 void hk_get_f64(double** ret, uint8_t* sensor, const anymaker::gc_string_view* name) {
     reinterpret_cast<get_f64_t>(h_get_f64.original)(ret, sensor, name);
@@ -317,7 +337,8 @@ const AnyUiStateV1* ui;
 const ModControlsV1* controls;
 uint64_t g_action;
 std::mutex g_input_mutex;
-bool g_hidden = false, g_key_down = false, g_cleared_this_hold = false, g_near = false;
+bool g_hidden = false, g_key_down = false, g_cleared_this_hold = false;   // under g_input_mutex
+std::atomic<bool> g_near{false};                      // a Dyno's graph is in range (render thread writes, input reads)
 double g_key_down_at = 0;
 constexpr double kShowDistance = 40.0;
 
@@ -425,7 +446,7 @@ void draw(const AnyFrameV1* f, void*) {
     }
     static View view;                               // render thread only
     bool shown = pick(view, clear);
-    { std::lock_guard lock(g_input_mutex); g_near = shown; }
+    g_near = shown;
     if (!shown || hidden) return;
 
     Painter p;
@@ -468,10 +489,10 @@ void draw(const AnyFrameV1* f, void*) {
         float yy = py_hp(v);
         p.line(gx, yy, gx + gw, yy, grid, 1);
         p.text(x + 4 * s, yy - 8 * s, 38 * s, 16 * s, wide(fmt(hp_step < 1 ? "%.1f" : "%.0f", v)), 11 * s, dim, ANY_GPU_CENTER);
-    }
-    for (int k = 1; k <= 4; ++k) {                  // torque axis labels on the right, at the same grid lines' share
-        double nm = nm_top * k / 4;
-        p.text(gx + gw + 2 * s, py_nm(nm) - 8 * s, 34 * s, 16 * s, wide(fmt("%.0f", nm)), 11 * s, dim, ANY_GPU_CENTER);
+        if (v > 0) {                                // torque axis labels on the right, on the same grid lines
+            double nm = nm_top * v / hp_top;
+            p.text(gx + gw + 2 * s, yy - 8 * s, 34 * s, 16 * s, wide(fmt(nm < 10 ? "%.1f" : "%.0f", nm)), 11 * s, dim, ANY_GPU_CENTER);
+        }
     }
     for (int k = 1; k <= 8; ++k) {
         float xx = px(k * 1000.0);
@@ -568,7 +589,11 @@ void install_hooks() {
         if (!g_file_ctor) g_file_ctor = reinterpret_cast<self_fn_t>(function(bind::definition_file_ctor));
         if (!g_file_dtor) g_file_dtor = reinterpret_cast<self_fn_t>(function(bind::definition_file_dtor));
         if (!load_cell) load_cell = route::cell(bind::definition_file_load);
-        if (!g_file_load && load_cell && code_is(*load_cell, kSigFileLoad)) g_file_load = reinterpret_cast<file_load_t>(*load_cell);
+        if (!g_file_load && load_cell) {
+            if (code_is(*load_cell, kSigFileLoad)) g_file_load = reinterpret_cast<file_load_t>(*load_cell);
+            else load_cell = nullptr;            // a wrong route: look again next time
+        }
+        if (!g_get_definition) g_get_definition = reinterpret_cast<get_definition_t>(function(bind::definitions_get_by_id));
         if (!g_string_ctor) g_string_ctor = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
         if (!engine) {                           // the game's engine tick, or Turbo's hook on it (hot boost air), to chain onto
             void** c = route::cell(bind::engine_tick); void* entry = route::function(bind::engine_tick);
@@ -578,14 +603,15 @@ void install_hooks() {
         if (!get) get = hook_cell(bind::altitude_get_data_f64);
         if (!g_vehicle_transform) g_vehicle_transform = reinterpret_cast<transform_t>(function(bind::server_vehicle_get_transform));
         if (!g_component_transform) g_component_transform = reinterpret_cast<transform_t>(function(bind::server_component_get_transform));
-        bool core = add && g_file_ctor && g_file_dtor && g_file_load && g_string_ctor && engine && tick && get;
+        // The definition lookup is needed too: without it the part would be added again on every definitions add.
+        bool core = add && g_file_ctor && g_file_dtor && g_file_load && g_string_ctor && g_get_definition && engine && tick && get;
         if (!core) {
             if (attempt == 5 || attempt == 179)
-                log(attempt == 179 ? 2 : 1, "%s (add=%d file=%d/%d/%d string=%d engine=%d sensor=%d/%d)", attempt == 179 ? "could not locate the game functions; Dyno is off" : "still looking for the game functions",
-                    !!add, !!g_file_ctor, !!g_file_dtor, !!g_file_load, !!g_string_ctor, !!engine, !!tick, !!get);
+                log(attempt == 179 ? 2 : 1, "%s (add=%d file=%d/%d/%d string=%d lookup=%d engine=%d sensor=%d/%d)", attempt == 179 ? "could not locate the game functions; Dyno is off" : "still looking for the game functions",
+                    !!add, !!g_file_ctor, !!g_file_dtor, !!g_file_load, !!g_string_ctor, !!g_get_definition, !!engine, !!tick, !!get);
             continue;
         }
-        g_get_definition = reinterpret_cast<get_definition_t>(function(bind::definitions_get_by_id));
+        std::lock_guard install_lock(engine_parts::install_mutex());   // one AnyEngineParts part hooks at a time
         if (!g_vehicle_transform || !g_component_transform) log(1, "transforms not found; the graph shows for the most recent Dyno, wherever it is");
         if (!write_definition_file()) { log(2, "could not write the Dyno definition file; Dyno is off"); return; }
         if (!h_engine_tick.install(engine, (void*)&hk_engine_tick)) { log(2, "engine tick hook not installed; Dyno is off"); return; }
