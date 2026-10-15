@@ -100,14 +100,16 @@ static double run_blower(State& st, const Spec& s, Plant& pl, double pulley_rps,
 
 int main() {
     // Ids and sizes.
-    for (int n = kMinSize; n <= kMaxSize; ++n) { std::string id = definition_id(n); assert(size_from_id(id.c_str(), id.size()) == n); }
-    assert(size_from_id("turbo", 5) == 0 && size_from_id("turbocharger_6", 14) == 0 && size_from_id("turbocharger_1", 14) == 0);
-    // Specs grow with size: more flow, more lag.
-    for (int n = kMinSize; n < kMaxSize; ++n) {
+    for (int n : kTurboSizes) { std::string id = definition_id(n); assert(size_from_id(id.c_str(), id.size()) == n); }
+    assert(size_from_id("turbo", 5) == 0 && size_from_id("turbocharger_7", 14) == 0 && size_from_id("turbocharger_1", 14) == 0);
+    assert(size_from_id("turbocharger_2", 14) == 0 && size_from_id("turbocharger_4", 14) == 0 && size_from_id("turbocharger_5", 14) == 0);   // removed (Nate, 2026-10-15)
+    // Specs grow with size: more flow, more lag. The 6x6 keeps the 5x5's numbers; it grew for its pipes.
+    for (int n = kMinSize; n < 5; ++n) {
         Spec a = spec(n), b = spec(n + 1);
         assert(b.rated_flow > a.rated_flow && b.spool_up_s > a.spool_up_s && b.compressor_coeff > a.compressor_coeff && b.max_rpm < a.max_rpm);
     }
-    assert(!spec(3).large_pipe && spec(4).large_pipe);
+    assert(spec(6).rated_flow == spec(5).rated_flow && spec(6).spool_up_s == spec(5).spool_up_s && spec(6).max_rpm == spec(5).max_rpm);
+    assert(!spec(3).large_pipe && spec(4).large_pipe && spec(6).large_pipe && turbo_depth(3) == 2 && turbo_depth(6) == 3);
     // Channels.
     for (int i = 0; i < kChannelCount; ++i) assert(channel_index(kChannels[i].name, std::strlen(kChannels[i].name)) == i && kChannels[i].input == (i == kFirstInput));
     assert(channel_index("pressure", 8) < 0);
@@ -115,42 +117,51 @@ int main() {
     // part's face too: it covers exactly 4 of the part's cells, all on the face it points out of.
     for (int n = kMinSize; n <= kMaxSize; ++n)
         for (int k = 0; k < kNodeCount; ++k) {
-            Port p = port(n, Node(k)); assert(p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y < n && p.z >= 0 && p.z < n);
+            const int depth = turbo_depth(n);
+            Port p = port(n, Node(k)); assert(p.x >= 0 && p.x < depth && p.y >= 0 && p.y < n && p.z >= 0 && p.z < n);
             int covered = 0;
-            for (int x = 0; x < 2; ++x)
+            for (int x = 0; x < depth; ++x)
                 for (int y = 0; y < n; ++y)
                     for (int z = 0; z < n; ++z)
                         if (port_covers(n, Node(k), x, y, z)) {
                             ++covered;
-                            int face[6] = {x, 1 - x, y, n - 1 - y, z, n - 1 - z};   // distance to the face each direction points out of
+                            int face[6] = {x, depth - 1 - x, y, n - 1 - y, z, n - 1 - z};   // distance to the face each direction points out of
                             assert(face[p.dir] == 0);
                         }
             assert(covered == (spec(n).large_pipe ? 4 : 1));
         }
     assert(port(3, kColdIn).dir == 0 && port(3, kHotOut).dir == 1 && port(3, kColdIn).y == 1 && port(3, kColdOut).y == 2 && port(4, kColdOut).y == 2 &&
            port(5, kColdOut).y == 3 && port(3, kHotIn).x == 1 && port(4, kHotIn).x == 0 && port(5, kHotIn).z == 0);
-    // The stock large impeller (turbo_d, 2 cells thick) anchors its large +z outlet the same way: [0, top - 1, top].
+    // The stock large impeller (turbo_d, 6x6, 2 cells thick) anchors its large +z outlet the same way: [0, top - 1, top].
     assert(port(5, kColdOut).x == 0 && port(5, kColdOut).z == 4);
+    // The 6x6 (3 deep): the large intake and exhaust out sit dead centre (cells 2-3 of 0-5), the exhaust out on the
+    // back face, the turbine inlet on the turbine's two cells.
+    assert(port(6, kColdIn).y == 2 && port(6, kColdIn).z == 2 && port(6, kHotOut).x == 2 && port(6, kHotOut).y == 2 && port(6, kHotOut).z == 2 &&
+           port(6, kHotIn).x == 1 && port(6, kHotIn).z == 0 && port(6, kColdOut).x == 0 && port(6, kColdOut).y == 4 && port(6, kColdOut).z == 5);
     // Oil ports: under the part (small liquid nodes), the feed under the cold side and the drain under the hot side,
     // each in a cell no gas node touches (no stock part mixes gas and liquid nodes in one cell).
     for (int n = kMinSize; n <= kMaxSize; ++n)
         for (bool in : {true, false}) {
             Port o = oil_port(n, in);
-            assert(o.y == 0 && o.dir == 2 && o.x == (in ? 0 : 1) && o.z >= 0 && o.z < n);
+            assert(o.y == 0 && o.dir == 2 && o.x == (in ? 0 : turbo_depth(n) - 1) && o.z >= 0 && o.z < n);
             for (int k = 0; k < kNodeCount; ++k) assert(!port_covers(n, Node(k), o.x, o.y, o.z));
         }
-    // Definitions file: four entries, four gas nodes each, the stock class, balanced braces.
-    bool built[4] = {true, true, false, true}, bov_built[2] = {false, true}, wg_built[2] = {true, false};
+    // Definitions file: the 3x3 and 6x6 turbos (the 2x2, 4x4 and 5x5 are gone), four gas nodes each, the stock class,
+    // balanced braces.
+    bool built[5] = {true, false, true, true, true}, bov_built[2] = {false, true}, wg_built[2] = {true, false};
     std::string json = definitions_json(built, bov_built, wg_built);
     size_t count = 0;
     for (size_t at = 0; (at = json.find("\"class\": \"gas_pump_centrifugal\"", at)) != std::string::npos; ++at) ++count;
-    assert(count == 10);                                   // four turbos, two of each valve, two superchargers
+    assert(count == 8);                                    // two turbos, two of each valve, two superchargers
+    assert(json.find("turbocharger_2") == std::string::npos && json.find("turbocharger_4") == std::string::npos && json.find("turbocharger_5") == std::string::npos &&
+           json.find("Turbo 2x2") == std::string::npos && json.find("Turbo 4x4") == std::string::npos && json.find("5x5") == std::string::npos && json.find("2x2 and") == std::string::npos);
+    assert(json.find("\"bounds_max\": [2, 5, 5]") != std::string::npos && json.find("6x6x3") != std::string::npos);   // the 6x6 is 3 deep
     assert(json.find("\"class\": \"gas_tank\"") != std::string::npos);   // the intercooler: gas ports snap onto it
     assert(json.find("\"class\": \"gas_vent\"") != std::string::npos && json.find("\"class\": \"gas_vent_b\"") != std::string::npos);
     assert(json.find("\"id\": \"oil_in\"") != std::string::npos && json.find("\"type\": \"liquid\"") != std::string::npos);
     assert(json.find("radiator_a_0_0_0.mesh") != std::string::npos && json.find("\"mode_y\": \"tile\"") != std::string::npos);
     {   // with every mesh built the parts use theirs; the intercooler points at its first tile
-        bool all[4] = {true, true, true, true}, two[2] = {true, true}, one = true;
+        bool all[5] = {true, true, true, true, true}, two[2] = {true, true}, one = true;
         std::string full = definitions_json(all, two, two, two, &one);
         assert(full.find("turbo_turbo_air_filter_large.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_0_0_0.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_round_0_0_0.mesh") != std::string::npos && full.find("Turbo Intercooler (Round Tank)") != std::string::npos && full.find("\"mode_x\": \"tile\"") != std::string::npos &&
                full.find("radiator_a_0_0_0.mesh") == std::string::npos);
@@ -166,8 +177,8 @@ int main() {
     assert(json.find("\"id\": \"turbo_blow_off_valve_large\"") != std::string::npos && json.find("turbo_turbo_blow_off_valve_large.mesh") != std::string::npos &&
            json.find("turbo_turbo_blow_off_valve.mesh") == std::string::npos);
     assert(json.find("\"direction\": 5, \"type\": \"gas\", \"size\": 1}") != std::string::npos);   // the large valve's Air port is a large pipe
-    assert(json.find("turbo_turbocharger_2.mesh") != std::string::npos && json.find("turbo_turbocharger_4.mesh") == std::string::npos && json.find("turbo_a.mesh") != std::string::npos);
-    assert(json.find("\"name\": \"Turbo 5x5\"") != std::string::npos && json.find("\"type_f64_input\", \"name\": \"boost_limit\"") != std::string::npos);
+    assert(json.find("turbo_turbocharger_6.mesh") != std::string::npos && json.find("turbo_turbocharger_3.mesh") == std::string::npos && json.find("turbo_a.mesh") != std::string::npos);
+    assert(json.find("\"name\": \"Turbo 6x6\"") != std::string::npos && json.find("\"type_f64_input\", \"name\": \"boost_limit\"") != std::string::npos);
     int depth = 0, square = 0; bool in_string = false;
     for (char c : json) {
         if (c == '"') in_string = !in_string;
@@ -286,9 +297,9 @@ int main() {
         std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), mesh.data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
         uint32_t idx[12]; std::memcpy(idx, mesh.data() + m.index_bytes + 4, sizeof idx);
         assert(idx[0] == 0 && idx[1] == 1 && idx[2] == 2 && idx[6] == 4 && idx[7] == 6 && idx[8] == 5);
-        double c = (n - 1) * kCell / 2, s = n / 3.0;
+        double c = (n - 1) * kCell / 2, s = n / 3.0, back = (turbo_depth(n) - 1) * kCell;   // the back cell's centre
         assert(near(v[0].pos[0], -0.04, 1e-6) && near(v[0].pos[1], c - 0.12 * s, 1e-5) && near(v[2].pos[2], c + 0.12 * s, 1e-5));
-        assert(near(v[4].pos[0], kCell + 0.04, 1e-6) && near(v[4].pos[1], c + 0.12 * s, 1e-5) && near(v[4].normal[0], 1, 1e-6));
+        assert(near(v[4].pos[0], back + 0.04, 1e-6) && near(v[4].pos[1], c + 0.12 * s, 1e-5) && near(v[4].normal[0], 1, 1e-6));
         assert(v[0].rgba[0] == 153 && v[0].rgba[1] == 0 && v[4].rgba[0] == 153 && v[4].rgba[1] == 38 &&
                v[7].rgba[0] == (spec(n).large_pipe ? 153 : 51));   // paint markers 1 and 2; a large turbo paints its stub ends over (flange blocks)
         // Cold outlet stub lands under the outlet's pipe end on the +z face (top cell); hot inlet stub under the inlet's on -z.
@@ -299,7 +310,7 @@ int main() {
         // centred on the pipe end.
         std::vector<MeshVertex> all(m.vertices); std::memcpy(all.data(), mesh.data() + m.vertex_bytes + 4, all.size() * sizeof(MeshVertex));
         const double edge = 0.5 * kCell + 0.0025;
-        for (auto& x : all) assert(x.pos[0] >= -edge && x.pos[0] <= kCell + edge && x.pos[1] >= -edge && x.pos[1] <= (n - 1) * kCell + edge && x.pos[2] >= -edge && x.pos[2] <= (n - 1) * kCell + edge);
+        for (auto& x : all) assert(x.pos[0] >= -edge && x.pos[0] <= back + edge && x.pos[1] >= -edge && x.pos[1] <= (n - 1) * kCell + edge && x.pos[2] >= -edge && x.pos[2] <= (n - 1) * kCell + edge);
         auto has = [&](const uint8_t col[3], const double at[3], double r) {
             for (auto& x : all)
                 if (x.rgba[0] == col[0] && x.rgba[1] == col[1] && x.rgba[2] == col[2] && std::hypot(x.pos[0] - at[0], x.pos[1] - at[1], x.pos[2] - at[2]) < r) return true;
@@ -381,9 +392,10 @@ int main() {
                     for (double nudge : {-1.0, 0.0, 1.0}) {          // the game may round the byte either way
                         bool open; double level; int sound = -1, size = -1;
                         decode_blow_off_factor(byte(encode_blow_off_factor(true, spool, k, z)) + nudge / 255.0, open, level, sound, size);
-                        assert(open && sound == k && size == z && near(level, spool, 0.07 + 0.12 * std::abs(nudge)));
+                        const int voiced = std::min(z, 5);                // the byte carries sizes 2-5; the 6x6 voices as the 5x5
+                        assert(open && sound == k && size == voiced && near(level, spool, 0.07 + 0.12 * std::abs(nudge)));
                         decode_blow_off_factor(byte(encode_blow_off_factor(false, spool, k, z)), open, level, sound, size);
-                        assert(!open && level == 0 && sound == k && size == z);   // shut keeps the last sound for the tail
+                        assert(!open && level == 0 && sound == k && size == voiced);   // shut keeps the last sound for the tail
                     }
         }
         auto peak = [](Synth& s, double level, bool flag, int samples, bool blown = false) {
@@ -504,10 +516,10 @@ int main() {
             assert(k == 0 ? paint0 && paint1 : paint1 == (tx != 1 && ty != 1));
         }
     }
-    // Superchargers: two new parts on the impeller class; the 2x2 and 4x4 turbos stay defined (saved vehicles keep
-    // them) but leave the part lists and loot.
+    // Superchargers: two new parts on the impeller class, in place of the 2x2 and 4x4 turbos (gone entirely, like the
+    // 5x5, which grew to the 6x6).
     {
-        bool all[4] = {true, true, true, true}, two[2] = {true, true}, one = true;
+        bool all[5] = {true, true, true, true, true}, two[2] = {true, true}, one = true;
         std::string full = definitions_json(all, two, two, two, &one, two);
         auto entry = [&](const char* id) {
             size_t at = full.find(std::string("\"id\": \"") + id + "\"");
@@ -531,11 +543,8 @@ int main() {
         assert(count_in(small, "\"type\": \"port\"") == 2 * 2 * 2 && count_in(large, "\"type\": \"port\"") == 2 * 4 * 4);   // data ports on both sides
         assert(small.find("turbo_supercharger_small.mesh") != std::string::npos && large.find("\"bounds_max\": [3, 3, 3]") != std::string::npos);
         assert(small.find("\"tech_tier\": 3") != std::string::npos && small.find("\"name\": \"drive_power\"") != std::string::npos);
-        for (int n : {2, 4}) {
-            std::string old = entry(definition_id(n).c_str());
-            assert(old.find("\"tech_tier\": -1") != std::string::npos && old.find("\"spawn_probability\": 0.0") != std::string::npos && old.find("Retired") != std::string::npos);
-        }
-        for (int n : {3, 5}) assert(entry(definition_id(n).c_str()).find("\"tech_tier\": 3") != std::string::npos);
+        for (int n : {2, 4, 5}) assert(full.find("\"id\": \"" + definition_id(n) + "\"") == std::string::npos);
+        for (int n : kTurboSizes) assert(entry(definition_id(n).c_str()).find("\"tech_tier\": 3") != std::string::npos);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
         assert(definitions_json(all).find("meshes/components/turbo_a.mesh") != std::string::npos);   // no meshes: the stock look
         assert(blower_from_id("supercharger_small", 18) == kBlowerSmall && blower_from_id("supercharger_large", 18) == kBlowerLarge &&

@@ -24,7 +24,8 @@ static uint32_t dispatch(void* client,void* scene,const char* id,bool building){
 // files the catalog reads at startup. While the inventory is open, copy any definition those files did not
 // list into the catalog so the item browser can find it. Client scene +0x1530 is the inventory definition
 // container (definitions vector at +0x0), +0x15d8 the vehicle component container (vector at +0x8); both
-// hold vector<ref<definition>> whose objects start with id, name, description and class strings.
+// hold vector<ref<definition>> whose objects start with id, name, description and class strings. A component's
+// mesh_static path (+0xe0) goes into its JSON so the item browser can draw its picture like a stock part's.
 struct LiveVector {uintptr_t buffer;int32_t offset,count,capacity,size;uintptr_t ctor,dtor;};
 static bool live_objects(uintptr_t address,std::vector<uintptr_t>& out){LiveVector v{};if(!safe_read_memory(address,&v,sizeof(v))||(v.size!=16&&v.size!=8)||v.count<0||v.count>10000||v.capacity<v.count||v.capacity>65536||v.offset<0||v.offset>=std::max(1,v.capacity)||(!v.buffer&&v.count))return false;
  for(int i=0;i<v.count;++i){uintptr_t object{};if(!safe_read_memory(v.buffer+uintptr_t((v.offset+i)%v.capacity)*v.size+(v.size==16?8:0),&object,8))return false;if(object)out.push_back(object);}return true;}
@@ -37,7 +38,7 @@ static void merge_live(uintptr_t scene,uint64_t now){static uintptr_t last_scene
    std::string id=component?std::string("component:")+raw:std::string(raw);if(catalog_runtime::contains(id.c_str()))continue;strcpy_s(m.id,id.c_str());
    if(!p34_copy_string(object+0x10,m.name,sizeof(m.name))||!m.name[0])strcpy_s(m.name,raw);p34_copy_string(object+0x20,m.description,sizeof(m.description));p34_copy_string(object+0x30,m.item_class,sizeof(m.item_class));p34_copy_string(object+(component?0x1b8:0x330),m.category,sizeof(m.category));
    std::string json="{\"id\": "+live_json_text(raw)+", \"name\": "+live_json_text(m.name)+", \"description\": "+live_json_text(m.description)+", \"class\": "+live_json_text(m.item_class)+", \"category\": "+live_json_text(m.category);
-   if(component)m.valid_fields|=ANY_ITEM_VEHICLE_COMPONENT;else{int32_t tier{};if(safe_read_memory(object+0x318,&tier,4)&&tier>=0&&tier<=100){m.tech_tier=tier;m.valid_fields|=ANY_ITEM_TECH_TIER;json+=", \"tech_tier\": "+std::to_string(tier);}char mesh[260]{};if(p34_copy_string(object+0x40,mesh,sizeof(mesh))&&mesh[0])json+=", \"mesh_file\": "+live_json_text(mesh);}
+   if(component){m.valid_fields|=ANY_ITEM_VEHICLE_COMPONENT;char mesh[260]{};if(p34_copy_string(object+0xe0,mesh,sizeof(mesh))&&mesh[0])json+=", \"mesh_static\": {\"mesh_path\": "+live_json_text(mesh)+"}";}else{int32_t tier{};if(safe_read_memory(object+0x318,&tier,4)&&tier>=0&&tier<=100){m.tech_tier=tier;m.valid_fields|=ANY_ITEM_TECH_TIER;json+=", \"tech_tier\": "+std::to_string(tier);}char mesh[260]{};if(p34_copy_string(object+0x40,mesh,sizeof(mesh))&&mesh[0])json+=", \"mesh_file\": "+live_json_text(mesh);}
    entry.json=json+", \"source\": \"loaded_world\"}";found.push_back(std::move(entry));if(found.size()>=2000)break;}}
  std::string ids;for(auto& f:found)if(ids.size()<1500)ids+=std::string(ids.empty()?"":",")+f.metadata.id;
  if(auto added=catalog_runtime::append(found))log_line(ANY_LOG_INFO,"framework",("ITEM_CATALOG live_added="+std::to_string(added)+" source=loaded_world ids="+ids).c_str());}

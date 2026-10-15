@@ -4,31 +4,32 @@
 > so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
 > AnyEngineParts 0.1.0 is a prototype: it needs AnyAPI 0.37.0 or newer on that build. **Single player only** for now.
 
-Turbo adds two exhaust-driven turbochargers, **Turbo 3x3** and **Turbo 5x5**, and two belt-driven
-[superchargers](#superchargers), **Supercharger (Small)** and **Supercharger (Large)**. The Turbo 2x2 and 4x4 are
-retired: vehicles that have them keep them and they work as before, but they no longer show in the part lists or
-loot. Each turbo is N cells wide, N tall and 2 thick. The front cell is the stock impeller's compressor housing, scaled to the size; the back cell is
-the turbine housing, the same impeller mirrored. A new turbo starts with a steel cold side and a cast-iron hot side,
+Turbo adds two exhaust-driven turbochargers, **Turbo 3x3** (3x3x2) and **Turbo 6x6** (6x6x3), the faces of the
+stock Small and Large Impellers, and two belt-driven [superchargers](#superchargers), **Supercharger (Small)** and
+**Supercharger (Large)**. The Turbo 2x2, 4x4 and 5x5 are gone: the superchargers took the small ones' place and the
+5x5 grew into the 6x6, so its large pipes sit in the middle of its faces. A saved vehicle that had one loads without
+it. The front half of a turbo is the stock impeller's compressor housing, scaled to the size; the back half is the
+turbine housing, the same impeller mirrored. A new turbo starts with a steel cold side and a cast-iron hot side,
 and the paint tool colours each side on its own, like any stock part. Every opening on the housing sits exactly where
-its pipe joins: on the 4x4 and 5x5 the boost outlet and the turbine inlet are large pipes that span both cells, so a
-cast flange block carries them across the top and bottom corners.
+its pipe joins: on the 6x6 the boost outlet and the turbine inlet are large pipes that span two cells, so a cast
+flange block carries them across the top and bottom corners.
 
 ## Hooking one up
 
 | Port | Where | Connect to |
 | --- | --- | --- |
-| Intake in (cold side) | Middle of the front face (the 2x2: its lower near cell; the 5x5: just above and beyond the centre, where its large pipe fits) | Nothing needed: it draws from the open air. A pipe here can only add air. |
-| Boost out (cold side) | Top far corner, facing sideways (4x4 and 5x5: across both cells, the cell below the top) | The engine's air intake |
-| Exhaust in (hot side) | Bottom near corner, facing the other way (4x4 and 5x5: across both cells) | The engine's exhaust |
+| Intake in (cold side) | Middle of the front face | Nothing needed: it draws from the open air. A pipe here can only add air. |
+| Boost out (cold side) | Top far corner, facing sideways (6x6: across the front two cells, the cell below the top) | The engine's air intake |
+| Exhaust in (hot side) | Bottom near corner, facing the other way (6x6: across the back two cells) | The engine's exhaust |
 | Exhaust out (hot side) | Middle of the back face, opposite the intake | A gas vent (the tailpipe) |
-| Oil in, oil out | Underneath, a brass-ringed port under each housing (the 2x2: under the far row) | The engine's oil, through an oil cooler (see [Upkeep](#upkeep-oil-air-filter-heat-and-wear)) |
+| Oil in, oil out | Underneath, a brass-ringed port under each housing | The engine's oil, through an oil cooler (see [Upkeep](#upkeep-oil-air-filter-heat-and-wear)) |
 
 Exhaust flowing from the hot inlet to the hot outlet spins the shaft. The shaft's spool sets how much pressure
 the cold side pushes into the engine's intake. Engines already turn intake pressure into power: ambient gives
 1x, and an intake pressure of 98 kPa (the game's scale) gives the full 2x. One turbo stops there; two in a row
 (a [compound](#twin-and-compound-turbos)) can take it up to 3x.
 
-Turbos 4x4 and 5x5 use large pipes; 2x2 and 3x3 use small pipes. No gas tank is needed. The compressor inlet is open to the air like a real turbo intake.
+The Turbo 6x6 uses large pipes and the 3x3 small pipes. No gas tank is needed. The compressor inlet is open to the air like a real turbo intake.
 
 **Make the turbo the only way in and out.** The game evens out the pressure across everything joined by pipes at
 once, every tick, and a stock vent passes far more gas than a turbo: about 15 to 900 L/s for each unit of pressure,
@@ -42,13 +43,13 @@ depending on its size, against 5 to 33 L/s through a turbine. So:
 - A wastegate is the one bypass that belongs there: it opens only as far as you tell it to.
 
 Big engines need big turbos. A turbo much smaller than its engine chokes the exhaust: the back pressure takes away
-much of what the boost adds (a 4-rotor Rotary wants a 5x5 or two 4x4s).
+much of what the boost adds (a 4-rotor Rotary wants a 6x6).
 
 ## Twin and compound turbos
 
 **Twin turbos** (side by side): join the engine's exhaust to both hot inlets and both boost outlets to the engine's
 air intake. The game evens out an engine's exhaust across all its exhaust manifolds and everything piped to them, so
-the two turbines share it evenly. Two 3x3s spool sooner than one 5x5 and make about the same boost on an engine that
+the two turbines share it evenly. Two 3x3s spool sooner than one 6x6 and make about the same boost on an engine that
 feeds them both fully (44 L/s of exhaust or more). One blow-off valve on the shared boost pipe serves both.
 
 **Compound turbos** (one after the other): pipe the first turbo's boost outlet into the second turbo's intake, and the
@@ -111,9 +112,7 @@ than its power alone would give. The **Dyno** shows power after that cost, and `
 | Size | Exhaust for full boost | Spool-up time | Shaft speed at full boost |
 | --- | --- | --- | --- |
 | 3x3 | 22 L/s | about 0.9 s | 160,000 rpm |
-| 5x5 | 65 L/s | about 2.4 s | 90,000 rpm |
-| 2x2 (retired) | 10 L/s | about 0.5 s | 220,000 rpm |
-| 4x4 (retired) | 40 L/s | about 1.5 s | 120,000 rpm |
+| 6x6 | 65 L/s | about 2.4 s | 90,000 rpm |
 
 Pick the size whose full-boost flow is close to your engine's exhaust L/s at the throttle you use. Boost starts
 building at a quarter of that flow and reaches full boost at the rated flow. Bigger turbos take longer to spool
@@ -126,8 +125,8 @@ engine loses power, as it does with any restricted exhaust. A turbo that is too 
 
 Two companion parts, in the gas parts with the turbos:
 
-- **Turbo Blow-Off Valve (Small)** (1 cell, small pipe, for the 2x2 and 3x3) and **(Large)** (2x2x2, large
-  pipe, for the 4x4 and 5x5). Inline: pipe the turbo's boost outlet into its **plain end** (it shows as *Gas
+- **Turbo Blow-Off Valve (Small)** (1 cell, small pipe, for the 3x3) and **(Large)** (2x2x2, large
+  pipe, for the 6x6). Inline: pipe the turbo's boost outlet into its **plain end** (it shows as *Gas
   node*) and its **blue-ringed end** (*Air node*) into the engine's air intake. Boost passes straight through.
   When you lift off the throttle, boost trapped in the pipe is higher than the turbo can hold; the valve vents it
   out of the vent slots in its crown, so the turbo keeps its spin. Without
@@ -203,12 +202,12 @@ turbo's boost. The tanks paint.
 Turbos and blow-off valves have their own sounds in place of the impeller hum, made by the mod as it plays:
 
 - **Spool whistle**: a whine that rises with turbine speed, plus the rush of air and intake hiss. Each size has
-  its own voice: the 2x2 screams high, the 5x5 whooshes deep.
+  its own voice: the 3x3 screams high, the 6x6 whooshes deep.
 - **Surge** (no blow-off valve, throttle lifted): "stu-stu-stu", quick puffs of air as boost pushes back through
   the compressor, slowing as the boost runs out. Bigger turbos puff deeper and slower.
 - **Blow-off**: a burst when it opens, then quiet as the trapped boost runs out, even if you stay off the
   throttle. Pick the valve's sound in the Properties Tool (**Sound effect**): 0 whoosh, 1 flutter, 2 chirp,
-  3 dump (deep). Each is voiced for the turbo venting through it: a 2x2's is short and sharp, a 5x5's long
+  3 dump (deep). Each is voiced for the turbo venting through it: a 3x3's is short and sharp, a 6x6's long
   and deep.
 
 - **Antilag**: irregular gunshot bangs and crackles from the wastegate while antilag fires; deeper on bigger turbos.
@@ -310,8 +309,7 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
   stock impeller does with its own, smaller, drag. Every half second each turbo and supercharger also notes what its
   boost pipe feeds (an engine's air manifold, which the engine tick hook records, or the next stage's intake); the
   Dyno names the boost setup from that.
-- The retired 2x2 and 4x4 turbos keep their definitions (the game drops a saved part whose definition is gone) with
-  `tech_tier` -1 and `spawn_probability` 0, which keeps them out of the part lists and loot.
+- The 2x2, 4x4 and 5x5 turbos are no longer defined, so the game drops them from a saved vehicle as it loads.
 - The hot side's gas is not saved; it refills from the pipes after loading. Saves that contain a turbo need
   AnyEngineParts installed to load it.
 

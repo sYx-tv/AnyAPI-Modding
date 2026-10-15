@@ -17,16 +17,19 @@ the data port outputs rpm, power, torque and the latest peak. See [Dyno](../mods
 and chokes the engine's air, so the engine runs on in limp mode (about a third of its power at most) until you replace
 the turbo. The tooltip's **Condition** now shows a percentage, 100% new down to 0% blown; it used to show no value.
 
+**Turbos: 3x3 and 6x6.** The Turbo 2x2 and 4x4 are gone (the superchargers take their place), and the 5x5 grew into
+the **Turbo 6x6** (6x6x3), the face of the stock Large Impeller, so its large intake and exhaust pipes sit dead centre
+(a 2-cell pipe has no middle on a 5-cell face). It is 3 cells deep so it keeps a turbo's proportions, and it performs
+as the 5x5 did. **A saved vehicle with a 2x2, 4x4 or 5x5 turbo loads without it:** place a 3x3, a 6x6 or a
+supercharger instead.
+
 **Turbo ports fixed:**
-- The 4x4 and 5x5 boost outlet and turbine inlet sat half off the part. They now sit on it: the outlet one cell below
-  the top corner, the inlet across both cells of the bottom corner, each on a flange block. **On a vehicle built with
-  0.1.0, re-lay the pipe on those two ports** (move it down a cell, or across a cell for the inlet).
-- The 2x2's oil ports shared cells with its gas ports; they now sit one row back. Every turbo now shows its oil ports
-  as brass-ringed fittings underneath.
-- Every opening lines up with its pipe: the 2x2's intake and exhaust out moved to where their pipes join, and the
-  5x5's eye moved onto its large pipe.
-- No data-port mounts under the 4x4 and 5x5 intake and exhaust pipes, and the wastegates lost stray mounts that
-  floated off the part.
+- The large turbo's boost outlet and turbine inlet sat half off the part in 0.1.0. They now sit on it, each on a flange
+  block.
+- Every turbo now shows its oil ports as brass-ringed fittings underneath, in cells of their own.
+- Every opening lines up with its pipe.
+- No data-port mounts under the large intake and exhaust pipes, and the wastegates lost stray mounts that floated off
+  the part.
 
 **New: superchargers.** **Supercharger (Small)** (2x2x2) and **Supercharger (Large)** (4x4x4) are centrifugal
 superchargers driven by the engine: put a stock Pulley Wheel on the torque spot on the back and belt it to an Engine
@@ -35,8 +38,9 @@ boost at 7,000 RPM, the large one from about 4,000). The belt takes the power it
 gear whine, with a **Supercharger volume** setting beside Turbo volume. Pipe one into a turbo to twincharge. See
 [Superchargers](../mods/turbo.md#superchargers).
 
-**The 2x2 and 4x4 turbos are retired.** The superchargers take their place. Vehicles that have them keep them, and they
-work as before, but they no longer show in the part lists or loot.
+**Pictures in the item browser:** with AnyAPI 0.38.1, AnyInventory's item browser shows a picture for every part a
+mod adds (the turbos, superchargers, valves, filters, intercoolers, Dyno and Rotary, and GpsPart's GPS Sensor), as it
+does for the game's own parts. They had none.
 
 **The Dyno names your boost setup** (single to quad turbo, compound, supercharged, twincharged) under its live
 readout, and its power is now net of what superchargers take through their belts.

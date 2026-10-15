@@ -109,7 +109,7 @@ inline BlowerVoice blower_voice(bool large) {
     return large ? BlowerVoice{460, 5900, 1900, 8800, 0.20, 0.05, 0.12} : BlowerVoice{650, 7900, 2700, 11700, 0.18, 0.05, 0.09};
 }
 
-// Each turbo size has its own voice: the 2x2 screams high and puffs fast, the 5x5 whooshes deep and slow.
+// Each turbo size has its own voice: the 2x2 screams high and puffs fast, the 5x5 (and the 6x6) whooshes deep and slow.
 struct Character {
     double base, span;                 // whistle pitch at rest and the rise to full spool (Hz)
     double overtone, overtone_gain;    // second whistle partial (ratio of the pitch)
@@ -125,14 +125,15 @@ inline Character character(int size) {
     // Nate's ears (2026-10-13): the big ones were too deep. The 4x4 sits halfway between the 3x3 and the old
     // 4x4, and the 5x5 just past the old 4x4.
     case 4: return {1275, 5000, 1.5, 0.10, 0.13, 4700, 0.17, 0.90, 16.5, 8.25, 0.032, 1.28};
-    case 5: return { 945, 4015, 1.5, 0.127, 0.19, 3920, 0.19, 0.74, 14, 7, 0.039, 1.40};
+    case 5:
+    case 6: return { 945, 4015, 1.5, 0.127, 0.19, 3920, 0.19, 0.74, 14, 7, 0.039, 1.40};   // the 6x6 keeps the 5x5's voice
     default: return {1500, 5600, 1.5, 0.08, 0.10, 5200, 0.16, 1.00, 18, 9, 0.028, 1.20};
     }
 }
 
 struct Synth {
     Voice voice = Voice::kTurbo;
-    int size = 3;                      // turbo size 2-5 (see character())
+    int size = 3;                      // turbo size 2-6 (see character())
     int sound = kWhoosh;               // blow-off valve sound (BlowOffSound)
     int tuned_size = 0;                // size the filters were set for
     // smoothed state

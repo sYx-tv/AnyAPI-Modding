@@ -1,4 +1,4 @@
-// Turbo: exhaust-driven turbochargers in four sizes (2x2x2 to 5x5x2), built from the stock impeller.
+// Turbo: exhaust-driven turbochargers in two sizes (3x3x2 and 6x6x3), built from the stock impeller.
 //
 // Each size is a new part of the stock impeller's class (gas_pump_centrifugal). The impeller already has two gas
 // nodes, the compressor inlet and outlet, and pumps between their two gas contents. The mod gives each turbo a
@@ -11,8 +11,8 @@
 //
 // Superchargers (small 2x2x2 and large 4x4x4) are the same class too, driven by a stock Pulley Wheel on their torque
 // spot belted to the engine: their head follows the pulley's speed, and the air they push takes its work back off the
-// belt (apply_torque on their torque node, as the stock impeller does). The 2x2 and 4x4 turbos are retired: still
-// defined so saved vehicles keep them, but hidden from the part lists and loot.
+// belt (apply_torque on their torque node, as the stock impeller does). They replaced the 2x2 and 4x4 turbos, which are
+// gone (a saved vehicle that had one loads without it).
 //
 // Getting it: tech_tier 3 loot in the "gas" category, like the stock impellers. Single player / host only for
 // now: the definitions are added on this game's server and client scene, and every player would need the mod.
@@ -236,7 +236,7 @@ double now_seconds() {
     return double(t.QuadPart) / double(freq.QuadPart);
 }
 
-// What a gas_pump_centrifugal component is: 2-5 a turbo of that size, kKindBlowOff(Large) / kKindWastegate a valve,
+// What a gas_pump_centrifugal component is: 3 or 6 a turbo of that size, kKindBlowOff(Large) / kKindWastegate a valve,
 // kKindSupercharger(Large) a supercharger, 0 a stock impeller.
 constexpr int kKindBlowOff = 10, kKindWastegate = 11, kKindBlowOffLarge = 12, kKindWastegateLarge = 13;
 constexpr int kKindIntercooler = 14, kKindAirFilter = 16, kKindAirFilterLarge = 17;
@@ -1390,13 +1390,13 @@ bool write_definition_file() {
     std::wstring components = game_dir + L"\\rom\\meshes\\components\\";
     std::vector<uint8_t> stock = read_file(components + L"turbo_a.mesh");
     bool built[kMaxSize - kMinSize + 1]{};
-    for (int n = kMinSize; n <= kMaxSize; ++n) {
+    for (int n : kTurboSizes) {
         std::string id = definition_id(n);
         std::vector<uint8_t> mesh = build_turbo_mesh(stock, n, id.c_str());
         std::wstring file = components + L"turbo_" + std::wstring(id.begin(), id.end()) + L".mesh";
         built[n - kMinSize] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
-    if (!built[0] || !built[3]) log(1, "impeller mesh not recognised or not writable (%zu bytes); some turbos use the stock impeller look", stock.size());
+    if (!built[3 - kMinSize] || !built[6 - kMinSize]) log(1, "impeller mesh not recognised or not writable (%zu bytes); some turbos use the stock impeller look", stock.size());
     bool bov_built[2]{};
     for (int large = 0; large < 2; ++large) {
         std::string path = blow_off_mesh_path(large != 0);              // meshes/components/turbo_<id>.mesh
@@ -1463,7 +1463,7 @@ bool write_definition_file() {
 
 bool already_added(void* container) {
     if (!g_get_definition || !g_string_ctor) return false;
-    static const std::string id = definition_id(kMinSize);
+    static const std::string id = definition_id(kTurboSizes[0]);
     anymaker::gc_string_view s{};
     g_string_ctor(&s, id.c_str());
     const void* found = nullptr;

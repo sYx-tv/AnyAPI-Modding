@@ -6,7 +6,7 @@
 
 AnyEngineParts adds engine parts to the game, in one mod (`AnyEngineParts.dll`):
 
-- [Turbochargers](turbo.md) (3x3x2 and 5x5x2), driven by the engine's exhaust, with Small and Large
+- [Turbochargers](turbo.md) (3x3x2 and 6x6x3), driven by the engine's exhaust, with Small and Large
   inline blow-off valves, a wastegate with microcontroller-controlled antilag, boost data channels and
   synthesized whistle, surge, blow-off and antilag sounds. Twin, compound and twincharged setups work.
 - [Superchargers](turbo.md#superchargers) (Small 2x2x2 and Large 4x4x4), belted to the engine with a stock Pulley
