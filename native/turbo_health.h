@@ -105,17 +105,20 @@ inline double filter_head_factor(bool filter, double condition) {
 }
 
 // ------------------------------------------------------------------------------------------- hot boost air
-// Compressing air heats it: about +120 C at the game's full boost (head 9 over ambient 1).
-constexpr double kBoostHeatC = 120.0;
-inline double compressor_heat(double head, double max_head) {
-    double f = max_head > 0 ? std::clamp(std::isfinite(head) ? head / max_head : 0.0, 0.0, 1.0) : 0.0;
-    return kBoostHeatC * std::pow(f, 0.8);
+// Compressing air heats it, as a real compressor does: the outlet is the inlet times the pressure ratio's
+// isentropic rise, over the compressor's efficiency where it runs. At full boost (a ratio of 1.87) at its best
+// efficiency that is about +80 C on 20 C air; a compressor run off its best (near surge or choke) heats it more.
+inline double compressor_heat(double inlet_c, double pressure_ratio, double efficiency) {
+    double in = std::isfinite(inlet_c) ? std::clamp(inlet_c, -50.0, 600.0) : 20.0;
+    double ratio = std::isfinite(pressure_ratio) ? std::max(1.0, pressure_ratio) : 1.0;
+    double eta = std::isfinite(efficiency) ? std::clamp(efficiency, 0.2, 1.0) : 0.7;
+    return (in + 273.15) * (std::pow(ratio, 0.2857) - 1.0) / eta;
 }
-// The air a compressor sends on: its inlet air (outside air, or a first stage's boost) heated by its head, then cooled
-// towards the outside air by the intercoolers' effectiveness (intercooler_effectiveness below).
-inline double boost_air_c(double inlet_c, double head, double max_head, double cooling, double ambient_c) {
+// The air a compressor sends on: its inlet air (outside air, or a first stage's boost) heated by compressing it, then
+// cooled towards the outside air by the intercoolers' effectiveness (intercooler_effectiveness below).
+inline double boost_air_c(double inlet_c, double pressure_ratio, double efficiency, double cooling, double ambient_c) {
     double in = std::isfinite(inlet_c) ? std::clamp(inlet_c, -50.0, 600.0) : ambient_c;
-    double hot = in + compressor_heat(head, max_head);
+    double hot = in + compressor_heat(in, pressure_ratio, efficiency);
     return hot - (hot - ambient_c) * std::clamp(std::isfinite(cooling) ? cooling : 0.0, 0.0, 1.0);
 }
 // Intercoolers on the boost pipe: how much of that heat they take back out (0-1). `cells` is their total frontal
@@ -137,8 +140,9 @@ inline double boost_factor_for_air(double factor, double intake_c) {
     return 1.0 + (factor - 1.0) * intake_density_ratio(intake_c);
 }
 // Knock: hot boosted air hurts the engine. Added to the engine's own damage counter per tick (the game takes a
-// damage step at 1): at 140 C and full boost a step about every 6 to 7 minutes.
-constexpr double kKnockC = 90.0;
+// damage step at 1): full boost from 20 C air with no intercooler (about 98 C) costs a step about every 8 to 9
+// minutes. Real engines start to knock on boost well under 100 C of intake air.
+constexpr double kKnockC = 60.0;
 inline double knock_damage(double intake_c, double factor, double dt) {
     if (!std::isfinite(intake_c) || !std::isfinite(factor) || !(dt > 0)) return 0;
     double heat = std::max(0.0, intake_c - kKnockC) / 50.0, boost = std::max(0.0, factor - 1.15);

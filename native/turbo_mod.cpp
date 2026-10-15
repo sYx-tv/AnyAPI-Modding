@@ -192,6 +192,8 @@ struct Turbo {
     const void* upstream = nullptr;                  // compound: the turbo whose boost its compressor breathes, or nullptr
     double cooler_cells = 0;                         // intercoolers on its boost pipe, total frontal cells
     int coolers = 0;
+    double boost_capacity = 0;                       // litres its whole boost pipe holds (refresh_topology)
+    int feeders = 1;                                 // compressors pushing into that pipe, itself included
     void* filter = nullptr;                          // the air filter on its intake this tick (a second stage: none)
     State state;
     double last_log = -1e9;
@@ -915,8 +917,23 @@ void refresh_topology(void* self, void* vehicle, Turbo& t, double now) {
     int coolers = 0;
     const void* engine = nullptr;
     const void* stage = nullptr;
+    // The boost pipe's size (every gas content on it, once each) and how many compressors push into it: the turbo model
+    // needs both to tell air that only fills the pipe from air the engine takes (turbo_logic.h, working_flow).
+    const void* contents[64]{};
+    int content_count = 0, feeders = 0;
+    double capacity = 0;
     for_each_connected(vehicle, static_cast<uint8_t*>(self) + off::pump_node_b, [&](void* node) {
         auto* component = at<uint8_t*>(node, off::node_component);
+        if (component && node == component + off::pump_node_b && g_turbos.count(component)) ++feeders;
+        if (anymaker::readable(static_cast<uint8_t*>(node), off::node_content + 8)) {
+            auto* content = at<uint8_t*>(node, off::node_content);
+            if (content && content_count < 64 && std::find(contents, contents + content_count, content) == contents + content_count &&
+                anymaker::readable(content, off::content_capacity + 8)) {
+                contents[content_count++] = content;
+                double c = at<double>(content, off::content_capacity);
+                if (std::isfinite(c) && c > 0 && c < 1e6) capacity += c;
+            }
+        }
         if (!engine && component) {
             auto m = g_manifolds.find(component);
             if (m != g_manifolds.end() && now - m->second.at < 2.0) engine = m->second.engine;
@@ -931,6 +948,8 @@ void refresh_topology(void* self, void* vehicle, Turbo& t, double now) {
     });
     t.cooler_cells = cells;
     t.coolers = coolers;
+    t.boost_capacity = capacity;
+    t.feeders = std::max(1, feeders);
     if (engine != t.feeds_engine || stage != t.feeds_stage) {
         static std::atomic<int> logs{40};
         auto next = stage ? g_turbos.find(stage) : g_turbos.end();
@@ -975,6 +994,10 @@ void tick_blower(void* self, void* vehicle, Turbo& t) {
         in.volume[i] = at<double>(contents[i], off::content_volume);
     }
     in.dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;
+    double inlet_c = fed ? at<double>(c0, off::content_temperature) : kAmbientC;
+    in.intake_temperature = inlet_c;
+    in.boost_capacity = t.boost_capacity;
+    in.feeders = t.feeders;
     void* shaft = g_get_rps && g_apply_torque && g_newtons_per_joule ? blower_shaft(self) : nullptr;
     double rps = 0;
     if (shaft) g_get_rps(&rps, shaft);
@@ -1005,15 +1028,14 @@ void tick_blower(void* self, void* vehicle, Turbo& t) {
     }
     double cells = t.cooler_cells;
     double cooling = intercooler_effectiveness(cells, t.state.intake_flow);
-    double inlet_c = fed ? at<double>(c0, off::content_temperature) : kAmbientC;
-    double air_c = boost_air_c(inlet_c, o.head, kMaxHead, cooling, kAmbientC);
+    double air_c = boost_air_c(inlet_c, o.pressure_ratio, o.efficiency, cooling, kAmbientC);
     if (o.compressor_move > 0) at<double>(c1, off::content_temperature) = air_c;
     if (filter_condition && t.state.spool > 0) {
         *filter_condition = std::max(0.0, *filter_condition - filter_clog(t.state.spool, in.dt));
         g_wear_dirty = true;
     }
     t.state.slots[kOilFlow] = 0;
-    t.state.slots[kTurboTemperature] = boost_air_c(inlet_c, o.head, kMaxHead, 0.0, kAmbientC);   // its housing: the air leaving it
+    t.state.slots[kTurboTemperature] = boost_air_c(inlet_c, o.pressure_ratio, o.efficiency, 0.0, kAmbientC);   // its housing: the air leaving it
     t.state.slots[kAirFiltered] = filtered ? 1.0 : 0.0;
     t.state.slots[kBoostAirTemperature] = air_c;
     t.state.slots[kPowerMultiplier] = boost_factor_for_air(t.state.slots[kPowerMultiplier], air_c);
@@ -1076,6 +1098,10 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     }
     if (contents[kHotIn]) in.exhaust_temperature = at<double>(contents[kHotIn], off::content_temperature);
     in.dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;
+    double inlet_c = fed ? at<double>(c0, off::content_temperature) : kAmbientC;
+    in.intake_temperature = inlet_c;
+    in.boost_capacity = t.boost_capacity;
+    in.feeders = t.feeders;
     // Upkeep, from what the last ticks left: its condition and any air filter on the compressor intake. A second
     // stage breathes air its first stage filtered (or not): that one's filter does the work, and wears.
     sync_wear(now_s);
@@ -1113,8 +1139,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     double cells = t.cooler_cells;
     if (t.coolers == 0 && t.state.spool > 0.5) log_boost_pipe(self, vehicle, t, now_s);
     double cooling = intercooler_effectiveness(cells, t.state.intake_flow);
-    double inlet_c = fed ? at<double>(c0, off::content_temperature) : kAmbientC;
-    double air_c = boost_air_c(inlet_c, o.head, kMaxHead, cooling, kAmbientC);
+    double air_c = boost_air_c(inlet_c, o.pressure_ratio, o.efficiency, cooling, kAmbientC);
     if (o.compressor_move > 0) at<double>(c1, off::content_temperature) = air_c;
     // Oil: what comes in the oil port passes through (as engine oil pressure would push it) and leaves hotter.
     constexpr double kOilPassLps = 0.8;
@@ -1185,7 +1210,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     at<double>(self, off::pump_display_power) = o.power;
     at<double>(self, off::pump_flow) = o.compressor_move;
     t.boost = std::max(0.0, in.pressure[kColdOut] - in.pressure[kColdIn]);
-    double sound = encode_turbo_factor(t.state.spool, t.state.surging, t.state.blown);   // the clients' turbo sound (turbo_sound.h)
+    double sound = encode_turbo_factor(std::min(1.0, t.state.speed), t.state.surging, t.state.blown);   // the clients' turbo sound: its shaft speed (turbo_sound.h)
     g_property_set(static_cast<uint8_t*>(self) + off::pump_factor_speed, &sound);
     static std::atomic<int> event_logs{60};
     if (t.state.surging != t.was_surging || in.bov_venting != t.was_venting) {
@@ -1202,9 +1227,10 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     for (int i = 0; i < kNodeCount; ++i) off_ambient = off_ambient || std::abs(in.pressure[i] - 1.0) > 0.05;
     if ((t.ticks++ == 0 || ((t.state.exhaust_flow > 0.05 || t.state.spool > 0.01 || off_ambient) && now - t.last_log >= 5.0)) && logs.fetch_sub(1) > 0) {
         t.last_log = now;
-        log(0, "Turbo %dx%d id %d tick %d: hot in %.2f (%.2f L, %.0f C) -> hot out %.2f (%.2f L), exhaust %.1f L/s, spool %.2f, head %.2f, cold in %.2f (%.2f L) -> cold out %.2f (%.2f L), intake %.1f L/s (power x%.2f)%s%s, dt %.4f",
+        log(0, "Turbo %dx%d id %d tick %d: hot in %.2f (%.2f L, %.0f C) -> hot out %.2f (%.2f L), exhaust %.1f L/s, shaft %.0f rpm (spool %.2f), turbine %.1f kW, compressor %.1f kW, wastegate %.2f, head %.2f, cold in %.2f (%.2f L) -> cold out %.2f (%.2f L, pipe %.1f L, %d feeding), intake %.1f L/s (power x%.2f)%s%s, dt %.4f",
             t.size, t.size, at<int32_t>(self, off::component_id), t.ticks, in.pressure[kHotIn], in.volume[kHotIn], in.exhaust_temperature, in.pressure[kHotOut], in.volume[kHotOut],
-            t.state.exhaust_flow, t.state.spool, o.head, in.pressure[kColdIn], in.volume[kColdIn], in.pressure[kColdOut], in.volume[kColdOut], t.state.intake_flow,
+            t.state.exhaust_flow, t.state.slots[kRpm], t.state.spool, o.turbine_power / 1000.0, o.power / 1000.0, t.state.bypass, o.head, in.pressure[kColdIn], in.volume[kColdIn],
+            in.pressure[kColdOut], in.volume[kColdOut], t.boost_capacity, t.feeders, t.state.intake_flow,
             power_multiplier(in.pressure[kColdOut]), t.state.surging ? ", SURGE" : "", in.bov_venting ? ", blow-off venting" : "", in.dt);
     }
 }
@@ -1280,7 +1306,7 @@ void hk_tooltip(void* self, void* data) {
             turbo = true;
             blower = found->second.blower;
             flow = found->second.state.intake_flow;
-            rps = blower ? found->second.state.slots[kRpm] / 60.0 : found->second.state.spool * found->second.spec.max_rpm / 60.0;
+            rps = found->second.state.slots[kRpm] / 60.0;   // shaft (or impeller) speed
             boost = found->second.boost;
             condition = found->second.up.condition;
             temperature_c = found->second.up.temperature;

@@ -5,6 +5,18 @@ the curves draw on screen; the last three pulls stay up so you can compare build
 the latest pull's torque, boost, engine temperature and knock. F6 hides the panel, holding F6 clears the pulls, and
 the data port outputs rpm, power, torque and the latest peak. See [Dyno](../mods/dyno.md).
 
+**Turbos spool like real ones.** Lag used to be a fixed timer (2.4 s on the big turbo) that only started once the
+exhaust passed a quarter of the turbo's rated flow, so full boost tended to arrive near the redline. Now the exhaust
+spins a real shaft: the turbine's push comes from the exhaust's flow and pressure, each size's shaft has its own
+weight, and the compressor's boost climbs with the square of the shaft's speed. A matched turbo (a 6x6 on a 4-rotor,
+a 3x3 on a 2-rotor) reaches full boost about 1.5 s after you floor it at 3,500 RPM and holds it to the redline: a
+built-in wastegate sends the spare exhaust round the turbine, and the new `wastegate` output reads it. More revs spool
+it faster; a turbo too big for its engine lags, and one too small chokes the exhaust. Antilag now holds its 80% spool
+under load. Superchargers use the same compressor maths: still no lag, and the belt pays the real work of compressing
+the air. Boost air is cooler (about 78 °C over the outside air, not 120), and knock now starts at 60 °C boost air
+instead of 90, so an intercooler still pays off. Compounds work best with the exhaust run through both turbines in a
+row; see [Twin and compound turbos](../mods/turbo.md#twin-and-compound-turbos).
+
 **Fix:** blow-off valves, wastegates, air filters and the intercooler no longer look see-through. Their faces were built facing inward, so the game hid their outsides.
 
 **New looks:** blow-off valves have a slim "race port" body with a slotted vent crown, and wastegates a finned actuator can with two boost nipples. Paint works as before: the first colour on the body, the second on the cap.

@@ -47,7 +47,7 @@ static double run(State& st, const Spec& s, Plant& pl, double exhaust_lps, doubl
         in.pressure[kHotOut] = 1; in.volume[kHotOut] = pl.cap;
         in.pressure[kColdIn] = 1; in.volume[kColdIn] = pl.cap;
         in.pressure[kColdOut] = pl.cold_out / pl.cap; in.volume[kColdOut] = pl.cold_out;
-        in.dt = dt;
+        in.dt = dt; in.exhaust_temperature = 300;          // the game's exhaust
         Step o = step(st, s, in);
         pl.hot_in -= o.turbine_move;
         pl.cold_out += o.compressor_move;
@@ -55,26 +55,27 @@ static double run(State& st, const Spec& s, Plant& pl, double exhaust_lps, doubl
     return pl.cold_out / pl.cap;
 }
 
-// Two turbos in series on the cold side (a compound): the first stage breathes outside air into a pipe the second
-// stage breathes from; both turbines share the exhaust manifold. Returns the second stage's outlet pressure.
-struct CompoundPlant { double cap = 2.0, hot_in = 2.0, mid = 2.0, out = 2.0; };
+// Two turbos in series (a compound): the first stage `a` breathes outside air into a pipe the second stage `b`
+// breathes from (intercooled between them). Their turbines are in series too, as a real compound is plumbed: the
+// exhaust drives b's turbine first, then a's, then out. Returns the second stage's outlet pressure.
+struct CompoundPlant { double cap = 2.0, hot_in = 2.0, hot_mid = 2.0, mid = 2.0, out = 2.0; };
 static double run_compound(State& a, State& b, const Spec& sa, const Spec& sb, CompoundPlant& pl, double exhaust_lps, double air_lps, double seconds,
                            double dt = 1.0 / 60) {
     for (double t = 0; t < seconds; t += dt) {
         pl.hot_in += exhaust_lps * dt;
         pl.out = std::max(0.0, pl.out - air_lps * dt);
         Inputs ia, ib;
-        for (Inputs* in : {&ia, &ib}) {
-            in->pressure[kHotIn] = pl.hot_in / pl.cap; in->volume[kHotIn] = pl.hot_in;
-            in->pressure[kHotOut] = 1; in->volume[kHotOut] = pl.cap;
-            in->dt = dt;
-        }
+        ib.pressure[kHotIn] = pl.hot_in / pl.cap; ib.volume[kHotIn] = pl.hot_in;
+        ib.pressure[kHotOut] = ia.pressure[kHotIn] = pl.hot_mid / pl.cap; ib.volume[kHotOut] = ia.volume[kHotIn] = pl.hot_mid;
+        ia.pressure[kHotOut] = 1; ia.volume[kHotOut] = pl.cap;
+        for (Inputs* in : {&ia, &ib}) { in->dt = dt; in->exhaust_temperature = 300; }
         ia.pressure[kColdIn] = 1; ia.volume[kColdIn] = pl.cap;
         ia.pressure[kColdOut] = pl.mid / pl.cap; ia.volume[kColdOut] = pl.mid;
         ib.pressure[kColdIn] = pl.mid / pl.cap; ib.volume[kColdIn] = pl.mid;
         ib.pressure[kColdOut] = pl.out / pl.cap; ib.volume[kColdOut] = pl.out;
         Step oa = step(a, sa, ia), ob = step(b, sb, ib);
-        pl.hot_in -= oa.turbine_move + ob.turbine_move;
+        pl.hot_in -= ob.turbine_move;
+        pl.hot_mid += ob.turbine_move - oa.turbine_move;
         pl.mid += oa.compressor_move - ob.compressor_move;
         pl.out += ob.compressor_move;
     }
@@ -98,17 +99,54 @@ static double run_blower(State& st, const Spec& s, Plant& pl, double pulley_rps,
     return pl.cold_out / pl.cap;
 }
 
+// A turbo on one of the game's engines (its tick from research-engine-air.md: fuel from volume, speed, boost and
+// back pressure; air in, air plus burnt fuel out as exhaust), running at a fixed speed, an open tailpipe after the
+// turbine. `volume` is the engine's (45 a rotor). Returns the seconds to 90 % of full boost at full
+// throttle from a light-throttle cruise (-1: never in 6 s); `kpa` gets the boost it settles at.
+static double tip_in(int n, double volume, double rpm, double* kpa = nullptr) {
+    Spec s = spec(n); State st;
+    double own = n * n * 0.25, hot_cap = own + 4, out_cap = own + 2, air_cap = own + 4;
+    double hot = hot_cap, out = out_cap, air = air_cap, seconds = -1, dt = 1.0 / 60;
+    for (int i = 0; i < 540; ++i) {
+        double throttle = i < 180 ? 0.1 : 1.0;
+        double boost = std::clamp(air / air_cap, 1.0, 19.0), back = hot / hot_cap;
+        double fuel = volume * 400 / 60 * std::clamp(rpm / 8000 + 0.2, 0.0, 1.0) * (1 + (boost - 1) / 9) / 9.6e6 * throttle * (1 - std::clamp((back - 4) / 16, 0.0, 1.0));
+        double used = std::min(air, fuel * 8720);
+        air -= used; hot += used + fuel * 800;
+        Inputs in; in.dt = dt; in.exhaust_temperature = 300; in.boost_capacity = air_cap;
+        in.pressure[kHotIn] = hot / hot_cap; in.volume[kHotIn] = own * in.pressure[kHotIn];
+        in.pressure[kHotOut] = out / out_cap; in.volume[kHotOut] = own * in.pressure[kHotOut];
+        in.pressure[kColdIn] = 1; in.volume[kColdIn] = own;
+        in.pressure[kColdOut] = air / air_cap; in.volume[kColdOut] = own * in.pressure[kColdOut];
+        Step o = step(st, s, in);
+        hot -= o.turbine_move; out += o.turbine_move; air += o.compressor_move;
+        out -= std::min(out, 6.0 * (out / out_cap - 1));                       // a free-flowing tailpipe
+        if (i >= 180 && seconds < 0 && (air / air_cap - 1) > 0.9 * kMaxHead) seconds = (i - 179) * dt;
+    }
+    if (kpa) *kpa = (air / air_cap - 1) * kKpaPerUnit;
+    return seconds;
+}
+
 int main() {
     // Ids and sizes.
     for (int n : kTurboSizes) { std::string id = definition_id(n); assert(size_from_id(id.c_str(), id.size()) == n); }
     assert(size_from_id("turbo", 5) == 0 && size_from_id("turbocharger_7", 14) == 0 && size_from_id("turbocharger_1", 14) == 0);
     assert(size_from_id("turbocharger_2", 14) == 0 && size_from_id("turbocharger_4", 14) == 0 && size_from_id("turbocharger_5", 14) == 0);   // removed (Nate, 2026-10-15)
-    // Specs grow with size: more flow, more lag. The 6x6 keeps the 5x5's numbers; it grew for its pipes.
+    // Specs grow with size: more flow, a heavier, slower shaft (more energy to spin up). The 6x6 keeps the 5x5's
+    // numbers; it grew for its pipes.
     for (int n = kMinSize; n < 5; ++n) {
         Spec a = spec(n), b = spec(n + 1);
-        assert(b.rated_flow > a.rated_flow && b.spool_up_s > a.spool_up_s && b.compressor_coeff > a.compressor_coeff && b.max_rpm < a.max_rpm);
+        assert(b.rated_flow > a.rated_flow && b.spool_kj > a.spool_kj && b.inertia > a.inertia && b.compressor_coeff > a.compressor_coeff && b.max_rpm < a.max_rpm);
     }
-    assert(spec(6).rated_flow == spec(5).rated_flow && spec(6).spool_up_s == spec(5).spool_up_s && spec(6).max_rpm == spec(5).max_rpm);
+    assert(spec(6).rated_flow == spec(5).rated_flow && spec(6).spool_kj == spec(5).spool_kj && spec(6).max_rpm == spec(5).max_rpm);
+    for (int n : kTurboSizes) {
+        Spec s = spec(n);
+        assert(near(0.5 * s.inertia * s.shaft_full * s.shaft_full, s.spool_kj * 1000, 1e-6 * s.spool_kj * 1000));   // its energy at full boost
+        // The turbine passes its rated flow at a 2-unit drop; more drop pushes more through, but with the square root
+        // of the pressure (it chokes), and nothing flows the wrong way into it.
+        assert(near(turbine_flow(s, 3, 1), s.rated_flow, 1e-9 * s.rated_flow) && turbine_flow(s, 5, 1) < 1.7 * s.rated_flow && turbine_flow(s, 5, 1) > 1.4 * s.rated_flow);
+        assert(turbine_flow(s, 1, 1) == 0 && turbine_flow(s, 1, 3) < 0);
+    }
     assert(!spec(3).large_pipe && spec(4).large_pipe && spec(6).large_pipe);
     // Channels.
     for (int i = 0; i < kChannelCount; ++i) assert(channel_index(kChannels[i].name, std::strlen(kChannels[i].name)) == i && kChannels[i].input == (i == kFirstInput));
@@ -214,29 +252,60 @@ int main() {
     assert(wastegate_move(1, 1, 3, 5, 5, 1.0 / 60) < 0 && std::isfinite(wastegate_move(NAN, NAN, 1, 5, 5, 1.0 / 60)));
     // Model: no exhaust, no spool; the compressor still lets a naturally aspirated engine breathe.
     { State st; Plant pl; Spec s = spec(3); double p = run(st, s, pl, 0, 8, 10); assert(st.spool < 1e-9 && p > 0.6 && p < 1.0); }
-    // Rated exhaust flow spools to full boost and back pressure stays under the 4 units that cut engine power.
-    { State st; Plant pl; Spec s = spec(3); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.9, 20);
-      assert(st.spool > 0.95 && p > 8.5 && pl.hot_in / pl.cap < 4.0); assert(near(st.slots[kPowerMultiplier], power_multiplier(p), 0.05)); }
-    // Lag: after one second a 5x5 has built less spool than a 2x2 at the same relative flow.
-    { State a, b; Plant pa, pb; run(a, spec(2), pa, spec(2).rated_flow, 0, 1.0); run(b, spec(5), pb, spec(5).rated_flow, 0, 1.0); assert(a.spool > b.spool + 0.15); }
+    // Rated exhaust flow spools to full boost and back pressure stays under the 4 units that cut engine power; the
+    // built-in wastegate holds it there, bypassing what the shaft does not need.
+    for (int n : kTurboSizes) {
+        State st; Plant pl; Spec s = spec(n); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.9, 20);
+        assert(st.spool > 0.95 && p > 8.5 && p < 10.5 && pl.hot_in / pl.cap < 4.0 && st.bypass > 0.2 && st.slots[kBypass] == st.bypass);
+        assert(near(st.slots[kPowerMultiplier], power_multiplier(p), 0.05) && st.speed <= kOverspeed && near(st.slots[kRpm], st.speed * s.max_rpm));
+    }
+    // Lag comes from the shaft, not a timer: on the same exhaust a 6x6's heavier shaft spools slower than a 3x3's,
+    // and more exhaust spools the same turbo faster.
+    { State a, b; Plant pa, pb; run(a, spec(3), pa, 22, 18, 0.5); run(b, spec(6), pb, 22, 18, 0.5); assert(a.spool > b.spool + 0.15); }
+    { State a, b; Plant pa, pb; run(a, spec(6), pa, 40, 0, 0.25); run(b, spec(6), pb, 65, 0, 0.25); assert(b.spool > a.spool + 0.1); }
+    // On a real engine (the game's engine tick): matched turbos reach 90 % of full boost in well under two seconds
+    // from a cruise at 3,500 RPM and hold it, so full boost no longer waits for the redline; a 6x6 on a 2-rotor at
+    // low revs never gets there (too little exhaust), and every match makes some boost from 2,500 RPM.
+    { double kpa = 0;
+      double t = tip_in(6, 180, 3500, &kpa); assert(t > 0.5 && t < 2.0 && kpa > 80 && kpa < 95);    // 4-rotor
+      t = tip_in(3, 90, 3500, &kpa); assert(t > 0.5 && t < 2.0 && kpa > 80 && kpa < 95);           // 2-rotor
+      assert(tip_in(6, 180, 2500) > tip_in(6, 180, 5000));                                           // more revs, more exhaust, less lag
+      t = tip_in(6, 90, 2500, &kpa); assert(t < 0 && kpa > 15 && kpa < 60); }
+    // The compressor's efficiency: best at 3/4 of its design flow for its speed, worse towards surge and choke.
+    { Spec s = spec(3); double best = compressor_efficiency(s, 0.75 * s.design_flow, 1);
+      assert(near(best, kCompressorEfficiency) && compressor_efficiency(s, 0.1 * s.design_flow, 1) < best - 0.1 && compressor_efficiency(s, 2 * s.design_flow, 1) < best - 0.1 &&
+             compressor_efficiency(s, 0, 1) >= 0.4 && near(compressor_efficiency(s, 0.375 * s.design_flow, 0.5), best)); }
+    // Filling the boost pipe costs a tenth of its work (the game needs nine pipe-fulls of air for full boost; a real
+    // pipe takes under one), shared between the turbos feeding it; steady or falling boost pays for all of it.
+    { State st; Inputs in; in.boost_capacity = 10; in.pressure[kColdOut] = 2; in.volume[kColdOut] = 2;
+      assert(working_flow(st, in, 400, 1.0 / 60) == 400);                       // no previous pressure yet
+      in.pressure[kColdOut] = 2.5; assert(near(working_flow(st, in, 400, 1.0 / 60), 400 - 0.9 * 300));
+      in.pressure[kColdOut] = 3; in.feeders = 2; assert(near(working_flow(st, in, 400, 1.0 / 60), 400 - 0.9 * 150));
+      in.pressure[kColdOut] = 2; assert(working_flow(st, in, 400, 1.0 / 60) == 400 && working_flow(st, in, -5, 1.0 / 60) == 0); }
     // A big engine on a small turbo chokes it: back pressure goes past the engine's 4-unit limit.
-    { State st; Plant pl; run(st, spec(2), pl, 40, 30, 10); assert(pl.hot_in / pl.cap > 4.0); }
-    // The same flow on a 5x5 is too little for full boost.
-    { State st; Plant pl; run(st, spec(5), pl, 25, 20, 20); assert(st.spool < 0.4); }
+    { State st; Plant pl; run(st, spec(3), pl, 70, 60, 10); assert(pl.hot_in / pl.cap > 4.0); }
+    // A small engine's exhaust on a 6x6 is too little for full boost.
+    { State st; Plant pl; double p = run(st, spec(6), pl, 22, 18, 20); assert(st.spool < 0.6 && p < 7.0); }
     // Boost limit (kPa, game scale) caps the boost the `boost` output reads (the docs: "caps boost at this pressure").
     { State st; st.slots[kBoostLimit] = 49; Plant pl; Spec s = spec(3); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.5, 20);
       assert(p < 6.05 && p > 4.5 && st.slots[kBoost] < 49.5 && st.slots[kBoost] > 35); }
     // Compounds: the engine's boost factor carries on past the game's 10 (2x) up to 19 (3x), and no further.
     assert(near(power_multiplier(10), 2.0) && near(power_multiplier(19), 3.0) && near(power_multiplier(40), 3.0) && near(power_multiplier(5.5), 1.5));
     // The boost limit is over the air outside, so a second stage whose inlet is already boosted makes only the rest.
-    { State st; st.spool = 1; st.slots[kBoostLimit] = 49; assert(near(head_for(st, 1.0), 5.0, 0.01) && near(head_for(st, 4.0), 2.0, 0.01) && head_for(st, 9.0) == 0); }
+    { State st; st.speed = 1; st.slots[kBoostLimit] = 49; assert(near(head_for(st, 1.0), 5.0, 0.01) && near(head_for(st, 4.0), 2.0, 0.01) && head_for(st, 9.0) == 0); }
+    // The head is a pressure ratio that goes with the square of shaft speed: 9 units from outside air at full speed,
+    // a quarter of that at half speed, more units from a boosted inlet, never past the engine's 19.
+    { State st; st.speed = 1; assert(near(head_for(st, 1.0), kMaxHead, 0.01) && head_for(st, 5.0) > 12 && near(head_for(st, 10.0), 9.0, 1e-9));
+      st.speed = 0.5; assert(near(head_for(st, 1.0), kMaxHead / 4, 0.01)); st.speed = NAN; assert(head_for(st, 1.0) == 0); }
     // A second stage heats its inlet air further; intercoolers cool towards the outside air.
-    assert(near(boost_air_c(20, 9, 9, 0, 20), 140) && near(boost_air_c(140, 9, 9, 0, 20), 260) && near(boost_air_c(140, 9, 9, 1, 20), 20));
-    assert(near(boost_air_c(20, 9, 9, 0.5, 20), 80) && near(boost_air_c(NAN, 0, 9, 0, 20), 20));
-    // Two 3x3s in series on a big engine reach well past one turbo's 10 (three times the power needs 19); one 3x3 on its
-    // own under the same draw stays at or under 10.
+    { double one = boost_air_c(20, kFullBoostRatio, kCompressorEfficiency, 0, 20);
+      assert(near(one, 97.6, 0.5) && boost_air_c(one, 1.5, kCompressorEfficiency, 0, 20) > one + 40 && near(boost_air_c(one, 1.5, kCompressorEfficiency, 1, 20), 20));
+      assert(near(boost_air_c(20, kFullBoostRatio, kCompressorEfficiency, 0.5, 20), (one + 20) / 2) && near(boost_air_c(NAN, 1, kCompressorEfficiency, 0, 20), 20)); }
+    // Two 3x3s compounded on a big engine reach well past one turbo's 10 (three times the power needs 19); one 3x3 on
+    // its own under the same draw stays at or under 10.
     { State a, b; CompoundPlant pl; double p = run_compound(a, b, spec(3), spec(3), pl, 50, 40, 20);
-      assert(a.spool > 0.95 && b.spool > 0.95 && p > 13 && p < 19.5 && b.slots[kPowerMultiplier] > 2.3);
+      assert(a.spool > 0.95 && b.spool > 0.5 && p > 13 && p < 19.5 && b.slots[kPowerMultiplier] > 2.3);
+      assert(b.spool < a.spool);                        // breathing boosted air, the second stage needs less shaft speed
       assert(b.slots[kBoost] > 100);                    // the second stage's `boost` reads the total over the air outside
       State one; Plant single; double q = run(one, spec(3), single, 25, 40, 20); assert(q <= 10.0 && one.slots[kPowerMultiplier] <= 2.0); }
     // Boost outputs: over the air outside, in kPa and psi (full boost about 88 kPa, 12.8 psi).
@@ -245,7 +314,7 @@ int main() {
     // Antilag holds the spool off throttle (engine idling) and says so; it does nothing with the engine off.
     { Spec s = spec(3);
       auto idle = [&](bool antilag) { State st; Plant pl; run(st, s, pl, s.rated_flow, 0, 10);
-          for (int i = 0; i < 180; ++i) {
+          for (int i = 0; i < 300; ++i) {                  // 5 s: unloaded, the shaft only coasts down on its bearings
               Inputs in; in.pressure[kHotIn] = 1.1; in.volume[kHotIn] = 2.2; in.pressure[kHotOut] = 1; in.volume[kHotOut] = 2;
               in.pressure[kColdIn] = 1; in.volume[kColdIn] = 2; in.pressure[kColdOut] = 1; in.volume[kColdOut] = 2; in.dt = 1.0 / 60; in.antilag = antilag;
               step(st, s, in);
@@ -469,14 +538,16 @@ int main() {
         assert(bearing_whine(0.1) && !bearing_whine(0.5) && !bearing_whine(0));
         assert(filter_head_factor(false, 0) == 1 && near(filter_head_factor(true, 0), 0.85) && filter_head_factor(true, 1) == 1);
     }
-    // Hot boost air: about +120 C at full head, intercoolers take it back out (bigger and slower is better), and the
-    // engine's boost factor follows the air's density; naturally aspirated engines are untouched.
+    // Hot boost air: about +78 C at full boost from outside air (a pressure ratio of 1.87 at 74 % efficiency), hotter
+    // where the compressor runs off its best flow; intercoolers take it back out (bigger and slower is better), and
+    // the engine's boost factor follows the air's density; naturally aspirated engines are untouched.
     {
-        assert(near(compressor_heat(9, 9), 120) && compressor_heat(0, 9) == 0 && compressor_heat(4.5, 9) < 120);
+        assert(near(compressor_heat(20, kFullBoostRatio, kCompressorEfficiency), 77.6, 0.5) && compressor_heat(20, 1, kCompressorEfficiency) == 0 &&
+               compressor_heat(20, 1.4, kCompressorEfficiency) < 70 && compressor_heat(20, kFullBoostRatio, 0.5) > 100 && std::isfinite(compressor_heat(NAN, NAN, NAN)));
         assert(intercooler_effectiveness(0, 10) == 0 && intercooler_effectiveness(6, 10) > 0.8 && intercooler_effectiveness(12, 10) > intercooler_effectiveness(6, 10) &&
                intercooler_effectiveness(6, 80) < intercooler_effectiveness(6, 10));
         assert(boost_factor_for_air(1.0, 140) == 1.0 && near(boost_factor_for_air(2.0, 30), 2.0) && boost_factor_for_air(2.0, 140) < 1.8 && boost_factor_for_air(2.0, 0) > 2.0);
-        assert(knock_damage(80, 2, 1) == 0 && knock_damage(140, 1.1, 1) == 0 && knock_damage(140, 2, 1) > 0 && std::isfinite(boost_factor_for_air(2.0, NAN)));
+        assert(knock_damage(55, 2, 1) == 0 && knock_damage(140, 1.1, 1) == 0 && knock_damage(140, 2, 1) > 0 && 1 / knock_damage(98, 2, 1) > 480 && 1 / knock_damage(98, 2, 1) < 560 && std::isfinite(boost_factor_for_air(2.0, NAN)));
     }
     // Wear file: round trip, junk ignored, values clamped.
     {
@@ -550,19 +621,19 @@ int main() {
         assert(blower_from_id("supercharger_small", 18) == kBlowerSmall && blower_from_id("supercharger_large", 18) == kBlowerLarge &&
                blower_from_id("supercharger", 12) == kNoBlower && valve_from_id("supercharger_small", 18) == kNoValve && size_from_id("supercharger_small", 18) == 0);
     }
-    {   // the model: head with the square of the pulley's speed, no lag, and the belt pays for the air
+    {   // the model: head with the square of the pulley's speed, no lag, and the belt pays for compressing the air
         assert(blower_spool(0) == 0 && near(blower_spool(kBlowerFullBoostRps), 1) && near(blower_spool(-kBlowerFullBoostRps / 2), 0.25) && blower_spool(1e9) == 1);
         assert(near(blower_spool(3500 / 60.0 * kBeltMedium), 0.25));                 // medium Engine Wheel at 3,500 RPM
         assert(blower_spool(4100 / 60.0 * kBeltLarge) > 0.99);                       // the large wheel overdrives it
         assert(near(blower_spool(8000 / 60.0 * kBeltSmall), 0.5436, 1e-3));         // the small one: about half at the fuel cut
-        assert(near(blower_drive_joules(1, 9), 1e-3 * 9 * 9800 / 0.55) && blower_drive_joules(-1, 9) == 0 && blower_drive_joules(1, 0) == 0);
         for (bool big : {false, true}) {
             Spec s = blower_spec(big);
             State st; Plant pl; double joules = 0;
             double p = run_blower(st, s, pl, kBlowerFullBoostRps, s.rated_flow * 0.8, 10, &joules);
             assert(p > 8.0 && p <= 10.0 && st.slots[kPowerMultiplier] > 1.8 && st.slots[kPowerMultiplier] <= 2.0);
-            double watts = joules / 10;                                               // about flow x head / efficiency
-            assert(watts > 0.7 * s.rated_flow * 0.8e-3 * 9 * 9800 / 0.55 && watts < 1.2 * s.rated_flow * 0.8e-3 * 9 * 9800 / 0.55);
+            double watts = joules / 10;                                               // the air's compression work, through the gears
+            double ideal = compressor_watts(s.rated_flow * 0.8, 1, p, kAmbientC, compressor_efficiency(s, s.rated_flow * 0.8, 1)) / kBlowerDriveEfficiency;
+            assert(watts > 0.85 * ideal && watts < 1.15 * ideal && near(st.slots[kDrivePower], ideal / 1000, 0.15 * ideal / 1000));
             assert(st.slots[kDrivePower] > 0 && near(st.slots[kCondition], 1) && st.slots[kRpm] > 0.99 * s.max_rpm && !st.surging);
             State st2; Plant pl2; run_blower(st2, s, pl2, kBlowerFullBoostRps, s.rated_flow * 0.8, 0.2);
             assert(st2.spool > 0.95);                                                 // no lag

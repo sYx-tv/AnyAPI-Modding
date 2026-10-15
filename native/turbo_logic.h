@@ -11,8 +11,21 @@
 //   - Engines burn max_watts = 400 W per volume unit; air use is about 0.36 L/s per unit at 1x, and the
 //     exhaust is the air plus the burnt fuel, at 300 C.
 //   - The stock impeller moves min(content, 0.4 * net pressure * dt) litres per tick from inlet to outlet,
-//     with head 0.1 per rps. A turbo here is the same pump with its head set by the spool, plus a turbine
+//     with head 0.1 per rps. A turbo here is the same pump with its head set by its shaft speed, plus a turbine
 //     that lets exhaust through its hot side.
+//
+// The turbo is a real shaft (2026-10-15, Nate: "make them behave as close to real life as you possibly can"). Exhaust
+// through the turbine pushes it (the work the gas gives up expanding, at the turbine's efficiency for its blade speed),
+// the compressor and the bearings hold it back, and its inertia sets how fast it can change speed. The compressor's
+// pressure ratio goes with the square of the shaft speed, so lag is not a fixed time: more exhaust spools it faster,
+// a bigger (heavier, lower-pressure) turbo spools slower, and a turbo too big for its engine never gets going. A
+// built-in wastegate holds full boost once the shaft has more than it needs. The game's scales are mapped onto real
+// ones for this:
+//   - Boost side: 1 game unit = 9.8 kPa, so full boost (9 units over the inlet, 88 kPa) is a pressure ratio of 1.87.
+//   - Exhaust side: 1 game unit = 0.5 bar, so the 4 units where engines start to lose power is 2.5 bar absolute.
+//   - A game litre of gas is a litre of outside air (1.2 g); the game's 300 C exhaust stands for a real engine's 900 C.
+//   - The game's pipes hold far more air at full boost than real ones (pressure 10 is 10 pipe-fulls, where a real
+//     pipe at a ratio of 1.87 holds 1.87), so the compressor pays for a tenth of the air that only fills its pipe.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -38,13 +51,27 @@ constexpr double kMaxHead = 9.0;          // ambient 1 + 9 = 10: the engine's fu
 // tops out at 10.
 constexpr double kStockEnginePressure = 10.0;
 constexpr double kMaxEnginePressure = 19.0;
-constexpr double kSpoolStart = 0.25;      // exhaust flow (fraction of rated) where the shaft starts to build boost
 constexpr double kAmbientC = 20.0;
 constexpr double kPsiPerKpa = 0.1450377;
 constexpr double kAntilagSpool = 0.8;     // antilag holds the shaft at this spool off throttle
+constexpr double kAntilagFlow = 0.85;     // exhaust flow (fraction of rated) below which antilag fires (off throttle)
 constexpr double kAntilagMinFlow = 0.03;  // exhaust flow (fraction of rated) that shows the engine is running
 constexpr double kSurgeSpool = 0.15;      // below this spool a backflow is just boost bleeding off, not surge
-constexpr double kSurgeTau = 0.4;         // surge stalls the wheel: extra spool decay time constant, seconds
+constexpr double kSurgeTau = 0.8;         // surge stalls the wheel: shaft speed decay time constant, seconds
+// Real-world scales (see the header comment).
+constexpr double kAmbientKpa = 101.325;
+constexpr double kAmbientK = 293.15;
+constexpr double kFullBoostRatio = 1.0 + kMaxHead * kKpaPerUnit / kAmbientKpa;   // 1.87: a stage at full shaft speed
+constexpr double kHotBarPerUnit = 0.5;     // exhaust side, real bar per game unit
+constexpr double kKgPerLitre = 0.0012;
+constexpr double kCpAir = 1005.0, kCpExhaust = 1150.0;    // J/kg K
+constexpr double kAirExponent = 0.2857, kExhaustExponent = 0.248;   // (gamma - 1) / gamma, air and exhaust
+constexpr double kExhaustTemperatureScale = 3.0;           // game exhaust C -> real exhaust C
+constexpr double kFillShare = 0.1;         // share of the pipe-filling air the compressor pays for
+constexpr double kOverspeed = 1.12;        // the shaft's speed limit, over its full-boost speed
+constexpr double kTurbineEfficiency = 0.72, kCompressorEfficiency = 0.74;   // at their best
+constexpr double kBestBladeSpeedRatio = 0.7;               // turbine tip speed over the gas's spouting speed, at best
+constexpr double kBypassTau = 0.08;        // the built-in wastegate's actuator, seconds
 // A turbo worn to 0% blows: the shaft stops and the wrecked compressor wheel blocks most of the intake. The engine still
 // breathes through it, but only this share of a working turbo's flow: about a third of the air a matched engine (one
 // whose exhaust spools it fully) wants at full revs without boost, so it idles and crawls but makes about a third of
@@ -54,31 +81,44 @@ constexpr double kBlownFlowShare = 0.12;
 // One turbo size: N x N face, 2 cells thick (cold side cell x = 0, hot side cell x = 1).
 struct Spec {
     int size = 0;
-    double rated_flow = 0;        // exhaust L/s through the hot side for full boost
-    double turbine_coeff = 0;     // L/s per unit of pressure drop across the hot side
-    double compressor_coeff = 0;  // L/s per unit of net head on the cold side
-    double spool_up_s = 0;        // time constant while building boost (turbo lag)
-    double spool_down_s = 0;      // time constant while boost falls
-    double max_rpm = 0;           // shown on the rpm output at full spool
+    double rated_flow = 0;        // exhaust L/s through the turbine at a 2-unit pressure drop (its size, like an A/R)
+    double turbine_k = 0;         // Stodola flow constant for that
+    double compressor_coeff = 0;  // L/s per unit of net head on the cold side, at the outside air's density
+    double design_flow = 0;       // L/s of air (at its inlet's density) where the compressor is most efficient, full speed
+    double bypass_coeff = 0;      // built-in wastegate, wide open: L/s per unit of pressure drop
+    double max_rpm = 0;           // shaft rpm at full boost
+    double shaft_full = 0;        // the same, rad/s
+    double inertia = 0;           // kg m^2 of the shaft, both wheels on it
+    double tip_speed = 0;         // m/s, turbine tip at full-boost speed
+    double friction = 0;          // N m of bearing drag at full-boost speed
+    double spool_kj = 0;          // the shaft's energy at full-boost speed
     bool large_pipe = false;
 };
-// Rated flow scales with the face area; lag with size. At rated flow the hot side drops 2 units (about
-// 20 kPa) of pressure, well under the 4 units (39 kPa) where engines lose power, so a matched turbo never
-// chokes its engine; an undersized one does, as a real turbo would.
+// The turbine's swallowing capacity scales with the face area and the shaft's energy with size: the 6x6 suits the
+// 4-rotor (it holds full boost from about 2,500 RPM there, steady), the 3x3 the 2-rotor. At its rated flow the hot side
+// drops 2 units (1 bar), under the 4 units where engines lose power; more than that and the built-in wastegate opens.
 inline Spec spec(int n) {
     n = std::clamp(n, kMinSize, kMaxSize);
     // 2x2 to 6x6; the 6x6 has the 5x5's numbers (it grew for its pipes, not its power).
     static constexpr double rated[] = {10, 22, 40, 65, 65};
-    static constexpr double lag[] = {0.5, 0.9, 1.5, 2.4, 2.4};
+    static constexpr double energy_kj[] = {0.3, 0.6, 1.0, 1.5, 1.5};
     static constexpr double rpm[] = {220000, 160000, 120000, 90000, 90000};
     Spec s;
     s.size = n;
     s.rated_flow = rated[n - kMinSize];
-    s.turbine_coeff = s.rated_flow / 2.0;
+    double a = 1.0 + 2.0 * kHotBarPerUnit, x = a * a - 1.0;     // a 2-unit drop into the outside air
+    s.turbine_k = s.rated_flow * std::sqrt(x + 0.075) / x;
     s.compressor_coeff = s.rated_flow * 1.2;
-    s.spool_up_s = lag[n - kMinSize];
-    s.spool_down_s = s.spool_up_s * 0.5;
+    s.design_flow = s.rated_flow * 2.0;
+    s.bypass_coeff = s.rated_flow * 0.6;
     s.max_rpm = rpm[n - kMinSize];
+    s.shaft_full = s.max_rpm * 6.283185307179586 / 60.0;
+    s.spool_kj = energy_kj[n - kMinSize];
+    s.inertia = 2.0 * s.spool_kj * 1000.0 / (s.shaft_full * s.shaft_full);
+    // Blade speed: at full speed on that 2-unit drop with 300 C game exhaust the turbine runs at its best ratio.
+    double dh = kCpExhaust * (273.15 + kExhaustTemperatureScale * 300.0) * (1.0 - std::pow(a, -kExhaustExponent));
+    s.tip_speed = kBestBladeSpeedRatio * std::sqrt(2.0 * dh);
+    s.friction = 0.03 * kTurbineEfficiency * kKgPerLitre * s.rated_flow * dh / s.shaft_full;   // 3% of that power
     s.large_pipe = n >= 4;
     return s;
 }
@@ -98,7 +138,7 @@ enum Node { kColdIn, kColdOut, kHotIn, kHotOut, kNodeCount };
 // Data channels.
 // New channels go at the end: saved data links refer to them by position.
 enum Channel { kIntakePressure, kExhaustPressure, kPowerMultiplier, kSpool, kRpm, kExhaustFlow, kIntakeFlow, kExhaustTemperature, kSurge, kBoost, kBoostPsi, kAntilagFiring, kBoostLimit,
-               kOilFlow, kTurboTemperature, kCondition, kAirFiltered, kBoostAirTemperature, kDrivePower, kChannelCount };
+               kOilFlow, kTurboTemperature, kCondition, kAirFiltered, kBoostAirTemperature, kDrivePower, kBypass, kChannelCount };
 constexpr int kFirstInput = kBoostLimit;
 struct ChannelInfo { const char* name; bool input; };
 inline constexpr ChannelInfo kChannels[kChannelCount] = {
@@ -121,6 +161,7 @@ inline constexpr ChannelInfo kChannels[kChannelCount] = {
     {"air_filter", false},          // 1 with an air filter on the compressor intake, else 0
     {"boost_air_temperature", false},   // C, the boost air after any intercooler (what the engine breathes)
     {"drive_power", false},         // kW a supercharger takes from the engine through its belt (0 on a turbo)
+    {"wastegate", false},           // 0-1, how far the turbo's built-in wastegate is open (it holds full boost)
 };
 inline int channel_index(const char* name, size_t length) {
     for (int i = 0; i < kChannelCount; ++i) {
@@ -164,8 +205,10 @@ inline std::string description(int n) {
     Spec s = spec(n);
     return "Exhaust-driven turbocharger, " + std::to_string(n) + "x" + std::to_string(n) + "x2. Cold side (front): compressor intake in "
         "the middle of the face, compressor outlet at the top facing sideways - feed an air manifold. Hot side (back): turbine "
-        "exhaust out in the middle - vent it; turbine inlet at the bottom facing the other side, from the exhaust manifold. Full boost (98 kPa, double engine power) needs about " + fmt(s.rated_flow) +
-        " L/s of exhaust; boost starts near " + fmt(s.rated_flow * kSpoolStart) + " L/s. Bigger turbos move more air with less back pressure but have more lag. " +
+        "exhaust out in the middle - vent it; turbine inlet at the bottom facing the other side, from the exhaust manifold. Exhaust spins its shaft "
+        "and boost climbs with the square of the shaft's speed, so the more exhaust, the quicker it spools. A built-in wastegate holds full boost "
+        "(88 kPa, double engine power). " + std::string(n >= 6 ? "Suits a 3- or 4-rotor or a long small engine; on a small one it barely spools. "
+                                                                  : "Suits a 1- or 2-rotor or a short small engine; on a big one it chokes the exhaust. ") +
         (s.large_pipe ? "Large pipe." : "Small pipe.") +
         " Underneath: oil in (front) and oil out (back) - circulate engine oil through it with an oil cooler and oil filter. "
         "It wears with use: much faster without oil flow, without an air filter on its intake, or running hot. Its Condition "
@@ -238,6 +281,9 @@ struct Inputs {
     double pressure[kNodeCount]{};   // content volume / capacity of each node's content
     double volume[kNodeCount]{};     // litres currently in each node's content
     double exhaust_temperature = kAmbientC;
+    double intake_temperature = kAmbientC;   // C of the air reaching the compressor (outside air, or a first stage's boost)
+    double boost_capacity = 0;       // litres the whole boost pipe holds (0: only this part's outlet is known)
+    int feeders = 1;                 // compressors pushing into that pipe (twins share its filling)
     double dt = 0;
     bool bov_venting = false;        // a blow-off valve on the boost pipe is venting this tick
     double bov_spring_kpa = 0;       // its Stiffness setting (the stiffest, if several vent)
@@ -245,15 +291,22 @@ struct Inputs {
 };
 inline double blow_off_surge_through(double spring_kpa);   // below, with the blow-off valve
 struct Step {
-    double turbine_move = 0;     // litres to move this tick, hot in -> hot out (negative: back)
+    double turbine_move = 0;     // litres to move this tick, hot in -> hot out (negative: back), wheel and wastegate
     double compressor_move = 0;  // litres to move this tick, cold in -> cold out (negative: back)
-    double head = 0;             // pressure the compressor adds
-    double power = 0;            // compressor power, for the stock tooltip (L/s x pressure)
+    double head = 0;             // pressure the compressor adds at no flow
+    double power = 0;            // W the compressor takes from its shaft (or belt)
+    double turbine_power = 0;    // W the exhaust gives the shaft
+    double pressure_ratio = 1;   // real outlet over inlet pressure
+    double efficiency = kCompressorEfficiency;   // the compressor's, where it is running (sets how hot the air gets)
 };
 struct State {
-    double spool = 0;
+    double spool = 0;             // share of full boost the shaft can make: (speed / full-boost speed)^2, at most 1
+    double speed = 0;             // shaft speed over its full-boost speed (up to kOverspeed)
+    double bypass = 0;            // built-in wastegate opening, 0-1
     double exhaust_flow = 0;     // smoothed L/s
     double intake_flow = 0;      // smoothed L/s
+    double last_boost_pressure = NAN;   // the boost pipe's pressure at the start of the last tick
+    double fill = 0;             // L/s this compressor's share of the boost pipe filled by, last tick
     bool surging = false;
     bool antilag_firing = false;  // antilag is lighting fuel in the exhaust to hold the spool (throttle off)
     double health = 1;            // share of its head the turbo can still make (wear, clogged filter; turbo_health.h)
@@ -272,14 +325,51 @@ inline double capped(double want, double from_volume, double back_volume) {
 inline double power_multiplier(double intake_pressure) {
     return 1.0 + (std::clamp(finite_or(intake_pressure, 1.0), 1.0, kMaxEnginePressure) - 1.0) / 9.0;
 }
+// Real absolute pressure (kPa) of boost-side air at a game pressure, and real bar of exhaust.
+inline double boost_kpa(double p) { return kAmbientKpa + kKpaPerUnit * (finite_or(p, 1.0) - 1.0); }
+inline double exhaust_bar(double p) { return 1.0 + kHotBarPerUnit * (std::max(0.0, finite_or(p, 1.0)) - 1.0); }
+// How much denser (by temperature) the compressor's inlet air is than outside air: it moves that much more.
+inline double inlet_density(double inlet_c) { return kAmbientK / (273.15 + std::clamp(finite_or(inlet_c, kAmbientC), -50.0, 600.0)); }
 
-// The compressor's head for the current spool and boost limit (pressure units over its inlet). The limit is boost
-// over the air outside, as the `boost` output reads it, so a second stage (inlet already boosted) makes only the rest.
+// The compressor's head (pressure units over its inlet, at no flow) for its shaft speed: a centrifugal stage makes a
+// pressure RATIO that climbs with the square of its speed, 1.87 at full-boost speed, so a stage breathing boosted air
+// adds more units than one breathing outside air. Capped by the boost limit (boost over the outside air, as the
+// `boost` output reads it, so a second stage makes only the rest) and by the engine's 3x pressure.
 inline double head_for(const State& st, double inlet_pressure) {
-    double head = kMaxHead * st.spool * std::clamp(finite_or(st.health, 1.0), 0.0, 1.0);
+    double p_in = std::max(1.0, finite_or(inlet_pressure, 1.0));
+    double speed = std::max(0.0, finite_or(st.speed, 0.0));
+    double head = boost_kpa(p_in) / kKpaPerUnit * (kFullBoostRatio - 1.0) * speed * speed * std::clamp(finite_or(st.health, 1.0), 0.0, 1.0);
+    head = std::min(head, std::max(0.0, kMaxEnginePressure - p_in));
     double limit = finite_or(st.slots[kBoostLimit], 0.0);
-    if (limit > 0) head = std::clamp(limit / kKpaPerUnit - (std::max(1.0, finite_or(inlet_pressure, 1.0)) - 1.0), 0.0, head);
+    if (limit > 0) head = std::clamp(limit / kKpaPerUnit - (p_in - 1.0), 0.0, head);
     return head;
+}
+// Exhaust through the turbine wheel, L/s: Stodola's ellipse law in real pressures (flow ~ sqrt(P_in^2 - P_out^2)),
+// softened near no flow so a small manifold stays steady. Negative flows back.
+inline double turbine_flow(const Spec& s, double p_in, double p_out) {
+    double a = exhaust_bar(p_in), b = exhaust_bar(p_out), x = a * a - b * b;
+    return s.turbine_k * x / std::sqrt(std::abs(x) + 0.075);
+}
+// The compressor's efficiency where it runs: best near 3/4 of its design flow for its speed, falling off towards
+// surge (too little flow for its speed) and choke (too much).
+inline double compressor_efficiency(const Spec& s, double inlet_lps, double speed) {
+    double phi = std::max(0.0, inlet_lps) / (s.design_flow * std::max(speed, 0.2));
+    return std::max(0.4, kCompressorEfficiency * (1.0 - 0.8 * (phi - 0.75) * (phi - 0.75)));
+}
+// Watts to push `lps` of air (game litres) from inlet to outlet pressure at that efficiency.
+inline double compressor_watts(double lps, double p_in, double p_out, double inlet_c, double efficiency) {
+    double ratio = boost_kpa(p_out) / std::max(1.0, boost_kpa(p_in));
+    if (!(lps > 0) || !(ratio > 1)) return 0.0;
+    return kKgPerLitre * lps * kCpAir * (273.15 + finite_or(inlet_c, kAmbientC)) * (std::pow(ratio, kAirExponent) - 1.0) / std::max(0.1, efficiency);
+}
+// The pipe-filling share of a compressor's flow costs a tenth of its real work (header comment): the air it pays for.
+inline double working_flow(State& st, const Inputs& in, double flow_lps, double dt) {
+    double p = std::max(0.0, finite_or(in.pressure[kColdOut], 1.0));
+    double own = p > 1e-6 ? std::max(0.0, finite_or(in.volume[kColdOut], 0.0)) / p : 0.0;
+    double capacity = in.boost_capacity > 0 && std::isfinite(in.boost_capacity) ? in.boost_capacity : own;
+    st.fill = std::isfinite(st.last_boost_pressure) ? (p - st.last_boost_pressure) * capacity / dt / std::max(1, in.feeders) : 0.0;
+    st.last_boost_pressure = p;
+    return std::clamp(flow_lps - (1.0 - kFillShare) * std::max(0.0, st.fill), 0.0, std::max(0.0, flow_lps));
 }
 
 inline Step step(State& st, const Spec& s, const Inputs& in) {
@@ -288,28 +378,73 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
     if (dt <= 0) return out;
     double p[kNodeCount];
     for (int i = 0; i < kNodeCount; ++i) p[i] = std::max(0.0, finite_or(in.pressure[i], 1.0));
-    // Hot side: exhaust passes the turbine in proportion to the pressure drop across it.
-    out.turbine_move = capped(s.turbine_coeff * (p[kHotIn] - p[kHotOut]) * dt, in.volume[kHotIn], in.volume[kHotOut]);
+    bool dead = st.blown || !(st.health > 0);     // the shaft no longer turns
+    st.speed = std::clamp(finite_or(st.speed, 0.0), 0.0, kOverspeed);
+    double omega = st.speed * s.shaft_full;
+    // Hot side: exhaust through the turbine wheel, and round it through the built-in wastegate.
+    double wheel = turbine_flow(s, p[kHotIn], p[kHotOut]);
+    double around = clamp01(st.bypass) * s.bypass_coeff * (p[kHotIn] - p[kHotOut]);
+    out.turbine_move = capped((wheel + around) * dt, in.volume[kHotIn], in.volume[kHotOut]);
     // Only exhaust going the right way drives the turbine: gas flowing back out of a pressurised hot side after the
     // engine stops must not spool it up.
-    double exhaust_lps = std::max(0.0, out.turbine_move) / dt;
+    double total = wheel + around;
+    double wheel_lps = out.turbine_move > 0 && total > 1e-9 ? out.turbine_move / dt * std::max(0.0, wheel) / total : 0.0;
     double k = std::min(1.0, dt / 0.15);
-    st.exhaust_flow += (exhaust_lps - st.exhaust_flow) * k;
-    // Shaft: the spool chases the exhaust flow, slowly (turbo lag), faster when it falls.
-    double target = clamp01((st.exhaust_flow / s.rated_flow - kSpoolStart) / (1.0 - kSpoolStart));
-    // Antilag: when the exhaust alone would let the shaft slow, fuel burnt in the manifold keeps it spinning.
-    // It needs the engine running (some exhaust to light).
-    bool dead = st.blown || !(st.health > 0);     // the shaft no longer turns
-    st.antilag_firing = !dead && in.antilag && target < kAntilagSpool && st.exhaust_flow > kAntilagMinFlow * s.rated_flow;
-    if (st.antilag_firing) target = kAntilagSpool;
-    if (dead) target = 0;
-    double tau = target > st.spool ? s.spool_up_s : s.spool_down_s;
-    st.spool += (target - st.spool) * (1.0 - std::exp(-dt / tau));
-    st.spool = clamp01(st.spool);
-    // Cold side: a centrifugal compressor with the spool's head, like the stock impeller but far more flow.
+    st.exhaust_flow += (std::max(0.0, out.turbine_move) / dt - st.exhaust_flow) * k;
+    // The work the exhaust can give up expanding across the wheel (J/kg).
+    double expansion = exhaust_bar(p[kHotIn]) / std::max(1e-3, exhaust_bar(p[kHotOut]));
+    double exhaust_k = std::max(kAmbientK, 273.15 + kExhaustTemperatureScale * finite_or(in.exhaust_temperature, kAmbientC));
+    double work = expansion > 1 ? kCpExhaust * exhaust_k * (1.0 - std::pow(expansion, -kExhaustExponent)) : 0.0;
+    double exhaust_kg = dead ? 0.0 : kKgPerLitre * wheel_lps;
+    // Cold side: a centrifugal compressor with the head of its speed. Denser (cooler) inlet air moves more.
     out.head = head_for(st, p[kColdIn]);
+    double density = inlet_density(in.intake_temperature);
     double net = out.head - (p[kColdOut] - p[kColdIn]);
-    out.compressor_move = capped(s.compressor_coeff * (st.blown ? kBlownFlowShare : 1.0) * net * dt, in.volume[kColdIn], in.volume[kColdOut]);
+    out.compressor_move = capped(s.compressor_coeff * density * (st.blown ? kBlownFlowShare : 1.0) * net * dt, in.volume[kColdIn], in.volume[kColdOut]);
+    double flow = out.compressor_move / dt;
+    double paid = working_flow(st, in, flow, dt);
+    out.pressure_ratio = std::max(1.0, finite_or(boost_kpa(p[kColdOut]) / std::max(1.0, boost_kpa(p[kColdIn])), 1.0));
+    out.efficiency = compressor_efficiency(s, flow / density, st.speed);
+    out.power = compressor_watts(paid, p[kColdIn], p[kColdOut], in.intake_temperature, out.efficiency);
+    // The built-in wastegate holds the shaft at the speed that makes the target boost at this flow (the head the
+    // compressor needs is the target plus its droop at this flow), and never past its speed limit. The target is full
+    // boost (a ratio of 1.87 over its inlet) up to the engine's 3x pressure, or the boost limit input.
+    double target_out = std::min(kMaxEnginePressure, 1.0 + (boost_kpa(p[kColdIn]) * kFullBoostRatio - kAmbientKpa) / kKpaPerUnit);
+    double limit = finite_or(st.slots[kBoostLimit], 0.0);
+    if (limit > 0) target_out = std::min(target_out, 1.0 + limit / kKpaPerUnit);
+    double per_speed2 = boost_kpa(p[kColdIn]) / kKpaPerUnit * (kFullBoostRatio - 1.0) * std::max(0.05, std::clamp(finite_or(st.health, 1.0), 0.0, 1.0));
+    double need = (std::max(0.0, target_out - p[kColdIn]) + std::max(0.0, flow) / (s.compressor_coeff * density)) / per_speed2;
+    double cap = s.shaft_full * std::min(kOverspeed, std::sqrt(std::max(0.0, need)));
+    // Antilag: when the exhaust alone would let the shaft slow (off throttle), fuel burnt in the manifold gives the
+    // turbine what it needs to hold its speed. It needs the engine running (some exhaust to light).
+    double hold = std::sqrt(kAntilagSpool) * s.shaft_full;
+    st.antilag_firing = !dead && in.antilag && st.exhaust_flow < kAntilagFlow * s.rated_flow && st.exhaust_flow > kAntilagMinFlow * s.rated_flow;
+    // Shaft, in a few small steps: turbine torque falls off as the blade speed passes the gas's best (a radial
+    // turbine's torque is highest stalled and gone at about twice its best blade speed).
+    const int kSteps = 4;
+    double h = dt / kSteps, spare = 0.0, r = s.tip_speed / s.shaft_full;
+    double spout = work > 0 ? std::sqrt(2.0 * work) : 0.0;
+    for (int i = 0; i < kSteps; ++i) {
+        double turbine = 0.0;
+        if (spout > 0 && exhaust_kg > 0) {
+            double u = r * omega / spout, runaway = 2.0 * kBestBladeSpeedRatio;
+            turbine = std::max(0.0, kTurbineEfficiency * exhaust_kg * work * 4.0 * r / (runaway * spout) * (1.0 - u / runaway));
+        }
+        double load = out.power / std::max(omega, 0.05 * s.shaft_full);
+        double friction = omega > 0 ? s.friction * (0.3 + 0.7 * omega / s.shaft_full) : 0.0;
+        if (st.antilag_firing && omega < hold) turbine = std::max(turbine, load + friction + s.inertia * (hold - omega) / 0.3);
+        double next = std::max(0.0, omega + (turbine - load - friction) / s.inertia * h);
+        if (next > cap && turbine > 0) {
+            if (omega > cap) { spare = 1.0; next = std::max(cap, omega - (load + friction) / s.inertia * h); }   // all of it goes round
+            else { spare = std::max(spare, clamp01((turbine - load - friction) / turbine)); next = cap; }
+        }
+        out.turbine_power = turbine * next;
+        omega = next;
+    }
+    if (dead) omega *= std::exp(-dt / 0.3);
+    // The wastegate opens by the share of the wheel's exhaust the shaft could not use.
+    double want = spare > 0 ? clamp01(spare * std::max(0.0, total) / std::max(1e-6, s.bypass_coeff * std::max(0.05, p[kHotIn] - p[kHotOut]))) : 0.0;
+    st.bypass += (want - st.bypass) * std::min(1.0, dt / kBypassTau);
     // Surge: boost pushing back through a spinning compressor (throttle off, no blow-off valve). The flow stalls and
     // reverses in pulses, which slows the wheel hard. A venting blow-off valve takes that boost instead.
     st.surging = false;
@@ -320,17 +455,18 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
     else if (out.compressor_move < 0 && st.spool > kSurgeSpool) {
         st.surging = true;
         out.compressor_move *= through;
-        st.spool *= std::exp(-dt * through / kSurgeTau);
+        omega *= std::exp(-dt * through / kSurgeTau);
     }
+    st.speed = std::clamp(finite_or(omega / s.shaft_full, 0.0), 0.0, kOverspeed);
+    st.spool = std::min(1.0, st.speed * st.speed);
     double intake_lps = std::abs(out.compressor_move) / dt;
     st.intake_flow += (intake_lps - st.intake_flow) * k;
-    out.power = intake_lps * out.head;
     // Outputs (inputs keep whatever the data link wrote).
     st.slots[kIntakePressure] = p[kColdOut] * kKpaPerUnit;
     st.slots[kExhaustPressure] = p[kHotIn] * kKpaPerUnit;
     st.slots[kPowerMultiplier] = power_multiplier(p[kColdOut]);
     st.slots[kSpool] = st.spool;
-    st.slots[kRpm] = st.spool * s.max_rpm;
+    st.slots[kRpm] = st.speed * s.max_rpm;
     st.slots[kExhaustFlow] = st.exhaust_flow;
     st.slots[kIntakeFlow] = st.intake_flow;
     st.slots[kExhaustTemperature] = finite_or(in.exhaust_temperature, kAmbientC);
@@ -338,17 +474,21 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
     st.slots[kBoost] = (p[kColdOut] - 1.0) * kKpaPerUnit;
     st.slots[kBoostPsi] = st.slots[kBoost] * kPsiPerKpa;
     st.slots[kAntilagFiring] = st.antilag_firing ? 1.0 : 0.0;
+    st.slots[kBypass] = st.bypass;
     return out;
 }
 
 // ------------------------------------------------------------------------------------------- superchargers
 // A centrifugal supercharger: the stock Impeller's class, driven the same way, by a stock Pulley Wheel on its torque
 // spot belted to an Engine Wheel. Belts are fixed ratios: the pulley turns 2.5, 3.875 or 6.675 times as fast as the
-// engine with the small, medium or large Engine Wheel. No turbine and no lag: its head climbs with the square of the
-// pulley's speed. On the medium Engine Wheel it reaches a turbo's full boost at kBlowerFullBoostRpm; the large wheel
-// overdrives it (full boost from about 4,000 RPM), the small one underdrives it (about half boost at the fuel cut),
-// which is how a real supercharger is tuned: by its pulley ratio. Squeezing the air takes work, which the belt takes
-// from the engine like any other load. No oil or wear: its gearbox carries its own oil.
+// engine with the small, medium or large Engine Wheel. No turbine and no lag: its impeller is geared to the pulley, so
+// it turns with the engine at every instant, and its pressure ratio climbs with the square of its speed, like any
+// centrifugal compressor (so boost builds with RPM and peaks at the top: that is what a real centrifugal supercharger
+// does; a Roots or screw blower would be flat). On the medium Engine Wheel it reaches a turbo's full boost at
+// kBlowerFullBoostRpm; the large wheel overdrives it (full boost from about 4,000 RPM), the small one underdrives it
+// (about half boost at the fuel cut), which is how a real supercharger is tuned: by its pulley ratio. Squeezing the air
+// takes the same real work as a turbo's compressor, which the belt takes from the engine like any other load. No oil or
+// wear: its gearbox carries its own oil.
 //   small: 2 x 2 x 2 cells; large: 4 x 4 x 4. Both: a large-pipe intake in the middle of the front face (z-), the
 //   outlet on top (y+; small pipe on the small, large on the large), the torque spot on the back face (z+) in the
 //   bottom corner cell, data ports on both sides.
@@ -358,8 +498,7 @@ constexpr const char* kBlowerLargeId = "supercharger_large";
 constexpr double kBeltSmall = 2.5, kBeltMedium = 3.875, kBeltLarge = 6.675;   // pulley turns per engine turn, by Engine Wheel
 constexpr double kBlowerFullBoostRpm = 7000;   // engine RPM of full boost on the medium Engine Wheel
 constexpr double kBlowerFullBoostRps = kBlowerFullBoostRpm / 60.0 * kBeltMedium;   // the pulley's speed then
-constexpr double kBlowerEfficiency = 0.55;     // the compressor (about 70%) times its step-up gears and the belt
-constexpr double kPascalPerUnit = 9800;        // the game's units.pressure_to_pascals
+constexpr double kBlowerDriveEfficiency = 0.95;   // its step-up gears and the belt
 inline Blower blower_from_id(const char* id, size_t length) {
     auto is = [&](const char* want) { return std::char_traits<char>::length(want) == length && std::char_traits<char>::compare(id, want, length) == 0; };
     return !id ? kNoBlower : is(kBlowerSmallId) ? kBlowerSmall : is(kBlowerLargeId) ? kBlowerLarge : kNoBlower;
@@ -371,36 +510,37 @@ inline Spec blower_spec(bool large) {
     s.size = blower_cells(large);
     s.rated_flow = large ? 44 : 16;          // L/s it moves at full boost against a hungry engine, like a turbo of that flow
     s.compressor_coeff = 1.2 * s.rated_flow;
-    s.spool_up_s = s.spool_down_s = 0.05;    // gear driven: it follows the engine at once
+    s.design_flow = 2.0 * s.rated_flow;
     s.max_rpm = large ? 45000 : 65000;       // impeller speed at full boost (the rpm output)
     s.large_pipe = large;
     return s;
 }
-// Share of full boost at a pulley speed (rev/s): a centrifugal compressor's head goes with the square of its speed.
-inline double blower_spool(double pulley_rps) {
-    double r = std::abs(finite_or(pulley_rps, 0.0)) / kBlowerFullBoostRps;
-    return clamp01(r * r);
-}
-// Joules the belt gives up to push `litres` through `head` (game pressure units) this tick.
-inline double blower_drive_joules(double litres, double head) {
-    return litres > 0 && head > 0 ? litres * 1e-3 * head * kPascalPerUnit / kBlowerEfficiency : 0.0;
-}
-struct BlowerStep { double compressor_move = 0, head = 0, drive_joules = 0; };
+// Its impeller's speed over its full-boost speed, for a pulley speed (rev/s). Past full boost (the large wheel near the
+// top) its bypass holds full boost, as a real supercharger's does.
+inline double blower_speed(double pulley_rps) { return std::min(1.0, std::abs(finite_or(pulley_rps, 0.0)) / kBlowerFullBoostRps); }
+// Share of full boost at a pulley speed: a centrifugal compressor's head goes with the square of its speed.
+inline double blower_spool(double pulley_rps) { double r = blower_speed(pulley_rps); return r * r; }
+struct BlowerStep { double compressor_move = 0, head = 0, drive_joules = 0, pressure_ratio = 1, efficiency = kCompressorEfficiency; };
 // One tick. The cold-side ports only (kColdIn, kColdOut); pulley_rps is the speed of its torque spot.
 inline BlowerStep blower_step(State& st, const Spec& s, const Inputs& in, double pulley_rps) {
     BlowerStep out;
     double dt = std::clamp(finite_or(in.dt, 0.0), 0.0, 0.25);
     if (dt <= 0) return out;
     double p_in = std::max(0.0, finite_or(in.pressure[kColdIn], 1.0)), p_out = std::max(0.0, finite_or(in.pressure[kColdOut], 1.0));
-    double target = blower_spool(pulley_rps);
-    st.spool = clamp01(st.spool + (target - st.spool) * (1.0 - std::exp(-dt / s.spool_up_s)));
+    st.speed = blower_speed(pulley_rps);             // geared to the pulley: no lag at all
+    st.spool = st.speed * st.speed;
     out.head = head_for(st, p_in);
+    double density = inlet_density(in.intake_temperature);
     double net = out.head - (p_out - p_in);
-    out.compressor_move = capped(s.compressor_coeff * net * dt, in.volume[kColdIn], in.volume[kColdOut]);
+    out.compressor_move = capped(s.compressor_coeff * density * net * dt, in.volume[kColdIn], in.volume[kColdOut]);
     // Throttle off, the boost pushes back through the wheel in surges, unless a blow-off valve on the pipe takes it.
     if (out.compressor_move < 0 && in.bov_venting) out.compressor_move = 0;
     st.surging = out.compressor_move < 0 && st.spool > kSurgeSpool;
-    out.drive_joules = blower_drive_joules(out.compressor_move, out.head);
+    double flow = out.compressor_move / dt;
+    double paid = working_flow(st, in, flow, dt);
+    out.pressure_ratio = std::max(1.0, finite_or(boost_kpa(p_out) / std::max(1.0, boost_kpa(p_in)), 1.0));
+    out.efficiency = compressor_efficiency(s, flow / density, st.speed);
+    out.drive_joules = compressor_watts(paid, p_in, p_out, in.intake_temperature, out.efficiency) / kBlowerDriveEfficiency * dt;
     double k = std::min(1.0, dt / 0.15);
     st.intake_flow += (std::abs(out.compressor_move) / dt - st.intake_flow) * k;
     st.slots[kIntakePressure] = p_out * kKpaPerUnit;
@@ -421,7 +561,7 @@ inline std::string blower_entry(bool large, const std::string& mesh_path) {
     std::string description = std::string("Belt-driven centrifugal supercharger, ") + std::to_string(n) + "x" + std::to_string(n) + "x" + std::to_string(n) +
         ". Bolt a Pulley Wheel onto its torque spot (the back, bottom corner) and belt it to an Engine Wheel, as you would an Impeller. "
         "Intake: the large pipe in the middle of the front face, open to the air. Outlet on top: feed an air manifold, or a turbo's intake to twincharge. "
-        "No lag: boost climbs with engine speed. On the medium Engine Wheel it reaches full boost (98 kPa, double engine power) near " + fmt(kBlowerFullBoostRpm) +
+        "No lag: it turns with the engine, and boost climbs with the square of engine speed. On the medium Engine Wheel it reaches full boost (88 kPa, double engine power) near " + fmt(kBlowerFullBoostRpm) +
         " RPM; the large wheel spins it faster (full boost from about 4000 RPM), the small one slower. Driving it takes power from the engine through the belt. " +
         (large ? "Large pipe outlet." : "Small pipe outlet.");
     std::string surfaces = "{\"id\": \"torque\", \"pos\": [0, 0, " + std::to_string(top) + "], \"dir\": 5, \"type\": \"torque\"}";

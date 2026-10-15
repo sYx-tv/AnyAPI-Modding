@@ -24,10 +24,11 @@ flange block carries them across the top and bottom corners.
 | Exhaust out (hot side) | Middle of the back face, opposite the intake | A gas vent (the tailpipe) |
 | Oil in, oil out | Underneath, a brass-ringed port under each housing | The engine's oil, through an oil cooler (see [Upkeep](#upkeep-oil-air-filter-heat-and-wear)) |
 
-Exhaust flowing from the hot inlet to the hot outlet spins the shaft. The shaft's spool sets how much pressure
-the cold side pushes into the engine's intake. Engines already turn intake pressure into power: ambient gives
-1x, and an intake pressure of 98 kPa (the game's scale) gives the full 2x. One turbo stops there; two in a row
-(a [compound](#twin-and-compound-turbos)) can take it up to 3x.
+Exhaust expanding through the turbine (hot inlet to hot outlet) spins the shaft, and the compressor on the same
+shaft pushes air into the engine's intake with a boost that climbs with the square of the shaft's speed. Engines
+already turn intake pressure into power: ambient gives 1x, and an intake pressure of 98 kPa (the game's scale) gives
+the full 2x. A built-in wastegate holds one turbo there, at 88 kPa of boost, and sends the exhaust the shaft does
+not need round the turbine; two in a row (a [compound](#twin-and-compound-turbos)) can take it up to 3x.
 
 The Turbo 6x6 uses large pipes and the 3x3 small pipes. No gas tank is needed. The compressor inlet is open to the air like a real turbo intake.
 
@@ -49,8 +50,9 @@ much of what the boost adds (a 4-rotor Rotary wants a 6x6).
 
 **Twin turbos** (side by side): join the engine's exhaust to both hot inlets and both boost outlets to the engine's
 air intake. The game evens out an engine's exhaust across all its exhaust manifolds and everything piped to them, so
-the two turbines share it evenly. Two 3x3s spool sooner than one 6x6 and make about the same boost on an engine that
-feeds them both fully (44 L/s of exhaust or more). One blow-off valve on the shared boost pipe serves both.
+the two turbines share it evenly, so each gets half. On a 4-rotor, one 6x6 reaches full boost a little sooner than two
+3x3s (about 1 s against 2 s, flooring it at 3,500 RPM) and backs up less exhaust; two 6x6s each get too little and lag
+(about 3 s, and only to about 84 kPa). One blow-off valve on the shared boost pipe serves both.
 
 **Compound turbos** (one after the other): pipe the first turbo's boost outlet into the second turbo's intake, and the
 second turbo's boost outlet to the engine. The second turbo breathes the first one's boost and adds its own on top,
@@ -58,10 +60,16 @@ so together they pass the 2x one turbo can give: the engine's power carries on r
 at 186 kPa (19 on the game's scale), and no further. An intercooler between the two (and one after the second) keeps
 the air cool: the second turbo heats air that is already hot.
 
-- Split the exhaust between the two turbines, as for twins. Running it through one turbine and then the other works
-  too, but backs the exhaust up into the engine, which costs power.
-- Two of the same size work best. In testing on the bench model, two 3x3s on 50 L/s of exhaust reached about 160 kPa,
-  2.66x.
+- **Run the exhaust through both turbines in a row** for quick boost, the way real compounds are plumbed: from the
+  engine into the second turbo's exhaust inlet, out of it into the first turbo's exhaust inlet, then the tailpipe.
+  Splitting the exhaust between the two (as for twins) backs up a little less exhaust, but each turbine gets half, so
+  the boost takes several seconds to build.
+- On a 4-rotor, two 6x6s in a row reached about 160 kPa (2.7x) 2 s after flooring it at 4,000 RPM in testing with the
+  game's engine model; split, they took about 6 s to get there. A 3x3 as the second stage chokes a 4-rotor's exhaust
+  (the back pressure costs more power than the boost adds). On a 2-rotor, a 6x6 first stage and a 3x3 second stage
+  worked best: about 155 kPa, 2.5x.
+- The second turbo turns slower than the first (its `spool` reads about 0.6 at full boost): breathing boosted air, it
+  makes more boost for its speed.
 - The air filter goes on the first turbo's intake; the second turbo counts it as its own.
 - A `boost_limit` on the second turbo caps the total boost at its outlet; on the first, the boost between the two.
 - The log says which turbo found which: `compound second stage, breathing the boost of Turbo ...`.
@@ -86,15 +94,21 @@ engine with the belt tool. The belt turns the pulley 2.5, 3.875 or 6.675 times a
 medium or large Engine Wheel, and the boost goes with the square of the pulley's speed. The Engine Wheel is how you
 tune it, the way a real supercharger is tuned by its pulley:
 
-| Engine Wheel | Full boost (98 kPa, 2x power) from | Boost at the 8,000 RPM fuel cut |
+| Engine Wheel | Full boost (88 kPa, 2x power) from | Boost at the 8,000 RPM fuel cut |
 | --- | --- | --- |
 | Small | never: about half boost at the fuel cut | about 54% |
 | Medium | 7,000 RPM | full |
 | Large | about 4,000 RPM | full |
 
-Squeezing the air takes work, and the belt takes it from the engine: about the air's flow times its boost, over 55%
-efficiency. At full boost the small one takes about 2 kW and the large about 6 kW, so the engine revs a little slower
-than its power alone would give. The **Dyno** shows power after that cost, and `drive_power` reads it in kW.
+Like any centrifugal compressor, it makes most of its boost near the top of its speed: on the medium Engine Wheel it
+gives about a quarter of full boost at 3,500 RPM. For boost from the middle of the rev range use the large Engine
+Wheel, or twincharge it with a turbo. A Roots or screw supercharger, whose boost is flat from low revs, is a different
+machine that AnyEngineParts does not have.
+
+Squeezing the air takes work, and the belt takes it from the engine: the work of compressing it (the compressor is
+about 70% efficient where it runs) plus 5% in its gears. At full boost and full flow the small one takes about 1.7 kW
+and the large about 4.6 kW, so the engine revs a little slower than its power alone would give. The **Dyno** shows
+power after that cost, and `drive_power` reads it in kW.
 
 - No oil, no wear and no heat of its own: its gear case carries its own oil. An air filter on its intake still keeps
   the dust out of the engine's air, and clogs with use like a turbo's.
@@ -109,17 +123,26 @@ than its power alone would give. The **Dyno** shows power after that cost, and `
 
 ## Sizes and lag
 
-| Size | Exhaust for full boost | Spool-up time | Shaft speed at full boost |
-| --- | --- | --- | --- |
-| 3x3 | 22 L/s | about 0.9 s | 160,000 rpm |
-| 6x6 | 65 L/s | about 2.4 s | 90,000 rpm |
+Lag is the shaft's, not a timer: the exhaust has to spin the turbine and compressor wheels up to speed, and the boost
+climbs with the square of that speed. More exhaust (more revs, a bigger engine, more throttle) spins them up faster,
+and a bigger turbo's heavier shaft needs more of it. Off throttle the shaft coasts down on its own; surge (no blow-off
+valve) slows it hard.
 
-Pick the size whose full-boost flow is close to your engine's exhaust L/s at the throttle you use. Boost starts
-building at a quarter of that flow and reaches full boost at the rated flow. Bigger turbos take longer to spool
-(more lag) and spool down at half their spool-up time.
+| Size | Turbine sized for | Shaft speed at full boost | Suits | 90% boost after flooring it at 3,500 RPM |
+| --- | --- | --- | --- | --- |
+| 3x3 | 22 L/s of exhaust | 160,000 rpm | a 1- or 2-rotor, or a short small engine | about 1.5 s on a 2-rotor, 3 s on a 1-rotor |
+| 6x6 | 65 L/s of exhaust | 90,000 rpm | a 3- or 4-rotor, or a long small engine | about 1.4 s on a 4-rotor |
 
-A turbo that is too small for its engine chokes it: exhaust backs up, and above 39 kPa of exhaust pressure the
-engine loses power, as it does with any restricted exhaust. A turbo that is too big barely spools.
+Pick the size whose turbine flow is close to your engine's exhaust L/s. A matched turbo gives some boost from about
+2,500 RPM and full boost soon after you floor it, well before the redline. From there its built-in wastegate holds
+full boost (88 kPa) to the redline and sends the spare exhaust round the turbine, which keeps back pressure down; the
+`wastegate` output reads how far it is open. A Turbo Wastegate part (`open`, or `boost_limit`) still caps boost
+lower.
+
+A turbo that is too small for its engine chokes it: it spools fast, but the exhaust backs up (a 3x3 on a 4-rotor holds
+5 to 8 units, 49 to 76 kPa), and above 39 kPa of exhaust pressure the engine loses power, as it does with any
+restricted exhaust. A turbo that is too big barely spools: a 6x6 on a 2-rotor makes about 37 kPa at 2,500 RPM and
+needs about 5 s to reach full boost at 3,500.
 
 ## Blow-off valve and wastegate
 
@@ -181,11 +204,12 @@ wear at all. The times below are for full boost the whole time:
 
 ## Intercooler and hot boost air
 
-Compressing air heats it: at full boost the air leaving the turbo is about 120 °C over the air outside. With
+Compressing air heats it: at full boost the air leaving the turbo is about 78 °C over the air outside (more when
+the compressor runs far from its best flow, and a compound's second stage heats air that is already hot). With
 AnyEngineParts every engine, stock or the rotary, feels its intake air's temperature. The boost part of its power
 scales with the air's density against 30 °C air, so hot boost makes less power and cold boost makes more. Boost
-air over 90 °C also knocks a boosted engine, which slowly damages it. Without an intercooler, full boost
-costs a damage step about every 6 to 7 minutes.
+air over 60 °C also knocks a boosted engine, which slowly damages it. Without an intercooler, full boost
+costs a damage step about every 8 to 9 minutes.
 
 An intercooler fixes that. There are two, which work the same and differ only in looks: the **Turbo Intercooler
 (Race Core)**, a black core with bright fins and an inlet stub on each tank, and the **Turbo Intercooler (Round
@@ -241,8 +265,9 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | `boost_psi` | Output | The same in psi (full boost is about 12.8), for a boost gauge |
 | `exhaust_pressure` | Output | Pressure at the hot inlet, kPa |
 | `power_multiplier` | Output | The engine power multiplier this boost gives, 1 to 2 (up to 3 on a compound's second turbo), after what hot boost air costs |
-| `spool` | Output | Shaft spool, 0 to 1 |
-| `rpm` | Output | Shaft speed |
+| `spool` | Output | The share of full boost the shaft's speed can make, 0 to 1 (its speed over full-boost speed, squared) |
+| `rpm` | Output | Shaft speed, rpm (a supercharger's impeller) |
+| `wastegate` | Output | How far the turbo's built-in wastegate is open, 0 to 1 (it opens once the shaft is fast enough for full boost) |
 | `exhaust_flow`, `intake_flow` | Output | Hot-side and cold-side flow, L/s |
 | `exhaust_temperature` | Output | Gas temperature at the hot inlet, °C |
 | `surge` | Output | 1 while the compressor surges (boost pushing back, no blow-off valve venting), else 0 |
@@ -264,7 +289,7 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 
 - The part definitions are built in the DLL ([`turbo_logic.h`](../../native/turbo_logic.h)). At start-up they
   are written to `AnyAPI and Modding/Turbo/turbochargers.json` and added to the game's vehicle components right
-  after the game adds its own. The turbos' ids are `turbocharger_2` to `turbocharger_5`, class `gas_pump_centrifugal`
+  after the game adds its own. The turbos' ids are `turbocharger_3` and `turbocharger_6`, class `gas_pump_centrifugal`
   (the stock impeller's), with four gas logic nodes instead of two; the superchargers' are `supercharger_small` and
   `supercharger_large`, the same class with its two. Their meshes are built from simple shapes
   ([`turbo_supercharger_mesh.h`](../../native/turbo_supercharger_mesh.h)).
@@ -278,10 +303,15 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 - The impeller's server create, destroy, tick, tooltip and `get_data_f64` are hooked. When a turbo is created, the mod
   creates its hot side with the game's own functions: two gas contents and two gas nodes registered in the
   vehicle, so pipes and pressure treat them like any other port. Stock impellers are untouched.
-- Each tick the turbo lets exhaust through its hot side in proportion to the pressure drop, spools from that
-  flow with its size's lag, and runs its compressor with a head set by the spool (full spool gives the engine's
-  full boost).
-- Sounds: the server packs each turbo's spool and surge (and each blow-off valve's venting) into the impeller's
+- Each tick the turbo runs a real turbocharger's physics on the game's gas: exhaust through the turbine by
+  Stodola's law (flow with the square root of the pressure difference), the work it gives the shaft from its
+  expansion (the game's 300 °C exhaust stands for about 900 °C), a shaft with each size's inertia, and a
+  centrifugal compressor whose pressure ratio goes with the square of its speed (1.87, full boost, at full speed),
+  with a simple efficiency map. The compressor takes the work of compressing the air it moves from the shaft. The
+  game's gas needs about nine pipe-fulls of air to reach full boost where a real pipe needs under one, so the
+  compressor pays for only a tenth of the air that fills its boost pipe, and the full price of what the engine
+  breathes. A built-in wastegate holds the shaft at the speed that makes full boost for the flow.
+- Sounds: the server packs each turbo's shaft speed and surge (and each blow-off valve's venting) into the impeller's
   own replicated speed value. The client impeller tick, which only plays the hum, is hooked for the mod's parts:
   it synthesizes 48 kHz audio ([`turbo_sound.h`](../../native/turbo_sound.h)) and streams it into a positional
   voice effect, the way the game plays voice chat. If the hooks are not found, the parts keep the hum.

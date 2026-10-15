@@ -15,9 +15,9 @@ namespace turbo {
 
 constexpr int kSampleRate = 48000;
 
-// The impeller's replicated speed factor (0-1, sent as one byte, so steps of 1/255) carries a turbo's spool, surge and
-// whether it has blown: bytes 0-124 are spool, 127 is a blown turbo (126-128 read as blown, whichever way the game
-// rounds), and 0.51-1 is spool while surging. A blow-off valve sends 0 when shut, else 0.5-1 for how hard it vents.
+// The impeller's replicated speed factor (0-1, sent as one byte, so steps of 1/255) carries a turbo's shaft speed (over
+// its full-boost speed), surge and whether it has blown: bytes 0-124 are the speed, 127 is a blown turbo (126-128 read
+// as blown, whichever way the game rounds), and 0.51-1 is the speed while surging. A blow-off valve sends 0 when shut, else 0.5-1 for how hard it vents.
 // A supercharger sends the same as a turbo with the engine's speed (blower_sound_level) in place of the spool: it never blows.
 inline double encode_turbo_factor(double spool, bool surging, bool blown = false) {
     if (blown) return 127.0 / 255.0;
@@ -269,7 +269,9 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool 
             s.phase2 += two_pi * s.pitch * c.overtone * dt;
             if (s.phase1 > two_pi) s.phase1 -= two_pi;
             if (s.phase2 > two_pi) s.phase2 -= two_pi;
-            double loud = std::pow(s.spool, 1.6) * (1.0 - 0.35 * s.surge_env) * (1.0 - 0.4 * s.pulse_gain * body);
+            // A turbo's level is its shaft speed (the whistle's pitch follows it); its loudness follows the boost it
+            // makes, which goes with the speed squared.
+            double loud = std::pow(s.spool, 3.2) * (1.0 - 0.35 * s.surge_env) * (1.0 - 0.4 * s.pulse_gain * body);
             if (blower) {
                 // The gears: a buzzy whine (three harmonics) that wavers at the gear mesh rate, there from idle up.
                 double fg = bv.gear_base + bv.gear_span * s.spool;
@@ -294,7 +296,7 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool 
             } else {
                 v += loud * (0.30 * std::sin(s.phase1) + c.overtone_gain * std::sin(s.phase2));
                 v += loud * c.air_gain * 4.0 * s.air.run(s.noise(), std::min(s.pitch * 0.85, 16000.0), 5.0);
-                v += c.hiss_gain * s.spool * s.spool * s.hiss.run(s.noise());
+                v += c.hiss_gain * s.spool * s.spool * s.spool * s.spool * s.hiss.run(s.noise());
             }
             v += c.puff_gain * puffs;
             if (s.blow_age <= kBlowSeconds) { v += blow_sample(s, bov_pitch, bov_length, dt); s.blow_age += dt; }
