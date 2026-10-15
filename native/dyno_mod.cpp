@@ -4,6 +4,8 @@
 // game's engine tick turns into motion, x60) is binned by RPM, and when the throttle comes off a pull of at least
 // 1,500 RPM is kept. The last three pulls are drawn over each other (oldest grey, then blue, newest orange), with
 // power solid and torque dashed, beside each pull's peaks, the latest pull's boost, engine temperature and knock.
+// Power is net of what superchargers take through their belts, and the header names the boost setup (Turbo's
+// vehicle_boost: single to quad turbo, compound, supercharged, twincharged).
 // The graph shows while the local player is within 40 m of a vehicle carrying a Dyno; the "Show / hide dyno" key
 // (F6, rebindable in Controls) hides it, and holding that key for a second clears the pulls. The part's data port
 // gives rpm, power, torque, boost, temperature and the latest peak to microcontrollers (dyno_logic.h).
@@ -93,6 +95,7 @@ anymaker::cell_hook h_add_definitions, h_engine_tick, h_sensor_tick, h_get_f64;
 struct EngineEntry { const void* vehicle = nullptr; EngineSample sample; double time = 0, knock = 0, knock_time = -1e9; };
 struct Dyno {
     Recorder recorder;
+    std::string setup;                                // Turbo's name for the boost setup ("Twin turbo", ...)
     double slots[kChannelCount]{};
     double position[3]{};
     bool placed = false, clear_held = false;
@@ -262,8 +265,14 @@ EngineSample vehicle_sample(const void* vehicle, double now) {
 void hk_sensor_tick(uint8_t* sensor, void* vehicle, void* scene) {
     reinterpret_cast<sensor_tick_t>(h_sensor_tick.original)(sensor, vehicle, scene);
     if (!sensor || !vehicle) return;
+    {
+        std::lock_guard lock(g_mutex);
+        if (!is_dyno(sensor)) return;
+    }
+    // The boost setup, and the power superchargers take through their belts: the curves show what reaches the
+    // wheels, net of it. Asked before taking the Dyno's lock (Turbo has its own).
+    turbo::VehicleBoost boost = turbo::vehicle_boost(vehicle);
     std::lock_guard lock(g_mutex);
-    if (!is_dyno(sensor)) return;
     double now = now_seconds();
     g_dyno_tick_ms.store(int64_t(now * 1000), std::memory_order_relaxed);
     Dyno& d = g_dynos[sensor];                      // may already exist: a data channel connected first
@@ -277,12 +286,17 @@ void hk_sensor_tick(uint8_t* sensor, void* vehicle, void* scene) {
     }
     d.clear_held = clear_held;
     EngineSample s = vehicle_sample(vehicle, now);
+    if (s.engines > 0 && boost.drive_watts > 0) s.watts = std::max(0.0, s.watts - boost.drive_watts);
+    if (d.setup != boost.setup) {
+        if (s.engines > 0) log(0, "boost setup: %s", boost.setup.c_str());
+        d.setup = boost.setup;
+    }
     if (d.recorder.feed(s, dt)) {
         double w, rpm, nm, nm_rpm;
         d.recorder.latest()->peak_power(w, rpm);
         d.recorder.latest()->peak_torque(nm, nm_rpm);
-        log(0, "pull %u kept: %.1f hp at %.0f rpm, %.0f N.m at %.0f rpm, boost %.2f, %.1f s%s", d.recorder.latest()->number, w / kWattsPerHp, rpm, nm, nm_rpm,
-            d.recorder.latest()->boost_peak, d.recorder.latest()->seconds, d.recorder.latest()->knocked() ? ", knocked" : "");
+        log(0, "pull %u kept: %.1f hp at %.0f rpm, %.0f N.m at %.0f rpm, boost %.2f, %.1f s%s (%s)", d.recorder.latest()->number, w / kWattsPerHp, rpm, nm, nm_rpm,
+            d.recorder.latest()->boost_peak, d.recorder.latest()->seconds, d.recorder.latest()->knocked() ? ", knocked" : "", d.setup.c_str());
     }
     double clear = d.slots[kClearRuns];
     fill_outputs(d.recorder, d.slots);
@@ -375,7 +389,7 @@ uint32_t input(const AnyInputV1* e, void*) {
 }
 
 // A copy of what the panel shows, taken under the lock.
-struct View { Recorder recorder; double distance = -1; };
+struct View { Recorder recorder; std::string setup; double distance = -1; };
 
 bool local_player(double pos[3]) {
     if (!host.copy_players) return false;
@@ -413,6 +427,7 @@ bool pick(View& out, bool clear) {
     if (!best || (have_player && best->placed && best_d > kShowDistance)) return false;
     if (clear) { best->recorder.clear(); log(0, "pulls cleared"); }
     out.recorder = best->recorder;
+    out.setup = best->setup;
     out.distance = have_player ? best_d : -1;
     return true;
 }
@@ -469,6 +484,7 @@ void draw(const AnyFrameV1* f, void*) {
     std::string readout = live.engines == 0 ? "No engine running" :
         thousands(rpm_now) + " rpm   " + fmt("%.1f hp", live.watts / kWattsPerHp) + "   " + fmt("%.0f N\xB7m", torque_nm(live.watts, live.rps)) + "   boost " + fmt("%.2f\xD7", live.boost);
     p.text(x + 80 * s, y + 6 * s, 330 * s, 26 * s, wide(readout), 14 * s, light);
+    if (live.engines > 0 && !view.setup.empty()) p.text(x + 80 * s, y + 30 * s, 330 * s, 14 * s, wide(view.setup), 11 * s, dim);
     if (r.active) p.text(x + 410 * s, y + 6 * s, 60 * s, 26 * s, L"REC", 13 * s, red, ANY_GPU_BOLD);
 
     // Graph area.

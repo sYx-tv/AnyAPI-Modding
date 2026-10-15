@@ -57,6 +57,10 @@ inline double wear_multiplier(bool oiled, bool filtered, double pollution) {
 }
 inline double heat_wear(double temperature_c) { return 1.0 + std::max(0.0, (temperature_c - kTurboHotC) / 50.0); }
 
+// The filter clogs with the air it cleans: about 10 hours of full-boost running to go fully dirty (a supercharger's
+// filter by its share of full boost the same way).
+inline double filter_clog(double spool, double dt) { return spool * dt / (10.0 * 3600.0); }
+
 inline UpkeepStep upkeep(UpkeepState& st, const UpkeepInputs& in) {
     UpkeepStep out;
     double dt = std::isfinite(in.dt) && in.dt > 0 ? std::min(in.dt, 0.5) : 0.0;
@@ -80,8 +84,7 @@ inline UpkeepStep upkeep(UpkeepState& st, const UpkeepInputs& in) {
     st.condition = std::clamp(st.condition * std::exp(-rate * dt), 0.0, 1.0);
     if (st.condition < 0.001) st.condition = 0;
     out.wear_rate = rate;
-    // The filter clogs with the air it cleans: about 10 hours of full-boost running to go fully dirty.
-    if (in.filter) out.filter_wear = spool * dt / (10.0 * 3600.0);
+    if (in.filter) out.filter_wear = filter_clog(spool, dt);
     return out;
 }
 

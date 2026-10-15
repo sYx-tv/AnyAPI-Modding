@@ -4,8 +4,10 @@
 > so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
 > AnyEngineParts 0.1.0 is a prototype: it needs AnyAPI 0.37.0 or newer on that build. **Single player only** for now.
 
-Turbo adds four exhaust-driven turbochargers: **Turbo 2x2**, **3x3**, **4x4** and **5x5**. Each is N cells wide,
-N tall and 2 thick. The front cell is the stock impeller's compressor housing, scaled to the size; the back cell is
+Turbo adds two exhaust-driven turbochargers, **Turbo 3x3** and **Turbo 5x5**, and two belt-driven
+[superchargers](#superchargers), **Supercharger (Small)** and **Supercharger (Large)**. The Turbo 2x2 and 4x4 are
+retired: vehicles that have them keep them and they work as before, but they no longer show in the part lists or
+loot. Each turbo is N cells wide, N tall and 2 thick. The front cell is the stock impeller's compressor housing, scaled to the size; the back cell is
 the turbine housing, the same impeller mirrored. A new turbo starts with a steel cold side and a cast-iron hot side,
 and the paint tool colours each side on its own, like any stock part. Every opening on the housing sits exactly where
 its pipe joins: on the 4x4 and 5x5 the boost outlet and the turbine inlet are large pipes that span both cells, so a
@@ -63,14 +65,53 @@ the air cool: the second turbo heats air that is already hot.
 - A `boost_limit` on the second turbo caps the total boost at its outlet; on the first, the boost between the two.
 - The log says which turbo found which: `compound second stage, breathing the boost of Turbo ...`.
 
+## Superchargers
+
+A supercharger is a centrifugal compressor driven by the engine through a belt, so it has no lag: its boost follows
+the engine's speed the moment it changes. **Supercharger (Small)** is 2x2x2 with a small boost outlet; **Supercharger
+(Large)** is the same unit at twice the size, 4x4x4, with a large outlet.
+
+| Port | Where | Connect to |
+| --- | --- | --- |
+| Intake | Middle of the front face, a large pipe on both sizes | Nothing needed: it draws from the open air (an air filter goes here) |
+| Boost out | On top, rising off the snail | The engine's air intake, or a turbo's intake to twincharge |
+| Torque spot | The back face, bottom corner, on the input shaft | A stock **Pulley Wheel**, belted to an Engine Wheel |
+| Data ports | Either side | The same channels as a turbo, plus `drive_power` |
+
+Hook it up like an Impeller: put a Pulley Wheel on the torque spot and run a belt from it to an Engine Wheel on the
+engine with the belt tool. The belt turns the pulley 2.5, 3.875 or 6.675 times as fast as the engine on the small,
+medium or large Engine Wheel, and the boost goes with the square of the pulley's speed. The Engine Wheel is how you
+tune it, the way a real supercharger is tuned by its pulley:
+
+| Engine Wheel | Full boost (98 kPa, 2x power) from | Boost at the 8,000 RPM fuel cut |
+| --- | --- | --- |
+| Small | never: about half boost at the fuel cut | about 54% |
+| Medium | 7,000 RPM | full |
+| Large | about 4,000 RPM | full |
+
+Squeezing the air takes work, and the belt takes it from the engine: about the air's flow times its boost, over 55%
+efficiency. At full boost the small one takes about 2 kW and the large about 6 kW, so the engine revs a little slower
+than its power alone would give. The **Dyno** shows power after that cost, and `drive_power` reads it in kW.
+
+- No oil, no wear and no heat of its own: its gear case carries its own oil. An air filter on its intake still keeps
+  the dust out of the engine's air, and clogs with use like a turbo's.
+- Off throttle at speed, boost pushes back through it in surges like a turbo's. A blow-off valve on its boost pipe
+  takes that, and `boost_limit` caps its boost the same way.
+- It heats the air it squeezes like a turbo does, so an intercooler on its boost pipe pays off.
+- **Twincharging**: pipe the supercharger's boost into a turbo's intake (or a turbo's into the supercharger's). The
+  supercharger gives boost from low RPM while the turbo spools, and the two add up past 2x like a
+  [compound](#twin-and-compound-turbos).
+- Without a belt (or with the game functions it needs not found), it passes air like a stopped impeller and makes
+  no boost.
+
 ## Sizes and lag
 
 | Size | Exhaust for full boost | Spool-up time | Shaft speed at full boost |
 | --- | --- | --- | --- |
-| 2x2 | 10 L/s | about 0.5 s | 220,000 rpm |
 | 3x3 | 22 L/s | about 0.9 s | 160,000 rpm |
-| 4x4 | 40 L/s | about 1.5 s | 120,000 rpm |
 | 5x5 | 65 L/s | about 2.4 s | 90,000 rpm |
+| 2x2 (retired) | 10 L/s | about 0.5 s | 220,000 rpm |
+| 4x4 (retired) | 40 L/s | about 1.5 s | 120,000 rpm |
 
 Pick the size whose full-boost flow is close to your engine's exhaust L/s at the throttle you use. Boost starts
 building at a quarter of that flow and reaches full boost at the rated flow. Bigger turbos take longer to spool
@@ -171,16 +212,21 @@ Turbos and blow-off valves have their own sounds in place of the impeller hum, m
 - **Antilag**: irregular gunshot bangs and crackles from the wastegate while antilag fires; deeper on bigger turbos.
 - **Blowing up**: once, when a turbo wears out: a crack and a boom, shrapnel pinging, the wheel screeching to a stop
   and a hiss of boost and smoke. A turbo that was already blown when you load in stays quiet.
+- **Supercharger whine**: the buzz of its straight-cut step-up gears, there from idle and rising with the engine with
+  no lag, the impeller's thin whistle above it and the gulp of air. The large one sings lower. It surges and blows off
+  like a turbo.
 
 The wastegate is otherwise silent. Sounds follow the vehicle volume slider and are heard by every player near the part.
-With AnyHelpers installed, **Mod Settings > AnyEngineParts > Turbo volume** sets how loud all of them are, from 0 to
-200 % (100 is normal). It applies to your game only.
+With AnyHelpers installed, **Mod Settings > AnyEngineParts > Turbo volume** sets how loud the turbo sounds, blow-off
+valves and antilag are, and **Supercharger volume** the supercharger whine, each from 0 to 200 % (100 is normal).
+They apply to your game only.
 
 ## Tooltip
 
 Looking at a turbo shows its intake flow, turbine speed and boost (the pressure it adds over the intake), in the
 game's own units, then its **condition** (100% new, 0% blown, in whole percent like the stock filters; a worn turbo
 reads at least 1% until it blows, and a blown one shows 0% in the game's warning colour) and **temperature** (see Upkeep).
+A supercharger shows its flow, impeller speed and boost.
 
 ## Data channels
 
@@ -204,19 +250,22 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | `condition` | Output | 1 new, 0 blown; below 0.5 it loses boost |
 | `air_filter` | Output | 1 with an air filter on the intake, else 0 |
 | `boost_air_temperature` | Output | The boost air after any intercooler, °C (what the engine breathes) |
+| `drive_power` | Output | Supercharger: the power its belt takes from the engine, kW (0 on a turbo) |
 | `boost_limit` | Input | A wastegate: caps boost (as the `boost` output reads it) at this pressure in kPa (0 or unwired: no cap) |
 
 ## Getting it
 
-- **Survival:** world loot at tech tier 3 in the gas category, like the stock impellers.
+- **Survival:** world loot at tech tier 3 in the gas category, like the stock impellers (turbos and superchargers).
 - **Sandbox and Creative:** with the gas parts.
 
 ## How it works
 
-- The four part definitions are built in the DLL ([`turbo_logic.h`](../../native/turbo_logic.h)). At start-up they
+- The part definitions are built in the DLL ([`turbo_logic.h`](../../native/turbo_logic.h)). At start-up they
   are written to `AnyAPI and Modding/Turbo/turbochargers.json` and added to the game's vehicle components right
-  after the game adds its own. Their ids are `turbocharger_2` to `turbocharger_5`, class `gas_pump_centrifugal`
-  (the stock impeller's), with four gas logic nodes instead of two.
+  after the game adds its own. The turbos' ids are `turbocharger_2` to `turbocharger_5`, class `gas_pump_centrifugal`
+  (the stock impeller's), with four gas logic nodes instead of two; the superchargers' are `supercharger_small` and
+  `supercharger_large`, the same class with its two. Their meshes are built from simple shapes
+  ([`turbo_supercharger_mesh.h`](../../native/turbo_supercharger_mesh.h)).
 - The meshes are built at start-up from the game's `rom/meshes/components/turbo_a.mesh` and written beside it as
   `turbo_turbocharger_N.mesh` ([`turbo_mesh.h`](../../native/turbo_mesh.h)). If the stock mesh is not in the
   expected format, that size uses the plain impeller look.
@@ -251,6 +300,14 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
   that temperature, and knock is added to the engine's own damage counter afterwards. Past the game's 10 (2x) the
   factor carries on to 3x at 19, which only a compound reaches. If the hooks are not found,
   engines ignore intake temperature as before.
+- Superchargers are the impeller class with its own two gas nodes and its torque node. Their tick is the mod's: it
+  reads the shaft's speed (`vehicle_torque_node.get_rps`), sets the head from it, pushes the air, and puts the work
+  that took back on the shaft as a drag torque (`apply_torque`, times the torque system's newtons per joule), as the
+  stock impeller does with its own, smaller, drag. Every half second each turbo and supercharger also notes what its
+  boost pipe feeds (an engine's air manifold, which the engine tick hook records, or the next stage's intake); the
+  Dyno names the boost setup from that.
+- The retired 2x2 and 4x4 turbos keep their definitions (the game drops a saved part whose definition is gone) with
+  `tech_tier` -1 and `spawn_probability` 0, which keeps them out of the part lists and loot.
 - The hot side's gas is not saved; it refills from the pipes after loading. Saves that contain a turbo need
   AnyEngineParts installed to load it.
 

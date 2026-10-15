@@ -28,6 +28,19 @@ the turbo. The tooltip's **Condition** now shows a percentage, 100% new down to 
 - No data-port mounts under the 4x4 and 5x5 intake and exhaust pipes, and the wastegates lost stray mounts that
   floated off the part.
 
+**New: superchargers.** **Supercharger (Small)** (2x2x2) and **Supercharger (Large)** (4x4x4) are centrifugal
+superchargers driven by the engine: put a stock Pulley Wheel on the torque spot on the back and belt it to an Engine
+Wheel. Boost comes with no lag and climbs with engine speed; the Engine Wheel's size tunes it (the medium one gives full
+boost at 7,000 RPM, the large one from about 4,000). The belt takes the power it needs from the engine. Each has its own
+gear whine, with a **Supercharger volume** setting beside Turbo volume. Pipe one into a turbo to twincharge. See
+[Superchargers](../mods/turbo.md#superchargers).
+
+**The 2x2 and 4x4 turbos are retired.** The superchargers take their place. Vehicles that have them keep them, and they
+work as before, but they no longer show in the part lists or loot.
+
+**The Dyno names your boost setup** (single to quad turbo, compound, supercharged, twincharged) under its live
+readout, and its power is now net of what superchargers take through their belts.
+
 **New: compound turbos.** Pipe one turbo's boost into another turbo's intake and the second one adds its boost on top
 of the first. One turbo still gives the game's full 2x; a compound goes past it, up to 3x at 186 kPa. See
 [Twin and compound turbos](../mods/turbo.md#twin-and-compound-turbos).

@@ -89,7 +89,7 @@ enum Node { kColdIn, kColdOut, kHotIn, kHotOut, kNodeCount };
 // Data channels.
 // New channels go at the end: saved data links refer to them by position.
 enum Channel { kIntakePressure, kExhaustPressure, kPowerMultiplier, kSpool, kRpm, kExhaustFlow, kIntakeFlow, kExhaustTemperature, kSurge, kBoost, kBoostPsi, kAntilagFiring, kBoostLimit,
-               kOilFlow, kTurboTemperature, kCondition, kAirFiltered, kBoostAirTemperature, kChannelCount };
+               kOilFlow, kTurboTemperature, kCondition, kAirFiltered, kBoostAirTemperature, kDrivePower, kChannelCount };
 constexpr int kFirstInput = kBoostLimit;
 struct ChannelInfo { const char* name; bool input; };
 inline constexpr ChannelInfo kChannels[kChannelCount] = {
@@ -111,6 +111,7 @@ inline constexpr ChannelInfo kChannels[kChannelCount] = {
     {"condition", false},           // 1 new, 0 blown; below 0.5 it loses boost
     {"air_filter", false},          // 1 with an air filter on the compressor intake, else 0
     {"boost_air_temperature", false},   // C, the boost air after any intercooler (what the engine breathes)
+    {"drive_power", false},         // kW a supercharger takes from the engine through its belt (0 on a turbo)
 };
 inline int channel_index(const char* name, size_t length) {
     for (int i = 0; i < kChannelCount; ++i) {
@@ -173,6 +174,10 @@ inline std::string oil_node(int n, bool in) {
 }
 
 // One part definition: a resized stock impeller (class gas_pump_centrifugal) with a hot side.
+// The 2x2 and 4x4 turbos are retired (Nate, 2026-10-15: the superchargers take their place). They stay defined so
+// vehicles that have them still load (the game silently drops a part whose definition is gone), but a tech tier of -1
+// keeps them out of the sandbox and creative part lists and spawn probability 0 out of loot.
+inline bool turbo_retired(int n) { return n == 2 || n == 4; }
 inline std::string definition_entry(int n, const std::string& mesh_path) {
     Spec s = spec(n);
     int top = n - 1;
@@ -198,7 +203,7 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
     return std::string("    {\n") +
         "      \"id\": \"" + definition_id(n) + "\",\n" +
         "      \"name\": \"Turbo " + std::to_string(n) + "x" + std::to_string(n) + "\",\n" +
-        "      \"description\": \"" + description(n) + "\",\n" +
+        "      \"description\": \"" + (turbo_retired(n) ? "Retired: the superchargers take its place. " : "") + description(n) + "\",\n" +
         "      \"class\": \"gas_pump_centrifugal\",\n" +
         "      \"zones\": [{\"bounds_min\": [0, 0, 0], \"bounds_max\": " + box + "}],\n" +
         "      \"interaction_zones\": [],\n" +
@@ -214,8 +219,8 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [\n        " + descriptors + "\n      ],\n" +
-        "      \"tech_tier\": 3,\n" +
-        "      \"spawn_probability\": 0.1,\n" +
+        "      \"tech_tier\": " + (turbo_retired(n) ? "-1" : "3") + ",\n" +
+        "      \"spawn_probability\": " + (turbo_retired(n) ? "0.0" : "0.1") + ",\n" +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
@@ -329,6 +334,128 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
     st.slots[kBoostPsi] = st.slots[kBoost] * kPsiPerKpa;
     st.slots[kAntilagFiring] = st.antilag_firing ? 1.0 : 0.0;
     return out;
+}
+
+// ------------------------------------------------------------------------------------------- superchargers
+// A centrifugal supercharger: the stock Impeller's class, driven the same way, by a stock Pulley Wheel on its torque
+// spot belted to an Engine Wheel. Belts are fixed ratios: the pulley turns 2.5, 3.875 or 6.675 times as fast as the
+// engine with the small, medium or large Engine Wheel. No turbine and no lag: its head climbs with the square of the
+// pulley's speed. On the medium Engine Wheel it reaches a turbo's full boost at kBlowerFullBoostRpm; the large wheel
+// overdrives it (full boost from about 4,000 RPM), the small one underdrives it (about half boost at the fuel cut),
+// which is how a real supercharger is tuned: by its pulley ratio. Squeezing the air takes work, which the belt takes
+// from the engine like any other load. No oil or wear: its gearbox carries its own oil.
+//   small: 2 x 2 x 2 cells; large: 4 x 4 x 4. Both: a large-pipe intake in the middle of the front face (z-), the
+//   outlet on top (y+; small pipe on the small, large on the large), the torque spot on the back face (z+) in the
+//   bottom corner cell, data ports on both sides.
+enum Blower { kNoBlower = 0, kBlowerSmall = 1, kBlowerLarge = 2 };
+constexpr const char* kBlowerSmallId = "supercharger_small";
+constexpr const char* kBlowerLargeId = "supercharger_large";
+constexpr double kBeltSmall = 2.5, kBeltMedium = 3.875, kBeltLarge = 6.675;   // pulley turns per engine turn, by Engine Wheel
+constexpr double kBlowerFullBoostRpm = 7000;   // engine RPM of full boost on the medium Engine Wheel
+constexpr double kBlowerFullBoostRps = kBlowerFullBoostRpm / 60.0 * kBeltMedium;   // the pulley's speed then
+constexpr double kBlowerEfficiency = 0.55;     // the compressor (about 70%) times its step-up gears and the belt
+constexpr double kPascalPerUnit = 9800;        // the game's units.pressure_to_pascals
+inline Blower blower_from_id(const char* id, size_t length) {
+    auto is = [&](const char* want) { return std::char_traits<char>::length(want) == length && std::char_traits<char>::compare(id, want, length) == 0; };
+    return !id ? kNoBlower : is(kBlowerSmallId) ? kBlowerSmall : is(kBlowerLargeId) ? kBlowerLarge : kNoBlower;
+}
+inline const char* blower_id(bool large) { return large ? kBlowerLargeId : kBlowerSmallId; }
+inline int blower_cells(bool large) { return large ? 4 : 2; }
+inline Spec blower_spec(bool large) {
+    Spec s;
+    s.size = blower_cells(large);
+    s.rated_flow = large ? 44 : 16;          // L/s it moves at full boost against a hungry engine, like a turbo of that flow
+    s.compressor_coeff = 1.2 * s.rated_flow;
+    s.spool_up_s = s.spool_down_s = 0.05;    // gear driven: it follows the engine at once
+    s.max_rpm = large ? 45000 : 65000;       // impeller speed at full boost (the rpm output)
+    s.large_pipe = large;
+    return s;
+}
+// Share of full boost at a pulley speed (rev/s): a centrifugal compressor's head goes with the square of its speed.
+inline double blower_spool(double pulley_rps) {
+    double r = std::abs(finite_or(pulley_rps, 0.0)) / kBlowerFullBoostRps;
+    return clamp01(r * r);
+}
+// Joules the belt gives up to push `litres` through `head` (game pressure units) this tick.
+inline double blower_drive_joules(double litres, double head) {
+    return litres > 0 && head > 0 ? litres * 1e-3 * head * kPascalPerUnit / kBlowerEfficiency : 0.0;
+}
+struct BlowerStep { double compressor_move = 0, head = 0, drive_joules = 0; };
+// One tick. The cold-side ports only (kColdIn, kColdOut); pulley_rps is the speed of its torque spot.
+inline BlowerStep blower_step(State& st, const Spec& s, const Inputs& in, double pulley_rps) {
+    BlowerStep out;
+    double dt = std::clamp(finite_or(in.dt, 0.0), 0.0, 0.25);
+    if (dt <= 0) return out;
+    double p_in = std::max(0.0, finite_or(in.pressure[kColdIn], 1.0)), p_out = std::max(0.0, finite_or(in.pressure[kColdOut], 1.0));
+    double target = blower_spool(pulley_rps);
+    st.spool = clamp01(st.spool + (target - st.spool) * (1.0 - std::exp(-dt / s.spool_up_s)));
+    out.head = head_for(st, p_in);
+    double net = out.head - (p_out - p_in);
+    out.compressor_move = capped(s.compressor_coeff * net * dt, in.volume[kColdIn], in.volume[kColdOut]);
+    // Throttle off, the boost pushes back through the wheel in surges, unless a blow-off valve on the pipe takes it.
+    if (out.compressor_move < 0 && in.bov_venting) out.compressor_move = 0;
+    st.surging = out.compressor_move < 0 && st.spool > kSurgeSpool;
+    out.drive_joules = blower_drive_joules(out.compressor_move, out.head);
+    double k = std::min(1.0, dt / 0.15);
+    st.intake_flow += (std::abs(out.compressor_move) / dt - st.intake_flow) * k;
+    st.slots[kIntakePressure] = p_out * kKpaPerUnit;
+    st.slots[kPowerMultiplier] = power_multiplier(p_out);
+    st.slots[kSpool] = st.spool;
+    st.slots[kRpm] = std::abs(finite_or(pulley_rps, 0.0)) / kBlowerFullBoostRps * s.max_rpm;
+    st.slots[kIntakeFlow] = st.intake_flow;
+    st.slots[kSurge] = st.surging ? 1.0 : 0.0;
+    st.slots[kBoost] = (p_out - 1.0) * kKpaPerUnit;
+    st.slots[kBoostPsi] = st.slots[kBoost] * kPsiPerKpa;
+    st.slots[kCondition] = 1.0;
+    st.slots[kDrivePower] = out.drive_joules / dt / 1000.0;
+    return out;
+}
+inline std::string blower_mesh_path(bool large) { return std::string("meshes/components/turbo_") + blower_id(large) + ".mesh"; }
+inline std::string blower_entry(bool large, const std::string& mesh_path) {
+    const int n = blower_cells(large), top = n - 1;
+    std::string description = std::string("Belt-driven centrifugal supercharger, ") + std::to_string(n) + "x" + std::to_string(n) + "x" + std::to_string(n) +
+        ". Bolt a Pulley Wheel onto its torque spot (the back, bottom corner) and belt it to an Engine Wheel, as you would an Impeller. "
+        "Intake: the large pipe in the middle of the front face, open to the air. Outlet on top: feed an air manifold, or a turbo's intake to twincharge. "
+        "No lag: boost climbs with engine speed. On the medium Engine Wheel it reaches full boost (98 kPa, double engine power) near " + fmt(kBlowerFullBoostRpm) +
+        " RPM; the large wheel spins it faster (full boost from about 4000 RPM), the small one slower. Driving it takes power from the engine through the belt. " +
+        (large ? "Large pipe outlet." : "Small pipe outlet.");
+    std::string surfaces = "{\"id\": \"torque\", \"pos\": [0, 0, " + std::to_string(top) + "], \"dir\": 5, \"type\": \"torque\"}";
+    for (int side = 0; side < 2; ++side)                     // data ports on both sides
+        for (int y = 0; y < n; ++y)
+            for (int z = 0; z < n; ++z)
+                surfaces += ",\n        {\"pos\": [" + std::to_string(side ? top : 0) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": " + std::to_string(side) + ", \"gender\": 2, \"type\": \"port\"}";
+    // A large pipe is 2 x 2 cells anchored at its low corner: the intake across x and y (centred on the even face),
+    // the large outlet across x and z.
+    std::string in = large ? "{\"pos\": [1, 1, 0], \"direction\": 4, \"type\": \"gas\", \"size\": 1}" : "{\"pos\": [0, 0, 0], \"direction\": 4, \"type\": \"gas\", \"size\": 1}";
+    std::string out = large ? "{\"pos\": [2, 3, 0], \"direction\": 3, \"type\": \"gas\", \"size\": 1}" : "{\"pos\": [1, 1, 0], \"direction\": 3, \"type\": \"gas\"}";
+    std::string descriptors;
+    for (int i = 0; i < kChannelCount; ++i)
+        descriptors += std::string(i ? ",\n        " : "") + "{\"type\": \"" + (kChannels[i].input ? "type_f64_input" : "type_f64_output") + "\", \"name\": \"" + kChannels[i].name + "\"}";
+    std::string box = "[" + std::to_string(top) + ", " + std::to_string(top) + ", " + std::to_string(top) + "]";
+    return std::string("    {\n") +
+        "      \"id\": \"" + blower_id(large) + "\",\n" +
+        "      \"name\": \"" + (large ? "Supercharger (Large)" : "Supercharger (Small)") + "\",\n" +
+        "      \"description\": \"" + description + "\",\n" +
+        "      \"class\": \"gas_pump_centrifugal\",\n" +
+        "      \"zones\": [{\"bounds_min\": [0, 0, 0], \"bounds_max\": " + box + "}],\n" +
+        "      \"interaction_zones\": [],\n" +
+        "      \"surfaces\": [\n        " + surfaces + "\n      ],\n" +
+        "      \"logic_nodes\": [\n        " + in + ",\n        " + out + "\n      ],\n" +
+        "      \"mesh_static\": {\"mesh_path\": \"" + mesh_path + "\"},\n" +
+        "      \"meshes_dynamic\": [],\n" +
+        "      \"category\": \"gas\",\n" +
+        "      \"tags\": \"torque\",\n" +
+        "      \"tags_generated\": \"torque,port,\",\n" +
+        "      \"inspection_geometry\": [{\"p0\": [0.0, 0.0, 0.0], \"p1\": " + box + "}],\n" +
+        "      \"density\": 800.0,\n" +
+        "      \"mateable_port_types\": 2,\n" +
+        "      \"data_descriptors\": [\n        " + descriptors + "\n      ],\n" +
+        "      \"tech_tier\": 3,\n" +
+        "      \"spawn_probability\": 0.1,\n" +
+        "      \"loot_group\": \"mechanical\",\n" +
+        "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
+        "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
+        "    }";
 }
 
 // ------------------------------------------------------------------------------------------- valves
@@ -580,7 +707,7 @@ inline std::string intercooler_entry(bool built, bool round = false) {
 // bov_built[large], wg_built[large] and filter_built[large] the same for the valves and filters, cooler_built for the
 // intercoolers' tiles (else the radiator's look).
 inline std::string definitions_json(const bool built[kMaxSize - kMinSize + 1], const bool bov_built[2] = nullptr, const bool wg_built[2] = nullptr,
-                                    const bool filter_built[2] = nullptr, const bool* cooler_built = nullptr) {
+                                    const bool filter_built[2] = nullptr, const bool* cooler_built = nullptr, const bool blower_built[2] = nullptr) {
     std::string out = "{\n  \"definitions\": [\n";
     for (int n = kMinSize; n <= kMaxSize; ++n)
         out += definition_entry(n, built[n - kMinSize] ? mesh_path(n) : std::string(kStockMeshPath)) + ",\n";
@@ -591,8 +718,25 @@ inline std::string definitions_json(const bool built[kMaxSize - kMinSize + 1], c
     for (int large = 0; large < 2; ++large)
         out += air_filter_entry(large, filter_built && filter_built[large] ? air_filter_mesh_path(large) : std::string(large ? "meshes/components/gas_port_b.mesh" : kValveMeshPath)) + ",\n";
     out += intercooler_entry(cooler_built && *cooler_built) + ",\n";
-    out += intercooler_entry(cooler_built && *cooler_built, true) + "\n";
+    out += intercooler_entry(cooler_built && *cooler_built, true) + ",\n";
+    for (int large = 0; large < 2; ++large)
+        out += blower_entry(large, blower_built && blower_built[large] ? blower_mesh_path(large) : std::string(kStockMeshPath)) + (large ? "\n" : ",\n");
     return out + "  ]\n}\n";
+}
+
+// ------------------------------------------------------------------------------------------- boost setup
+// What the Dyno calls an engine's (or a vehicle's) boost: the turbos and superchargers feeding it, and whether any
+// turbo breathes another turbo's boost (a compound).
+struct BoostSetup { int turbos = 0, superchargers = 0; bool compound = false; };
+inline std::string boost_setup_name(const BoostSetup& b) {
+    static const char* const kCount[] = {"", "Single", "Twin", "Triple", "Quad"};
+    auto many = [](int n, const char* one) { return std::to_string(n) + " " + one + (n == 1 ? "" : "s"); };
+    int t = std::max(0, b.turbos), c = std::max(0, b.superchargers);
+    if (t == 0 && c == 0) return "Naturally aspirated";
+    if (t > 0 && c > 0) return t == 1 && c == 1 ? "Twincharged" : "Twincharged: " + many(t, "turbo") + ", " + many(c, "supercharger");
+    if (c > 0) return c == 1 ? "Supercharged" : c <= 4 ? std::string(kCount[c]) + " supercharged" : many(c, "supercharger");
+    if (b.compound && t > 1) return t == 2 ? "Compound turbo" : "Compound turbo: " + many(t, "turbo");
+    return t <= 4 ? std::string(kCount[t]) + " turbo" : many(t, "turbo");
 }
 
 }  // namespace turbo

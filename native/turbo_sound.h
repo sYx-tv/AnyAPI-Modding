@@ -1,5 +1,6 @@
 #pragma once
-// Turbo sounds, synthesized: spool whistle, compressor surge puffs, four blow-off valve sounds and antilag bangs. No game or Windows
+// Turbo sounds, synthesized: spool whistle, compressor surge puffs, four blow-off valve sounds, antilag bangs and the
+// superchargers' gear whine. No game or Windows
 // dependencies, so tests/turbo_logic_test.cpp renders them on any platform.
 //
 // The game plays voice chat by streaming 48 kHz mono 16-bit PCM into a positional voice effect (application.audio
@@ -17,6 +18,7 @@ constexpr int kSampleRate = 48000;
 // The impeller's replicated speed factor (0-1, sent as one byte, so steps of 1/255) carries a turbo's spool, surge and
 // whether it has blown: bytes 0-124 are spool, 127 is a blown turbo (126-128 read as blown, whichever way the game
 // rounds), and 0.51-1 is spool while surging. A blow-off valve sends 0 when shut, else 0.5-1 for how hard it vents.
+// A supercharger sends the same as a turbo with the engine's speed (blower_sound_level) in place of the spool: it never blows.
 inline double encode_turbo_factor(double spool, bool surging, bool blown = false) {
     if (blown) return 127.0 / 255.0;
     double s = std::isfinite(spool) ? (spool < 0 ? 0 : spool > 1 ? 1 : spool) : 0;
@@ -86,7 +88,26 @@ struct Sweep {
 
 // A wastegate firing antilag sends the same byte as a venting whoosh valve (encode_blow_off_factor with kWhoosh):
 // firing, how hard, and the turbo's size.
-enum class Voice { kTurbo, kBlowOff, kAntilag };
+enum class Voice { kTurbo, kBlowOff, kAntilag, kSupercharger };
+
+// A supercharger's voice follows the engine with no lag: the whine of its step-up gears (straight cut, a buzzy tone
+// with harmonics that wavers with the gear mesh), its impeller's thin whistle above it and the air it gulps. The
+// level it gets is its pulley's speed over the fastest a belt turns it (the large Engine Wheel at the engine's
+// 8,000 RPM fuel cut); on the medium wheel the fuel cut is kBlowerMediumCut. The large one sings lower.
+constexpr double kBlowerSoundRps = 8000.0 / 60.0 * 6.675;
+constexpr double kBlowerMediumCut = 3.875 / 6.675;
+inline double blower_sound_level(double pulley_rps) {
+    double l = std::isfinite(pulley_rps) ? std::abs(pulley_rps) / kBlowerSoundRps : 0;
+    return l > 1 ? 1 : l;
+}
+struct BlowerVoice {
+    double gear_base, gear_span;       // gear whine pitch at rest and the rise to the fuel cut (Hz)
+    double whistle_base, whistle_span; // impeller whistle
+    double gear_gain, whistle_gain, air_gain;
+};
+inline BlowerVoice blower_voice(bool large) {
+    return large ? BlowerVoice{460, 5900, 1900, 8800, 0.20, 0.05, 0.12} : BlowerVoice{650, 7900, 2700, 11700, 0.18, 0.05, 0.09};
+}
 
 // Each turbo size has its own voice: the 2x2 screams high and puffs fast, the 5x5 whooshes deep and slow.
 struct Character {
@@ -125,6 +146,7 @@ struct Synth {
     // A turbo that is already blown when first heard (loaded, or driven into range) stays quiet.
     bool blown_known = false, was_blown = false;
     double heard = 0, blow_age = 1e9, blow_pitch = 0, screech_phase = 0, boom_phase = 0;
+    double gear_phase = 0, mesh_phase = 0, gear_pitch = 0;   // supercharger gear whine
     struct Ping { double age = 1e9, f = 0, decay = 0, gain = 0, p1 = 0, p2 = 0; } pings[6];
     uint32_t rng = 0x12345678u;
     BandPass hiss, click, whoosh, whoosh_low, rumble, bang_body, bang_low, crackle, blow_crack, blow_low, blow_smoke;
@@ -177,8 +199,9 @@ inline double blow_sample(Synth& s, double bov_pitch, double bov_length, double 
 }
 
 // Renders n samples. Turbo voice: level = spool 0-1, flag = surging, blown = the turbo has blown (the first time it
-// turns true it plays the blow-up). Blow-off voice: flag = venting, level = how hard (0-1), in the synth's sound,
-// voiced for the turbo size venting through it.
+// turns true it plays the blow-up). Supercharger voice: level = blower_sound_level, flag = surging; size 2 is the
+// small, 4 the large. Blow-off voice: flag = venting, level = how hard (0-1), in the synth's sound, voiced for the
+// turbo size venting through it.
 inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool blown = false) {
     const Character c = character(s.size);
     // A blow-off valve on a bigger turbo dumps more air: lower, longer and, for the flutter, slower.
@@ -199,12 +222,15 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool 
     }
     double target = std::isfinite(level) ? (level < 0 ? 0 : level > 1 ? 1 : level) : 0;
     const double dt = 1.0 / kSampleRate, two_pi = 6.283185307179586;
+    const bool blower = s.voice == Voice::kSupercharger;
+    const BlowerVoice bv = blower_voice(s.size >= 4);
+    if (blower) blown = false;
     for (int i = 0; i < n; ++i) {
         double v = 0;
-        if (s.voice == Voice::kTurbo) {
-            s.spool += (target - s.spool) * (1.0 - std::exp(-dt / 0.05));
+        if (s.voice == Voice::kTurbo || blower) {
+            s.spool += (target - s.spool) * (1.0 - std::exp(-dt / (blower ? 0.015 : 0.05)));
             // Spool whistle: a whine that rises with shaft speed, the air rushing through, and intake hiss.
-            double f = c.base + c.span * s.spool;
+            double f = blower ? bv.whistle_base + bv.whistle_span * s.spool : c.base + c.span * s.spool;
             s.pitch = s.pitch <= 0 ? f : s.pitch + (f - s.pitch) * 0.002;
             // Surge ("stu-stu-stu"): boost slams back through the compressor in quick puffs. Each puff is a burst of
             // air: a sharp "t" then a breathy "u" that falls in pitch, like a short blow-off. The puffs come fast
@@ -234,9 +260,29 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool 
             if (s.phase1 > two_pi) s.phase1 -= two_pi;
             if (s.phase2 > two_pi) s.phase2 -= two_pi;
             double loud = std::pow(s.spool, 1.6) * (1.0 - 0.35 * s.surge_env) * (1.0 - 0.4 * s.pulse_gain * body);
-            v += loud * (0.30 * std::sin(s.phase1) + c.overtone_gain * std::sin(s.phase2));
-            v += loud * c.air_gain * 4.0 * s.air.run(s.noise(), std::min(s.pitch * 0.85, 16000.0), 5.0);
-            v += c.hiss_gain * s.spool * s.spool * s.hiss.run(s.noise());
+            if (blower) {
+                // The gears: a buzzy whine (three harmonics) that wavers at the gear mesh rate, there from idle up.
+                double fg = bv.gear_base + bv.gear_span * s.spool;
+                s.gear_pitch = s.gear_pitch <= 0 ? fg : s.gear_pitch + (fg - s.gear_pitch) * 0.01;
+                s.gear_phase += two_pi * s.gear_pitch * dt;
+                s.mesh_phase += two_pi * s.gear_pitch / 17.0 * dt;
+                if (s.gear_phase > two_pi) s.gear_phase -= two_pi;
+                if (s.mesh_phase > two_pi) s.mesh_phase -= two_pi;
+                double g = s.gear_phase;
+                double whine = std::sin(g) + 0.45 * std::sin(2 * g + 0.4) + 0.22 * std::sin(3 * g + 1.1);
+                // As loud as it gets by the medium wheel's fuel cut; overdriven it only climbs in pitch.
+                double drive = std::min(1.0, s.spool / kBlowerMediumCut);
+                double gear_loud = std::pow(0.06 + 0.94 * drive, 1.3) * (1.0 + 0.22 * std::sin(s.mesh_phase)) * (1.0 - 0.3 * s.surge_env);
+                double air_loud = std::pow(drive, 1.6) * (1.0 - 0.35 * s.surge_env) * (1.0 - 0.4 * s.pulse_gain * body);
+                v += bv.gear_gain * gear_loud * whine;
+                v += air_loud * bv.whistle_gain * (std::sin(s.phase1) + 0.4 * std::sin(s.phase2));
+                v += air_loud * bv.air_gain * 4.0 * s.air.run(s.noise(), std::min(s.pitch * 0.4, 16000.0), 3.0);
+                v += 0.6 * c.hiss_gain * drive * drive * s.hiss.run(s.noise());
+            } else {
+                v += loud * (0.30 * std::sin(s.phase1) + c.overtone_gain * std::sin(s.phase2));
+                v += loud * c.air_gain * 4.0 * s.air.run(s.noise(), std::min(s.pitch * 0.85, 16000.0), 5.0);
+                v += c.hiss_gain * s.spool * s.spool * s.hiss.run(s.noise());
+            }
             v += c.puff_gain * puffs;
             if (s.blow_age <= kBlowSeconds) { v += blow_sample(s, bov_pitch, bov_length, dt); s.blow_age += dt; }
         } else if (s.voice == Voice::kAntilag) {

@@ -1,6 +1,7 @@
 #include "../turbo_logic.h"
 #include "../turbo_mesh.h"
 #include "../turbo_upkeep_mesh.h"
+#include "../turbo_supercharger_mesh.h"
 #include "../turbo_health.h"
 #include "../turbo_wear_store.h"
 #include "../turbo_sound.h"
@@ -80,6 +81,23 @@ static double run_compound(State& a, State& b, const Spec& sa, const Spec& sb, C
     return pl.out / pl.cap;
 }
 
+// A supercharger on its belt feeding an engine's manifold that draws `air_lps`; the intake is open to the air.
+// Returns the outlet pressure; `joules` adds up what the belt gave.
+static double run_blower(State& st, const Spec& s, Plant& pl, double pulley_rps, double air_lps, double seconds, double* joules = nullptr,
+                         bool bov = false, double dt = 1.0 / 60) {
+    for (double t = 0; t < seconds; t += dt) {
+        pl.cold_out = std::max(0.0, pl.cold_out - air_lps * dt);
+        Inputs in;
+        in.pressure[kColdIn] = 1; in.volume[kColdIn] = pl.cap;
+        in.pressure[kColdOut] = pl.cold_out / pl.cap; in.volume[kColdOut] = pl.cold_out;
+        in.dt = dt; in.bov_venting = bov;
+        BlowerStep o = blower_step(st, s, in, pulley_rps);
+        pl.cold_out += o.compressor_move;
+        if (joules) *joules += o.drive_joules;
+    }
+    return pl.cold_out / pl.cap;
+}
+
 int main() {
     // Ids and sizes.
     for (int n = kMinSize; n <= kMaxSize; ++n) { std::string id = definition_id(n); assert(size_from_id(id.c_str(), id.size()) == n); }
@@ -126,7 +144,7 @@ int main() {
     std::string json = definitions_json(built, bov_built, wg_built);
     size_t count = 0;
     for (size_t at = 0; (at = json.find("\"class\": \"gas_pump_centrifugal\"", at)) != std::string::npos; ++at) ++count;
-    assert(count == 8);                                    // four turbos, two of each valve
+    assert(count == 10);                                   // four turbos, two of each valve, two superchargers
     assert(json.find("\"class\": \"gas_tank\"") != std::string::npos);   // the intercooler: gas ports snap onto it
     assert(json.find("\"class\": \"gas_vent\"") != std::string::npos && json.find("\"class\": \"gas_vent_b\"") != std::string::npos);
     assert(json.find("\"id\": \"oil_in\"") != std::string::npos && json.find("\"type\": \"liquid\"") != std::string::npos);
@@ -478,5 +496,116 @@ int main() {
             assert(k == 0 ? paint0 && paint1 : paint1 == (tx != 1 && ty != 1));
         }
     }
+    // Superchargers: two new parts on the impeller class; the 2x2 and 4x4 turbos stay defined (saved vehicles keep
+    // them) but leave the part lists and loot.
+    {
+        bool all[4] = {true, true, true, true}, two[2] = {true, true}, one = true;
+        std::string full = definitions_json(all, two, two, two, &one, two);
+        auto entry = [&](const char* id) {
+            size_t at = full.find(std::string("\"id\": \"") + id + "\"");
+            assert(at != std::string::npos);
+            return full.substr(at, full.find("\n    }", at) - at);
+        };
+        auto count_in = [](const std::string& text, const std::string& what) {
+            size_t n = 0;
+            for (size_t at = 0; (at = text.find(what, at)) != std::string::npos; ++at) ++n;
+            return n;
+        };
+        std::string small = entry("supercharger_small"), large = entry("supercharger_large");
+        assert(small.find("\"name\": \"Supercharger (Small)\"") != std::string::npos && large.find("\"name\": \"Supercharger (Large)\"") != std::string::npos);
+        assert(small.find("{\"id\": \"torque\", \"pos\": [0, 0, 1], \"dir\": 5, \"type\": \"torque\"}") != std::string::npos);   // back face, bottom corner
+        assert(large.find("{\"id\": \"torque\", \"pos\": [0, 0, 3], \"dir\": 5, \"type\": \"torque\"}") != std::string::npos);
+        assert(small.find("{\"pos\": [0, 0, 0], \"direction\": 4, \"type\": \"gas\", \"size\": 1}") != std::string::npos);     // large intake, centred
+        assert(small.find("{\"pos\": [1, 1, 0], \"direction\": 3, \"type\": \"gas\"}") != std::string::npos);                  // small outlet on top
+        assert(large.find("{\"pos\": [1, 1, 0], \"direction\": 4, \"type\": \"gas\", \"size\": 1}") != std::string::npos);
+        assert(large.find("{\"pos\": [2, 3, 0], \"direction\": 3, \"type\": \"gas\", \"size\": 1}") != std::string::npos);
+        assert(count_in(small, "\"type\": \"gas\"") == 2 && count_in(large, "\"type\": \"gas\"") == 2 && small.find("liquid") == std::string::npos);
+        assert(count_in(small, "\"type\": \"port\"") == 2 * 2 * 2 && count_in(large, "\"type\": \"port\"") == 2 * 4 * 4);   // data ports on both sides
+        assert(small.find("turbo_supercharger_small.mesh") != std::string::npos && large.find("\"bounds_max\": [3, 3, 3]") != std::string::npos);
+        assert(small.find("\"tech_tier\": 3") != std::string::npos && small.find("\"name\": \"drive_power\"") != std::string::npos);
+        for (int n : {2, 4}) {
+            std::string old = entry(definition_id(n).c_str());
+            assert(old.find("\"tech_tier\": -1") != std::string::npos && old.find("\"spawn_probability\": 0.0") != std::string::npos && old.find("Retired") != std::string::npos);
+        }
+        for (int n : {3, 5}) assert(entry(definition_id(n).c_str()).find("\"tech_tier\": 3") != std::string::npos);
+        assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
+        assert(definitions_json(all).find("meshes/components/turbo_a.mesh") != std::string::npos);   // no meshes: the stock look
+        assert(blower_from_id("supercharger_small", 18) == kBlowerSmall && blower_from_id("supercharger_large", 18) == kBlowerLarge &&
+               blower_from_id("supercharger", 12) == kNoBlower && valve_from_id("supercharger_small", 18) == kNoValve && size_from_id("supercharger_small", 18) == 0);
+    }
+    {   // the model: head with the square of the pulley's speed, no lag, and the belt pays for the air
+        assert(blower_spool(0) == 0 && near(blower_spool(kBlowerFullBoostRps), 1) && near(blower_spool(-kBlowerFullBoostRps / 2), 0.25) && blower_spool(1e9) == 1);
+        assert(near(blower_spool(3500 / 60.0 * kBeltMedium), 0.25));                 // medium Engine Wheel at 3,500 RPM
+        assert(blower_spool(4100 / 60.0 * kBeltLarge) > 0.99);                       // the large wheel overdrives it
+        assert(near(blower_spool(8000 / 60.0 * kBeltSmall), 0.5436, 1e-3));         // the small one: about half at the fuel cut
+        assert(near(blower_drive_joules(1, 9), 1e-3 * 9 * 9800 / 0.55) && blower_drive_joules(-1, 9) == 0 && blower_drive_joules(1, 0) == 0);
+        for (bool big : {false, true}) {
+            Spec s = blower_spec(big);
+            State st; Plant pl; double joules = 0;
+            double p = run_blower(st, s, pl, kBlowerFullBoostRps, s.rated_flow * 0.8, 10, &joules);
+            assert(p > 8.0 && p <= 10.0 && st.slots[kPowerMultiplier] > 1.8 && st.slots[kPowerMultiplier] <= 2.0);
+            double watts = joules / 10;                                               // about flow x head / efficiency
+            assert(watts > 0.7 * s.rated_flow * 0.8e-3 * 9 * 9800 / 0.55 && watts < 1.2 * s.rated_flow * 0.8e-3 * 9 * 9800 / 0.55);
+            assert(st.slots[kDrivePower] > 0 && near(st.slots[kCondition], 1) && st.slots[kRpm] > 0.99 * s.max_rpm && !st.surging);
+            State st2; Plant pl2; run_blower(st2, s, pl2, kBlowerFullBoostRps, s.rated_flow * 0.8, 0.2);
+            assert(st2.spool > 0.95);                                                 // no lag
+            State idle; Plant pl3; double j0 = 0; double q = run_blower(idle, s, pl3, 0, 4, 5, &j0);
+            assert(idle.spool == 0 && j0 == 0 && q < 1.0);                           // no belt: no boost, no drag
+            // Throttle off at speed: boost builds to the head; then the engine drops and the boost surges back out,
+            // unless a blow-off valve takes it.
+            State lift; Plant pl4; run_blower(lift, s, pl4, kBlowerFullBoostRps, 0, 5);
+            assert(pl4.cold_out / pl4.cap > 9.0);
+            Plant pl5 = pl4; State with = lift;
+            bool surged = false;
+            for (int k = 0; k < 30 && !surged; ++k) { run_blower(lift, s, pl4, kBlowerFullBoostRps * 0.4, 0, 1.0 / 60); surged = lift.surging; }
+            assert(surged);
+            for (int k = 0; k < 30; ++k) { run_blower(with, s, pl5, kBlowerFullBoostRps * 0.4, 0, 1.0 / 60, nullptr, true); assert(!with.surging); }
+            State capped; capped.slots[kBoostLimit] = 49; Plant pl6;
+            double c = run_blower(capped, s, pl6, kBlowerFullBoostRps, s.rated_flow * 0.5, 10);
+            assert(c > 5.5 && c < 6.3);                                               // boost_limit caps it like a turbo
+        }
+        assert(blower_spec(true).rated_flow > blower_spec(false).rated_flow && blower_spec(false).large_pipe == false && blower_spec(true).large_pipe);
+    }
+    {   // the Dyno's names for the boost setup
+        auto name = [](int t, int c, bool compound = false) { BoostSetup b; b.turbos = t; b.superchargers = c; b.compound = compound; return boost_setup_name(b); };
+        assert(name(0, 0) == "Naturally aspirated" && name(1, 0) == "Single turbo" && name(2, 0) == "Twin turbo" && name(3, 0) == "Triple turbo" &&
+               name(4, 0) == "Quad turbo" && name(6, 0) == "6 turbos");
+        assert(name(2, 0, true) == "Compound turbo" && name(3, 0, true) == "Compound turbo: 3 turbos" && name(1, 0, true) == "Single turbo");
+        assert(name(0, 1) == "Supercharged" && name(0, 2) == "Twin supercharged" && name(0, 5) == "5 superchargers");
+        assert(name(1, 1) == "Twincharged" && name(2, 1) == "Twincharged: 2 turbos, 1 supercharger" && name(1, 2, true) == "Twincharged: 1 turbo, 2 superchargers");
+    }
+    {   // the gear whine: follows the pulley at once, louder and higher with speed; the large one sings lower
+        auto loudness = [](bool big, double rps) {
+            Synth sy; sy.voice = Voice::kSupercharger; sy.size = big ? 4 : 2;
+            std::vector<int16_t> pcm(kSampleRate / 2);
+            render(sy, blower_sound_level(rps), false, pcm.data(), int(pcm.size()));
+            render(sy, blower_sound_level(rps), false, pcm.data(), int(pcm.size()));
+            double sum = 0;
+            for (int16_t v : pcm) sum += double(v) * v;
+            return std::make_pair(std::sqrt(sum / pcm.size()), sy.gear_pitch);
+        };
+        auto idle = loudness(false, 800 / 60.0 * kBeltMedium), high = loudness(false, 7000 / 60.0 * kBeltMedium), big = loudness(true, 7000 / 60.0 * kBeltMedium);
+        assert(idle.first > 50 && high.first > 2 * idle.first && high.second > 3 * idle.second && big.second < high.second && big.first > 50);
+        assert(near(blower_sound_level(kBlowerSoundRps * 2), 1) && near(blower_sound_level(-kBlowerSoundRps / 2), 0.5));
+        double spool = 0; bool surging = false, blown = true;
+        decode_turbo_factor(encode_turbo_factor(blower_sound_level(4000 / 60.0 * kBeltMedium), false), spool, surging, blown);
+        assert(near(spool, blower_sound_level(4000 / 60.0 * kBeltMedium), 0.01) && !surging && !blown);
+    }
+    // Supercharger meshes: every look readable, both paint markers, inside the part's cells, the pulley boss centred on
+    // the torque spot's cell on the back face.
+    for (int large = 0; large < 2; ++large)
+        for (int style = 0; style < kSuperchargerStyleCount; ++style) {
+            std::vector<uint8_t> mesh = build_supercharger_mesh(stock, large, "s", style);
+            MeshLayout m; assert(parse_mesh(mesh, m) && m.vertices > 200);
+            std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), mesh.data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
+            double lo = -kCell / 2, hi = (blower_cells(large) - 0.5) * kCell;
+            bool paint0 = false, paint1 = false, boss = false;
+            for (auto& p : v) {
+                for (int j = 0; j < 3; ++j) assert(p.pos[j] >= lo - 0.003 && p.pos[j] <= hi + 0.003);
+                paint0 = paint0 || (p.rgba[0] == 153 && p.rgba[1] == 0); paint1 = paint1 || (p.rgba[0] == 153 && p.rgba[1] == 38);
+                boss = boss || (std::abs(p.pos[0]) < 0.02 && std::abs(p.pos[1]) < 0.02 && p.pos[2] > hi - 0.002);
+            }
+            assert(paint0 && paint1 && boss);
+        }
     return 0;
 }

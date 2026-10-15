@@ -20,6 +20,10 @@ the graph are each pull's peak power and the latest pull's peak torque, boost, e
 engine knocked. Knock is the turbos' knock from hot boost air (see [Turbo](turbo.md)); the game's other engine damage,
 from low oil or overheating, is not counted as knock.
 
+Under the live readout the panel names the boost setup it sees on the vehicle: **Naturally aspirated**, **Single**,
+**Twin**, **Triple** or **Quad turbo**, **Compound turbo**, **Supercharged**, **Twin supercharged** or
+**Twincharged** (a turbo and a supercharger), with the counts when there are more. Each kept pull's log line ends with it.
+
 A pull can be made on the road or with the wheels off the ground: the game's engine makes the same power at a given
 RPM either way, so the numbers match.
 
@@ -31,7 +35,8 @@ kept pulls (a pull being recorded carries on).
 Every number comes from the game's own engine:
 
 - **Power** is the energy each engine turns into motion each tick (times 60 ticks per second), added up over every
-  engine on the vehicle. It is shown in hp (1 hp = 745.7 W).
+  engine on the vehicle, less what [superchargers](turbo.md#superchargers) take through their belts. It is shown in hp
+  (1 hp = 745.7 W).
 - **Torque** is power divided by engine speed (2π × revolutions per second), in N·m.
 - **RPM** is the fastest engine's speed. **Boost** is the engine's intake pressure factor (1 = none, 2 = the most
   boost the game counts). **Engine** is the hottest engine's temperature.
