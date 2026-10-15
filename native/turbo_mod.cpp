@@ -84,6 +84,7 @@ constexpr ptrdiff_t node_island = 48;                // vehicle_gas_node.m_islan
 constexpr ptrdiff_t node_node_index = 20;
 constexpr ptrdiff_t node_content = 24;              // vehicle_gas_node.m_content
 constexpr ptrdiff_t tank_content = 480;             // gas_tank.m_content (the intercooler is a gas tank)
+constexpr ptrdiff_t port_mated_component = 544;     // gas_port.m_mated_component (the part a gas port is snapped onto)
 constexpr ptrdiff_t client_definition = 176;         // client_scene.vehicle_component.m_definition
 constexpr ptrdiff_t client_factor_speed = 0xe0 + 8;  // client gas_pump_centrifugal.m_factor_speed's value (f64)
 constexpr ptrdiff_t mat34_t = 72;                    // mat34.t (vec3)            // vehicle_gas_node.m_node_index (s32; -1 when not found)
@@ -167,6 +168,7 @@ struct Turbo {
     UpkeepState up;                                  // its temperature (the condition lives in g_wear, saved)
     double oil_lps = 0;                              // smoothed
     double last_upkeep_log = -1e9;
+    double last_pipe_log = -1e9;                     // when it last logged what is on a boost pipe without an intercooler
     State state;
     double last_log = -1e9;
     int ticks = 0;
@@ -670,14 +672,77 @@ const char* definition_id_of(const void* component, size_t& length) {
     length = size_t(id.length);
     return id.data;
 }
-void* intercooler_of(void* node) {
-    if (!anymaker::readable(static_cast<uint8_t*>(node) + off::node_content, 8)) return nullptr;
-    auto* content = at<uint8_t*>(node, off::node_content);
-    if (!content || reinterpret_cast<uintptr_t>(content) < off::tank_content) return nullptr;
-    void* tank = content - off::tank_content;
+bool is_intercooler_part(const void* component) {
     size_t length = 0;
-    const char* id = definition_id_of(tank, length);   // not cached: most candidates here are not components at all
-    return id && valve_from_id(id, length) == kIntercooler ? tank : nullptr;
+    const char* id = definition_id_of(component, length);   // not cached: most candidates here are not components at all
+    return id && valve_from_id(id, length) == kIntercooler;
+}
+// The gas tank's own add_mating_component makes a snapped-on port's node with the tank's content, so the content leads
+// back to the tank. The port also keeps the part it is snapped onto, which is the second way to the intercooler.
+void* intercooler_of(void* node) {
+    if (!anymaker::readable(static_cast<uint8_t*>(node), off::node_content + 8)) return nullptr;
+    auto* content = at<uint8_t*>(node, off::node_content);
+    if (content && reinterpret_cast<uintptr_t>(content) >= off::tank_content && is_intercooler_part(content - off::tank_content))
+        return content - off::tank_content;
+    auto* component = at<uint8_t*>(node, off::node_component);
+    size_t length = 0;
+    const char* id = definition_id_of(component, length);
+    if (!id || length < 8 || std::memcmp(id, "gas_port", 8) != 0 || !anymaker::readable(component + off::port_mated_component, 8)) return nullptr;
+    void* mated = at<void*>(component, off::port_mated_component);
+    return mated && is_intercooler_part(mated) ? mated : nullptr;
+}
+
+// Calls f(node) for every gas node on a turbo's boost pipe: the compressor outlet's island and, past a blow-off valve
+// on it, the island on the valve's far side. An inline valve joins its two pipes into one (hk_flood), so that is
+// usually the same island; when the game did not join them, the boost still crosses the valve (tick_valve).
+template <class F> void for_each_on_boost_pipe(void* turbo, F f) {
+    auto island_of = [](void* node) -> void* {
+        return node && anymaker::readable(static_cast<uint8_t*>(node) + off::node_island, 8) ? at<void*>(node, off::node_island) : nullptr;
+    };
+    void* start = static_cast<uint8_t*>(turbo) + off::pump_node_b;
+    void* seen[4] = {island_of(start)};
+    void* further[3]{};
+    int islands = 1, more = 0;
+    for_each_on_island(start, [&](void* node) {
+        f(node);
+        void* component = at<void*>(node, off::node_component);
+        auto valve = g_valves.find(component);
+        if (valve == g_valves.end() || !is_blow_off(valve->second.kind)) return;
+        for (ptrdiff_t side : {off::pump_node_a, off::pump_node_b}) {
+            void* other = static_cast<uint8_t*>(component) + side;
+            void* island = island_of(other);
+            if (!island || islands == 4 || std::find(seen, seen + islands, island) != seen + islands) continue;
+            seen[islands++] = island;
+            further[more++] = other;
+        }
+    });
+    for (int i = 0; i < more; ++i) for_each_on_island(further[i], f);
+}
+// A boosting turbo that finds no intercooler logs the parts on its boost pipe (and what each gas port is snapped onto),
+// so a player's log shows how the pipe is laid when an intercooler on it is not picked up.
+void log_boost_pipe(void* turbo, Turbo& t, double now) {
+    static std::atomic<int> logs{12};
+    if (now - t.last_pipe_log < 60.0 || logs.load() <= 0) return;
+    t.last_pipe_log = now;
+    logs.fetch_sub(1);
+    std::vector<std::string> parts;
+    int nodes = 0;
+    for_each_on_boost_pipe(turbo, [&](void* node) {
+        ++nodes;
+        auto* component = at<uint8_t*>(node, off::node_component);
+        size_t length = 0;
+        const char* id = definition_id_of(component, length);
+        std::string name = id ? std::string(id, length) : std::string("?");
+        if (id && length >= 8 && std::memcmp(id, "gas_port", 8) == 0 && anymaker::readable(component + off::port_mated_component, 8)) {
+            size_t on_length = 0;
+            const char* on = definition_id_of(at<void*>(component, off::port_mated_component), on_length);
+            name += " on " + (on ? std::string(on, on_length) : std::string("nothing"));
+        }
+        if (parts.size() < 16 && std::find(parts.begin(), parts.end(), name) == parts.end()) parts.push_back(name);
+    });
+    std::string list;
+    for (const std::string& p : parts) list += (list.empty() ? "" : ", ") + p;
+    log(0, "Turbo %dx%d id %d: no intercooler on its boost pipe (%d gas nodes: %s)", t.size, t.size, at<int32_t>(turbo, off::component_id), nodes, list.c_str());
 }
 // Frontal area of an intercooler in cells: 3 x 2 as placed, plus what it was stretched by.
 double cooler_cells(const void* cooler) {
@@ -806,7 +871,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     double cells = 0;
     const void* seen[8]{};
     int coolers = 0;
-    for_each_on_island(static_cast<uint8_t*>(self) + off::pump_node_b, [&](void* node) {
+    for_each_on_boost_pipe(self, [&](void* node) {
         void* cooler = intercooler_of(node);
         if (!cooler || coolers == 8) return;
         for (int k = 0; k < coolers; ++k) if (seen[k] == cooler) return;   // one per intercooler, however many ports it has
@@ -814,6 +879,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
         cells += cooler_cells(cooler);
         if (first_sight(cooler)) default_paint(cooler, kCoolerColours.slot[0], kCoolerColours.slot[1]);
     });
+    if (coolers == 0 && t.state.spool > 0.5) log_boost_pipe(self, t, now_s);
     double cooling = intercooler_effectiveness(cells, t.state.intake_flow);
     double air_c = kAmbientC + compressor_heat(o.head, kMaxHead) * (1.0 - cooling);
     if (o.compressor_move > 0) at<double>(c1, off::content_temperature) = air_c;

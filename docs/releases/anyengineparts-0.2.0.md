@@ -28,6 +28,10 @@ the turbo. The tooltip's **Condition** now shows a percentage, 100% new down to 
 - No data-port mounts under the 4x4 and 5x5 intake and exhaust pipes, and the wastegates lost stray mounts that
   floated off the part.
 
+**Intercoolers:** the turbo now looks for its intercooler past an inline blow-off valve too, and also through the part each
+gas port is snapped onto. In testing, a turbo never found its intercooler, so its boost air stayed hot. If a boosting turbo
+still finds none, the log lists the parts on its boost pipe so the cause shows up.
+
 **Fixes from a full review:**
 - A rare crash at startup: a hook could be called in the moment before it knew where to pass the call on. It now
   knows first. This was in the shared modding SDK, so every part (and any mod rebuilt with it) is covered.

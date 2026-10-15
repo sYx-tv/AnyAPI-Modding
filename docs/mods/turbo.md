@@ -215,8 +215,10 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
   [`turbo_health.h`](../../native/turbo_health.h), the wear file in [`turbo_wear_store.h`](../../native/turbo_wear_store.h).
 - The air filter is a stock gas vent class with its own mesh; the turbo finds it on its intake pipe. The intercooler
   is a stock gas tank class with the radiator's stretch keys, port surfaces and three mesh tiles
-  ([`turbo_upkeep_mesh.h`](../../native/turbo_upkeep_mesh.h)). The turbo finds it on its boost pipe through the
-  gas ports' shared content, and sets the temperature of the air it pushes.
+  ([`turbo_upkeep_mesh.h`](../../native/turbo_upkeep_mesh.h)). The turbo finds it on its boost pipe, past an inline
+  blow-off valve too, through the gas ports' shared content (the tank's own `add_mating_component` gives a snapped-on
+  port's node the tank's content) or the part a port is snapped onto, and sets the temperature of the air it pushes.
+  A boosting turbo that finds none logs the parts on its boost pipe once a minute (`no intercooler on its boost pipe`).
 - Hot boost air: the server engine tick and `math.remap` are hooked. The engine tick notes its air manifolds'
   temperature; the one remap call it makes for its boost factor, `remap(pressure, 1, 10, 1, 2)`, is scaled for
   that temperature, and knock is added to the engine's own damage counter afterwards. If the hooks are not found,

@@ -127,7 +127,7 @@ inline double boost_factor_for_air(double factor, double intake_c) {
     return 1.0 + (factor - 1.0) * intake_density_ratio(intake_c);
 }
 // Knock: hot boosted air hurts the engine. Added to the engine's own damage counter per tick (the game takes a
-// damage step at 1): at 140 C and full boost a step every 10 minutes or so.
+// damage step at 1): at 140 C and full boost a step about every 6 to 7 minutes.
 constexpr double kKnockC = 90.0;
 inline double knock_damage(double intake_c, double factor, double dt) {
     if (!std::isfinite(intake_c) || !std::isfinite(factor) || !(dt > 0)) return 0;
