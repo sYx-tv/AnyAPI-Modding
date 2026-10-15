@@ -1,4 +1,4 @@
-// Turbo: exhaust-driven turbochargers in two sizes (3x3x2 and 6x6x3), built from the stock impeller.
+// Turbo: exhaust-driven turbochargers in two sizes (3x3x2 and 6x6x2), built from the stock impeller.
 //
 // Each size is a new part of the stock impeller's class (gas_pump_centrifugal). The impeller already has two gas
 // nodes, the compressor inlet and outlet, and pumps between their two gas contents. The mod gives each turbo a

@@ -24,13 +24,12 @@ namespace turbo {
 constexpr int kMinSize = 2, kMaxSize = 6;
 // The turbos on offer (Nate, 2026-10-15): the 3x3 (small pipe) and the 6x6 (large pipe), the stock Small and Large
 // Impellers' faces. The 2x2 and 4x4 were removed (the superchargers take their place), and the 5x5 grew to the 6x6
-// so its large pipes sit dead centre (a 2-cell pipe has no middle on a 5-cell face). The tables below keep the
-// other sizes' numbers for the sounds, which voice blow-off valves and superchargers by size.
+// so its large pipes sit dead centre (a 2-cell pipe has no middle on a 5-cell face). Every turbo is 2 cells deep, like
+// the stock Large Impeller: a 2-cell pipe on the top or bottom face spans both, so it is centred too (Nate tried a
+// 3-deep 6x6 and picked 2 deep). The tables below keep the other sizes' numbers for the sounds, which voice blow-off
+// valves and superchargers by size.
 constexpr int kTurboSizes[] = {3, 6};
 inline bool turbo_offered(int n) { return n == 3 || n == 6; }
-// Cells front to back: the compressor housing and the turbine housing. The 3x3 is 2 deep, a cell each; the 6x6 is 3
-// deep (Nate: "so it doesnt look stupid stretched"), a cell and a half each.
-inline int turbo_depth(int n) { return n >= 6 ? 3 : 2; }
 constexpr const char* kIdPrefix = "turbocharger_";
 constexpr double kKpaPerUnit = 9.8;       // the game's own scale (see above)
 constexpr double kMaxHead = 9.0;          // ambient 1 + 9 = 10: the engine's full 2x boost
@@ -139,13 +138,13 @@ inline int channel_index(const char* name, size_t length) {
 // The stock large impeller (turbo_d) anchors its +z outlet one cell below the top the same way.
 struct Port { int x, y, z, dir; };
 inline Port port(int n, Node node) {
-    int c = (n - 1) / 2, top = n - 1, back = turbo_depth(n) - 1;
+    int c = (n - 1) / 2, top = n - 1;
     bool large = spec(n).large_pipe;
     switch (node) {
     case kColdIn: return {0, c, c, 0};                          // x_neg: front, axial
     case kColdOut: return {0, large ? top - 1 : top, top, 5};   // z_pos
-    case kHotIn: return {large ? back - 1 : back, 0, 0, 4};     // z_neg, on the turbine's cells
-    default: return {back, c, c, 1};                            // x_pos: back, axial
+    case kHotIn: return {large ? 0 : 1, 0, 0, 4};              // z_neg
+    default: return {1, c, c, 1};                               // x_pos: back, axial
     }
 }
 // The cells a port's pipe end covers on the part's face: 1 x 1 for a small pipe, 2 x 2 for a large one.
@@ -163,7 +162,7 @@ inline std::string fmt(double v) {
 }
 inline std::string description(int n) {
     Spec s = spec(n);
-    return "Exhaust-driven turbocharger, " + std::to_string(n) + "x" + std::to_string(n) + "x" + std::to_string(turbo_depth(n)) + ". Cold side (front): compressor intake in "
+    return "Exhaust-driven turbocharger, " + std::to_string(n) + "x" + std::to_string(n) + "x2. Cold side (front): compressor intake in "
         "the middle of the face, compressor outlet at the top facing sideways - feed an air manifold. Hot side (back): turbine "
         "exhaust out in the middle - vent it; turbine inlet at the bottom facing the other side, from the exhaust manifold. Full boost (98 kPa, double engine power) needs about " + fmt(s.rated_flow) +
         " L/s of exhaust; boost starts near " + fmt(s.rated_flow * kSpoolStart) + " L/s. Bigger turbos move more air with less back pressure but have more lag. " +
@@ -177,7 +176,7 @@ inline std::string description(int n) {
 // after the four gas nodes (saved links refer to logic nodes by position, so the old ones keep their meaning).
 // No stock part puts a gas node and a liquid node in one cell, so on the 2x2 (where the centre row holds the gas
 // intake and the turbine nodes) they sit one row further back, in cells of their own.
-inline Port oil_port(int n, bool in) { return {in ? 0 : turbo_depth(n) - 1, 0, n == 2 ? 1 : (n - 1) / 2, 2}; }
+inline Port oil_port(int n, bool in) { return {in ? 0 : 1, 0, n == 2 ? 1 : (n - 1) / 2, 2}; }
 inline std::string oil_node(int n, bool in) {
     Port p = oil_port(n, in);
     return "{\"id\": \"" + std::string(in ? "oil_in" : "oil_out") + "\", \"pos\": [" + std::to_string(p.x) + ", " + std::to_string(p.y) + ", " + std::to_string(p.z) + "], \"direction\": 2, \"type\": \"liquid\"}";
@@ -186,7 +185,7 @@ inline std::string oil_node(int n, bool in) {
 // One part definition: a resized stock impeller (class gas_pump_centrifugal) with a hot side.
 inline std::string definition_entry(int n, const std::string& mesh_path) {
     Spec s = spec(n);
-    int top = n - 1, back = turbo_depth(n) - 1;
+    int top = n - 1;
     std::string pipe = s.large_pipe ? ", \"size\": 1" : "";
     auto node = [&](Node which) {
         Port p = port(n, which);
@@ -196,16 +195,16 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
     // large pipe). The torque mount the impeller class asks for sits under the front far corner, clear of the oil
     // feed (on the 2x2, whose oil feed takes that cell, under the front near corner).
     std::string surfaces = "{\"id\": \"torque\", \"pos\": [0, 0, " + std::to_string(n == 2 ? 0 : top) + "], \"dir\": 2, \"type\": \"torque\"}";
-    for (int x : {0, back})
+    for (int x = 0; x < 2; ++x)
         for (int y = 0; y < n; ++y)
             for (int z = 0; z < n; ++z) {
                 if (port_covers(n, x ? kHotOut : kColdIn, x, y, z)) continue;
-                surfaces += ",\n        {\"pos\": [" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": " + std::to_string(x ? 1 : 0) + ", \"gender\": 2, \"type\": \"port\"}";
+                surfaces += ",\n        {\"pos\": [" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": " + std::to_string(x) + ", \"gender\": 2, \"type\": \"port\"}";
             }
     std::string descriptors;
     for (int i = 0; i < kChannelCount; ++i)
         descriptors += std::string(i ? ",\n        " : "") + "{\"type\": \"" + (kChannels[i].input ? "type_f64_input" : "type_f64_output") + "\", \"name\": \"" + kChannels[i].name + "\"}";
-    std::string box = "[" + std::to_string(back) + ", " + std::to_string(top) + ", " + std::to_string(top) + "]";
+    std::string box = "[1, " + std::to_string(top) + ", " + std::to_string(top) + "]";
     return std::string("    {\n") +
         "      \"id\": \"" + definition_id(n) + "\",\n" +
         "      \"name\": \"Turbo " + std::to_string(n) + "x" + std::to_string(n) + "\",\n" +
@@ -221,7 +220,7 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
         "      \"category\": \"gas\",\n" +
         "      \"tags\": \"torque\",\n" +
         "      \"tags_generated\": \"torque,port,\",\n" +
-        "      \"inspection_geometry\": [{\"p0\": [0.0, 0.0, 0.0], \"p1\": [" + std::to_string(back) + ".0, " + std::to_string(top) + ".0, " + std::to_string(top) + ".0]}],\n" +
+        "      \"inspection_geometry\": [{\"p0\": [0.0, 0.0, 0.0], \"p1\": [1.0, " + std::to_string(top) + ".0, " + std::to_string(top) + ".0]}],\n" +
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [\n        " + descriptors + "\n      ],\n" +

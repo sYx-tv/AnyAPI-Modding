@@ -4,14 +4,14 @@
 > so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
 > AnyEngineParts 0.1.0 is a prototype: it needs AnyAPI 0.37.0 or newer on that build. **Single player only** for now.
 
-Turbo adds two exhaust-driven turbochargers, **Turbo 3x3** (3x3x2) and **Turbo 6x6** (6x6x3), the faces of the
+Turbo adds two exhaust-driven turbochargers, **Turbo 3x3** (3x3x2) and **Turbo 6x6** (6x6x2), the faces of the
 stock Small and Large Impellers, and two belt-driven [superchargers](#superchargers), **Supercharger (Small)** and
 **Supercharger (Large)**. The Turbo 2x2, 4x4 and 5x5 are gone: the superchargers took the small ones' place and the
-5x5 grew into the 6x6, so its large pipes sit in the middle of its faces. A saved vehicle that had one loads without
-it. The front half of a turbo is the stock impeller's compressor housing, scaled to the size; the back half is the
+5x5 grew into the 6x6 (the stock Large Impeller's size), so all four of its large pipes sit in the middle of their
+faces. A saved vehicle that had one loads without it. The front half of a turbo is the stock impeller's compressor housing, scaled to the size; the back half is the
 turbine housing, the same impeller mirrored. A new turbo starts with a steel cold side and a cast-iron hot side,
 and the paint tool colours each side on its own, like any stock part. Every opening on the housing sits exactly where
-its pipe joins: on the 6x6 the boost outlet and the turbine inlet are large pipes that span two cells, so a cast
+its pipe joins: on the 6x6 the boost outlet and the turbine inlet are large pipes that span both cells, so a cast
 flange block carries them across the top and bottom corners.
 
 ## Hooking one up
@@ -19,8 +19,8 @@ flange block carries them across the top and bottom corners.
 | Port | Where | Connect to |
 | --- | --- | --- |
 | Intake in (cold side) | Middle of the front face | Nothing needed: it draws from the open air. A pipe here can only add air. |
-| Boost out (cold side) | Top far corner, facing sideways (6x6: across the front two cells, the cell below the top) | The engine's air intake |
-| Exhaust in (hot side) | Bottom near corner, facing the other way (6x6: across the back two cells) | The engine's exhaust |
+| Boost out (cold side) | Top far corner, facing sideways (6x6: across both cells, the cell below the top) | The engine's air intake |
+| Exhaust in (hot side) | Bottom near corner, facing the other way (6x6: across both cells) | The engine's exhaust |
 | Exhaust out (hot side) | Middle of the back face, opposite the intake | A gas vent (the tailpipe) |
 | Oil in, oil out | Underneath, a brass-ringed port under each housing | The engine's oil, through an oil cooler (see [Upkeep](#upkeep-oil-air-filter-heat-and-wear)) |
 

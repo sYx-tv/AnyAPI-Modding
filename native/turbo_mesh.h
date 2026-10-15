@@ -241,8 +241,8 @@ inline void oil_fitting(MeshBuilder& b, const double c[3]) {
 //   and back with it, a little smaller so it stays inside the housing's face ring. On the 2x2 a small pipe is a
 //   quarter of the face, away from the centre: the eye is filled in flat and a new opening drawn at the pipe. (Only
 //   the 3x3 and 6x6 are offered now; the other sizes still build.)
-// - The large-pipe turbos take a large pipe on the boost outlet and the turbine inlet, which spans two cells along x;
-//   a cast flange block there carries the opening across the part's depth (the stock housings' own outlets are one
+// - The large-pipe turbos take a large pipe on the boost outlet and the turbine inlet, which spans both of the part's
+//   cells along x; a cast flange block there carries the opening across both (the stock housings' own outlets are one
 //   cell wide and are painted over).
 // - Oil ports get a pad, a brass ring and a hole under the part, at the oil nodes.
 inline std::vector<uint8_t> build_turbo_mesh(const std::vector<uint8_t>& stock, int n, const char* new_name) {
@@ -258,10 +258,6 @@ inline std::vector<uint8_t> build_turbo_mesh(const std::vector<uint8_t>& stock, 
     if (hi[1] - lo[1] < 0.2f || hi[1] - lo[1] > 0.28f || hi[2] - lo[2] < 0.2f || hi[2] - lo[2] > 0.28f || hi[0] - lo[0] > 0.12f) return {};
 
     const float s = float(n) / 3.0f;                    // face scale
-    // Depth: each housing fills half the part front to back (one cell on a 2-deep turbo, a cell and a half on the
-    // 3-deep 6x6), scaled from the part's front face; the turbine side mirrors it to the back face.
-    const int depth = turbo_depth(n);
-    const float xs = float(depth) / 2.0f, h = float(kCell) * 0.5f, back = float((depth - 1) * kCell);
     const float c = float((n - 1) * kCell * 0.5);       // centre of the N x N face, cells 0..n-1
     const bool large = spec(n).large_pipe;
     // The eye: the stock impeller's intake, everything within its face ring (0.06 m from the axis, an octagon, so the
@@ -301,9 +297,8 @@ inline std::vector<uint8_t> build_turbo_mesh(const std::vector<uint8_t>& stock, 
             if (large && outlet && (o.rgba[0] < 60 && o.rgba[1] < 60)) {   // under the flange block: paint the old opening over
                 o.rgba[0] = kPaint0[0]; o.rgba[1] = kPaint0[1]; o.rgba[2] = kPaint0[2];
             }
-            x = (x + h) * xs - h;
             if (side) {                                 // mirror front to back, then half a turn about the axis
-                x = back - x; y = -y; z = -z;
+                x = float(kCell) - x; y = -y; z = -z;
                 nx = -nx; ny = -ny; nz = -nz;
                 hot_paint(o.rgba);
             } else {
@@ -312,7 +307,7 @@ inline std::vector<uint8_t> build_turbo_mesh(const std::vector<uint8_t>& stock, 
             const float k = !fill_eye && eye ? s * eye_scale : s, d = !fill_eye && eye ? shift : 0.0f;
             o.pos[0] = x; o.pos[1] = y * k + c + d; o.pos[2] = z * k + c + d;
             const float nin[3] = {nx, ny, nz};
-            normal(nin, xs, s, s, o.normal);
+            normal(nin, 1.0f, s, s, o.normal);
             verts.push_back(o);
         }
         for (size_t t = 0; t + 2 < idx.size(); t += 3) {
@@ -331,7 +326,7 @@ inline std::vector<uint8_t> build_turbo_mesh(const std::vector<uint8_t>& stock, 
     }
     if (large) {
         // Just proud of the part's front and back faces, so the stock outlet stub under it never shows through.
-        const double x0 = -0.5 * kCell - 0.0005, x1 = (depth - 0.5) * kCell + 0.0005, reach = 0.065, half = rp + 0.014;
+        const double x0 = -0.5 * kCell - 0.0005, x1 = 1.5 * kCell + 0.0005, reach = 0.065, half = rp + 0.014;
         double at[3];
         port_face_centre(n, kColdOut, at);             // boost outlet: top far corner, looking +z
         const double top = (n - 0.5) * kCell;

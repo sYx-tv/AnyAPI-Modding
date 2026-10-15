@@ -18,9 +18,8 @@ and chokes the engine's air, so the engine runs on in limp mode (about a third o
 the turbo. The tooltip's **Condition** now shows a percentage, 100% new down to 0% blown; it used to show no value.
 
 **Turbos: 3x3 and 6x6.** The Turbo 2x2 and 4x4 are gone (the superchargers take their place), and the 5x5 grew into
-the **Turbo 6x6** (6x6x3), the face of the stock Large Impeller, so its large intake and exhaust pipes sit dead centre
-(a 2-cell pipe has no middle on a 5-cell face). It is 3 cells deep so it keeps a turbo's proportions, and it performs
-as the 5x5 did. **A saved vehicle with a 2x2, 4x4 or 5x5 turbo loads without it:** place a 3x3, a 6x6 or a
+the **Turbo 6x6** (6x6x2), the size of the stock Large Impeller, so all four of its large pipes sit dead centre (a
+2-cell pipe has no middle on a 5-cell face). It performs as the 5x5 did. **A saved vehicle with a 2x2, 4x4 or 5x5 turbo loads without it:** place a 3x3, a 6x6 or a
 supercharger instead.
 
 **Turbo ports fixed:**
