@@ -25,6 +25,11 @@ constexpr int kMinSize = 2, kMaxSize = 5;
 constexpr const char* kIdPrefix = "turbocharger_";
 constexpr double kKpaPerUnit = 9.8;       // the game's own scale (see above)
 constexpr double kMaxHead = 9.0;          // ambient 1 + 9 = 10: the engine's full 2x boost
+// The game's engines stop at a pressure of 10 (2x power). With compound turbos (a second stage breathing the first
+// stage's boost) AnyEngineParts lets them go on to this pressure: 19 is two full stages, 3x power. One turbo still
+// tops out at 10.
+constexpr double kStockEnginePressure = 10.0;
+constexpr double kMaxEnginePressure = 19.0;
 constexpr double kSpoolStart = 0.25;      // exhaust flow (fraction of rated) where the shaft starts to build boost
 constexpr double kAmbientC = 20.0;
 constexpr double kPsiPerKpa = 0.1450377;
@@ -90,7 +95,7 @@ struct ChannelInfo { const char* name; bool input; };
 inline constexpr ChannelInfo kChannels[kChannelCount] = {
     {"intake_pressure", false},     // compressor outlet, kPa on the game's scale (98 = full boost)
     {"exhaust_pressure", false},    // turbine inlet, same scale (39 starts to cut engine power)
-    {"power_multiplier", false},    // engine power factor the intake pressure gives, 1-2
+    {"power_multiplier", false},    // engine power factor the intake pressure gives, 1-2 (up to 3 with compounds)
     {"spool", false},               // 0-1
     {"rpm", false},
     {"exhaust_flow", false},        // L/s through the hot side
@@ -252,15 +257,18 @@ inline double finite_or(double v, double d) { return std::isfinite(v) ? v : d; }
 inline double capped(double want, double from_volume, double back_volume) {
     return want >= 0 ? std::min(want, std::max(0.0, from_volume)) : -std::min(-want, std::max(0.0, back_volume));
 }
+// The engine's boost factor for an intake pressure: the game's remap(pressure, 1, 10, 1, 2), carried on past 10 up to
+// kMaxEnginePressure for compounds.
 inline double power_multiplier(double intake_pressure) {
-    return 1.0 + (std::clamp(intake_pressure, 1.0, 10.0) - 1.0) / 9.0;
+    return 1.0 + (std::clamp(finite_or(intake_pressure, 1.0), 1.0, kMaxEnginePressure) - 1.0) / 9.0;
 }
 
-// The compressor's head for the current spool and boost limit (pressure units over its inlet).
-inline double head_for(const State& st, double /*inlet_pressure*/) {
+// The compressor's head for the current spool and boost limit (pressure units over its inlet). The limit is boost
+// over the air outside, as the `boost` output reads it, so a second stage (inlet already boosted) makes only the rest.
+inline double head_for(const State& st, double inlet_pressure) {
     double head = kMaxHead * st.spool * std::clamp(finite_or(st.health, 1.0), 0.0, 1.0);
-    double limit = finite_or(st.slots[kBoostLimit], 0.0);   // boost, as the `boost` output reads it
-    if (limit > 0) head = std::min(head, limit / kKpaPerUnit);
+    double limit = finite_or(st.slots[kBoostLimit], 0.0);
+    if (limit > 0) head = std::clamp(limit / kKpaPerUnit - (std::max(1.0, finite_or(inlet_pressure, 1.0)) - 1.0), 0.0, head);
     return head;
 }
 

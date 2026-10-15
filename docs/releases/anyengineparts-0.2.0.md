@@ -28,6 +28,10 @@ the turbo. The tooltip's **Condition** now shows a percentage, 100% new down to 
 - No data-port mounts under the 4x4 and 5x5 intake and exhaust pipes, and the wastegates lost stray mounts that
   floated off the part.
 
+**New: compound turbos.** Pipe one turbo's boost into another turbo's intake and the second one adds its boost on top
+of the first. One turbo still gives the game's full 2x; a compound goes past it, up to 3x at 186 kPa. See
+[Twin and compound turbos](../mods/turbo.md#twin-and-compound-turbos).
+
 **Intercoolers:** the turbo now looks for its intercooler past an inline blow-off valve too, and also through the part each
 gas port is snapped onto. In testing, a turbo never found its intercooler, so its boost air stayed hot. If a boosting turbo
 still finds none, the log lists the parts on its boost pipe so the cause shows up.

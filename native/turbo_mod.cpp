@@ -85,6 +85,7 @@ constexpr ptrdiff_t node_node_index = 20;
 constexpr ptrdiff_t node_content = 24;              // vehicle_gas_node.m_content
 constexpr ptrdiff_t tank_content = 480;             // gas_tank.m_content (the intercooler is a gas tank)
 constexpr ptrdiff_t port_mated_component = 544;     // gas_port.m_mated_component (the part a gas port is snapped onto)
+constexpr ptrdiff_t container_nodes = 8;             // vehicle_gas_node.container.m_nodes (vector<ptr<vehicle_gas_node>>)
 constexpr ptrdiff_t client_definition = 176;         // client_scene.vehicle_component.m_definition
 constexpr ptrdiff_t client_factor_speed = 0xe0 + 8;  // client gas_pump_centrifugal.m_factor_speed's value (f64)
 constexpr ptrdiff_t mat34_t = 72;                    // mat34.t (vec3)            // vehicle_gas_node.m_node_index (s32; -1 when not found)
@@ -98,6 +99,7 @@ constexpr ptrdiff_t grid_origin_dir = 48;
 constexpr ptrdiff_t component_extend = 296;          // m_extend_size's value (vec3_s32): cells added by stretching
 constexpr ptrdiff_t engine_air_manifolds = 1256;     // engine.m_air_manifolds (vector<ptr<air_manifold>>)
 constexpr ptrdiff_t engine_damage_factor = 1456;     // engine.m_damage_factor (f64; a damage step at 1)
+constexpr ptrdiff_t manifold_content = 576;          // air_manifold.m_content_gas (vehicle_gas_content)
 constexpr ptrdiff_t manifold_air_temperature = 624;  // air_manifold.m_content_gas.m_temperature
 constexpr size_t liquid_content_size = 232, liquid_node_size = 80;
 constexpr int32_t kLiquidOil = 2, kLiquidPollutant = 3;   // server_scene.e_vehicle_liquid_type
@@ -169,6 +171,11 @@ struct Turbo {
     double oil_lps = 0;                              // smoothed
     double last_upkeep_log = -1e9;
     double last_pipe_log = -1e9;                     // when it last logged what is on a boost pipe without an intercooler
+    double topology_at = -1e9;                       // when the pipes around it were last looked at (refresh_topology)
+    const void* upstream = nullptr;                  // compound: the turbo whose boost its compressor breathes, or nullptr
+    double cooler_cells = 0;                         // intercoolers on its boost pipe, total frontal cells
+    int coolers = 0;
+    void* filter = nullptr;                          // the air filter on its intake this tick (a second stage: none)
     State state;
     double last_log = -1e9;
     int ticks = 0;
@@ -692,42 +699,64 @@ void* intercooler_of(void* node) {
     return mated && is_intercooler_part(mated) ? mated : nullptr;
 }
 
-// Calls f(node) for every gas node on a turbo's boost pipe: the compressor outlet's island and, past a blow-off valve
-// on it, the island on the valve's far side. An inline valve joins its two pipes into one (hk_flood), so that is
-// usually the same island; when the game did not join them, the boost still crosses the valve (tick_valve).
-template <class F> void for_each_on_boost_pipe(void* turbo, F f) {
-    auto island_of = [](void* node) -> void* {
-        return node && anymaker::readable(static_cast<uint8_t*>(node) + off::node_island, 8) ? at<void*>(node, off::node_island) : nullptr;
+void* island_of(void* node) {
+    return node && anymaker::readable(static_cast<uint8_t*>(node) + off::node_island, 8) ? at<void*>(node, off::node_island) : nullptr;
+}
+// Calls add(node) for every other gas node of the vehicle holding `node`'s content: the other ports of a gas tank
+// (each port snapped onto it is its own node, and often on its own island).
+template <class F> void for_each_sharing_content(void* vehicle, void* node, F add) {
+    if (!vehicle) return;
+    const uint8_t* vec = static_cast<uint8_t*>(container_of(vehicle)) + off::container_nodes;
+    if (!anymaker::readable(vec, 24)) return;
+    const void* content = at<void*>(node, off::node_content);
+    auto* buffer = at<uint8_t*>(vec, 0);
+    int32_t offset = at<int32_t>(vec, 8), count = at<int32_t>(vec, 12), size = at<int32_t>(vec, 20);
+    if (!content || !buffer || count <= 0 || count > 8192 || size != 8 || offset < 0 || !anymaker::readable(buffer + size_t(offset) * 8, size_t(count) * 8)) return;
+    auto* entries = reinterpret_cast<void* const*>(buffer + size_t(offset) * 8);
+    for (int32_t i = 0; i < count; ++i) {
+        void* other = entries[i];
+        if (other && other != node && anymaker::readable(static_cast<uint8_t*>(other), off::node_island + 8) && at<void*>(other, off::node_content) == content) add(other);
+    }
+}
+
+// Calls f(node) for every gas node the air reaches from `start` without passing a turbo: its island, and on through
+// inline blow-off valves (an inline valve joins its two pipes into one, hk_flood, but if the game did not, the boost
+// still crosses it, tick_valve) and intercoolers (each port snapped onto one holds its air, often on an island of its
+// own). Each island once, at most kMaxIslands of them.
+constexpr int kMaxIslands = 8;
+template <class F> void for_each_connected(void* vehicle, void* start, F f) {
+    void* islands[kMaxIslands]{};
+    void* queue[kMaxIslands]{};
+    int n = 0;
+    auto add = [&](void* node) {
+        void* island = island_of(node);
+        if (!island || n == kMaxIslands || std::find(islands, islands + n, island) != islands + n) return;
+        islands[n] = island;
+        queue[n++] = node;
     };
-    void* start = static_cast<uint8_t*>(turbo) + off::pump_node_b;
-    void* seen[4] = {island_of(start)};
-    void* further[3]{};
-    int islands = 1, more = 0;
-    for_each_on_island(start, [&](void* node) {
-        f(node);
-        void* component = at<void*>(node, off::node_component);
-        auto valve = g_valves.find(component);
-        if (valve == g_valves.end() || !is_blow_off(valve->second.kind)) return;
-        for (ptrdiff_t side : {off::pump_node_a, off::pump_node_b}) {
-            void* other = static_cast<uint8_t*>(component) + side;
-            void* island = island_of(other);
-            if (!island || islands == 4 || std::find(seen, seen + islands, island) != seen + islands) continue;
-            seen[islands++] = island;
-            further[more++] = other;
-        }
-    });
-    for (int i = 0; i < more; ++i) for_each_on_island(further[i], f);
+    add(start);
+    for (int i = 0; i < n; ++i)
+        for_each_on_island(queue[i], [&](void* node) {
+            f(node);
+            void* component = at<void*>(node, off::node_component);
+            auto valve = g_valves.find(component);
+            if (valve != g_valves.end() && is_blow_off(valve->second.kind)) {
+                add(static_cast<uint8_t*>(component) + off::pump_node_a);
+                add(static_cast<uint8_t*>(component) + off::pump_node_b);
+            }
+            if (intercooler_of(node)) for_each_sharing_content(vehicle, node, add);
+        });
 }
 // A boosting turbo that finds no intercooler logs the parts on its boost pipe (and what each gas port is snapped onto),
 // so a player's log shows how the pipe is laid when an intercooler on it is not picked up.
-void log_boost_pipe(void* turbo, Turbo& t, double now) {
+void log_boost_pipe(void* turbo, void* vehicle, Turbo& t, double now) {
     static std::atomic<int> logs{12};
     if (now - t.last_pipe_log < 60.0 || logs.load() <= 0) return;
     t.last_pipe_log = now;
     logs.fetch_sub(1);
     std::vector<std::string> parts;
     int nodes = 0;
-    for_each_on_boost_pipe(turbo, [&](void* node) {
+    for_each_connected(vehicle, static_cast<uint8_t*>(turbo) + off::pump_node_b, [&](void* node) {
         ++nodes;
         auto* component = at<uint8_t*>(node, off::node_component);
         size_t length = 0;
@@ -743,12 +772,6 @@ void log_boost_pipe(void* turbo, Turbo& t, double now) {
     std::string list;
     for (const std::string& p : parts) list += (list.empty() ? "" : ", ") + p;
     log(0, "Turbo %dx%d id %d: no intercooler on its boost pipe (%d gas nodes: %s)", t.size, t.size, at<int32_t>(turbo, off::component_id), nodes, list.c_str());
-}
-// Frontal area of an intercooler in cells: 3 x 2 as placed, plus what it was stretched by.
-double cooler_cells(const void* cooler) {
-    if (!anymaker::readable(static_cast<const uint8_t*>(cooler) + off::component_extend, 12)) return 6;
-    int32_t x = std::clamp(at<int32_t>(cooler, off::component_extend), 0, 30), y = std::clamp(at<int32_t>(cooler, off::component_extend + 4), 0, 30);
-    return double(3 + x) * double(2 + y);
 }
 
 void tick_valve(void* self, int kind) {
@@ -809,6 +832,48 @@ void publish_sleeping_valves(double dt) {
     }
 }
 
+// Frontal area of an intercooler in cells: 3 x 2 as placed, plus what it was stretched by.
+double cooler_cells(const void* cooler) {
+    if (!anymaker::readable(static_cast<const uint8_t*>(cooler) + off::component_extend, 12)) return 6;
+    int32_t x = std::clamp(at<int32_t>(cooler, off::component_extend), 0, 30), y = std::clamp(at<int32_t>(cooler, off::component_extend + 4), 0, 30);
+    return double(3 + x) * double(2 + y);
+}
+
+// What is piped to a turbo, looked at twice a second (pipes change rarely, and the walk can cross every gas node of
+// the vehicle): the turbo whose boost its compressor breathes (it is then a compound's second stage) and the
+// intercoolers on its boost pipe, which it paints with their starting colours the first time it finds them.
+void refresh_topology(void* self, void* vehicle, Turbo& t, double now) {
+    if (now - t.topology_at < 0.5) return;
+    t.topology_at = now;
+    const void* upstream = nullptr;
+    for_each_connected(vehicle, static_cast<uint8_t*>(self) + off::pump_node_a, [&](void* node) {
+        auto* component = at<uint8_t*>(node, off::node_component);
+        if (!upstream && component && component != self && node == component + off::pump_node_b && g_turbos.count(component)) upstream = component;
+    });
+    if (upstream != t.upstream) {
+        auto up = upstream ? g_turbos.find(upstream) : g_turbos.end();
+        if (up != g_turbos.end())
+            log(0, "Turbo %dx%d id %d: compound second stage, breathing the boost of Turbo %dx%d id %d", t.size, t.size,
+                at<int32_t>(self, off::component_id), up->second.size, up->second.size, at<int32_t>(upstream, off::component_id));
+        else
+            log(0, "Turbo %dx%d id %d: breathes outside air", t.size, t.size, at<int32_t>(self, off::component_id));
+        t.upstream = upstream;
+    }
+    double cells = 0;
+    const void* seen[8]{};
+    int coolers = 0;
+    for_each_connected(vehicle, static_cast<uint8_t*>(self) + off::pump_node_b, [&](void* node) {
+        void* cooler = intercooler_of(node);
+        if (!cooler || coolers == 8) return;
+        for (int k = 0; k < coolers; ++k) if (seen[k] == cooler) return;   // one per intercooler, however many ports it has
+        seen[coolers++] = cooler;
+        cells += cooler_cells(cooler);
+        if (first_sight(cooler)) default_paint(cooler, kCoolerColours.slot[0], kCoolerColours.slot[1]);
+    });
+    t.cooler_cells = cells;
+    t.coolers = coolers;
+}
+
 void hk_tick(void* self, void* vehicle, void* scene) {
     if (!self) return;
     std::unique_lock<std::recursive_mutex> lock(g_mutex);
@@ -824,11 +889,15 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     Turbo& t = found->second;
     void* c0 = static_cast<uint8_t*>(self) + off::pump_content_0;
     void* c1 = static_cast<uint8_t*>(self) + off::pump_content_1;
+    double now_s = now_seconds();
+    refresh_topology(self, vehicle, t, now_s);
+    auto upstream = t.upstream ? g_turbos.find(t.upstream) : g_turbos.end();
+    bool fed = upstream != g_turbos.end();           // a compound's second stage: it breathes another turbo's boost
     // The compressor inlet is open to the air, like a real turbo's intake: hold it at ambient every tick, both ways.
     // A game vent on the inlet starved the compressor in the first test; and boost left in the
     // pipes when the engine stops flows back through the compressor and out here, instead of staying trapped.
-    // A pipe on the inlet still works.
-    hold_ambient(c0);
+    // A pipe on the inlet still works. A second stage's inlet is the first stage's boost pipe, so it is left alone.
+    if (!fed) hold_ambient(c0);
     void* contents[kNodeCount] = {c0, c1, t.hot ? t.hot->content[0] : nullptr, t.hot ? t.hot->content[1] : nullptr};
     Inputs in;
     for (int i = 0; i < kNodeCount; ++i) {
@@ -837,15 +906,18 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     }
     if (contents[kHotIn]) in.exhaust_temperature = at<double>(contents[kHotIn], off::content_temperature);
     in.dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;
-    // Upkeep, from what the last ticks left: its condition and any air filter on the compressor intake.
-    double now_s = now_seconds();
+    // Upkeep, from what the last ticks left: its condition and any air filter on the compressor intake. A second
+    // stage breathes air its first stage filtered (or not): that one's filter does the work, and wears.
     sync_wear(now_s);
     double& condition = wear_of('t', vehicle, self);
     void* filter = nullptr;
-    for_each_on_island(static_cast<uint8_t*>(self) + off::pump_node_a, [&](void* node) {
-        void* component = at<void*>(node, off::node_component);
-        if (!filter && component && is_air_filter(part_kind(component))) filter = component;
-    });
+    if (!fed)
+        for_each_on_island(static_cast<uint8_t*>(self) + off::pump_node_a, [&](void* node) {
+            void* component = at<void*>(node, off::node_component);
+            if (!filter && component && is_air_filter(part_kind(component))) filter = component;
+        });
+    t.filter = filter;
+    bool filtered = fed ? upstream->second.filter != nullptr : filter != nullptr;
     double* filter_condition = filter ? &wear_of('f', vehicle, filter) : nullptr;
     if (filter && first_sight(filter)) default_paint(filter, kFilterColours.slot[0], kFilterColours.slot[1]);
     t.state.health = condition_head_factor(condition) * filter_head_factor(filter != nullptr, filter_condition ? *filter_condition : 1.0);
@@ -866,22 +938,13 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     }
     if (o.compressor_move > 0) g_content_move(c0, c1, &o.compressor_move);
     else if (o.compressor_move < 0) { double v = -o.compressor_move; g_content_move(c1, c0, &v); }
-    // Compressing the air heats it; intercoolers on the boost pipe take that heat back out. The engine breathes
-    // whatever reaches its air manifold (hk_engine_tick).
-    double cells = 0;
-    const void* seen[8]{};
-    int coolers = 0;
-    for_each_on_boost_pipe(self, [&](void* node) {
-        void* cooler = intercooler_of(node);
-        if (!cooler || coolers == 8) return;
-        for (int k = 0; k < coolers; ++k) if (seen[k] == cooler) return;   // one per intercooler, however many ports it has
-        seen[coolers++] = cooler;
-        cells += cooler_cells(cooler);
-        if (first_sight(cooler)) default_paint(cooler, kCoolerColours.slot[0], kCoolerColours.slot[1]);
-    });
-    if (coolers == 0 && t.state.spool > 0.5) log_boost_pipe(self, t, now_s);
+    // Compressing the air heats it (on top of a first stage's heat, for a second stage); intercoolers on the boost
+    // pipe take that heat back out. The engine breathes whatever reaches its air manifold (hk_engine_tick).
+    double cells = t.cooler_cells;
+    if (t.coolers == 0 && t.state.spool > 0.5) log_boost_pipe(self, vehicle, t, now_s);
     double cooling = intercooler_effectiveness(cells, t.state.intake_flow);
-    double air_c = kAmbientC + compressor_heat(o.head, kMaxHead) * (1.0 - cooling);
+    double inlet_c = fed ? at<double>(c0, off::content_temperature) : kAmbientC;
+    double air_c = boost_air_c(inlet_c, o.head, kMaxHead, cooling, kAmbientC);
     if (o.compressor_move > 0) at<double>(c1, off::content_temperature) = air_c;
     // Oil: what comes in the oil port passes through (as engine oil pressure would push it) and leaves hotter.
     constexpr double kOilPassLps = 0.8;
@@ -908,7 +971,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     t.oil_lps += (oil_now - t.oil_lps) * std::min(1.0, in.dt / 0.5);
     UpkeepInputs ui;
     ui.spool = t.state.spool; ui.exhaust_fraction = t.state.exhaust_flow / t.spec.rated_flow; ui.exhaust_c = in.exhaust_temperature;
-    ui.oil_lps = t.oil_lps; ui.oil_c = oil_c; ui.oil_pollution = pollution; ui.filter = filter != nullptr;
+    ui.oil_lps = t.oil_lps; ui.oil_c = oil_c; ui.oil_pollution = pollution; ui.filter = filtered;
     ui.filter_condition = filter_condition ? *filter_condition : 1.0; ui.ambient_c = kAmbientC; ui.dt = in.dt;
     double was = condition;
     t.up.condition = condition;
@@ -920,7 +983,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
         t.state.blown = true;
         set_paint(self, kPaletteSoot, kPaletteSoot, false);
         log(1, "Turbo %dx%d id %d BLEW UP (worn out at %.0f C, oil %.2f L/s, %s): no boost and a choked intake until it is replaced",
-            t.size, t.size, at<int32_t>(self, off::component_id), t.up.temperature, t.oil_lps, filter ? "filtered" : "no air filter");
+            t.size, t.size, at<int32_t>(self, off::component_id), t.up.temperature, t.oil_lps, filtered ? "filtered" : "no air filter");
     }
     if (t.oil && moved > 0) {                         // the oil leaving carries the turbo's heat, and it ages a little
         void* oil_out = t.oil->content[1];
@@ -938,7 +1001,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     t.state.slots[kOilFlow] = t.oil_lps;
     t.state.slots[kTurboTemperature] = t.up.temperature;
     t.state.slots[kCondition] = condition;
-    t.state.slots[kAirFiltered] = filter ? 1.0 : 0.0;
+    t.state.slots[kAirFiltered] = filtered ? 1.0 : 0.0;
     t.state.slots[kBoostAirTemperature] = air_c;
     t.state.slots[kPowerMultiplier] = boost_factor_for_air(t.state.slots[kPowerMultiplier], air_c);   // as the engine gets it (hk_remap)
     static std::atomic<int> upkeep_logs{120};
@@ -946,7 +1009,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
         t.last_upkeep_log = now_s;
         log(0, "Turbo %dx%d id %d upkeep: %.0f C, condition %.4f, oil %.2f L/s at %.0f C (pollutant %.0f%%), filter %s, boost air %.0f C (%.0f cooler cells, cooling %.2f), health %.2f",
             t.size, t.size, at<int32_t>(self, off::component_id), t.up.temperature, condition, t.oil_lps, oil_c, pollution * 100,
-            filter ? (std::to_string(int(std::lround(ui.filter_condition * 100))) + "%").c_str() : "none", air_c, cells, cooling, t.state.health);
+            filter ? (std::to_string(int(std::lround(ui.filter_condition * 100))) + "%").c_str() : fed ? "first stage's" : "none", air_c, cells, cooling, t.state.health);
     }
     at<double>(self, off::pump_pressure) = o.head;
     at<double>(self, off::pump_display_power) = o.power;
@@ -1448,38 +1511,51 @@ using engine_tick_t = void (*)(void* self, void* vehicle, void* scene);
 using remap_t = void (*)(double* ret, const double* v, const double* a, const double* b, const double* c, const double* d);
 anymaker::cell_hook h_engine_tick, h_remap;
 thread_local bool t_in_engine = false;
-thread_local double t_intake_c = 0, t_boost_factor = 0;
+thread_local double t_intake_c = 0, t_intake_pressure = 0, t_boost_factor = 0;
 
-// Average temperature of an engine's air manifolds' gas, or NaN.
-double engine_intake_c(const void* engine) {
+// Average temperature of an engine's air manifolds' gas (or NaN), and in `pressure` their average pressure as the
+// engine works it out (each content's volume over capacity, 0 for none; NaN if a manifold cannot be read).
+double engine_intake_c(const void* engine, double& pressure) {
+    pressure = NAN;
     const uint8_t* vec = static_cast<const uint8_t*>(engine) + off::engine_air_manifolds;
     if (!anymaker::readable(vec, 24)) return NAN;
     auto* buffer = at<uint8_t*>(vec, 0);
     int32_t offset = at<int32_t>(vec, 8), count = at<int32_t>(vec, 12), size = at<int32_t>(vec, 20);
     if (!buffer || count <= 0 || count > 32 || size != 8 || offset < 0 || !anymaker::readable(buffer + size_t(offset) * 8, size_t(count) * 8)) return NAN;
     auto* entries = reinterpret_cast<void* const*>(buffer + size_t(offset) * 8);
-    double sum = 0;
+    double sum = 0, pressure_sum = 0;
     int n = 0;
+    bool all = true;
     for (int32_t i = 0; i < count; ++i) {
         const uint8_t* m = static_cast<const uint8_t*>(entries[i]);
-        if (!m || !anymaker::readable(m + off::manifold_air_temperature, 8)) continue;
+        if (!m || !anymaker::readable(m + off::manifold_content, off::manifold_air_temperature + 8 - off::manifold_content)) { all = false; continue; }
         double c = at<double>(m, off::manifold_air_temperature);
         if (std::isfinite(c) && c > -100 && c < 2000) { sum += c; ++n; }
+        double volume = at<double>(m, off::manifold_content + off::content_volume), capacity = at<double>(m, off::manifold_content + off::content_capacity);
+        if (std::isfinite(volume) && std::isfinite(capacity) && capacity > 0) pressure_sum += volume / capacity;
     }
+    if (all) pressure = pressure_sum / count;
     return n ? sum / n : NAN;
 }
 
+// The engine's boost factor: remap(clamp(pressure, 1, 10), 1, 10, 1, 2). Past 10 (only compounds get there) it carries
+// on to kMaxEnginePressure, 3x; then the boost part is scaled for the air's density.
 void hk_remap(double* ret, const double* v, const double* a, const double* b, const double* c, const double* d) {
     reinterpret_cast<remap_t>(h_remap.original)(ret, v, a, b, c, d);
     if (!t_in_engine || !ret || !a || !b || !c || !d || *a != 1.0 || *b != 10.0 || *c != 1.0 || *d != 2.0) return;
-    t_boost_factor = *ret;
-    *ret = boost_factor_for_air(*ret, t_intake_c);
+    double factor = *ret;
+    if (v && *v >= kStockEnginePressure && std::isfinite(t_intake_pressure) && t_intake_pressure > kStockEnginePressure)
+        factor = power_multiplier(t_intake_pressure);
+    t_boost_factor = factor;
+    *ret = boost_factor_for_air(factor, t_intake_c);
 }
 
 void hk_engine_tick(void* self, void* vehicle, void* scene) {
-    double intake = self ? engine_intake_c(self) : NAN;
+    double pressure = NAN;
+    double intake = self ? engine_intake_c(self, pressure) : NAN;
     t_in_engine = std::isfinite(intake);
     t_intake_c = intake;
+    t_intake_pressure = pressure;
     t_boost_factor = 0;
     reinterpret_cast<engine_tick_t>(h_engine_tick.original)(self, vehicle, scene);
     t_in_engine = false;

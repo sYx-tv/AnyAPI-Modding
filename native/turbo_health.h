@@ -108,6 +108,13 @@ inline double compressor_heat(double head, double max_head) {
     double f = max_head > 0 ? std::clamp(std::isfinite(head) ? head / max_head : 0.0, 0.0, 1.0) : 0.0;
     return kBoostHeatC * std::pow(f, 0.8);
 }
+// The air a compressor sends on: its inlet air (outside air, or a first stage's boost) heated by its head, then cooled
+// towards the outside air by the intercoolers' effectiveness (intercooler_effectiveness below).
+inline double boost_air_c(double inlet_c, double head, double max_head, double cooling, double ambient_c) {
+    double in = std::isfinite(inlet_c) ? std::clamp(inlet_c, -50.0, 600.0) : ambient_c;
+    double hot = in + compressor_heat(head, max_head);
+    return hot - (hot - ambient_c) * std::clamp(std::isfinite(cooling) ? cooling : 0.0, 0.0, 1.0);
+}
 // Intercoolers on the boost pipe: how much of that heat they take back out (0-1). `cells` is their total frontal
 // area in cells, `flow` the air through them in L/s: bigger cores and slower air cool better.
 inline double intercooler_effectiveness(double cells, double flow_lps) {

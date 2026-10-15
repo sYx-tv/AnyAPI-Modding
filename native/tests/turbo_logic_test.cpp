@@ -54,6 +54,32 @@ static double run(State& st, const Spec& s, Plant& pl, double exhaust_lps, doubl
     return pl.cold_out / pl.cap;
 }
 
+// Two turbos in series on the cold side (a compound): the first stage breathes outside air into a pipe the second
+// stage breathes from; both turbines share the exhaust manifold. Returns the second stage's outlet pressure.
+struct CompoundPlant { double cap = 2.0, hot_in = 2.0, mid = 2.0, out = 2.0; };
+static double run_compound(State& a, State& b, const Spec& sa, const Spec& sb, CompoundPlant& pl, double exhaust_lps, double air_lps, double seconds,
+                           double dt = 1.0 / 60) {
+    for (double t = 0; t < seconds; t += dt) {
+        pl.hot_in += exhaust_lps * dt;
+        pl.out = std::max(0.0, pl.out - air_lps * dt);
+        Inputs ia, ib;
+        for (Inputs* in : {&ia, &ib}) {
+            in->pressure[kHotIn] = pl.hot_in / pl.cap; in->volume[kHotIn] = pl.hot_in;
+            in->pressure[kHotOut] = 1; in->volume[kHotOut] = pl.cap;
+            in->dt = dt;
+        }
+        ia.pressure[kColdIn] = 1; ia.volume[kColdIn] = pl.cap;
+        ia.pressure[kColdOut] = pl.mid / pl.cap; ia.volume[kColdOut] = pl.mid;
+        ib.pressure[kColdIn] = pl.mid / pl.cap; ib.volume[kColdIn] = pl.mid;
+        ib.pressure[kColdOut] = pl.out / pl.cap; ib.volume[kColdOut] = pl.out;
+        Step oa = step(a, sa, ia), ob = step(b, sb, ib);
+        pl.hot_in -= oa.turbine_move + ob.turbine_move;
+        pl.mid += oa.compressor_move - ob.compressor_move;
+        pl.out += ob.compressor_move;
+    }
+    return pl.out / pl.cap;
+}
+
 int main() {
     // Ids and sizes.
     for (int n = kMinSize; n <= kMaxSize; ++n) { std::string id = definition_id(n); assert(size_from_id(id.c_str(), id.size()) == n); }
@@ -171,6 +197,19 @@ int main() {
     // Boost limit (kPa, game scale) caps the boost the `boost` output reads (the docs: "caps boost at this pressure").
     { State st; st.slots[kBoostLimit] = 49; Plant pl; Spec s = spec(3); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.5, 20);
       assert(p < 6.05 && p > 4.5 && st.slots[kBoost] < 49.5 && st.slots[kBoost] > 35); }
+    // Compounds: the engine's boost factor carries on past the game's 10 (2x) up to 19 (3x), and no further.
+    assert(near(power_multiplier(10), 2.0) && near(power_multiplier(19), 3.0) && near(power_multiplier(40), 3.0) && near(power_multiplier(5.5), 1.5));
+    // The boost limit is over the air outside, so a second stage whose inlet is already boosted makes only the rest.
+    { State st; st.spool = 1; st.slots[kBoostLimit] = 49; assert(near(head_for(st, 1.0), 5.0, 0.01) && near(head_for(st, 4.0), 2.0, 0.01) && head_for(st, 9.0) == 0); }
+    // A second stage heats its inlet air further; intercoolers cool towards the outside air.
+    assert(near(boost_air_c(20, 9, 9, 0, 20), 140) && near(boost_air_c(140, 9, 9, 0, 20), 260) && near(boost_air_c(140, 9, 9, 1, 20), 20));
+    assert(near(boost_air_c(20, 9, 9, 0.5, 20), 80) && near(boost_air_c(NAN, 0, 9, 0, 20), 20));
+    // Two 3x3s in series on a big engine reach well past one turbo's 10 (three times the power needs 19); one 3x3 on its
+    // own under the same draw stays at or under 10.
+    { State a, b; CompoundPlant pl; double p = run_compound(a, b, spec(3), spec(3), pl, 50, 40, 20);
+      assert(a.spool > 0.95 && b.spool > 0.95 && p > 13 && p < 19.5 && b.slots[kPowerMultiplier] > 2.3);
+      assert(b.slots[kBoost] > 100);                    // the second stage's `boost` reads the total over the air outside
+      State one; Plant single; double q = run(one, spec(3), single, 25, 40, 20); assert(q <= 10.0 && one.slots[kPowerMultiplier] <= 2.0); }
     // Boost outputs: over the air outside, in kPa and psi (full boost about 88 kPa, 12.8 psi).
     { State st; Plant pl; Spec s = spec(3); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.9, 20);
       assert(near(st.slots[kBoost], (p - 1) * kKpaPerUnit, 2.5) && near(st.slots[kBoostPsi], st.slots[kBoost] * 0.1450377, 1e-9) && st.slots[kBoostPsi] > 10); }

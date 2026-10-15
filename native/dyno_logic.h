@@ -157,7 +157,7 @@ inline constexpr ChannelInfo kChannels[kChannelCount] = {
     {"power_hp", false, L"Engine power now, all engines, hp"},
     {"power_kw", false, L"Engine power now, kW"},
     {"torque_nm", false, L"Engine torque now, N·m"},
-    {"boost", false, L"Intake pressure factor (1 = none, 2 = full boost)"},
+    {"boost", false, L"Intake pressure factor (1 = none, 2 = one turbo's full boost, up to 3 with compound turbos)"},
     {"engine_temperature", false, L"Hottest engine, °C"},
     {"recording", false, L"1 while a pull is being recorded"},
     {"peak_hp", false, L"Latest pull's peak power, hp"},

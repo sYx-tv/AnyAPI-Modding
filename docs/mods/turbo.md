@@ -23,7 +23,8 @@ cast flange block carries them across the top and bottom corners.
 
 Exhaust flowing from the hot inlet to the hot outlet spins the shaft. The shaft's spool sets how much pressure
 the cold side pushes into the engine's intake. Engines already turn intake pressure into power: ambient gives
-1x, and an intake pressure of 98 kPa (the game's scale) gives the full 2x.
+1x, and an intake pressure of 98 kPa (the game's scale) gives the full 2x. One turbo stops there; two in a row
+(a [compound](#twin-and-compound-turbos)) can take it up to 3x.
 
 Turbos 4x4 and 5x5 use large pipes; 2x2 and 3x3 use small pipes. No gas tank is needed. The compressor inlet is open to the air like a real turbo intake.
 
@@ -40,6 +41,27 @@ depending on its size, against 5 to 33 L/s through a turbine. So:
 
 Big engines need big turbos. A turbo much smaller than its engine chokes the exhaust: the back pressure takes away
 much of what the boost adds (a 4-rotor Rotary wants a 5x5 or two 4x4s).
+
+## Twin and compound turbos
+
+**Twin turbos** (side by side): join the engine's exhaust to both hot inlets and both boost outlets to the engine's
+air intake. The game evens out an engine's exhaust across all its exhaust manifolds and everything piped to them, so
+the two turbines share it evenly. Two 3x3s spool sooner than one 5x5 and make about the same boost on an engine that
+feeds them both fully (44 L/s of exhaust or more). One blow-off valve on the shared boost pipe serves both.
+
+**Compound turbos** (one after the other): pipe the first turbo's boost outlet into the second turbo's intake, and the
+second turbo's boost outlet to the engine. The second turbo breathes the first one's boost and adds its own on top,
+so together they pass the 2x one turbo can give: the engine's power carries on rising with intake pressure up to 3x
+at 186 kPa (19 on the game's scale), and no further. An intercooler between the two (and one after the second) keeps
+the air cool: the second turbo heats air that is already hot.
+
+- Split the exhaust between the two turbines, as for twins. Running it through one turbine and then the other works
+  too, but backs the exhaust up into the engine, which costs power.
+- Two of the same size work best. In testing on the bench model, two 3x3s on 50 L/s of exhaust reached about 160 kPa,
+  2.66x.
+- The air filter goes on the first turbo's intake; the second turbo counts it as its own.
+- A `boost_limit` on the second turbo caps the total boost at its outlet; on the first, the boost between the two.
+- The log says which turbo found which: `compound second stage, breathing the boost of Turbo ...`.
 
 ## Sizes and lag
 
@@ -165,10 +187,10 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | Channel | Direction | Value |
 | --- | --- | --- |
 | `intake_pressure` | Output | Pressure at the cold outlet, kPa (absolute: 9.8 is the air outside) |
-| `boost` | Output | Boost over the air outside, kPa (full boost is about 88) |
+| `boost` | Output | Boost over the air outside, kPa (full boost is about 88; a compound's second turbo reads the total) |
 | `boost_psi` | Output | The same in psi (full boost is about 12.8), for a boost gauge |
 | `exhaust_pressure` | Output | Pressure at the hot inlet, kPa |
-| `power_multiplier` | Output | The engine power multiplier this boost gives, 1 to 2, after what hot boost air costs |
+| `power_multiplier` | Output | The engine power multiplier this boost gives, 1 to 2 (up to 3 on a compound's second turbo), after what hot boost air costs |
 | `spool` | Output | Shaft spool, 0 to 1 |
 | `rpm` | Output | Shaft speed |
 | `exhaust_flow`, `intake_flow` | Output | Hot-side and cold-side flow, L/s |
@@ -213,6 +235,9 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 - Oil ports are made like the stock fuel manifold's: two liquid contents and nodes for the turbo's two liquid
   logic nodes, which sit after its four gas nodes so saved pipes keep their meaning. The upkeep model is in
   [`turbo_health.h`](../../native/turbo_health.h), the wear file in [`turbo_wear_store.h`](../../native/turbo_wear_store.h).
+- Every half second each turbo walks the pipes joined to its intake and boost outlet, across inline blow-off valves and
+  intercoolers. A turbo whose intake pipe holds another turbo's boost outlet is that turbo's second stage: it takes in
+  the first stage's air and temperature instead of the outside air's.
 - The air filter is a stock gas vent class with its own mesh; the turbo finds it on its intake pipe. The intercooler
   is a stock gas tank class with the radiator's stretch keys, port surfaces and three mesh tiles
   ([`turbo_upkeep_mesh.h`](../../native/turbo_upkeep_mesh.h)). The turbo finds it on its boost pipe, past an inline
@@ -221,7 +246,8 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
   A boosting turbo that finds none logs the parts on its boost pipe once a minute (`no intercooler on its boost pipe`).
 - Hot boost air: the server engine tick and `math.remap` are hooked. The engine tick notes its air manifolds'
   temperature; the one remap call it makes for its boost factor, `remap(pressure, 1, 10, 1, 2)`, is scaled for
-  that temperature, and knock is added to the engine's own damage counter afterwards. If the hooks are not found,
+  that temperature, and knock is added to the engine's own damage counter afterwards. Past the game's 10 (2x) the
+  factor carries on to 3x at 19, which only a compound reaches. If the hooks are not found,
   engines ignore intake temperature as before.
 - The hot side's gas is not saved; it refills from the pipes after loading. Saves that contain a turbo need
   AnyEngineParts installed to load it.
