@@ -32,6 +32,10 @@ the turbo. The tooltip's **Condition** now shows a percentage, 100% new down to 
 of the first. One turbo still gives the game's full 2x; a compound goes past it, up to 3x at 186 kPa. See
 [Twin and compound turbos](../mods/turbo.md#twin-and-compound-turbos).
 
+**Intercoolers are 2 cells deep:** a large gas port now sits fully on any face, not half off the top, bottom or ends.
+Growing one no longer stretches its inlet stubs or rails: it repeats whole cells both ways. An intercooler already
+placed grows one cell deeper, so move anything sitting right behind it.
+
 **Intercoolers:** the turbo now looks for its intercooler past an inline blow-off valve too, and also through the part each
 gas port is snapped onto. In testing, a turbo never found its intercooler, so its boost air stayed hot. If a boosting turbo
 still finds none, the log lists the parts on its boost pipe so the cause shows up.

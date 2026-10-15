@@ -149,9 +149,11 @@ An intercooler fixes that. There are two, which work the same and differ only in
 (Race Core)**, a black core with bright fins and an inlet stub on each tank, and the **Turbo Intercooler (Round
 Tank)**, a slim silver core between round tanks. Like the radiator, it has no pipes of its own: snap gas ports onto its faces,
 small or large, wherever suits the build. Run one from the turbo's boost and one to the engine's air intake. All its
-ports share one volume of air, so the boost passes straight through. It has an end tank on each side, like a car's,
-and stretches like the radiator: wider one cell at a time (the tanks stay at the ends) and taller. A bigger core cools better, and so does slower air: a 3x2 core takes about
-three quarters of the heat out of a 3x3 turbo's boost. The tanks paint.
+ports share one volume of air, so the boost passes straight through. It is 3 cells wide, 2 tall and 2 deep, so a
+large port sits fully on any face. It has an end tank on each side, like a car's, and grows like the radiator: wider
+and taller one cell at a time. The tanks stay at the ends and the inlet stubs and rails keep their shape at any size.
+A bigger core cools better, and so does slower air: a 3x2 core takes about three quarters of the heat out of a 3x3
+turbo's boost. The tanks paint.
 
 ## Sounds
 
@@ -239,8 +241,8 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
   intercoolers. A turbo whose intake pipe holds another turbo's boost outlet is that turbo's second stage: it takes in
   the first stage's air and temperature instead of the outside air's.
 - The air filter is a stock gas vent class with its own mesh; the turbo finds it on its intake pipe. The intercooler
-  is a stock gas tank class with the radiator's stretch keys, port surfaces and three mesh tiles
-  ([`turbo_upkeep_mesh.h`](../../native/turbo_upkeep_mesh.h)). The turbo finds it on its boost pipe, past an inline
+  is a stock gas tank class, two cells deep like the stock large radiator, with nine mesh tiles the game repeats along
+  its width and height ([`turbo_upkeep_mesh.h`](../../native/turbo_upkeep_mesh.h)). The turbo finds it on its boost pipe, past an inline
   blow-off valve too, through the gas ports' shared content (the tank's own `add_mating_component` gives a snapped-on
   port's node the tank's content) or the part a port is snapped onto, and sets the temperature of the air it pushes.
   A boosting turbo that finds none logs the parts on its boost pipe once a minute (`no intercooler on its boost pipe`).

@@ -460,20 +460,22 @@ int main() {
     // Air filter and intercooler meshes: readable, both paint markers, inside their cells.
     for (int large = 0; large < 2; ++large) {
         std::vector<std::vector<uint8_t>> meshes{build_air_filter_mesh(stock, large, "f")};
-        for (int style = 0; style < kIntercoolerStyleCount && !large; ++style)   // every look: tiles 0, 1, 2
-            for (int tile = 0; tile < 3; ++tile) meshes.push_back(build_intercooler_tile(stock, tile, "i", style));
+        for (int style = 0; style < kIntercoolerStyleCount && !large; ++style)   // both looks: tiles 0, 1, 2 along x and y
+            for (int t = 0; t < 9; ++t) meshes.push_back(build_intercooler_tile(stock, t % 3, t / 3, "i", style));
         for (size_t k = 0; k < meshes.size(); ++k) {
             MeshLayout m; assert(parse_mesh(meshes[k], m) && m.vertices > 50);
             std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), meshes[k].data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
             bool paint0 = false, paint1 = false;
             double lo[3], hi[3];
             if (k == 0) { for (int j = 0; j < 3; ++j) { lo[j] = -kCell / 2; hi[j] = (air_filter_cells(large) - 0.5) * kCell; } }
-            else { lo[0] = lo[1] = lo[2] = -kCell / 2; hi[0] = hi[2] = kCell / 2; hi[1] = 1.5 * kCell; }   // one cell wide, two tall
+            else { lo[0] = lo[1] = lo[2] = -kCell / 2; hi[0] = hi[1] = kCell / 2; hi[2] = 1.5 * kCell; }   // one cell wide and tall, two deep
             for (auto& p : v) {
                 for (int j = 0; j < 3; ++j) assert(p.pos[j] >= lo[j] - 0.003 && p.pos[j] <= hi[j] + 0.003);
                 paint0 = paint0 || (p.rgba[0] == 153 && p.rgba[1] == 0); paint1 = paint1 || (p.rgba[0] == 153 && p.rgba[1] == 38);
             }
-            assert((paint0 && paint1) || (k > 0 && (k - 1) % 3 == 1));   // the middle intercooler tiles are all core
+            int tx = int(k - 1) % 9 % 3, ty = int(k - 1) % 9 / 3;
+            assert(k == 0 || paint0 == (tx != 1));               // tanks on the end tiles only, caps on the corners only
+            assert(k == 0 ? paint0 && paint1 : paint1 == (tx != 1 && ty != 1));
         }
     }
     return 0;

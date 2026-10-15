@@ -1253,13 +1253,13 @@ bool write_definition_file() {
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         filter_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
-    for (int k = 0; k < 6; ++k) {                            // the game strings the tiles together like the radiator's
-        int tile = k % 3;
-        bool round = k >= 3;
-        std::string path = intercooler_mesh_path(tile, round);
+    for (int k = 0; k < 18; ++k) {                           // nine tiles each, laid out along x and y
+        int tx = k % 3, ty = k / 3 % 3;
+        bool round = k >= 9;
+        std::string path = intercooler_mesh_path(tx, ty, round);
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_intercooler_tile(stock, tile, name.c_str(), round ? kIntercoolerRoundStyle : kIntercoolerStyle);
+        std::vector<uint8_t> mesh = build_intercooler_tile(stock, tx, ty, name.c_str(), round ? kIntercoolerRoundStyle : kIntercoolerStyle);
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         cooler_built = cooler_built && !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
