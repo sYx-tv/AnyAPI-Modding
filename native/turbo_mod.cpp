@@ -1443,7 +1443,7 @@ bool write_definition_file() {
         std::string path = blower_mesh_path(large != 0);
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_supercharger_mesh(stock, large != 0, name.c_str(), kSuperchargerStyle);
+        std::vector<uint8_t> mesh = build_supercharger_mesh(stock, large != 0, name.c_str());
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         blower_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }

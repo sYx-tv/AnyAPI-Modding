@@ -1,8 +1,7 @@
 #pragma once
-// Centrifugal supercharger meshes, in five looks (kSuperchargerStyle picks the one the game uses). A head unit: the
-// compressor's snail-shell volute on the front, its large-pipe intake centred on the front face, the discharge rising
-// tangentially to the top face, and the step-up gear case behind it with the input shaft (the torque spot a stock
-// Pulley Wheel bolts onto) on the back face.
+// Centrifugal supercharger meshes. A head unit: the compressor's snail-shell volute on the front, its large-pipe intake
+// centred on the front face, the discharge rising tangentially to the top face, and the step-up gear case behind it
+// with the input shaft (the torque spot a stock Pulley Wheel bolts onto) on the back face.
 //   small: 2 x 2 x 2 cells; large intake on the front face, small outlet on top (cell x 1, z 0), torque spot on the
 //          back face (cell 0, 0).
 //   large: the small scaled up twice: 4 x 4 x 4 cells; large intake (cells 1-2), large outlet on top (cells x 2-3,
@@ -127,35 +126,10 @@ inline void open_tube_z(MeshBuilder& b, double cx, double cy, double r_out, doub
     for (int j = 0; j < seg; ++j) { uint32_t a = f + 2 * j; tri_facing(b, a, a + 1, a + 3, n); tri_facing(b, a, a + 3, a + 2, n); }
 }
 
-// A thin shell along z from radius r0 at z0 to r1 at z1, drawn on both sides (outside col, inside bore).
-inline void shell_z(MeshBuilder& b, double cx, double cy, double r0, double r1, double z0, double z1, const uint8_t col[3], const uint8_t bore[3], int seg) {
-    double slope = (r0 - r1) / (z1 - z0), l = std::sqrt(1 + slope * slope);
-    for (int side = 0; side < 2; ++side) {
-        double sg = side ? -1 : 1;
-        uint32_t f = uint32_t(b.verts.size());
-        for (int j = 0; j <= seg; ++j) {
-            double a = 2 * MeshBuilder::kPi * j / seg, cs = std::cos(a), sn = std::sin(a);
-            double nx = sg * cs / l, ny = sg * sn / l, nz = sg * slope / l;
-            b.vertex(cx + r0 * cs, cy + r0 * sn, z0, nx, ny, nz, side ? bore : col);
-            b.vertex(cx + r1 * cs, cy + r1 * sn, z1, nx, ny, nz, side ? bore : col);
-        }
-        for (int j = 0; j < seg; ++j) {
-            uint32_t a = f + 2 * j; double n[3] = {b.verts[a].normal[0] + b.verts[a + 2].normal[0], b.verts[a].normal[1] + b.verts[a + 2].normal[1], b.verts[a].normal[2]};
-            tri_facing(b, a, a + 2, a + 3, n); tri_facing(b, a, a + 3, a + 1, n);
-        }
-    }
-}
-
-constexpr int kSuperchargerStyleCount = 5;
-constexpr int kSuperchargerStyle = 0;    // placeholder until Nate picks a look (1-5 on the looks page = styles 0-4)
-inline const char* supercharger_style_name(int s) {
-    static const char* names[] = {"Polished head unit", "Ribbed satin cast", "Black billet", "Retro finned drum", "Velocity stack"};
-    return names[std::clamp(s, 0, kSuperchargerStyleCount - 1)];
-}
-
-// Builds the small (large = false) or large supercharger in one of the looks. Paint: the compressor housing takes
-// the first colour, the gear case the second.
-inline std::vector<uint8_t> build_supercharger_mesh(const std::vector<uint8_t>& stock, bool large, const char* new_name, int style = 0) {
+// Builds the small (large = false) or large supercharger: a satin cast housing with ribs along the scroll and cooling
+// fins round the gear case (look 2 of the five Nate was shown). Paint: the compressor housing takes the first colour,
+// the gear case the second.
+inline std::vector<uint8_t> build_supercharger_mesh(const std::vector<uint8_t>& stock, bool large, const char* new_name) {
     MeshLayout m;
     if (!parse_mesh(stock, m)) return {};
     MeshBuilder b;
@@ -168,7 +142,7 @@ inline std::vector<uint8_t> build_supercharger_mesh(const std::vector<uint8_t>& 
     const double top = f.p(kCell + h), front = f.p(-h), back = f.p(kCell + h);
     const uint8_t* housing = kValvePaint0;
     const uint8_t* gears = kValvePaint1;
-    static const uint8_t kAccent[3] = {196, 38, 34}, kChrome[3] = {226, 228, 230}, kBlade[3] = {120, 122, 126}, kBore[3] = {60, 62, 66};
+    static const uint8_t kChrome[3] = {226, 228, 230}, kBlade[3] = {120, 122, 126}, kBore[3] = {60, 62, 66};
     auto rho_at = [&](double s) { return rho0 + (rho1 - rho0) * s; };
     auto t_at = [&](double s) { return t0 + (t1 - t0) * s; };
     // a path following the scroll at (radial offset dr, axial offset dz), each a fraction of the tube's radius
@@ -182,7 +156,7 @@ inline std::vector<uint8_t> build_supercharger_mesh(const std::vector<uint8_t>& 
         sweep(b, c, e1, e2, r, 10, col);
     };
 
-    // the volute: a tube spiralling once round the axis, growing towards the discharge
+    // the volute: a tube spiralling once round the axis, growing towards the discharge, with cast ribs along it
     {
         std::vector<std::array<double, 3>> c, e1, e2; std::vector<double> r;
         for (int i = 0; i <= steps; ++i) {
@@ -192,8 +166,7 @@ inline std::vector<uint8_t> build_supercharger_mesh(const std::vector<uint8_t>& 
         }
         sweep(b, c, e1, e2, r, seg, housing);
     }
-    if (style == 1) { scroll_path(0.97, 0, f.l(0.0030), housing); scroll_path(0.70, 0.70, f.l(0.0022), housing); }   // cast ribs
-    if (style == 2) { scroll_path(0.62, -0.78, f.l(0.0016), kChrome); scroll_path(0.62, 0.78, f.l(0.0016), kChrome); }   // machined edges
+    scroll_path(0.97, 0, f.l(0.0030), housing); scroll_path(0.70, 0.70, f.l(0.0022), housing);
     // the shroud the volute wraps round, and the back plate joining it to the gear case
     { double c[3] = {cx, cy, 0}; b.cylinder(2, c, rho0 + f.l(0.002), zc - t0 * 0.9, zc + t0, housing, seg); }
     // the discharge: straight up from the volute's end to the top face, a flange where the pipe joins
@@ -201,46 +174,21 @@ inline std::vector<uint8_t> build_supercharger_mesh(const std::vector<uint8_t>& 
         double x = cx + rho1, c[3] = {x, 0, zc}, rf = large ? 0.046 + 0.008 : 0.019 + 0.008;
         double ft = f.l(0.008), fr = std::max(rf, t1 + f.l(0.003));
         b.cylinder(1, c, t1, cy, top - ft, housing, seg);
-        const uint8_t* fc = style == 2 ? kChrome : style == 1 ? housing : style == 3 ? kChrome : kValveIron;
-        b.cylinder(1, c, fr, top - ft, top - f.l(0.001), fc, seg);
+        b.cylinder(1, c, fr, top - ft, top - f.l(0.001), housing, seg);
         b.disc(1, c, (large ? 0.046 : 0.019), top - f.l(0.001) + 0.0003, true, kValveHole, seg);
         for (int k = 0; k < 4; ++k) {
             double a = pi / 4 + k * pi / 2, rb = fr - f.l(0.0035);
             double p[3] = {x + rb * std::cos(a), top - f.l(0.001), zc + rb * std::sin(a)};
-            bolt(b, 1, p, f.l(0.0016), style == 0 || style == 4 ? kChrome : kValveAlloy);
+            bolt(b, 1, p, f.l(0.0016), kValveAlloy);
         }
     }
-    // the intake: an open collar round the large pipe (a flared trumpet on the velocity stack), the impeller inside
+    // the intake: an open collar round the large pipe, the impeller inside
     {
         const double rp = 0.046, eye = zc - t0 * 0.9;        // the large pipe's radius; the shroud's front face
         const double inner = front + f.l(0.010);             // how far in the impeller sits
-        if (style == 4) {
-            const int rings = 12;
-            auto rad = [&](double s) { return rp + f.l(0.003) + std::pow(1 - s, 2.4) * f.l(0.024); };   // s 0 at the lip
-            for (int i = 0; i < rings; ++i) {
-                double s0 = double(i) / rings, s1 = double(i + 1) / rings;
-                double z0 = front + (eye - front) * s0, z1 = front + (eye - front) * s1;
-                shell_z(b, cx, cy, rad(s0), rad(s1), z0, z1, kChrome, kChrome, seg + 8);
-            }
-            open_tube_z(b, cx, cy, rad(0) + f.l(0.0025), rad(0) - f.l(0.0015), front, front + f.l(0.003), kChrome, kChrome, seg + 8);   // rolled lip
-        } else {
-            double rc = rp + f.l(style == 3 ? 0.010 : 0.007);
-            const uint8_t* col = style == 0 ? kChrome : style == 2 ? housing : style == 3 ? kChrome : kValveAlloy;
-            open_tube_z(b, cx, cy, rc, rp, front + f.l(0.004), eye, col, kBore, seg + 8);
-            open_tube_z(b, cx, cy, rc + f.l(0.003), rp, front, front + f.l(0.004), style == 2 ? kChrome : col, kBore, seg + 8);   // the lip
-            if (style == 2) open_tube_z(b, cx, cy, rc + f.l(0.0012), rc - f.l(0.001), front + f.l(0.008), front + f.l(0.0105), kAccent, kAccent, seg + 8);
-            if (style == 0 || style == 2)                     // a clamp ring of bolts where the collar meets the housing
-                for (int k = 0; k < 8; ++k) {
-                    double a = k * pi / 4 + pi / 8, rb = rc + f.l(0.002), bc[3] = {cx + rb * std::cos(a), cy + rb * std::sin(a), 0};
-                    b.cylinder(2, bc, f.l(0.0017), eye - f.l(0.005), eye, kValveIron, 6);
-                }
-            if (style == 3)                                   // a screen across the mouth
-                for (int k = -3; k <= 3; ++k) {
-                    double lo[3] = {cx - rp * std::sqrt(1 - std::pow(k / 3.6, 2)), cy + k * rp / 3.6 - f.l(0.0006), front + f.l(0.004)};
-                    double hi[3] = {cx + rp * std::sqrt(1 - std::pow(k / 3.6, 2)), cy + k * rp / 3.6 + f.l(0.0006), front + f.l(0.0055)};
-                    b.box(lo, hi, kValveAlloy);
-                }
-        }
+        const double rc = rp + f.l(0.007);
+        open_tube_z(b, cx, cy, rc, rp, front + f.l(0.004), eye, kValveAlloy, kBore, seg + 8);
+        open_tube_z(b, cx, cy, rc + f.l(0.003), rp, front, front + f.l(0.004), kValveAlloy, kBore, seg + 8);   // the lip
         // inside: the dark eye behind the impeller's blades and its polished nose
         double c[3] = {cx, cy, 0};
         b.disc(2, c, rp, inner + f.l(0.008), false, kValveHole, seg);
@@ -257,39 +205,20 @@ inline std::vector<uint8_t> build_supercharger_mesh(const std::vector<uint8_t>& 
         auto hull = [&](double rd, double ri, double z0, double z1, const uint8_t* col) {
             std::vector<std::array<double, 2>> p; circle_pts(p, cx, cy, rd, 48); circle_pts(p, ix, iy, ri, 24); prism_z(b, p, z0, z1, col);
         };
-        if (style == 3) {                                    // a round finned drum with the input on its own arm
-            double c[3] = {cx, cy, 0};
-            b.cylinder(2, c, f.l(0.050), g0, g1 - f.l(0.010), gears, seg);
-            b.frustum(2, c, f.l(0.050), f.l(0.036), g1 - f.l(0.010), g1, gears, seg);   // a domed back
-            for (int k = 0; k < 12; ++k) {                   // radial fins
-                double a = k * pi / 6;
-                box_turned(b, cx + std::cos(a) * f.l(0.050), cy + std::sin(a) * f.l(0.050), f.l(0.006), f.l(0.0014), a, g0 + f.l(0.004), g1 - f.l(0.012), gears);
-            }
-            hull(f.l(0.020), 0.024, g0 + f.l(0.020), g1, gears);   // the arm down to the input shaft
-        } else {
-            hull(f.l(0.052), 0.028, g0, g1, gears);
-            if (style == 1 || style == 4)                    // cooling fins round the case
-                for (int k = 1; k <= 4; ++k) {
-                    double z = g0 + (g1 - g0) * k / 5.0;
-                    hull(f.l(0.056), 0.031, z - f.l(0.0016), z + f.l(0.0016), gears);
-                }
-            if (style == 0 || style == 2) {                  // a cover plate on the back with its bolts
-                hull(f.l(0.045), 0.022, g1, g1 + f.l(0.003), style == 0 ? kChrome : gears);
-                for (int k = 0; k < 6; ++k) {
-                    double a = k * pi / 3 + pi / 6, bc[3] = {cx + f.l(0.039) * std::cos(a), cy + f.l(0.039) * std::sin(a), 0};
-                    b.cylinder(2, bc, f.l(0.0018), g1 + f.l(0.003), g1 + f.l(0.0055), style == 0 ? kValveIron : kChrome, 6);
-                }
-            }
-            if (style == 1) {                                // a mounting ear out the right side
-                double lo[3] = {cx + f.l(0.050), cy - f.l(0.011), g0 + f.l(0.006)}, hi[3] = {f.p(kCell + h) - 0.002, cy + f.l(0.011), g0 + f.l(0.020)};
-                b.box(lo, hi, gears);
-                double bc[3] = {(lo[0] + hi[0]) / 2, cy, 0};
-                b.cylinder(2, bc, f.l(0.0045), g0 + f.l(0.0055), g0 + f.l(0.0205), kValveHole, 10);
-            }
+        hull(f.l(0.052), 0.028, g0, g1, gears);
+        for (int k = 1; k <= 4; ++k) {                       // cooling fins round the case
+            double z = g0 + (g1 - g0) * k / 5.0;
+            hull(f.l(0.056), 0.031, z - f.l(0.0016), z + f.l(0.0016), gears);
+        }
+        {                                                    // a mounting ear out the right side
+            double lo[3] = {cx + f.l(0.050), cy - f.l(0.011), g0 + f.l(0.006)}, hi[3] = {f.p(kCell + h) - 0.002, cy + f.l(0.011), g0 + f.l(0.020)};
+            b.box(lo, hi, gears);
+            double bc[3] = {(lo[0] + hi[0]) / 2, cy, 0};
+            b.cylinder(2, bc, f.l(0.0045), g0 + f.l(0.0055), g0 + f.l(0.0205), kValveHole, 10);
         }
         // the input shaft's boss, where the pulley wheel bolts on
         double ic[3] = {ix, iy, 0};
-        b.cylinder(2, ic, 0.024, g1, back - 0.004, style == 2 || style == 0 ? kChrome : kValveAlloy, 24);
+        b.cylinder(2, ic, 0.024, g1, back - 0.004, kValveAlloy, 24);
         b.cylinder(2, ic, 0.016, back - 0.004, back - 0.0005, kValveIron, 24);
         for (int k = 0; k < 4; ++k) {
             double a = pi / 4 + k * pi / 2, bc[3] = {ix + 0.0105 * std::cos(a), iy + 0.0105 * std::sin(a), 0};

@@ -591,21 +591,20 @@ int main() {
         decode_turbo_factor(encode_turbo_factor(blower_sound_level(4000 / 60.0 * kBeltMedium), false), spool, surging, blown);
         assert(near(spool, blower_sound_level(4000 / 60.0 * kBeltMedium), 0.01) && !surging && !blown);
     }
-    // Supercharger meshes: every look readable, both paint markers, inside the part's cells, the pulley boss centred on
-    // the torque spot's cell on the back face.
-    for (int large = 0; large < 2; ++large)
-        for (int style = 0; style < kSuperchargerStyleCount; ++style) {
-            std::vector<uint8_t> mesh = build_supercharger_mesh(stock, large, "s", style);
-            MeshLayout m; assert(parse_mesh(mesh, m) && m.vertices > 200);
-            std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), mesh.data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
-            double lo = -kCell / 2, hi = (blower_cells(large) - 0.5) * kCell;
-            bool paint0 = false, paint1 = false, boss = false;
-            for (auto& p : v) {
-                for (int j = 0; j < 3; ++j) assert(p.pos[j] >= lo - 0.003 && p.pos[j] <= hi + 0.003);
-                paint0 = paint0 || (p.rgba[0] == 153 && p.rgba[1] == 0); paint1 = paint1 || (p.rgba[0] == 153 && p.rgba[1] == 38);
-                boss = boss || (std::abs(p.pos[0]) < 0.02 && std::abs(p.pos[1]) < 0.02 && p.pos[2] > hi - 0.002);
-            }
-            assert(paint0 && paint1 && boss);
+    // Supercharger meshes: readable, both paint markers, inside the part's cells, the pulley boss centred on the torque
+    // spot's cell on the back face.
+    for (int large = 0; large < 2; ++large) {
+        std::vector<uint8_t> mesh = build_supercharger_mesh(stock, large, "s");
+        MeshLayout m; assert(parse_mesh(mesh, m) && m.vertices > 200);
+        std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), mesh.data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
+        double lo = -kCell / 2, hi = (blower_cells(large) - 0.5) * kCell;
+        bool paint0 = false, paint1 = false, boss = false;
+        for (auto& p : v) {
+            for (int j = 0; j < 3; ++j) assert(p.pos[j] >= lo - 0.003 && p.pos[j] <= hi + 0.003);
+            paint0 = paint0 || (p.rgba[0] == 153 && p.rgba[1] == 0); paint1 = paint1 || (p.rgba[0] == 153 && p.rgba[1] == 38);
+            boss = boss || (std::abs(p.pos[0]) < 0.02 && std::abs(p.pos[1]) < 0.02 && p.pos[2] > hi - 0.002);
         }
+        assert(paint0 && paint1 && boss);
+    }
     return 0;
 }

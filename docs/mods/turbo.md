@@ -69,7 +69,9 @@ the air cool: the second turbo heats air that is already hot.
 
 A supercharger is a centrifugal compressor driven by the engine through a belt, so it has no lag: its boost follows
 the engine's speed the moment it changes. **Supercharger (Small)** is 2x2x2 with a small boost outlet; **Supercharger
-(Large)** is the same unit at twice the size, 4x4x4, with a large outlet.
+(Large)** is the same unit at twice the size, 4x4x4, with a large outlet. Both are a satin cast head unit: a ribbed
+snail-shell housing on the front and a finned gear case behind it. Paint colour 1 sets the housing, colour 2 the gear
+case.
 
 | Port | Where | Connect to |
 | --- | --- | --- |
