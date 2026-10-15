@@ -760,7 +760,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     void* c0 = static_cast<uint8_t*>(self) + off::pump_content_0;
     void* c1 = static_cast<uint8_t*>(self) + off::pump_content_1;
     // The compressor inlet is open to the air, like a real turbo's intake: hold it at ambient every tick, both ways.
-    // Game vents only pass about 13.5 L/s, which starved the compressor in the first test; and boost left in the
+    // A game vent on the inlet starved the compressor in the first test; and boost left in the
     // pipes when the engine stops flows back through the compressor and out here, instead of staying trapped.
     // A pipe on the inlet still works.
     hold_ambient(c0);

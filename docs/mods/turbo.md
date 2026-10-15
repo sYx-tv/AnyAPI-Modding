@@ -25,7 +25,21 @@ Exhaust flowing from the hot inlet to the hot outlet spins the shaft. The shaft'
 the cold side pushes into the engine's intake. Engines already turn intake pressure into power: ambient gives
 1x, and an intake pressure of 98 kPa (the game's scale) gives the full 2x.
 
-Turbos 4x4 and 5x5 use large pipes; 2x2 and 3x3 use small pipes. No gas tank is needed. The compressor inlet is open to the air like a real turbo intake, because the game's vents and filters only pass about 13.5 L/s, far less than a spooled turbo draws.
+Turbos 4x4 and 5x5 use large pipes; 2x2 and 3x3 use small pipes. No gas tank is needed. The compressor inlet is open to the air like a real turbo intake.
+
+**Make the turbo the only way in and out.** The game evens out the pressure across everything joined by pipes at
+once, every tick, and a stock vent passes far more gas than a turbo: about 15 to 900 L/s for each unit of pressure,
+depending on its size, against 5 to 33 L/s through a turbine. So:
+
+- The engine's air manifolds get their air only from the turbo's boost outlet. A vent or air filter on that side lets
+  the boost straight out (put the air filter on the turbo's intake instead).
+- The engine's exhaust manifolds go only to the turbo's exhaust inlet, and the tailpipe vent goes on the turbo's
+  exhaust out. A vent before the turbine lets the exhaust skip it, and the turbo never spools.
+- This counts for every air and exhaust manifold on the engine: one more manifold with its own vent does the same.
+- A wastegate is the one bypass that belongs there: it opens only as far as you tell it to.
+
+Big engines need big turbos. A turbo much smaller than its engine chokes the exhaust: the back pressure takes away
+much of what the boost adds (a 4-rotor Rotary wants a 5x5 or two 4x4s).
 
 ## Sizes and lag
 
