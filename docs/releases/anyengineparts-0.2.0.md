@@ -17,6 +17,11 @@ the air. Boost air is cooler (about 78 °C over the outside air, not 120), and k
 instead of 90, so an intercooler still pays off. Compounds work best with the exhaust run through both turbines in a
 row; see [Twin and compound turbos](../mods/turbo.md#twin-and-compound-turbos).
 
+**New: launch control (two-step).** The Turbo Wastegate has a `two_step` input: give it an engine RPM from a
+microcontroller and the engine holds there, bouncing on the limiter; with `antilag` on too, the turbo spools on the
+line with bangs. Set it to 0 (when you shift into first, say) and it lets go. See
+[Launch control](../mods/turbo.md#launch-control-two-step).
+
 **Fix:** blow-off valves, wastegates, air filters and the intercooler no longer look see-through. Their faces were built facing inward, so the game hid their outsides.
 
 **New looks:** blow-off valves have a slim "race port" body with a slotted vent crown, and wastegates a finned actuator can with two boost nipples. Paint works as before: the first colour on the body, the second on the cap.

@@ -72,6 +72,8 @@ constexpr double kOverspeed = 1.12;        // the shaft's speed limit, over its 
 constexpr double kTurbineEfficiency = 0.72, kCompressorEfficiency = 0.74;   // at their best
 constexpr double kBestBladeSpeedRatio = 0.7;               // turbine tip speed over the gas's spouting speed, at best
 constexpr double kBypassTau = 0.08;        // the built-in wastegate's actuator, seconds
+constexpr double kTwoStepBand = 150.0;     // two-step: RPM below its limit where the fuel comes back
+constexpr double kMaxTwoStepRpm = 8000.0;  // the game's fuel cut
 // A turbo worn to 0% blows: the shaft stops and the wrecked compressor wheel blocks most of the intake. The engine still
 // breathes through it, but only this share of a working turbo's flow: about a third of the air a matched engine (one
 // whose exhaust spools it fully) wants at full revs without boost, so it idles and crawls but makes about a third of
@@ -288,6 +290,7 @@ struct Inputs {
     bool bov_venting = false;        // a blow-off valve on the boost pipe is venting this tick
     double bov_spring_kpa = 0;       // its Stiffness setting (the stiffest, if several vent)
     bool antilag = false;            // a wastegate on the exhaust has its antilag input on
+    bool two_step = false;           // the engine is on its launch limiter (two-step): unburnt fuel reaches the exhaust
 };
 inline double blow_off_surge_through(double spring_kpa);   // below, with the blow-off valve
 struct Step {
@@ -416,9 +419,11 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
     double need = (std::max(0.0, target_out - p[kColdIn]) + std::max(0.0, flow) / (s.compressor_coeff * density)) / per_speed2;
     double cap = s.shaft_full * std::min(kOverspeed, std::sqrt(std::max(0.0, need)));
     // Antilag: when the exhaust alone would let the shaft slow (off throttle), fuel burnt in the manifold gives the
-    // turbine what it needs to hold its speed. It needs the engine running (some exhaust to light).
+    // turbine what it needs to hold its speed. It needs the engine running (some exhaust to light), or on its two-step
+    // limiter, which sends its fuel into the exhaust instead of burning it in the cylinders.
     double hold = std::sqrt(kAntilagSpool) * s.shaft_full;
-    st.antilag_firing = !dead && in.antilag && st.exhaust_flow < kAntilagFlow * s.rated_flow && st.exhaust_flow > kAntilagMinFlow * s.rated_flow;
+    st.antilag_firing = !dead && in.antilag &&
+                        (in.two_step || (st.exhaust_flow < kAntilagFlow * s.rated_flow && st.exhaust_flow > kAntilagMinFlow * s.rated_flow));
     // Shaft, in a few small steps: turbine torque falls off as the blade speed passes the gas's best (a radial
     // turbine's torque is highest stalled and gone at about twice its best blade speed).
     const int kSteps = 4;
@@ -642,8 +647,18 @@ inline Valve valve_from_id(const char* id, size_t length) {
          : is(kAirFilterId) ? kAirFilter : is(kAirFilterLargeId) ? kAirFilterLarge : (is(kIntercoolerId) || is(kIntercoolerRoundId)) ? kIntercooler : kNoValve;
 }
 
-enum ValveChannel { kValveOpen, kValveFlow, kValvePressure, kValveAntilag, kValveChannelCount };
-inline constexpr const char* kValveChannelNames[kValveChannelCount] = {"open", "flow", "pressure", "antilag"};
+enum ValveChannel { kValveOpen, kValveFlow, kValvePressure, kValveAntilag, kValveTwoStep, kValveChannelCount };
+inline constexpr const char* kValveChannelNames[kValveChannelCount] = {"open", "flow", "pressure", "antilag", "two_step"};
+// Two-step launch limiter: holds an engine at `limit` RPM by cutting its fuel there and giving it back kTwoStepBand
+// below, the bouncing rev limiter of a real launch control. `cutting` carries the state from tick to tick. A limit of
+// 0 (or none) is off; past the game's own fuel cut it changes nothing.
+inline bool two_step_cut(bool& cutting, double rpm, double limit) {
+    if (!(limit > 0) || !std::isfinite(limit) || !std::isfinite(rpm)) return cutting = false;
+    limit = std::min(limit, kMaxTwoStepRpm);
+    if (std::abs(rpm) >= limit) cutting = true;
+    else if (std::abs(rpm) < limit - kTwoStepBand) cutting = false;
+    return cutting;
+}
 inline int valve_channel_index(const char* name, size_t length) {
     for (int i = 0; i < kValveChannelCount; ++i)
         if (std::char_traits<char>::length(kValveChannelNames[i]) == length && std::char_traits<char>::compare(kValveChannelNames[i], name, length) == 0) return i;
@@ -714,12 +729,14 @@ inline std::string blow_off_mesh_path(bool large) { return std::string("meshes/c
 inline std::string wastegate_entry(bool large, const std::string& mesh) {
     std::string pipe = large ? ", \"size\": 1" : "";
     std::string descriptors = "{\"type\": \"type_f64_input\", \"name\": \"open\"}, {\"type\": \"type_f64_input\", \"name\": \"antilag\"}, "
-        "{\"type\": \"type_f64_output\", \"name\": \"flow\"}, {\"type\": \"type_f64_output\", \"name\": \"pressure\"}";
+        "{\"type\": \"type_f64_output\", \"name\": \"flow\"}, {\"type\": \"type_f64_output\", \"name\": \"pressure\"}, "
+        "{\"type\": \"type_f64_input\", \"name\": \"two_step\"}";
     std::string description = std::string("Electronic wastegate for a Turbo, ") + (large ? "large pipe" : "small pipe") +
         ". Exhaust from the manifold goes in underneath and out the side, to a vent or the turbo's exhaust out. Its open input "
         "(0 to 1, from a data link or microcontroller) lets exhaust bypass the turbine, which caps boost. Its antilag input (1 on, "
-        "0 off) burns fuel in the exhaust off throttle so the turbo stays spooled, with bangs and pops. Outputs flow (L/s) and "
-        "pressure (kPa). Paint the can and the cap separately.";
+        "0 off) burns fuel in the exhaust off throttle so the turbo stays spooled, with bangs and pops. Its two_step input "
+        "(an engine RPM, 0 off) is launch control: the engine the turbo boosts holds at that RPM, and with antilag on the "
+        "boost builds on the line. Outputs flow (L/s) and pressure (kPa). Paint the can and the cap separately.";
     // Data ports on the -x, -z and +z faces of every cell (not the -y inlet or the +x outlet face); the torque node the
     // impeller class asks for (unused) on top.
     std::string surfaces = std::string("{\"id\": \"torque\", \"pos\": [0, ") + (large ? "1" : "0") + ", 0], \"dir\": 3, \"type\": \"torque\"}";

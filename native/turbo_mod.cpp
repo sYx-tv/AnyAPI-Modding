@@ -108,6 +108,7 @@ constexpr ptrdiff_t grid_origin_dir = 48;
 constexpr ptrdiff_t component_extend = 296;          // m_extend_size's value (vec3_s32): cells added by stretching
 constexpr ptrdiff_t engine_air_manifolds = 1256;     // engine.m_air_manifolds (vector<ptr<air_manifold>>)
 constexpr ptrdiff_t engine_damage_factor = 1456;     // engine.m_damage_factor (f64; a damage step at 1)
+constexpr ptrdiff_t engine_rps = 1424;               // engine.m_rps (f64; the tick reads it before setting the new speed)
 constexpr ptrdiff_t manifold_content = 576;          // air_manifold.m_content_gas (vehicle_gas_content)
 constexpr ptrdiff_t manifold_air_temperature = 624;  // air_manifold.m_content_gas.m_temperature
 constexpr size_t liquid_content_size = 232, liquid_node_size = 80;
@@ -211,6 +212,10 @@ std::unordered_map<const void*, Turbo> g_turbos;     // keyed by server componen
 // Air manifolds, noted by the engine tick hook: manifold component -> the engine breathing through it, and when.
 struct ManifoldSeen { const void* engine = nullptr; double at = -1e9; };
 std::unordered_map<const void*, ManifoldSeen> g_manifolds;
+// Two-step launch limiters, by engine: the RPM a wastegate's two_step input asks for (renewed by the turbo ticks),
+// and the limiter's state (hk_engine_tick).
+struct Launch { double rpm = 0, at = -1e9, cut_at = -1e9; bool cutting = false; };
+std::unordered_map<const void*, Launch> g_launch;
 struct ValvePart {
     int kind = 0;
     ValveState state;
@@ -701,6 +706,24 @@ ValvePart* antilag_wastegate(Turbo& t) {
     return found;
 }
 
+// The highest two_step RPM a wastegate on the turbo's exhaust inlet pipe asks for (0: none).
+double two_step_rpm(Turbo& t) {
+    if (!t.hot) return 0;
+    double rpm = 0;
+    for_each_on_island(t.hot->node[0], [&](void* node) {
+        auto v = g_valves.find(at<void*>(node, off::node_component));
+        if (v != g_valves.end() && is_wastegate(v->second.kind) && std::isfinite(v->second.state.slots[kValveTwoStep]))
+            rpm = std::max(rpm, std::min(v->second.state.slots[kValveTwoStep], kMaxTwoStepRpm));
+    });
+    return rpm;
+}
+// The engine a turbo's boost reaches: the one on its boost pipe, or through the stage its boost feeds (a compound).
+const void* boosted_engine(const Turbo& t) {
+    if (t.feeds_engine) return t.feeds_engine;
+    auto next = t.feeds_stage ? g_turbos.find(t.feeds_stage) : g_turbos.end();
+    return next != g_turbos.end() ? next->second.feeds_engine : nullptr;
+}
+
 void publish_valve(void* self, ValvePart& v, double litres, double dt);
 
 // Evens out a part's two gas contents (the pressure on both sides becomes the same).
@@ -1120,6 +1143,21 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     t.state.blown = turbo_blown(condition);           // worn out: no boost, a choked intake (limp mode)
     ValvePart* antilag = antilag_wastegate(t);
     in.antilag = antilag != nullptr;
+    // Two-step: hand the engine it boosts the launch RPM a wastegate asks for; the engine tick does the limiting, and
+    // while it cuts, its fuel reaches the exhaust for antilag to light.
+    if (const void* engine = boosted_engine(t)) {
+        double launch_rpm = two_step_rpm(t);
+        auto l = g_launch.find(engine);
+        if (launch_rpm > 0) {
+            if (l == g_launch.end()) {
+                l = g_launch.emplace(engine, Launch{}).first;
+                static std::atomic<int> logs{40};
+                if (logs.fetch_sub(1) > 0) log(0, "two-step on: the Turbo %dx%d's engine holds at %.0f RPM", t.size, t.size, launch_rpm);
+            }
+            l->second.rpm = launch_rpm; l->second.at = now_s;
+        }
+        in.two_step = l != g_launch.end() && now_s - l->second.cut_at < 0.3;
+    }
     in.bov_venting = vent_blow_off_valves(self, t.size, (in.pressure[kColdOut] - in.pressure[kColdIn]) - head_for(t.state, in.pressure[kColdIn]), in.dt, in.bov_spring_kpa);
     Step o = step(t.state, t.spec, in);
     if (antilag && t.state.antilag_firing) {          // the wastegate plays the bangs
@@ -1730,7 +1768,7 @@ void hk_client_tick(void* self, void* network, void* vehicle, void* scene, const
 using engine_tick_t = void (*)(void* self, void* vehicle, void* scene);
 using remap_t = void (*)(double* ret, const double* v, const double* a, const double* b, const double* c, const double* d);
 anymaker::cell_hook h_engine_tick, h_remap;
-thread_local bool t_in_engine = false;
+thread_local bool t_in_engine = false, t_fuel_cut = false;
 thread_local double t_intake_c = 0, t_intake_pressure = 0, t_boost_factor = 0;
 
 // An engine's air manifolds (its m_air_manifolds vector): their count, 0 if it cannot be read.
@@ -1792,6 +1830,7 @@ double engine_intake_c(const void* engine, double& pressure) {
 void hk_remap(double* ret, const double* v, const double* a, const double* b, const double* c, const double* d) {
     reinterpret_cast<remap_t>(h_remap.original)(ret, v, a, b, c, d);
     if (!t_in_engine || !ret || !a || !b || !c || !d || *a != 1.0 || *b != 10.0 || *c != 1.0 || *d != 2.0) return;
+    if (t_fuel_cut) { t_boost_factor = 0; *ret = 0; return; }   // two-step: no fuel this tick (fuel burn scales with it)
     double factor = *ret;
     if (v && *v >= kStockEnginePressure && std::isfinite(t_intake_pressure) && t_intake_pressure > kStockEnginePressure)
         factor = power_multiplier(t_intake_pressure);
@@ -1806,8 +1845,22 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     t_intake_c = intake;
     t_intake_pressure = pressure;
     t_boost_factor = 0;
+    t_fuel_cut = false;
+    if (self && t_in_engine) {                      // two-step: cut the fuel at the launch RPM a turbo's wastegate asks for
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        auto l = g_launch.find(self);
+        if (l != g_launch.end()) {
+            double now = now_seconds();
+            auto* rps = static_cast<uint8_t*>(self) + off::engine_rps;
+            double rpm = anymaker::readable(rps, 8) ? at<double>(rps, 0) * 60.0 : NAN;
+            t_fuel_cut = two_step_cut(l->second.cutting, rpm, now - l->second.at < 0.5 ? l->second.rpm : 0.0);
+            if (t_fuel_cut) l->second.cut_at = now;
+            else if (now - l->second.at > 1.0) g_launch.erase(l);   // its input went to 0 (or the wastegate is gone)
+        }
+    }
     reinterpret_cast<engine_tick_t>(h_engine_tick.original)(self, vehicle, scene);
     t_in_engine = false;
+    t_fuel_cut = false;
     if (self) note_manifolds(self);
     if (!std::isfinite(intake) || !(t_boost_factor > 1.0)) return;
     double dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;

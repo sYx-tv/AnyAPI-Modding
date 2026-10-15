@@ -163,12 +163,31 @@ Two companion parts, in the gas parts with the turbos:
   which caps boost. Its `antilag` input (1 on, 0 off) turns on antilag for the turbo on the same exhaust pipe:
   whenever the engine is running but its exhaust alone would let the turbo slow down (off throttle, idling), fuel
   burnt in the exhaust holds the turbo at 80% spool, with bangs and crackles from the wastegate. Wire it to a
-  switch, or build your own logic in a microcontroller (only on a launch, only above some speed). Outputs `flow`
-  (L/s) and `pressure` (kPa).
+  switch, or build your own logic in a microcontroller (only on a launch, only above some speed). Its `two_step`
+  input is launch control (see below). Outputs `flow` (L/s) and `pressure` (kPa).
 
 The valves start with a bright steel body and a red cap; paint the body and the cap separately. While you place
 a turbo or valve, the preview shows these starting colours. The turbo's own `surge`
 output is 1 while it surges.
+
+### Launch control (two-step)
+
+A wastegate's `two_step` input takes an engine RPM (0 is off). While it is set, the engine that turbo boosts holds at
+that RPM however far you press the throttle: the fuel cuts at the RPM and comes back 150 RPM below, so it bounces on
+the limiter like a real launch control. With `antilag` on as well, the fuel the limiter cuts goes into the exhaust,
+so antilag fires on the line however little the engine is making, and the turbo is spooled (with bangs) before you
+go. Set `two_step` back to 0 and the engine is free at once.
+
+It is meant for a microcontroller, so you decide when it is on. For example, with the gear and an antilag switch
+wired in:
+
+- `launch = gear == 0 and switch == 1`
+- the wastegate's `two_step` = `launch ? 4000 : 0`
+- its `antilag` = `switch` (or `launch` for bangs only on the line)
+
+The mod reads the engine's speed itself, so the microcontroller needs no RPM. On a compound, a wastegate on either
+turbo's exhaust works. It needs the game functions the hot boost air uses (see How it works); without them the input
+does nothing.
 
 ## Upkeep: oil, air filter, heat and wear
 
@@ -331,8 +350,9 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 - Hot boost air: the server engine tick and `math.remap` are hooked. The engine tick notes its air manifolds'
   temperature; the one remap call it makes for its boost factor, `remap(pressure, 1, 10, 1, 2)`, is scaled for
   that temperature, and knock is added to the engine's own damage counter afterwards. Past the game's 10 (2x) the
-  factor carries on to 3x at 19, which only a compound reaches. If the hooks are not found,
-  engines ignore intake temperature as before.
+  factor carries on to 3x at 19, which only a compound reaches. Two-step uses the same call: on a cut tick the factor
+  is 0, and the game's fuel burn scales with it. If the hooks are not found, engines ignore intake temperature as
+  before.
 - Superchargers are the impeller class with its own two gas nodes and its torque node. Their tick is the mod's: it
   reads the shaft's speed (`vehicle_torque_node.get_rps`), sets the head from it, pushes the air, and puts the work
   that took back on the shaft as a drag torque (`apply_torque`, times the torque system's newtons per joule), as the

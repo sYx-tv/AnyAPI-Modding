@@ -325,6 +325,23 @@ int main() {
       State dead; Plant pl; Inputs in; in.dt = 1.0 / 60; in.antilag = true; for (int i = 0; i < 4; ++i) in.pressure[i] = 1; step(dead, s, in);
       assert(!dead.antilag_firing && dead.spool == 0); }
     assert(valve_channel_index("antilag", 7) == kValveAntilag && channel_index("boost_psi", 9) == kBoostPsi);
+    // Two-step: the wastegate takes a launch RPM; the limiter cuts at it and gives the fuel back 150 RPM below, so the
+    // engine bounces just under it; 0 is off, and it never asks for more than the game's own fuel cut.
+    assert(valve_channel_index("two_step", 8) == kValveTwoStep && json.find("\"type_f64_input\", \"name\": \"two_step\"") != std::string::npos);
+    { bool cut = false;
+      assert(!two_step_cut(cut, 3000, 4000) && two_step_cut(cut, 4000, 4000) && two_step_cut(cut, 3900, 4000) && !two_step_cut(cut, 3840, 4000));
+      assert(!two_step_cut(cut, 3990, 4000) && two_step_cut(cut, -4100, 4000));             // either way round
+      assert(!two_step_cut(cut, 9000, 0) && !cut && !two_step_cut(cut, NAN, 4000) && !two_step_cut(cut, 4000, NAN));
+      assert(!two_step_cut(cut, 7900, 20000) && two_step_cut(cut, 8000, 20000)); }
+    // On the limiter, antilag fires however little exhaust the engine makes (its fuel goes into the exhaust); without
+    // antilag the two-step alone does not.
+    { Spec s = spec(6);
+      for (bool antilag : {false, true}) {
+          State st; Inputs in; in.dt = 1.0 / 60; in.antilag = antilag; in.two_step = true;
+          for (int i = 0; i < 4; ++i) { in.pressure[i] = 1; in.volume[i] = 2; }
+          for (int i = 0; i < 180; ++i) step(st, s, in);
+          assert(st.antilag_firing == antilag && (antilag ? st.spool > 0.75 : st.spool == 0));
+      } }
     // Spool falls when the exhaust stops.
     { State st; Plant pl; Spec s = spec(3); run(st, s, pl, s.rated_flow, 0, 10); double was = st.spool; run(st, s, pl, 0, 0, 3); assert(st.spool < was * 0.2); }
     // Lift-off with boost trapped in the pipe: without a blow-off valve the compressor surges and the wheel slows
