@@ -663,34 +663,34 @@ inline std::string intercooler_entry(bool built, bool round = false) {
         "the turbo's boost, one to the engine's air intake. Compressing air heats it, and hot air makes less power and can knock "
         "the engine; the intercooler cools the boost back towards the outside air. Stretch it wider and taller for more cooling. "
         "Paint the tanks.");
-    // Two cells deep like the stock large radiator (radiator_b), so a large port sits fully on any face; the sizes
-    // follow its layout (y faces: x by z, x faces: z by y).
+    // One cell deep, 3 x 2 like the stock radiator, with its port faces.
     std::string surfaces = "{\"pos\": [-1, 0, 0], \"size\": [3, 2], \"dir\": 4, \"gender\": 2, \"type\": \"port\"}, "
-        "{\"pos\": [-1, 0, 1], \"size\": [3, 2], \"dir\": 5, \"gender\": 2, \"type\": \"port\"}, "
-        "{\"pos\": [-1, 1, 0], \"size\": [3, 2], \"dir\": 3, \"gender\": 2, \"type\": \"port\"}, "
-        "{\"pos\": [-1, 0, 0], \"size\": [3, 2], \"dir\": 2, \"gender\": 2, \"type\": \"port\"}, "
-        "{\"pos\": [1, 0, 0], \"size\": [2, 2], \"dir\": 1, \"gender\": 2, \"type\": \"port\"}, "
-        "{\"pos\": [-1, 0, 0], \"size\": [2, 2], \"gender\": 2, \"type\": \"port\"}";
+        "{\"pos\": [-1, 0, 0], \"size\": [3, 2], \"dir\": 5, \"gender\": 2, \"type\": \"port\"}, "
+        "{\"pos\": [-1, 1, 0], \"size\": [3, 1], \"dir\": 3, \"gender\": 2, \"type\": \"port\"}, "
+        "{\"pos\": [-1, 0, 0], \"size\": [3, 1], \"dir\": 2, \"gender\": 2, \"type\": \"port\"}, "
+        "{\"pos\": [1, 0, 0], \"size\": [1, 2], \"dir\": 1, \"gender\": 2, \"type\": \"port\"}, "
+        "{\"pos\": [-1, 0, 0], \"size\": [1, 2], \"gender\": 2, \"type\": \"port\"}";
     return std::string("    {\n") +
         "      \"id\": \"" + intercooler_id(round) + "\",\n" +
         "      \"name\": \"" + (round ? "Turbo Intercooler (Round Tank)" : "Turbo Intercooler (Race Core)") + "\",\n" +
         "      \"description\": \"" + description + "\",\n" +
         "      \"class\": \"gas_tank\",\n" +
-        "      \"zones\": [{\"bounds_min\": [-1, 0, 0], \"bounds_max\": [1, 1, 1]}],\n" +
+        "      \"zones\": [{\"bounds_min\": [-1, 0, 0], \"bounds_max\": [1, 1, 0]}],\n" +
         "      \"interaction_zones\": [],\n" +
         "      \"surfaces\": [" + surfaces + "],\n" +
         "      \"logic_nodes\": [],\n" +
         "      \"mesh_static\": {\"mesh_path\": \"" + (built ? intercooler_mesh_path(0, 0, round) : std::string("meshes/components/radiator_a_0_0_0.mesh")) + "\"},\n" +
         "      \"meshes_dynamic\": [],\n" +
-        // our tiles repeat both ways, so nothing stretches; without them, fall back on the radiator's look and its own
-        // layout (its width stretches, its tiles run along y)
+        // our tiles repeat both ways, so nothing stretches (the first x tile covers cells -1 and 0, see
+        // turbo_upkeep_mesh.h); without them, fall back on the radiator's look and its own layout (its width
+        // stretches, its tiles run along y)
         "      \"mode_x\": \"" + (built ? "tile" : "stretch") + "\",\n" +
         "      \"mode_y\": \"tile\",\n" +
         "      \"interval\": [1, 1, 0],\n" +
         "      \"center_stretch\": [0.0, 0.5, 0.0],\n" +
         "      \"category\": \"gas\",\n" +
         "      \"tags_generated\": \"port,\",\n" +
-        "      \"inspection_geometry\": [{\"p0\": [-1.0, 0.0, 0.0], \"p1\": [1.0, 1.0, 1.0]}],\n" +
+        "      \"inspection_geometry\": [{\"p0\": [-1.0, 0.0, 0.0], \"p1\": [1.0, 1.0, 0.0], \"radius\": 0.37}],\n" +
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 10,\n" +
         "      \"data_descriptors\": [],\n" +

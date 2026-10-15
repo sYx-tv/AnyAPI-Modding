@@ -4,11 +4,13 @@
 //   air filter, small: 3 x 3 x 3 cells, small pipe; large: 4 x 4 x 4 cells, large pipe, centred. The neck goes down to the gas node
 //     (direction 2), then a clamp band, a base cap, a pleated cone element (first colour) and a top cap (second
 //     colour) with a bright badge.
-//   intercooler: nine tiles the game lays out along x and y (turbo_intercooler_<x>_<y>_0): x tile 0 the left cell (left
-//     end tank), 1 one cell of core (repeated per extra width), 2 the right cell (right end tank); y tile 0 the bottom
-//     cell, 1 a middle cell (repeated per extra height), 2 the top cell. Each tile is one cell wide and tall and two
-//     cells deep, modelled around its own cell at x = y = 0, so nothing on it stretches however big it gets. No ports:
-//     the player snaps gas ports on, as on the radiator. Tanks take the first colour, their caps the second.
+//   intercooler: nine tiles the game lays out along x and y (turbo_intercooler_<x>_<y>_0), one cell deep. The game puts
+//     tile 0 at the part's cell 0, each tile 1 one cell further on, and tile 2 on the last cell; it never looks at
+//     where the part's cells start. The part's cells run from x = -1, so x tile 0 is two cells wide (the left end tank
+//     in cell -1, then core), 1 one cell of core (repeated per extra width), 2 the right cell (right end tank); y tile 0
+//     the bottom cell, 1 a middle cell (repeated per extra height), 2 the top cell. Each is modelled around its own cell
+//     at x = y = z = 0, so nothing on it stretches however big it gets and the mesh fills every cell of the part. No
+//     ports: the player snaps gas ports on, as on the radiator. Tanks take the first colour, their caps the second.
 #include "turbo_valve_mesh.h"
 
 namespace turbo {
@@ -78,17 +80,17 @@ constexpr int kIntercoolerStyleCount = 2;
 constexpr int kIntercoolerStyle = 0, kIntercoolerRoundStyle = 1;   // Nate's picks: the race core and the round-tank part
 static const uint8_t kCoreSilver[3] = {168, 170, 172}, kCoreBlack[3] = {22, 22, 24};
 
-// Builds one intercooler tile: tx 0 left end, 1 middle, 2 right end; ty 0 bottom, 1 middle, 2 top. Like a car's: an
-// end tank on each side and the core between them, two cells deep so a large gas port sits fully on any face. No
-// ports: gas ports snap onto its faces.
+// Builds one intercooler tile: tx 0 left end (two cells), 1 middle, 2 right end; ty 0 bottom, 1 middle, 2 top. Like a
+// car's: an end tank on each side and the core between them. No ports: gas ports snap onto its faces.
 inline std::vector<uint8_t> build_intercooler_tile(const std::vector<uint8_t>& stock, int tx, int ty, const char* new_name, int style = kIntercoolerStyle) {
     MeshLayout m;
     if (!parse_mesh(stock, m)) return {};
-    const double h = kCell / 2, zc = kCell / 2;              // the tile's own cell along x and y: -h..h; z: -h..kCell + h
-    const double tank_w = 0.028, td = 0.066, cd = 0.054;     // tank width, tank and core half depth (around zc)
+    const double h = kCell / 2, zc = 0;                      // the tile's own cell: -h..h on every axis
+    const double tank_w = 0.028, td = 0.034, cd = 0.028;     // tank width, tank and core half depth (around zc)
     const bool end = tx == 0 || tx == 2, bottom = ty == 0, top = ty == 2;
-    const double x0 = tx == 0 ? -h + tank_w : -h, x1 = tx == 2 ? h - tank_w : h;   // the core in this tile
-    const double tx0 = tx == 0 ? -h : h - tank_w, tx1 = tx == 0 ? -h + tank_w : h;   // the end tank's x span
+    const double xa = tx == 0 ? -kCell - h : -h;             // the tile's first x: tile 0 also covers cell -1
+    const double x0 = tx == 0 ? xa + tank_w : xa, x1 = tx == 2 ? h - tank_w : h;   // the core in this tile
+    const double tx0 = tx == 0 ? xa : h - tank_w, tx1 = tx == 0 ? xa + tank_w : h;   // the end tank's x span
     const double e = 0.006;                                  // the top and bottom rails' height
     const double y0 = bottom ? -h + e : -h, y1 = top ? h - e : h;   // the core and fins between the rails
     MeshBuilder b;
@@ -98,7 +100,7 @@ inline std::vector<uint8_t> build_intercooler_tile(const std::vector<uint8_t>& s
     // Vertical fins on both faces across [fx0, fx1]: `count` per cell width, `w` wide, standing `out` proud.
     auto fins_up = [&](double fx0, double fx1, double depth, int count, double w, double out, const uint8_t c[3]) {
         double pitch = kCell / count;
-        for (double x = -h + pitch / 2; x < h; x += pitch) {
+        for (double x = xa + pitch / 2; x < h; x += pitch) {
             if (x - w / 2 < fx0 - 1e-9 || x + w / 2 > fx1 + 1e-9) continue;
             box(x - w / 2, y0, zc - depth - out, x + w / 2, y1, zc - depth, c);
             box(x - w / 2, y0, zc + depth, x + w / 2, y1, zc + depth + out, c);
@@ -115,16 +117,16 @@ inline std::vector<uint8_t> build_intercooler_tile(const std::vector<uint8_t>& s
         rails(cd, 0.003, kValveAlloy);
         if (end) {
             box(tx0, -h, zc - td, tx1, h, zc + td, kValvePaint0);
-            if (bottom) box(tx0 - 0.001, -h - 0.002, zc - td - 0.002, tx1 + 0.001, -h + 0.005, zc + td + 0.002, kValvePaint1);
-            if (top) box(tx0 - 0.001, h - 0.005, zc - td - 0.002, tx1 + 0.001, h + 0.002, zc + td + 0.002, kValvePaint1);
+            if (bottom) box(tx0, -h, zc - td - 0.002, tx1, -h + 0.007, zc + td + 0.002, kValvePaint1);   // caps, flush with the part
+            if (top) box(tx0, h - 0.007, zc - td - 0.002, tx1, h, zc + td + 0.002, kValvePaint1);
             if (bottom) {                                    // an inlet stub on each tank's front, in the bottom cell
                 double c[3] = {(tx0 + tx1) / 2, -h + kCell * 0.45, zc};
-                b.cylinder(2, c, 0.009, td, td + 0.012, kValveAlloy, 16);
-                b.cylinder(2, c, 0.0105, td + 0.008, td + 0.010, kValveIron, 16);   // hose bead
+                b.cylinder(2, c, 0.009, zc + td, zc + h - 0.0005, kValveAlloy, 16);
+                b.cylinder(2, c, 0.0105, zc + td + 0.002, zc + td + 0.004, kValveIron, 16);   // hose bead
             }
         }
     } else {                                                 // round-tank front mount: rounded end tanks, brackets, silver core
-        const double cr = 0.046;                             // a slimmer core, so the tanks stand proud of it
+        const double cr = 0.024;                             // a slimmer core, so the tanks stand proud of it
         box(x0, y0, zc - cr, x1, y1, zc + cr, kCoreSilver);
         fins_up(x0, x1, cr, 12, 0.0018, 0.0007, kValveIron);
         rails(cr, 0.002, kValveIron);
@@ -141,7 +143,7 @@ inline std::vector<uint8_t> build_intercooler_tile(const std::vector<uint8_t>& s
                 double yc = bottom ? -h + 0.004 : h - 0.004;
                 box(tx0 + 0.002, yc - 0.004, zc - td + r, tx1 - 0.002, yc + 0.004, zc + td - r, kValvePaint1);
                 double yk = bottom ? -h + kCell * 0.3 : h - kCell * 0.3;
-                box(cx - 0.004, yk - 0.004, zc - td - 0.010, cx + 0.004, yk + 0.004, zc - td + r, kValveIron);
+                box(cx - 0.004, yk - 0.004, zc - td - 0.005, cx + 0.004, yk + 0.004, zc - td + r, kValveIron);
             }
         }
     }

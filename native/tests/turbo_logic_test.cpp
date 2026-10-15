@@ -475,7 +475,9 @@ int main() {
         assert(j.size() == 2 && j[(WearKey{'t', 1, 2})] == 1 && j[(WearKey{'f', 6, 7})] == 0);
         assert(decode_wear("").empty() && decode_wear("{\"t1:2\"").empty());
     }
-    // Air filter and intercooler meshes: readable, both paint markers, inside their cells.
+    // Air filter and intercooler meshes: readable, both paint markers, inside their cells. An intercooler tile fills
+    // its cells edge to edge along x and y, so laid out the game's way (tile 0 at cell 0, tile 1 a cell on, tile 2 on
+    // the last cell) the mesh covers the part from its first cell, -1, to its last.
     for (int large = 0; large < 2; ++large) {
         std::vector<std::vector<uint8_t>> meshes{build_air_filter_mesh(stock, large, "f")};
         for (int style = 0; style < kIntercoolerStyleCount && !large; ++style)   // both looks: tiles 0, 1, 2 along x and y
@@ -484,14 +486,20 @@ int main() {
             MeshLayout m; assert(parse_mesh(meshes[k], m) && m.vertices > 50);
             std::vector<MeshVertex> v(m.vertices); std::memcpy(v.data(), meshes[k].data() + m.vertex_bytes + 4, v.size() * sizeof(MeshVertex));
             bool paint0 = false, paint1 = false;
-            double lo[3], hi[3];
+            double lo[3], hi[3], min_x = 1, max_x = -1, min_y = 1, max_y = -1;
             if (k == 0) { for (int j = 0; j < 3; ++j) { lo[j] = -kCell / 2; hi[j] = (air_filter_cells(large) - 0.5) * kCell; } }
-            else { lo[0] = lo[1] = lo[2] = -kCell / 2; hi[0] = hi[1] = kCell / 2; hi[2] = 1.5 * kCell; }   // one cell wide and tall, two deep
+            else {                                           // one cell, and the first x tile also cell -1
+                lo[0] = lo[1] = lo[2] = -kCell / 2; hi[0] = hi[1] = hi[2] = kCell / 2;
+                if ((k - 1) % 9 % 3 == 0) lo[0] = -1.5 * kCell;
+            }
             for (auto& p : v) {
                 for (int j = 0; j < 3; ++j) assert(p.pos[j] >= lo[j] - 0.003 && p.pos[j] <= hi[j] + 0.003);
                 paint0 = paint0 || (p.rgba[0] == 153 && p.rgba[1] == 0); paint1 = paint1 || (p.rgba[0] == 153 && p.rgba[1] == 38);
+                min_x = std::min(min_x, double(p.pos[0])); max_x = std::max(max_x, double(p.pos[0]));
+                min_y = std::min(min_y, double(p.pos[1])); max_y = std::max(max_y, double(p.pos[1]));
             }
             int tx = int(k - 1) % 9 % 3, ty = int(k - 1) % 9 / 3;
+            assert(k == 0 || (std::abs(min_x - lo[0]) < 0.001 && std::abs(max_x - hi[0]) < 0.001 && std::abs(min_y - lo[1]) < 0.003 && std::abs(max_y - hi[1]) < 0.003));
             assert(k == 0 || paint0 == (tx != 1));               // tanks on the end tiles only, caps on the corners only
             assert(k == 0 ? paint0 && paint1 : paint1 == (tx != 1 && ty != 1));
         }

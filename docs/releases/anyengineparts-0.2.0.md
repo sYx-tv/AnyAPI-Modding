@@ -45,9 +45,9 @@ readout, and its power is now net of what superchargers take through their belts
 of the first. One turbo still gives the game's full 2x; a compound goes past it, up to 3x at 186 kPa. See
 [Twin and compound turbos](../mods/turbo.md#twin-and-compound-turbos).
 
-**Intercoolers are 2 cells deep:** a large gas port now sits fully on any face, not half off the top, bottom or ends.
-Growing one no longer stretches its inlet stubs or rails: it repeats whole cells both ways. An intercooler already
-placed grows one cell deeper, so move anything sitting right behind it.
+**Intercoolers fill their whole part:** the model used to start a cell in from one end, leaving an empty cell of the
+part's box with nothing drawn in it, so a gas port snapped there looked half off. The model now covers every cell, at
+any size. Growing one no longer stretches its inlet stubs or rails: it repeats whole cells both ways.
 
 **Intercoolers:** the turbo now looks for its intercooler past an inline blow-off valve too, and also through the part each
 gas port is snapped onto. In testing, a turbo never found its intercooler, so its boost air stayed hot. If a boosting turbo
