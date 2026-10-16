@@ -27,17 +27,17 @@ files in the game's `scripts` folder, and the server has a parser that builds bl
 The game's language, with a few shortcuts. Anything the game itself writes is also valid here.
 
 ```
-define in fractional engine
+define in fractional engine_rpm
 define in bool launch_switch
-define out integer wastegate
+define out integer two_step
 define var integer count
 
 # launch control
 on_tick {
-	if launch_switch and engine.rps < 2.0 {
-		wastegate.two_step = 4000
+	if launch_switch and engine_rpm < 100.0 {
+		two_step = 4000
 	} else {
-		wastegate.two_step = 0
+		two_step = 0
 	}
 	count = (count + 1) % 60
 }
@@ -48,7 +48,7 @@ on_tick {
 | Blocks | `on_tick { }`, `on_render { }` | `on_tick` runs every game tick |
 | Variables | `define var integer speed` | Types: `bool`, `integer`, `fractional`, `string`, `analogue`, or a `define type` |
 | Lists | `define list fractional samples` | `samples.append(x)`, `samples.insert(i, x)`, `samples.erase(i)`, `samples.clear()`, `samples[i]`, `len(samples)` |
-| Ports | `define in fractional engine`, then `engine.rps`; `define out integer wastegate`, then `wastegate.two_step = 4000` | A port is a connection to a part. Read or write one of that part's channels with a dot |
+| Ports | `define in fractional rpm`, `define out bool lamp` | Read inputs and write outputs by name |
 | Setting | `speed = speed + 1` | |
 | Tests | `if x { } elseif y { } else { }` | `else if` works too |
 | Loops | `repeat 4 { }`, `foreach samples { }` | |
@@ -111,8 +111,6 @@ the log says so and only these line features turn off.
 
 ## Limits
 
-- Port channels (`engine.rps`) follow the game's own text format but are not yet confirmed in game. A port
-  written without a channel went into the microcontroller but did nothing in the first test.
 - If a program uses something MCCode can't translate, the Code view shows the game's own text unchanged. You
   can still edit it and Apply sends it as written.
 - Apply replaces the whole program, so the game's block Undo goes back to the previous program in one step.
