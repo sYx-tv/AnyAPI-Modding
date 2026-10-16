@@ -5,9 +5,10 @@
 // 2 cells between, like the small engine's engine_block_a tiles.
 //
 // The engine is laid out along z in cells from its front face (e = 0) to its back face (e = 2 x rotors). Rotor k
-// fills e = 2k..2k+2: an oval rotor housing between iron side plates, with two raised ribs, two spark plugs on the
-// left, an exhaust flange on each side and two intake runners up into a long plenum on top. Front and rear covers carry the
-// small engine's octagonal output socket, and an oil pan runs along the whole engine.
+// fills e = 2k..2k+2: an oval rotor housing between side plates, with two raised ribs and two spark plugs on the left.
+// A flat deck runs over the housings and the covers are full blocks above the shaft, so every mounting face is flat
+// and flush (manifolds of any size fit, as on the small engine). Front and rear covers carry the small engine's
+// octagonal output socket, and an oil pan runs along the whole engine.
 //   x: -0.12..0.12 m (3 cells), y: -0.12..0.36 m (6 cells), the output shaft at x = y = 0, like the small engine.
 // Mesh file layout (Anymaker 0.1.24, as GpsPart and Turbo read it):
 //   "mesh" u32 version(5) u32 (1) u32 name_length, name bytes
@@ -77,15 +78,6 @@ inline std::vector<P2> octagon(double r, double first_deg) {
     const double t[8] = {d, h / 2 - d, h / 2 + d, h - d, h + d, 1.5 * h - d, 1.5 * h + d, 2 * h - d};
     std::vector<P2> out;
     for (double a : t) out.push_back({r * std::cos(a), r * std::sin(a)});
-    return out;
-}
-// Rounded rectangle (superellipse) for the intake plenum; 8 points give the stock parts' chamfered box.
-inline std::vector<P2> rounded(double cx, double cy, double hx, double hy, int n = 8) {
-    std::vector<P2> out;
-    for (int k = 0; k < n; ++k) {
-        double t = 6.283185307179586 * (k + 0.5) / n, c = std::cos(t), s = std::sin(t);
-        out.push_back({cx + hx * (c < 0 ? -1 : 1) * std::pow(std::abs(c), 0.5), cy + hy * (s < 0 ? -1 : 1) * std::pow(std::abs(s), 0.5)});
-    }
     return out;
 }
 // Half width of the housing (grow 0) at height y, for placing parts on its side.
@@ -166,22 +158,31 @@ inline void box(Mesh& m, const Window& w, double x0, double x1, double y0, doubl
 }
 
 // ------------------------------------------------------------------------------------------- the engine
-// Builds what an engine of `rotors` rotors shows inside the window.
+// The mounting faces stay flat and flush with the engine's cells, so stock manifolds of any size sit on it the way they
+// sit on the small engine: the top (y = 0.36) across the whole width and length, both sides (x = +-0.12) from y 0.20
+// up (the side ports), the covers across x +-0.12 from y 0.12 up, flush pads on both sides at y 0 (the low side
+// ports) and the oil pan along the bottom (the bottom port).
+constexpr double kTop = 0.36, kSide = 0.12, kCover = 0.16;
+
+// The lower half of the oval (left middle, through the bottom, to right middle) closed by a full-width block with
+// chamfered top corners up to `top`: one convex outline whose upper part fills the mounting faces.
+inline std::vector<P2> oval_with_block(double grow, double top = kTop, double ch = 0.008, double join = 0.10) {
+    auto o = oval(grow);
+    std::vector<P2> out;
+    for (int k = kOvalPoints / 2; k <= kOvalPoints; ++k) out.push_back(o[k % kOvalPoints]);
+    out.push_back({kSide, join}); out.push_back({kSide, top - ch}); out.push_back({kSide - ch, top});
+    out.push_back({-kSide + ch, top}); out.push_back({-kSide, top - ch}); out.push_back({-kSide, join});
+    return out;
+}
+// A flat slab across the top: y0..top, x +-side, chamfered top corners.
+inline std::vector<P2> slab(double y0, double side = kSide, double top = kTop, double ch = 0.008) {
+    return {{-side, y0}, {side, y0}, {side, top - ch}, {side - ch, top}, {-side + ch, top}, {-side, top - ch}};
+}
+
+// Builds what an engine of `rotors` rotors shows inside the window. The stock engines' look: painted housings (first
+// colour), the covers, plates and deck in the second colour, dark iron ribs, gasket line and port pads, light bolt heads.
 inline void build_engine(Mesh& m, const Window& w, int rotors) {
     const double length = 2.0 * rotors;
-    const auto housing = oval(0), rib = oval(0.0025), plate = oval(0.004), cover = oval(0.002);
-    // Covers and plates: front cover, an intermediate plate between rotors, rear cover.
-    // The stock engines' look: painted body (first colour), second colour on the covers, plates and plenum, dark iron
-    // bands and port frames, light bolt heads.
-    prism(m, w, cover, 0.0, 0.16, kRib);
-    prism(m, w, cover, length - 0.16, length, kRib);
-    for (int k = 1; k < rotors; ++k) prism(m, w, plate, 2.0 * k - 0.12, 2.0 * k + 0.12, kRib);
-    // Tension bolt heads around the top of each cover, clear of the output socket.
-    for (const P2& p : oval(-0.014)) {
-        if (p.y < 0.13) continue;
-        box(m, w, p.x - 0.007, p.x + 0.007, p.y - 0.007, p.y + 0.007, -0.08, 0.0, kAlloy);
-        box(m, w, p.x - 0.007, p.x + 0.007, p.y - 0.007, p.y + 0.007, length, length + 0.08, kAlloy);
-    }
     // The output faces, front and back: the small engine's octagonal torque socket, ring for ring (alloy rim, iron
     // face, teal band, alloy collar, iron boss and the shaft stub into the 0.02 m lip), so gearboxes and engine wheels
     // look as they do on the stock engines. The torque mating surfaces are the stock engine's (rotary_logic.h).
@@ -201,33 +202,37 @@ inline void build_engine(Mesh& m, const Window& w, int rotors) {
             prism(m, w, r.o, std::min(face, a), std::max(face, a), r.c, end == 0, end == 1);
         }
     }
-    // Intake plenum on top, oil pan underneath.
-    prism(m, w, rounded(0, 0.292, 0.088, 0.055), 0.22, length - 0.22, kRib);
-    box(m, w, -0.072, 0.072, -0.12, -0.085, 0.3, length - 0.3, kIron);
-    const double plug_y[2] = {-0.045, -0.085};
+    // Front and rear covers full height, an intermediate plate between rotors up to the deck.
+    const auto cover = oval_with_block(0.002), plate = oval_with_block(0.003, 0.19);
+    prism(m, w, cover, 0.0, kCover, kRib);
+    prism(m, w, cover, length - kCover, length, kRib);
+    for (int k = 1; k < rotors; ++k) prism(m, w, plate, 2.0 * k - 0.12, 2.0 * k + 0.12, kRib);
+    // Flat deck over the housings, an iron gasket line under it; flush bolt heads on the covers, clear of the socket.
+    prism(m, w, slab(0.20), kCover, length - kCover, kRib, false, false);
+    prism(m, w, slab(0.188, 0.116, 0.20, 0.0), kCover, length - kCover, kIron, false, false);
+    for (double x : {-0.095, 0.095}) for (double y : {0.16, 0.33}) {
+        box(m, w, x - 0.007, x + 0.007, y - 0.007, y + 0.007, -0.01, 0.0, kAlloy);
+        box(m, w, x - 0.007, x + 0.007, y - 0.007, y + 0.007, length, length + 0.01, kAlloy);
+    }
+    // Oil pan underneath (the bottom port).
+    box(m, w, -0.072, 0.072, -0.12, -0.085, kCover, length - kCover, kIron);
+    const auto housing = oval(0), rib = oval(0.0025);
+    const double in = oval_half_width(0.0) - 0.012;
     for (int k = 0; k < rotors; ++k) {
         double e0 = 2.0 * k, e1 = e0 + 2.0, c = e0 + 1.0;
         // Rotor housing between the side plates, with two raised ribs.
-        prism(m, w, housing, e0 + (k == 0 ? 0.16 : 0.12), e1 - (k == rotors - 1 ? 0.16 : 0.12), kHousing, false, false);
-        prism(m, w, rib, c - 0.55, c - 0.4, kIron);
-        prism(m, w, rib, c + 0.4, c + 0.55, kIron);
+        prism(m, w, housing, e0 + (k == 0 ? kCover : 0.12), e1 - (k == rotors - 1 ? kCover : 0.12), kHousing, false, false);
+        prism(m, w, rib, c - 0.57, c - 0.43, kIron);
+        prism(m, w, rib, c + 0.43, c + 0.57, kIron);
+        // Flush pads for the low side ports, both sides.
+        box(m, w, -kSide, -in, -0.036, 0.036, c - 0.8, c + 0.8, kIron);
+        box(m, w, in, kSide, -0.036, 0.036, c - 0.8, c + 0.8, kIron);
         // Leading and trailing spark plugs on the left side.
-        for (double y : plug_y) {
+        for (double y : {-0.06, -0.09}) {
             double x = -oval_half_width(y);
-            box(m, w, x - 0.01, x + 0.01, y - 0.008, y + 0.008, c - 0.1, c + 0.1, kIron);
-            box(m, w, x - 0.016, x - 0.01, y - 0.005, y + 0.005, c - 0.06, c + 0.06, kAlloy);
+            box(m, w, x - 0.008, x + 0.004, y - 0.008, y + 0.008, c - 0.1, c + 0.1, kIron);
+            box(m, w, std::max(-kSide, x - 0.013), x - 0.008, y - 0.005, y + 0.005, c - 0.06, c + 0.06, kAlloy);
         }
-        // Exhaust flange on each side, where the small engine's side ports are.
-        for (int side = -1; side <= 1; side += 2) {
-            double inner = oval_half_width(0.2) - 0.01;
-            double x0 = side < 0 ? -0.118 : inner, x1 = side < 0 ? -inner : 0.118;
-            box(m, w, x0, x1, 0.165, 0.245, c - 0.6, c + 0.6, kIron);
-            double f0 = side < 0 ? -0.12 : 0.112, f1 = side < 0 ? -0.112 : 0.12;
-            box(m, w, f0, f1, 0.175, 0.235, c - 0.45, c + 0.45, kPad);
-        }
-        // Two intake runners from the housing's top into the plenum.
-        for (int side = -1; side <= 1; side += 2)
-            box(m, w, side * 0.052 - 0.015, side * 0.052 + 0.015, 0.2, 0.25, c - 0.35, c + 0.35, kIron);
     }
 }
 

@@ -38,7 +38,7 @@ struct UpkeepInputs {
 };
 struct UpkeepState {
     double temperature = 20;     // turbo body, C
-    double condition = 1;        // 1 new, 0 seized
+    double condition = 1;        // 1 new, 0 blown
 };
 struct UpkeepStep {
     double oil_out_c = 20;       // temperature of the oil leaving the turbo
@@ -56,6 +56,10 @@ inline double wear_multiplier(bool oiled, bool filtered, double pollution) {
     return m;
 }
 inline double heat_wear(double temperature_c) { return 1.0 + std::max(0.0, (temperature_c - kTurboHotC) / 50.0); }
+
+// The filter clogs with the air it cleans: about 10 hours of full-boost running to go fully dirty (a supercharger's
+// filter by its share of full boost the same way).
+inline double filter_clog(double spool, double dt) { return spool * dt / (10.0 * 3600.0); }
 
 inline UpkeepStep upkeep(UpkeepState& st, const UpkeepInputs& in) {
     UpkeepStep out;
@@ -80,30 +84,42 @@ inline UpkeepStep upkeep(UpkeepState& st, const UpkeepInputs& in) {
     st.condition = std::clamp(st.condition * std::exp(-rate * dt), 0.0, 1.0);
     if (st.condition < 0.001) st.condition = 0;
     out.wear_rate = rate;
-    // The filter clogs with the air it cleans: about 10 hours of full-boost running to go fully dirty.
-    if (in.filter) out.filter_wear = spool * dt / (10.0 * 3600.0);
+    if (in.filter) out.filter_wear = filter_clog(spool, dt);
     return out;
 }
 
 // What the turbo can still do. Above half condition it is as good as new; below, its boost falls to 60% at the
-// end; at 0 it has seized (no boost, the shaft does not turn).
+// end; at 0 it has blown (no boost, the shaft does not turn, and the intake chokes: kBlownFlowShare in turbo_logic.h).
 inline double condition_head_factor(double condition) {
     double c = std::clamp(std::isfinite(condition) ? condition : 1.0, 0.0, 1.0);
     if (c <= 0) return 0;
     return c >= 0.5 ? 1.0 : 0.6 + 0.8 * c;
 }
 inline bool bearing_whine(double condition) { return std::isfinite(condition) && condition < 0.2 && condition > 0; }
+// Worn right out (upkeep snaps the last 0.1% to 0). A turbo that reaches it during a tick blows up; one loaded at 0
+// is already blown.
+inline bool turbo_blown(double condition) { return std::isfinite(condition) && condition <= 0; }
 // A dirty filter restricts the intake: full boost down to 85% when fully clogged.
 inline double filter_head_factor(bool filter, double condition) {
     return filter ? 0.85 + 0.15 * std::clamp(std::isfinite(condition) ? condition : 1.0, 0.0, 1.0) : 1.0;
 }
 
 // ------------------------------------------------------------------------------------------- hot boost air
-// Compressing air heats it: about +120 C at the game's full boost (head 9 over ambient 1).
-constexpr double kBoostHeatC = 120.0;
-inline double compressor_heat(double head, double max_head) {
-    double f = max_head > 0 ? std::clamp(std::isfinite(head) ? head / max_head : 0.0, 0.0, 1.0) : 0.0;
-    return kBoostHeatC * std::pow(f, 0.8);
+// Compressing air heats it, as a real compressor does: the outlet is the inlet times the pressure ratio's
+// isentropic rise, over the compressor's efficiency where it runs. At full boost (a ratio of 1.87) at its best
+// efficiency that is about +80 C on 20 C air; a compressor run off its best (near surge or choke) heats it more.
+inline double compressor_heat(double inlet_c, double pressure_ratio, double efficiency) {
+    double in = std::isfinite(inlet_c) ? std::clamp(inlet_c, -50.0, 600.0) : 20.0;
+    double ratio = std::isfinite(pressure_ratio) ? std::max(1.0, pressure_ratio) : 1.0;
+    double eta = std::isfinite(efficiency) ? std::clamp(efficiency, 0.2, 1.0) : 0.7;
+    return (in + 273.15) * (std::pow(ratio, 0.2857) - 1.0) / eta;
+}
+// The air a compressor sends on: its inlet air (outside air, or a first stage's boost) heated by compressing it, then
+// cooled towards the outside air by the intercoolers' effectiveness (intercooler_effectiveness below).
+inline double boost_air_c(double inlet_c, double pressure_ratio, double efficiency, double cooling, double ambient_c) {
+    double in = std::isfinite(inlet_c) ? std::clamp(inlet_c, -50.0, 600.0) : ambient_c;
+    double hot = in + compressor_heat(in, pressure_ratio, efficiency);
+    return hot - (hot - ambient_c) * std::clamp(std::isfinite(cooling) ? cooling : 0.0, 0.0, 1.0);
 }
 // Intercoolers on the boost pipe: how much of that heat they take back out (0-1). `cells` is their total frontal
 // area in cells, `flow` the air through them in L/s: bigger cores and slower air cool better.
@@ -124,8 +140,9 @@ inline double boost_factor_for_air(double factor, double intake_c) {
     return 1.0 + (factor - 1.0) * intake_density_ratio(intake_c);
 }
 // Knock: hot boosted air hurts the engine. Added to the engine's own damage counter per tick (the game takes a
-// damage step at 1): at 140 C and full boost a step every 10 minutes or so.
-constexpr double kKnockC = 90.0;
+// damage step at 1): full boost from 20 C air with no intercooler (about 98 C) costs a step about every 8 to 9
+// minutes. Real engines start to knock on boost well under 100 C of intake air.
+constexpr double kKnockC = 60.0;
 inline double knock_damage(double intake_c, double factor, double dt) {
     if (!std::isfinite(intake_c) || !std::isfinite(factor) || !(dt > 0)) return 0;
     double heat = std::max(0.0, intake_c - kKnockC) / 50.0, boost = std::max(0.0, factor - 1.15);

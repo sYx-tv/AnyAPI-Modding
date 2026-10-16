@@ -24,6 +24,7 @@
 #include "rotary_bindings.h"
 #include "rotary_logic.h"
 #include "rotary_mesh.h"
+#include "engine_parts_shared.h"
 #include "rotary_sound.h"
 #include <atomic>
 #include <cstdarg>
@@ -130,7 +131,7 @@ using file_load_t = void (*)(bool* ret, void* file, const void* path);
 anymaker::cell_hook h_add_definitions;
 self_fn_t g_file_ctor, g_file_dtor;
 file_load_t g_file_load;
-std::string g_json_path;                            // absolute, backslashes
+std::string g_json_path, g_json_forward;            // absolute, backslashes / slashes; set before g_ready, then fixed
 
 bool write_file(const std::wstring& path, const void* data, size_t size) {
     HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -172,6 +173,8 @@ bool write_definition_file() {
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
     if (n > 1) WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, g_json_path.data(), n, nullptr, nullptr);
+    g_json_forward = g_json_path;
+    for (char& c : g_json_forward) if (c == '\\') c = '/';
     return ok && !g_json_path.empty();
 }
 
@@ -185,14 +188,11 @@ bool already_added(void* container) {
 }
 
 // Loads our JSON into a fresh vehicle_component_definition_file and hands it to the container. The path's
-// characters must outlive the call ($string_ctor_cstr makes a non-owning view), so they are static. Other mods'
-// hooks (GpsPart, Turbo) may sit under ours on this cell; calling down through them is fine because every mod
+// characters must outlive the call ($string_ctor_cstr makes a non-owning view): they are g_json_path or
+// g_json_forward, which never change once the Rotary is ready, so the main and server threads can both add. Other
+// mods' hooks (GpsPart, Turbo) may sit under ours on this cell; calling down through them is fine because every mod
 // checks whether its parts are already in the container before adding them.
-bool add_ours(void* container, const std::string& text) {
-    static std::string kept[4];
-    static int next;
-    std::string& chars = kept[next++ % 4];
-    chars = text;
+bool add_ours(void* container, const std::string& chars) {
     GamePath path{kStoreSystem, 0, {}};
     g_string_ctor(&path.path, chars.c_str());
     alignas(16) uint8_t file[64]{};
@@ -210,9 +210,7 @@ void hk_add_definitions(void* container, const void* file) {
     if (!t_adding) { std::lock_guard<std::recursive_mutex> lock(g_mutex); g_is_rotary.clear(); }   // definitions may move
     if (!g_ready.load() || t_adding || !container || already_added(container)) return;
     t_adding = true;
-    std::string forward = g_json_path;
-    for (char& c : forward) if (c == '\\') c = '/';
-    bool ok = add_ours(container, g_json_path) || add_ours(container, forward);
+    bool ok = add_ours(container, g_json_path) || add_ours(container, g_json_forward);
     t_adding = false;
     static std::atomic<int> logs{6};
     if (logs.fetch_sub(1) > 0) log(ok ? 0 : 2, ok ? "Rotary Engine added to the game's parts (%s)" : "could not load the Rotary definition from %s", g_json_path.c_str());
@@ -263,6 +261,7 @@ struct ClientEngine {
     double game_volume = 0;                          // the stock power voice's volume this tick (> 0 while it runs)
     bool game_volume_seen = false;
     int logged_rotors = 0;
+    double quiet_since = -1;                         // when it went silent (now_seconds), -1 while audible
 };
 std::unordered_map<const void*, ClientEngine> g_engines;   // keyed by client component
 std::vector<int16_t> g_pcm;
@@ -333,6 +332,11 @@ void stream_sound(void* self, const double* dt) {
         v.placed = true;
     }
     bool audible = in.rps > 0.3 || v.synth.rps > 0.3 || v.synth.time < v.synth.crackle_until;
+    if (audible) v.quiet_since = -1;
+    else if (v.effect) {                             // a parked rotary hands its voice back after 2 s of silence
+        if (v.quiet_since < 0) v.quiet_since = now;
+        else if (now - v.quiet_since > 2.0) { release_voice(v); v.quiet_since = -1; return; }
+    }
     if (!v.effect) {
         if (!audible || now < v.retry_at || !v.placed) return;
         int32_t group = audio::kGroupVehicle; double range = audio::kRange;
@@ -520,6 +524,7 @@ void install_hooks() {
                 log(2, "could not locate the game functions (add=%d create=%d file=%d/%d/%d string=%d, definition route roots %d)", !!add, !!create, !!fctor, !!fdtor, !!fload, !!sc, g_route_roots);
             continue;
         }
+        std::lock_guard install_lock(engine_parts::install_mutex());   // one AnyEngineParts part hooks at a time
         g_file_ctor = fctor; g_file_dtor = fdtor; g_file_load = fload; g_string_ctor = sc;
         g_get_definition = reinterpret_cast<get_definition_t>(function(bind::definitions_get_by_id));
         if (!g_get_definition) log(1, "definition lookup not found; Rotary may add its part twice if another mod re-adds definitions");
