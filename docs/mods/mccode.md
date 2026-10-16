@@ -48,7 +48,8 @@ on_tick {
 | Blocks | `on_tick { }`, `on_render { }` | `on_tick` runs every game tick |
 | Variables | `define var integer speed` | Types: `bool`, `integer`, `fractional`, `string`, `analogue`, or a `define type` |
 | Lists | `define list fractional samples` | `samples.append(x)`, `samples.insert(i, x)`, `samples.erase(i)`, `samples.clear()`, `samples[i]`, `len(samples)` |
-| Ports | `define in fractional rpm`, `define out bool lamp` | Read inputs and write outputs by name |
+| Parts | `RearLeft.rps`, `RearLeft.brake_factor = 1.0` | A part wired to the microcontroller needs no define: read or set its channels with a dot, using the names the game shows |
+| Ports | `define in fractional rpm`, `define out bool lamp` | Your own inputs and outputs, read and written by name |
 | Setting | `speed = speed + 1` | |
 | Tests | `if x { } elseif y { } else { }` | `else if` works too |
 | Loops | `repeat 4 { }`, `foreach samples { }` | |

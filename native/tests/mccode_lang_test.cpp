@@ -135,6 +135,17 @@ int main() {
         Pretty p = prettify("on_tick\n{\n\tvar nope = 1\n}\n");
         assert(!p.ok && p.text == "on_tick\n{\n\tvar nope = 1\n}\n");
     }
+    // Parts wired to the microcontroller need no define: reading a channel is an input, setting one an output.
+    {
+        Compiled c = compile("define var fractional avg\non_tick {\n\tavg = (RearLeft.rps + RearRight.rps) / 2.0\n\tRearLeft.brake_factor = 1.0\n}\n");
+        assert(c.ok);
+        assert(c.canonical.find("var avg = ((in RearLeft.rps + in RearRight.rps) / 2.0)") != std::string::npos);
+        assert(c.canonical.find("out RearLeft.brake_factor = 1.0") != std::string::npos);
+        Pretty p = prettify(c.canonical);
+        assert(p.ok);
+        Compiled back = compile(p.text);
+        assert(back.ok && back.canonical == c.canonical);
+    }
     std::cout << "mccode_lang_test OK\n";
     return 0;
 }

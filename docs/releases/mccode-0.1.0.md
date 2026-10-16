@@ -6,7 +6,8 @@ blocks from it, so saving, multiplayer and players without the mod all work as u
 at any time.
 
 - **Friendly code:** the game's own text language with shortcuts: normal maths precedence, `and`/`or`/`not`,
-  `!=`, `else if`, plain names without `var`/`in`/`out` in front. Anything the game writes is valid too.
+  `!=`, `else if`, plain names without `var`/`in`/`out` in front, and wired parts by name (`RearLeft.rps`). Anything
+  the game writes is valid too.
 - **Checked before it's sent:** a mistake gets a red underline and a message, and nothing reaches the game until
   it's fixed, so a typo can't wipe the program.
 - **Side panel:** every command with a one-line explanation (click to insert), this microcontroller's ports,

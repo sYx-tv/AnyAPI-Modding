@@ -667,6 +667,7 @@ public:
 private:
     Symbols& sy_;
     std::vector<Diag>& d_;
+    bool target_ = false;   // resolving the left side of "x = ..."
 
     void error(int line, int col, int len, const std::string& msg) { d_.push_back({line, col, std::max(1, len), msg}); }
 
@@ -690,6 +691,10 @@ private:
         case SK::Call:
             if (!sy_.functions.count(s.name)) error(s.line, s.col, int(s.name.size()) + 5, "There's no function called '" + s.name + "' (define it with define function)");
             for (auto& a : s.args) expr(*a);
+            break;
+        case SK::Set:
+            target_ = true; expr(*s.a); target_ = false;
+            expr(*s.b);
             break;
         case SK::Append: case SK::Insert: case SK::Erase: case SK::Clear:
             expr(*s.a);
@@ -718,6 +723,13 @@ private:
             default: return false;
             }
         };
+        // A part wired to the microcontroller (a wheel, an engine) is a port the game provides without a define:
+        // RearLeft.rps reads one of its channels, RearLeft.brake_factor = 1 writes one.
+        if (!e.member.empty() && (e.ref == RK::In || e.ref == RK::Out)) { e.kind = e.ref; return; }
+        if (!e.member.empty() && e.ref == RK::Bare && !has(RK::Var) && !has(RK::Param)) {
+            e.kind = target_ ? RK::Out : RK::In;
+            return;
+        }
         if (e.ref != RK::Bare) {
             if (!has(e.ref)) {
                 const char* what = e.ref == RK::Var ? "variable" : e.ref == RK::In ? "input" : e.ref == RK::Out ? "output" : "parameter";
