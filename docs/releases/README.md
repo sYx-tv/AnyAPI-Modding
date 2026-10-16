@@ -10,7 +10,7 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Contents | Evidence |
 | --- | --- | --- | --- | --- |
-| 2026-10-16 | [v0.38.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.38.1) | [0.38.1](release-0.38.1.md), [AnyEngineParts 0.2.0](anyengineparts-0.2.0.md), [MCCode 0.1.0](mccode-0.1.0.md) | AnyAPI 0.38.1 (pictures for modded parts), AnyEngineParts 0.2.0 (Dyno, shaft-driven turbo spool, superchargers, launch control), MCCode 0.1.0 (type microcontroller code) | |
+| 2026-10-16 | [v0.38.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.38.1) | [0.38.1](release-0.38.1.md), [AnyEngineParts 0.2.0](anyengineparts-0.2.0.md) | AnyAPI 0.38.1 (pictures for modded parts), AnyEngineParts 0.2.0 (Dyno, shaft-driven turbo spool, superchargers, launch control) | |
 | 2026-10-13 | [v0.38.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.38.0) | [0.38.0](release-0.38.0.md) | AnyAPI 0.38.0 (modded items in the item catalog), AnyInventory 0.28.0 (fits any resolution, lists modded items) | |
 | 2026-10-10 | [v0.35.2](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.35.2) | [0.35.2](release-0.35.2.md) | AnyAPI 0.35.2, fixes the crash when opening a container inventory on Anymaker 0.1.24 | |
 | 2026-10-10 | [v0.35.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.35.1) | [0.35.1](release-0.35.1.md) | AnyAPI 0.35.1 (AnyBalance fix for Anymaker 0.1.24), AnyBalance 1.2.0 | |
