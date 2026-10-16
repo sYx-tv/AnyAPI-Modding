@@ -211,6 +211,9 @@ function(anyapi_version_resource target product)
   elseif(target STREQUAL "AnyInventory")
     set(ANYAPI_VERSION_COMMA "0,28,0,0")
     set(ANYAPI_VERSION_TEXT "0.28.0")
+  elseif(target STREQUAL "MCCode")
+    set(ANYAPI_VERSION_COMMA "0,1,0,0")
+    set(ANYAPI_VERSION_TEXT "0.1.0")
   elseif(target STREQUAL "AnyClock")
     set(ANYAPI_VERSION_COMMA "1,0,0,0")
     set(ANYAPI_VERSION_TEXT "1.0.0")
@@ -473,6 +476,19 @@ anyapi_version_resource(GpsPart GpsPart)
 add_executable(gpspart_logic_test tests/gpspart_logic_test.cpp)
 target_compile_options(gpspart_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME gpspart_logic COMMAND gpspart_logic_test)
+
+# MCCode: a Code view for the microcontroller editor (type the program instead of placing blocks), through the
+# experimental SDK.
+add_library(MCCode SHARED mccode_mod.cpp)
+target_include_directories(MCCode PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
+target_compile_options(MCCode PRIVATE /W3 /EHsc /utf-8)
+anyapi_version_resource(MCCode MCCode)
+add_executable(mccode_lang_test tests/mccode_lang_test.cpp)
+target_compile_options(mccode_lang_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME mccode_lang COMMAND mccode_lang_test)
+add_executable(mccode_editor_test tests/mccode_editor_test.cpp)
+target_compile_options(mccode_editor_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME mccode_editor COMMAND mccode_editor_test)
 
 # AnyEngineParts: turbochargers, blow-off valves and wastegate (turbo_*) and the rotary engine (rotary_*) in one DLL,
 # through the experimental SDK.
