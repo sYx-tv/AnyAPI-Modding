@@ -26,3 +26,22 @@ AnyHelpers provides optional settings and keybinds. Previews approximate materia
 textures and animated poses. See [Item catalog](../api/item-catalog.md),
 [Item images](../api/item-images.md), [Inventory actions](../api/inventory-actions.md)
 and [Screen layout](../api/screen-layout.md) for implementation contracts.
+
+## Language (unreleased)
+
+The browser follows the game's language selected in Steam (Library → Anymaker →
+Properties → General → Language; restart the game after changing it). Item names,
+descriptions and categories come from the installed game's translation tables.
+The browser's own buttons and messages support English and Russian; other
+languages currently use English for these labels. Missing translations fall back
+to English, then to the catalog's original text. If Steam is not available, the
+browser uses English. Steam initialization is owned by the game; the browser
+retries language detection if it starts earlier than Steam.
+
+Search accepts both translated and original English text, category names and
+definition IDs, regardless of letter case. Russian `е` and `ё` match each other.
+The optional description search covers both languages. Favorites and Add requests
+keep using stable definition IDs, including items supplied by other mods.
+
+This uses the game's existing translations, including their terminology. It does
+not replace the game's files or change translations elsewhere in the game.
