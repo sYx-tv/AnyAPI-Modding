@@ -118,7 +118,7 @@ constexpr Preset kPresets[kLayoutCount][kPresetsPerLayout] = {
      {"Race",           {120, 560, 0.85, 0.10, 0.35, 0.80, 0.80, 0.50, 0, 0.6, 1.0}},
      {"Diesel",         {70,  300, 0.20, 0.70, 0.05, 0.00, 0.30, 0.30, 1, 0.0, 1.0}}},
     {{"Stock",          {80,  360, 0.20, 0.85, 0.10, 0.00, 0.20, 0.25, 0, 0.0, 1.0}},
-     {"Muscle",         {70,  330, 0.45, 0.35, 0.65, 0.35, 0.40, 0.30, 0, 0.0, 1.0}},
+     {"Muscle",         {62,  320, 0.45, 0.35, 0.65, 0.35, 0.40, 0.30, 0, 0.0, 1.0}},
      {"Exotic",         {130, 600, 0.80, 0.25, 0.10, 0.60, 0.70, 0.60, 0, 1.0, 1.0}},
      {"Race",           {110, 520, 0.85, 0.05, 0.40, 0.90, 0.80, 0.50, 0, 0.0, 1.0}},
      {"Truck diesel",   {60,  280, 0.20, 0.60, 0.05, 0.00, 0.35, 0.30, 1, 0.0, 1.0}}},
@@ -171,6 +171,10 @@ struct Synth {
     double starter_phase = 0;
     Resonator rasp, rasp_hi, intake, tick, knock, knock_hi, pop_body;
     double tuned_pipe = -1, tuned_body = -1;
+    Layout tuned_layout = kLayoutCount;
+    // burble: the short tone each pulse rings with at a V's idle and overrun
+    double blat_phase = 0, blat_hz = 100, blat_amp = 0, blat_age = 1, blat_tau = 0.03;
+    Resonator knock_mid;
     double soft = 0, soft2 = 0, dc_x = 0, dc_y = 0;
     uint32_t rng = 0x9e3779b9u;
     double noise() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return double(rng) / 2147483648.0 - 1.0; }
@@ -191,31 +195,39 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         s.to_next = 0;
     }
     const double pipe_hz = pipe_hz_for(t, n);
-    if (s.tuned_pipe != pipe_hz || s.tuned_body != t.body_hz) {
+    const bool vee = layout == kVee;
+    if (s.tuned_pipe != pipe_hz || s.tuned_body != t.body_hz || s.tuned_layout != layout) {
         const double q = 2.6 + 2.4 * (1.0 - t.muffler);   // open pipes ring longer
         for (int b = 0; b < 2; ++b) {
-            const double d = b ? 0.91 : 1.0;                // the far bank's pipe a little longer
+            // A V's two banks run their own pipes, tuned well apart: with the cross-plane's uneven bank order that
+            // is the burble. Other layouts' second bank is only a little longer.
+            const double d = b ? (vee ? 0.78 : 0.91) : 1.0;
             s.bank[b].pipe.set(pipe_hz * d, q);
             s.bank[b].pipe2.set(pipe_hz * d * 2.02, q * 0.8);
-            s.bank[b].body.set(t.body_hz * (b ? 0.94 : 1.0), 2.2);
+            s.bank[b].body.set(t.body_hz * (b ? (vee ? 0.84 : 0.94) : 1.0), 2.2);
         }
         s.rasp.set(1700 + 900 * (1.0 - t.muffler), 1.0);
         s.rasp_hi.set(3600, 1.3);
         s.intake.set(520, 1.4);
         s.tick.set(5200, 4.0);
-        s.knock.set(2100, 5.0);
-        s.knock_hi.set(3500, 4.0);
+        s.knock.set(1350, 7.0);
+        s.knock_mid.set(2500, 6.0);
+        s.knock_hi.set(3900, 5.0);
         s.pop_body.set(pipe_hz * 1.7, 2.0);
-        s.tuned_pipe = pipe_hz; s.tuned_body = t.body_hz;
+        s.tuned_pipe = pipe_hz; s.tuned_body = t.body_hz; s.tuned_layout = layout;
     }
     const double dt = 1.0 / kSampleRate, two_pi = 6.283185307179586;
-    const double target_rps = std::isfinite(in.rps) && in.rps > 0 ? (in.rps > kMaxRps * 1.05 ? kMaxRps * 1.05 : in.rps) : 0;
+    const bool diesel = t.diesel > 0.5;
+    double target_rps = std::isfinite(in.rps) && in.rps > 0 ? (in.rps > kMaxRps * 1.05 ? kMaxRps * 1.05 : in.rps) : 0;
+    // A diesel idles low and runs out of breath early: the game's range is heard as a 650 to 4,300 rpm diesel.
+    if (diesel && target_rps > kIdleRps) target_rps = kIdleRps * 0.87 + (target_rps - kIdleRps) * 0.5;
+    else if (diesel) target_rps *= 0.87;
     const double target_load = std::isfinite(in.load) ? clamp01(in.load) : 0;
     const double k_rps = 1.0 - std::exp(-dt / 0.05), k_load = 1.0 - std::exp(-dt / 0.035), k_run = 1.0 - std::exp(-dt / 0.03);
     // Loudness per pulse: more cylinders fire more often, so each is a little quieter.
     const double per_pulse = std::pow(4.0 / n, 0.25);
     const double muffle = 0.35 + 0.65 * (1.0 - t.muffler);
-    const bool diesel = t.diesel > 0.5;
+    const double top = diesel ? kIdleRps * 0.87 + (kMaxRps - kIdleRps) * 0.5 : kMaxRps;   // the engine's own redline
     for (int i = 0; i < count; ++i) {
         s.time += dt;
         s.rps += (target_rps - s.rps) * k_rps;
@@ -225,7 +237,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         const bool running = s.run_env > 0.5;
         if (running && !was_running) s.catch_boost = 1.0;
         s.catch_boost *= std::exp(-dt / 0.4);
-        const double rpm01 = clamp01(s.rps / kMaxRps);
+        const double rpm01 = clamp01(s.rps / top);
         // How much idle character is left: all of it near the start speed, gone by ~2,000 rpm or under load.
         const double idle = std::pow(clamp01(1.0 - (s.rps - kIdleRps) / 22.0), 1.4) * (1.0 - 0.7 * s.load);
         s.lope_phase += s.lope_rate * dt;
@@ -241,7 +253,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         }
         const bool overrun = s.time < s.crackle_until;
         // Rev limiter: at the top under load the fuel is cut in bursts ("brrap-brrap").
-        const bool at_limit = running && s.rps > kMaxRps * 0.975 && s.load > 0.5;
+        const bool at_limit = running && s.rps > top * 0.975 && s.load > 0.5;
         s.limit_phase += (at_limit ? 13.0 - 5.0 * t.diesel : 0.0) * dt;
         if (s.limit_phase >= 1.0) s.limit_phase -= 1.0;
         const bool cut = at_limit && s.limit_phase < 0.45;
@@ -258,14 +270,28 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
             Bank& b = s.bank[s.table.bank[cyl]];
             b.age = 0;
             if (running && !cut) {
-                double strength = 1.0 + s.table.bias[cyl] * (1.0 + 2.0 * idle) + 0.35 * t.cam * idle * s.noise();
+                double strength = 1.0 + s.table.bias[cyl] * (vee ? 2.2 : 1.0) * (1.0 + 2.0 * idle) + 0.35 * t.cam * idle * s.noise();
                 const double lope = 1.0 - 0.55 * t.cam * idle * (1.0 - swell);
                 const bool miss = s.random01() < 0.12 * t.cam * idle * (1.3 - swell);
                 double drive = (0.45 + 0.55 * s.load) * (0.6 + 0.9 * rpm01) * (1.0 + 0.3 * idle);
                 if (overrun) drive *= 0.5 + 0.5 * s.random01();
                 b.amp = miss ? 0.06 : strength * lope * drive * (1.0 + 0.7 * s.catch_boost) * per_pulse;
                 b.noise = miss ? 0.2 : 1.0;
-                if (diesel && !miss) { s.knock_age = 0; s.knock_amp = (0.6 + 0.4 * s.random01()) * (0.5 + 0.5 * s.load) * (1.0 - 0.5 * rpm01) * per_pulse; }
+                if (diesel && !miss) {
+                    // The clatter: hardest at idle and when lugging under load, softer as it revs.
+                    s.knock_age = 0;
+                    s.knock_amp = (0.7 + 0.6 * s.random01()) * (1.0 + 0.35 * s.load) * (1.0 - 0.55 * rpm01) * per_pulse;
+                }
+                // Burble: on a V at idle and on the overrun each pulse rings out as a short, round tone, pitched by
+                // its bank's pipe. The cross-plane's L R L L R R R L bank order gives it the V8 rhythm.
+                const double burble = (vee ? 0.75 : 0.18) * (0.45 + t.cam) * (1.0 - 0.6 * t.diesel) *
+                                      std::fmax(idle, std::fmax(overrun ? 0.8 : 0.0, 0.5 * (1.0 - s.load) * (1.0 - rpm01)));
+                if (burble > 0.01) {
+                    s.blat_age = 0;
+                    s.blat_amp = b.amp * burble * (0.85 + 0.3 * s.random01());
+                    s.blat_hz = pipe_hz * (s.table.bank[cyl] ? 1.25 : 1.6) * (1.0 + 0.03 * s.noise()) * (1.0 + 0.6 * rpm01);
+                    s.blat_tau = std::fmin(0.035, 0.7 / std::fmax(s.rps * n / 2.0, 1.0));
+                }
             } else if (running) {
                 b.amp = 0.12 * per_pulse; b.noise = 0.3;     // fuel cut: just air
             } else {
@@ -291,7 +317,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
             const double env = a < 0.0005 ? a / 0.0005 : std::exp(-(a - 0.0005) / b.tau);
             const double exc = b.amp * env;
             b.thump += (exc - b.thump) * (1.0 - std::exp(-dt * two_pi * (140.0 + 120.0 * (1.0 - t.muffler))));
-            const double side = bi ? 0.88 : 1.0;   // the far bank a touch quieter
+            const double side = bi ? (vee ? 0.72 : 0.88) : 1.0;   // the far bank quieter
             v += side * (0.55 * b.pipe.run(exc) + 0.22 * b.pipe2.run(exc) + 0.32 * b.body.run(exc) + 0.95 * b.thump);
             edge_in += exc * b.noise;
             exc_sum += exc;
@@ -317,12 +343,23 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
 
         // Diesel knock: the sharp clatter of each combustion, loudest at idle.
         s.knock_age += dt;
-        if (s.knock_age < 0.004) {
-            const double ke = s.knock_amp * std::exp(-s.knock_age / 0.0009);
+        if (s.knock_age < 0.012) {
+            // A hard metallic tick (the pressure spike rings the block) over a short gravelly rattle.
+            const double ke = s.knock_amp * (std::exp(-s.knock_age / 0.0006) + 0.25 * std::exp(-s.knock_age / 0.004));
             const double kn = ke * s.noise();
-            v += 0.9 * t.diesel * (s.knock.run(kn) + 0.6 * s.knock_hi.run(kn));
+            v += 1.1 * t.diesel * (0.9 * s.knock.run(kn) + 0.8 * s.knock_mid.run(kn) + 0.5 * s.knock_hi.run(kn));
         } else {
-            s.knock.run(0); s.knock_hi.run(0);
+            s.knock.run(0); s.knock_mid.run(0); s.knock_hi.run(0);
+        }
+
+        // Burble tone: round and chunky, dropping in pitch as the pulse empties.
+        s.blat_age += dt;
+        if (s.blat_age < 0.2 && s.blat_amp > 0) {
+            const double ba = s.blat_age;
+            const double be = (ba < 0.0015 ? ba / 0.0015 : std::exp(-(ba - 0.0015) / s.blat_tau)) * s.blat_amp;
+            s.blat_phase += two_pi * s.blat_hz * (1.0 - 0.2 * (1.0 - std::exp(-ba / 0.025))) * dt;
+            if (s.blat_phase > two_pi) s.blat_phase -= two_pi;
+            v += 1.4 * be * (std::tanh(1.6 * std::sin(s.blat_phase)) + 0.35 * std::sin(2.0 * s.blat_phase + 0.6));
         }
 
         // Pops: a sharp crack and a short boom.
