@@ -88,6 +88,7 @@ static void center_player(){auto p=local_player();if(p){atlas::project(p->positi
 static void clear_route(){waypoint=false;route={};routed_at=0;if(saved_markers.active)saved_markers.commit(saved_markers.records,0);save_waypoint();}
 static void hud_draw(MapGraphics&,bool full=false,float width=320);
 static void full_panels(MapGraphics&,int,int);
+static void legend(MapGraphics&,float,float,float,float);
 static void placement_draw(MapGraphics&,int,int);
 
 // Append a timestamped helper event to anymap.log for startup and input diagnosis.
@@ -325,7 +326,19 @@ static void full_panels(MapGraphics& g,int w,int h){float width=std::min(300.f,m
  text(g,L"ROUTE",rx+16,top+18,17,Color(255,238,238,238));panel_label(g,waypoint?utf16(route_name().c_str()):L"No destination",{rx+16,top+57,width-32,50},20);
  if(waypoint){auto state=g.Save();g.SetClip(RectF(rx+12,top+112,width-24,120));g.TranslateTransform(rx+12,top+112);hud_draw(g,true,width-24);g.Restore(state);text(g,route.connected?L"Road route":L"Direct destination",rx+16,top+234,13,Color(255,165,165,165));panel_label(g,route.connected?meters(route.length)+L" remaining":(local_player()?meters(std::hypot(target.x-local_player()->position[0],target.y-local_player()->position[2])):L"Waiting for player"),{rx+16,top+260,width-32,26},18);auto p=local_player();if(p)text(g,meters(std::hypot(target.x-p->position[0],target.y-p->position[2]))+L" straight-line distance",rx+16,top+294,12,Color(255,165,165,165));}
  else{text(g,L"Click the map to set a waypoint",rx+16,top+116,12,Color(255,165,165,165));text(g,L"or route to a saved marker.",rx+16,top+139,12,Color(255,165,165,165));}
- route_clear={rx+12,top+326,width-24,40};find_player={rx+12,top+376,width-24,40};move_button={rx+12,float(h)-216,width-24,40};reset_position={rx+12,float(h)-166,width-24,40};ui_button(g,route_clear,L"Clear route");ui_button(g,find_player,L"Center on player");ui_button(g,move_button,L"Move minimap");ui_button(g,reset_position,L"Reset minimap position");text(g,L"More options in Mod Settings",rx+16,float(h)-110,12,Color(255,165,165,165));
+ route_clear={rx+12,top+326,width-24,40};find_player={rx+12,top+376,width-24,40};move_button={rx+12,float(h)-216,width-24,40};reset_position={rx+12,float(h)-166,width-24,40};ui_button(g,route_clear,L"Clear route");ui_button(g,find_player,L"Center on player");ui_button(g,move_button,L"Move minimap");ui_button(g,reset_position,L"Reset minimap position");legend(g,rx,top+436,width,float(h)-226);text(g,L"More options in Mod Settings",rx+16,float(h)-110,12,Color(255,165,165,165));
+}
+// Full-map key: one row per symbol, as many rows as fit between the route buttons and Move minimap.
+static void legend(MapGraphics& g,float x,float y,float width,float bottom){if(bottom-y<60)return;text(g,L"KEY",x+16,y,17,Color(255,238,238,238));y+=34;
+ AnySessionPlayerV1 you{},other{};you.valid_fields=PLAYER_LOCAL|PLAYER_FACING;other.valid_fields=PLAYER_FACING;
+ auto row=[&](const wchar_t* label,auto&& icon){if(y+20>bottom)return;icon(PointF(x+30,y+10));text(g,label,x+52,y+1,13,Color(255,205,205,205),false,width-64);y+=24;};
+ row(L"You",[&](PointF at){marker(g,you,at,false,0);});
+ row(L"Other players",[&](PointF at){marker(g,other,at,false,0);});
+ row(L"Route",[&](PointF at){Pen line(Color(255,217,114,217),4);g.DrawLine(&line,at.X-10,at.Y,at.X+10,at.Y);});
+ row(L"Waypoint",[&](PointF at){SolidBrush pin(Color(255,239,154,227));Pen rim(Color(255,51,37,57),2);g.FillEllipse(&pin,at.X-5,at.Y-5,10.f,10.f);g.DrawEllipse(&rim,at.X-5,at.Y-5,10.f,10.f);});
+ row(L"Saved marker",[&](PointF at){SolidBrush fill(Color(255,244,186,101));Pen edge(Color(255,42,49,37),2);g.FillEllipse(&fill,at.X-5,at.Y-5,10.f,10.f);g.DrawEllipse(&edge,at.X-5,at.Y-5,10.f,10.f);});
+ if(options.vehicles){row(L"Vehicle",[&](PointF at){blip(g,{0,0,mapactors::Vehicle},at);});row(L"Parked build / base",[&](PointF at){blip(g,{0,0,mapactors::Structure},at);});}
+ if(options.zombies){row(L"Zombie",[&](PointF at){blip(g,{0,0,mapactors::Zombie},at);});row(L"Large creature",[&](PointF at){blip(g,{0,0,mapactors::Creature},at);});}
 }
 // Placement uses full-map input capture, leaving ordinary gameplay mouse input untouched.
 static void placement_draw(MapGraphics& g,int w,int h){SolidBrush shade(Color(210,15,15,15));g.FillRectangle(&shade,0,0,w,h);float scale=float(options.size/100);int mw=int(320*scale),mh=int((waypoint&&options.guide?385:300)*scale);auto at=minimap_position(w,h,mw,mh);mini_preview={at.X,at.Y,float(mw),float(mh)};
