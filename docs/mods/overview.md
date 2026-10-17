@@ -19,7 +19,7 @@ keeps working defaults when it is absent.
 | [AnyMirror](mirror.md) | 1.1.1 | API 0.34.0 | Mirrored edge building with either edge tool, a toggleable mirror wall and keybinds | AnyHelpers settings and controls |
 | [GpsPart](gps.md) | 1.0.1 | API 0.35.0; single player | A new GPS Sensor part: position, heading, pitch, roll, speed, acceleration and waypoint outputs for the data port and microcontroller | None |
 | [ThirdPerson](third-person.md) | 0.1.3 | API 0.35.0 | Third-person camera on F5 with an adjustable follow distance (Alt + mouse wheel) | AnyHelpers settings and controls |
-| [MCCode](mccode.md) | 0.1.0 | API 0.38.0 | A Code view in the microcontroller editor: type the program instead of placing blocks, with a command list and the game's debugger | None; `</> Code` in the microcontroller editor |
+| [MCCode](mccode.md) | 0.2.0 | API 0.38.0 | A Code view in the microcontroller editor: type the program or build it from nodes and wires, with a command list and the game's debugger | None; `</> Code` in the microcontroller editor |
 
 All mods are in the published catalog ([`catalog.json`](../../catalog.json)).
 All versions target Anymaker 0.1.25 / Steam build 25904830. On that build every mod needs AnyAPI 0.37.0 or newer (AnyInventory lists modded items with 0.38.0), and the experimental-SDK mods need their 0.1.25 builds

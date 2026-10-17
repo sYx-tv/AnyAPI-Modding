@@ -25,6 +25,7 @@
 #include "route_cell.h"
 #include "mccode_lang.h"
 #include "mccode_editor.h"
+#include "mccode_nodes.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -210,9 +211,28 @@ struct State {
     Snapshot snap;
     int32_t vehicle = -1, component = -1;   // whose program the editor holds
     std::vector<Action> actions;
+    // node editor
+    bool nodes_mode = false;
+    nodes::Graph graph;
+    bool graph_found = false;        // the program carries a node graph (or the player started one)
+    bool graph_hand_edited = false;  // the code below the graph was changed by hand since
+    nodes::Generated gen;            // code of the graph as last generated
+    unsigned gen_rev = ~0u;          // editor revision that holds `gen.code`
+    std::vector<nodes::Graph> graph_undo, graph_redo;
+    float cam_x = 0, cam_y = 0, zoom = 1;
+    int selected = -1;               // node id
+    enum class NDrag { None, Pan, Move, Wire } ndrag = NDrag::None;
+    int drag_node = -1, drag_port = -1;
+    bool drag_from_input = false, drag_moved = false;
+    float drag_dx = 0, drag_dy = 0, mouse_x = 0, mouse_y = 0;
+    int edit_param = -1;             // parameter of the selected node being typed into
+    std::string edit_buf;
+    int added = 0;
 };
 State g;
 std::atomic<double> g_editor_seen{-1e9};
+void load_graph(bool from_game);
+void commit_param();
 bool g_escape_held = false;      // the Escape that closed the Code view: swallow its key-up too
 std::vector<int> g_diag_lines;   // line each row of the problems strip jumps to, -1 for none (as last drawn)
 
@@ -401,6 +421,7 @@ void hk_save_data(void* client, void* event, uint8_t* msg) {
                 }
                 g.applied_rev = g.ed.revision();
                 g.loaded = true;
+                load_graph(true);
                 g.scroll_line = 0;
                 g.follow_cursor = true;
                 if (p.ok) set_message("Program loaded. Edit it, then Apply (Ctrl+Enter).", 0xff8fd18f);
@@ -419,8 +440,8 @@ struct Box {
     float x = 0, y = 0, w = 0, h = 0;
     bool contains(float px, float py) const { return px >= x && px < x + w && py >= y && py < y + h; }
 };
-enum Btn { kApply, kReload, kUndo, kPause, kStepIn, kStepOver, kStepOut, kCopy, kPaste, kClose, kBtnCount };
-const wchar_t* kBtnLabel[kBtnCount] = {L"▶ Apply", L"Reload", L"Undo", L"Pause", L"Step in", L"Step over", L"Step out", L"Copy all", L"Paste", L"×"};
+enum Btn { kApply, kReload, kUndo, kPause, kStepIn, kStepOver, kStepOut, kCopy, kPaste, kMode, kClose, kBtnCount };
+const wchar_t* kBtnLabel[kBtnCount] = {L"▶ Apply", L"Reload", L"Undo", L"Pause", L"Step in", L"Step over", L"Step out", L"Copy all", L"Paste", L"Nodes", L"×"};
 struct Layout {
     float s = 1, font = 15, line_h = 20, cw = 9;
     Box button, panel, toolbar, btn[kBtnCount], editor, gutter, text, diag, side, tabs[3], side_body;
@@ -434,9 +455,9 @@ Layout layout(float w, float h) {
     l.panel = {m, m + 40 * s, w - 2 * m, h - m - (m + 40 * s)};
     l.toolbar = {l.panel.x, l.panel.y, l.panel.w, 44 * s};
     float bx = l.panel.x + 10 * s, by = l.panel.y + 7 * s, bh = 30 * s;
-    const float widths[kBtnCount] = {96, 76, 64, 84, 76, 92, 84, 84, 70, 30};
+    const float widths[kBtnCount] = {96, 76, 64, 84, 76, 92, 84, 84, 70, 104, 30};
     for (int i = 0; i < kBtnCount; ++i) {
-        if (i == kPause || i == kCopy) bx += 14 * s;
+        if (i == kPause || i == kCopy || i == kMode) bx += 14 * s;
         float bw = widths[i] * s;
         l.btn[i] = {bx, by, bw, bh};
         bx += bw + 6 * s;
@@ -495,6 +516,11 @@ void request_fetch() {
     set_message("Reading the program...");
 }
 void apply() {
+    if (g.nodes_mode) {
+        commit_param();
+        if (!g.graph_found) { set_message("Add some nodes first. Nothing was sent to the game.", 0xffffc400); return; }
+        if (g.ed.revision() == g.gen_rev && !g.gen.problems.empty()) { set_message("Fix the nodes outlined in red first. Nothing was sent to the game.", 0xffff6b6b); return; }
+    }
     recompile();
     if (!g.live.ok) {
         if (!g.raw) { set_message("Fix the red lines first. Nothing was sent to the game.", 0xffff6b6b); return; }
@@ -522,6 +548,152 @@ void open_view(bool open) {
     }
     log(0, open ? "Code view opened" : "Code view closed");
 }
+// ------------------------------------------------------------------ node editor model (g_mutex held)
+constexpr float kNodeW = 170, kHeadH = 24, kSumH = 18, kRowH = 22;
+float node_height(const nodes::NodeDef& d) { return kHeadH + kSumH + float(std::max<size_t>(std::max(d.ins.size(), d.outs.size()), 1)) * kRowH + 6; }
+
+void frame_graph() {   // camera on the graph's top-left corner
+    if (g.graph.nodes.empty()) { g.cam_x = -40; g.cam_y = -40; return; }
+    float x = 1e9f, y = 1e9f;
+    for (auto& n : g.graph.nodes) { x = std::min(x, n.x); y = std::min(y, n.y); }
+    g.cam_x = x - 40; g.cam_y = y - 40;
+}
+// The editor's text changed from the game: pick up a node graph it carries.
+void load_graph(bool from_game) {
+    auto parsed = nodes::parse(g.ed.text());
+    g.graph_found = parsed.found;
+    g.graph = parsed.found ? parsed.graph : nodes::Graph{};
+    g.graph_hand_edited = parsed.found && parsed.hand_edited;
+    g.graph_undo.clear(); g.graph_redo.clear();
+    g.selected = -1; g.edit_param = -1;
+    g.gen = nodes::generate(g.graph);
+    g.gen_rev = ~0u;
+    if (parsed.found && !parsed.hand_edited) {
+        // same program: show the code as the graph writes it, so lines map to nodes
+        bool matched = g.applied_rev == g.ed.revision();
+        g.ed.set_text(g.gen.code);
+        g.gen_rev = g.ed.revision();
+        if (matched) { g.applied_rev = g.ed.revision(); g.applied_map = compile(g.gen.code).canon_to_src; g.raw = false; }
+        if (from_game) g.nodes_mode = true;
+    }
+    frame_graph();
+}
+void graph_edit() {   // call before changing the graph
+    g.graph_undo.push_back(g.graph);
+    if (g.graph_undo.size() > 100) g.graph_undo.erase(g.graph_undo.begin());
+    g.graph_redo.clear();
+}
+void graph_sync() {   // the graph changed: regenerate the code
+    g.graph_found = true;
+    g.graph_hand_edited = false;
+    g.gen = nodes::generate(g.graph);
+    g.ed.set_text(g.gen.code, true);
+    g.gen_rev = g.ed.revision();
+    if (g.selected >= 0 && !g.graph.node(g.selected)) g.selected = -1;
+}
+void graph_undo_redo(bool redo) {
+    auto& from = redo ? g.graph_redo : g.graph_undo;
+    auto& to = redo ? g.graph_undo : g.graph_redo;
+    if (from.empty()) return;
+    to.push_back(g.graph);
+    g.graph = from.back();
+    from.pop_back();
+    g.edit_param = -1;
+    graph_sync();
+}
+void commit_param() {
+    if (g.edit_param < 0) return;
+    nodes::Node* n = g.graph.node(g.selected);
+    const nodes::NodeDef* d = n ? nodes::find_def(n->kind) : nullptr;
+    if (d && g.edit_param < int(d->params.size())) {
+        auto& prm = d->params[size_t(g.edit_param)];
+        std::string v = g.edit_buf;
+        if (prm.kind == nodes::PK::Number) v = nodes::number_text(v);
+        if (n->params[prm.key] != v) { graph_edit(); g.graph.node(g.selected)->params[prm.key] = v; graph_sync(); }
+    }
+    g.edit_param = -1;
+}
+void select_node(int id) {
+    if (id != g.selected) commit_param();
+    g.selected = id;
+    // bring it to the front
+    auto it = std::find_if(g.graph.nodes.begin(), g.graph.nodes.end(), [&](const nodes::Node& n) { return n.id == id; });
+    if (it != g.graph.nodes.end()) std::rotate(it, it + 1, g.graph.nodes.end());
+}
+void add_node(const std::string& kind, float canvas_w, float canvas_h, float z) {
+    commit_param();
+    graph_edit();
+    float x = g.cam_x + canvas_w / z * .5f - kNodeW / 2 + float(g.added % 6) * 18, y = g.cam_y + canvas_h / z * .4f + float(g.added % 6) * 18;
+    ++g.added;
+    int id = g.graph.add(kind, std::round(x), std::round(y)).id;
+    g.selected = id;
+    graph_sync();
+}
+void delete_selected() {
+    if (g.selected < 0 || !g.graph.node(g.selected)) return;
+    g.edit_param = -1;
+    graph_edit();
+    g.graph.remove(g.selected);
+    g.selected = -1;
+    graph_sync();
+}
+void duplicate_selected() {
+    nodes::Node* n = g.graph.node(g.selected);
+    if (!n) return;
+    commit_param();
+    graph_edit();
+    nodes::Node copy = *n;
+    nodes::Node& added = g.graph.add(copy.kind, copy.x + 30, copy.y + 30);
+    added.params = copy.params;
+    g.selected = added.id;
+    graph_sync();
+}
+void set_nodes_mode(bool on) {
+    if (g.nodes_mode == on) return;
+    commit_param();
+    g.nodes_mode = on;
+    g.tab = 0;
+    g.side_scroll = 0;
+    if (!on) return;
+    if (g.graph_found && g.ed.revision() != g.gen_rev) {   // edited in the Code view since
+        auto pr = nodes::parse(g.ed.text());
+        if (pr.found && !pr.hand_edited) {
+            g.graph = pr.graph;
+            g.gen = nodes::generate(g.graph);
+            if (g.ed.text() == g.gen.code) g.gen_rev = g.ed.revision();
+        } else g.graph_hand_edited = true;
+    }
+    if (g.graph_hand_edited) set_message("This code was changed by hand. Editing the nodes replaces those changes.", 0xffffc400);
+    else if (!g.graph_found) {
+        bool has_code = false;
+        for (auto& line : g.ed.lines()) {
+            size_t a = line.find_first_not_of(" \t");
+            if (a != std::string::npos && line[a] != '#') has_code = true;
+        }
+        if (has_code) set_message("This program was written as code. Adding a node replaces it; Code view and Ctrl+Z bring it back.", 0xffffc400);
+        else set_message("Add nodes from the list on the right, then drag between ports to wire them.", 0xff8fd18f);
+        frame_graph();
+    }
+}
+// Problems per node: bad parameters, code that doesn't compile, and errors the game reports on its blocks.
+std::map<int, std::string> node_problems() {
+    std::map<int, std::string> out;
+    for (auto& pr : g.gen.problems) out.emplace(pr.node, pr.msg);
+    if (g.ed.revision() != g.gen_rev) return out;
+    auto node_of_line = [&](int line) { return line >= 0 && line < int(g.gen.line_node.size()) ? g.gen.line_node[size_t(line)] : -1; };
+    for (auto& d : g.live.diags) if (int n = node_of_line(d.line); n >= 0) out.emplace(n, d.msg);
+    if (mapping_live())
+        for (auto& [row, type] : g.snap.error_rows) if (int n = node_of_line(row_to_line(row)); n >= 0) out.emplace(n, error_text(type));
+    return out;
+}
+std::string node_summary(const nodes::Node& n, const nodes::NodeDef& d) {
+    auto P = [&](const char* k) { auto it = n.params.find(k); return it == n.params.end() ? std::string() : it->second; };
+    if (n.kind.rfind("part_", 0) == 0) return P("part") + (P("channel").empty() ? "" : "." + P("channel")) + (P("type") == "whole number" ? " (whole)" : "");
+    std::string s;
+    for (auto& prm : d.params) s += (s.empty() ? "" : "  ") + (d.params.size() > 1 ? std::string(prm.label) + " " : std::string()) + P(prm.key);
+    return s;
+}
+
 // Inserts a side-panel snippet at the cursor, indented like the current line; "$" marks where the cursor goes.
 void insert_snippet(const std::string& snippet) {
     std::string indent;
@@ -570,9 +742,38 @@ void set_clipboard(const std::string& s) {
 }
 
 // Side panel rows, built the same way for drawing and clicking.
-struct SideRow { std::string label, help, insert; bool header = false; uint32_t color = 0xffe8ecef; };
+enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode };
+struct SideRow { std::string label, help, insert; bool header = false; uint32_t color = 0xffe8ecef; SideAct act = SideAct::None; int arg = 0; };
 std::vector<SideRow> side_rows() {
     std::vector<SideRow> rows;
+    if (g.nodes_mode && g.tab == 0) {
+        const char* group = "";
+        for (size_t i = 0; i < nodes::library().size(); ++i) {
+            auto& d = nodes::library()[i];
+            if (strcmp(group, d.group)) { group = d.group; rows.push_back({d.group, "", "", true}); }
+            SideRow r{d.title, d.help, "", false, 0xffe8ecef, SideAct::AddNode, int(i)};
+            rows.push_back(r);
+        }
+        return rows;
+    }
+    if (g.nodes_mode && g.tab == 1) {
+        const nodes::Node* n = g.graph.node(g.selected);
+        const nodes::NodeDef* d = n ? nodes::find_def(n->kind) : nullptr;
+        if (!d) { rows.push_back({"Nothing selected", "Click a node to change its settings", ""}); return rows; }
+        rows.push_back({std::string(d->title) + "  (node " + std::to_string(n->id) + ")", "", "", true});
+        rows.push_back({d->help, "", "", false, 0xff8b96a0});
+        for (size_t i = 0; i < d->params.size(); ++i) {
+            auto& prm = d->params[i];
+            auto it = n->params.find(prm.key);
+            std::string v = it == n->params.end() ? "" : it->second;
+            if (int(i) == g.edit_param) v = g.edit_buf + (fmod(now_seconds(), 1.0) < .6 ? "|" : " ");
+            std::string hint = prm.kind == nodes::PK::Choice ? "  (click to change)" : int(i) == g.edit_param ? "  (Enter to set)" : "  (click to edit)";
+            rows.push_back({prm.label, v + hint, "", false, 0xffe8ecef, SideAct::EditParam, int(i)});
+        }
+        rows.push_back({"Duplicate", "Ctrl+D", "", false, 0xff8fd18f, SideAct::DuplicateNode});
+        rows.push_back({"Delete node", "Delete key", "", false, 0xffff6b6b, SideAct::DeleteNode});
+        return rows;
+    }
     if (g.tab == 0) {
         const char* group = "";
         for (auto& h : kHelp) {
@@ -622,7 +823,16 @@ std::vector<SideRow> side_rows() {
 // ================================================================== drawing (render thread)
 std::wstring widen(const std::string& s) {
     std::wstring w;
-    for (unsigned char c : s) w += wchar_t(c < 128 ? c : (c == 0xb7 ? 0xb7 : '?'));
+    for (size_t i = 0; i < s.size(); ++i) {
+        unsigned char c = (unsigned char)s[i];
+        if (c < 0x80) { w += wchar_t(c); continue; }
+        int extra = c >= 0xf0 ? 3 : c >= 0xe0 ? 2 : c >= 0xc0 ? 1 : 0;
+        if (!extra || i + size_t(extra) >= s.size()) { w += wchar_t(c == 0xb7 ? 0xb7 : '?'); continue; }
+        uint32_t cp = c & (0x3f >> extra);
+        for (int k = 1; k <= extra; ++k) cp = (cp << 6) | ((unsigned char)s[i + size_t(k)] & 0x3f);
+        i += size_t(extra);
+        w += cp < 0x10000 ? wchar_t(cp) : L'?';
+    }
     return w;
 }
 struct Painter {
@@ -680,6 +890,164 @@ std::vector<uint32_t> colour_line(const std::string& l) {
     return c;
 }
 
+// ------------------------------------------------------------------ node canvas
+// Canvas units are the graph's own; on screen they scale by z = layout scale * zoom.
+struct NodeHit { int node = -1, port = -1; bool input = false, on_port = false; };
+float canvas_z(const Layout& l) { return l.s * g.zoom; }
+void port_pos(const Layout& l, const nodes::Node& n, int port, bool input, float& sx, float& sy) {
+    float z = canvas_z(l);
+    sx = l.editor.x + ((input ? n.x : n.x + kNodeW) - g.cam_x) * z;
+    sy = l.editor.y + (n.y + kHeadH + kSumH + (float(port) + .5f) * kRowH - g.cam_y) * z;
+}
+NodeHit hit_node(const Layout& l, float x, float y) {
+    NodeHit h;
+    float z = canvas_z(l), r = std::max(9.f, 9 * z);
+    for (auto it = g.graph.nodes.rbegin(); it != g.graph.nodes.rend(); ++it) {
+        const nodes::NodeDef* d = nodes::find_def(it->kind);
+        if (!d) continue;
+        for (int side = 0; side < 2; ++side) {
+            size_t count = side == 0 ? d->ins.size() : d->outs.size();
+            for (size_t i = 0; i < count; ++i) {
+                float px, py;
+                port_pos(l, *it, int(i), side == 0, px, py);
+                if (std::abs(x - px) <= r && std::abs(y - py) <= r * .9f) return {it->id, int(i), side == 0, true};
+            }
+        }
+        float nx = l.editor.x + (it->x - g.cam_x) * z, ny = l.editor.y + (it->y - g.cam_y) * z;
+        if (x >= nx && x < nx + kNodeW * z && y >= ny && y < ny + node_height(*d) * z) return {it->id, -1, false, false};
+    }
+    return h;
+}
+std::map<std::string, std::string> live_values() {
+    std::map<std::string, std::string> v;
+    if (!g.loaded || g.applied_rev != g.ed.revision() || g.ed.revision() != g.gen_rev) return v;   // only for the applied graph
+    for (auto& w : g.snap.watch) {
+        size_t eq = w.find(" = ");
+        if (eq != std::string::npos) v[w.substr(0, eq)] = w.substr(eq + 3);
+    }
+    return v;
+}
+uint32_t group_colour(const char* group) {
+    std::string s = group;
+    if (s == "Parts") return 0xff2f6f8f;
+    if (s == "Maths") return 0xff3a5f9a;
+    if (s == "Compare") return 0xff7a5a1f;
+    if (s == "Logic") return 0xff2f7a4a;
+    if (s == "Memory") return 0xff6a3f8a;
+    if (s == "Timing") return 0xff8a3f5f;
+    return 0xff6a6a2f;
+}
+void ellipse(float cx, float cy, float r, uint32_t color, bool stroke = false, float width = 1) {
+    AnyGpuCommandV1 c; c.kind = ANY_GPU_ELLIPSE; c.rect[0] = cx - r; c.rect[1] = cy - r; c.rect[2] = 2 * r; c.rect[3] = 2 * r; c.color = color;
+    if (stroke) { c.flags = ANY_GPU_STROKE; c.stroke = width; }
+    gpu->emit(&c);
+}
+void wire_curve(Painter& p, float x0, float y0, float x1, float y1, uint32_t color, float width) {
+    float dx = std::max(std::abs(x1 - x0) * .5f, 40 * width);
+    float px = x0, py = y0;
+    for (int i = 1; i <= 16; ++i) {
+        float t = float(i) / 16, u = 1 - t;
+        float x = u * u * u * x0 + 3 * u * u * t * (x0 + dx) + 3 * u * t * t * (x1 - dx) + t * t * t * x1;
+        float y = u * u * u * y0 + 3 * u * u * t * y0 + 3 * u * t * t * y1 + t * t * t * y1;
+        p.line(px, py, x, y, color, width);
+        px = x; py = y;
+    }
+}
+constexpr uint32_t kNumWire = 0xff7cc8ff, kBoolWire = 0xff8fd18f;
+
+void draw_node_canvas(const Layout& l, Painter& p) {
+    float s = l.s, z = canvas_z(l);
+    p.box(l.editor, kEditorBg, 6 * s);
+    p.clip(l.editor);
+    // grid
+    float step = 40 * z;
+    if (step >= 8) {
+        float gx = l.editor.x - std::fmod(g.cam_x * z, step); if (gx > l.editor.x) gx -= step;
+        float gy = l.editor.y - std::fmod(g.cam_y * z, step); if (gy > l.editor.y) gy -= step;
+        for (float x = gx; x < l.editor.x + l.editor.w; x += step) p.line(x, l.editor.y, x, l.editor.y + l.editor.h, 0xff171d22, 1);
+        for (float y = gy; y < l.editor.y + l.editor.h; y += step) p.line(l.editor.x, y, l.editor.x + l.editor.w, y, 0xff171d22, 1);
+    }
+    auto values = live_values();
+    auto problems = node_problems();
+    // wires
+    for (auto& w : g.graph.wires) {
+        const nodes::Node *a = g.graph.node(w.from), *b = g.graph.node(w.to);
+        const nodes::NodeDef* da = a ? nodes::find_def(a->kind) : nullptr;
+        if (!a || !b || !da || w.from_port >= int(da->outs.size())) continue;
+        float x0, y0, x1, y1;
+        port_pos(l, *a, w.from_port, false, x0, y0);
+        port_pos(l, *b, w.to_port, true, x1, y1);
+        wire_curve(p, x0, y0, x1, y1, da->outs[size_t(w.from_port)].is_bool ? kBoolWire : kNumWire, 2 * z);
+    }
+    // the wire being dragged
+    if (g.ndrag == State::NDrag::Wire) {
+        if (const nodes::Node* n = g.graph.node(g.drag_node)) {
+            const nodes::NodeDef* d = nodes::find_def(n->kind);
+            float px, py;
+            port_pos(l, *n, g.drag_port, g.drag_from_input, px, py);
+            bool is_bool = d && (g.drag_from_input ? d->ins[size_t(g.drag_port)].is_bool : d->outs[size_t(g.drag_port)].is_bool);
+            if (g.drag_from_input) wire_curve(p, g.mouse_x, g.mouse_y, px, py, is_bool ? kBoolWire : kNumWire, 2 * z);
+            else wire_curve(p, px, py, g.mouse_x, g.mouse_y, is_bool ? kBoolWire : kNumWire, 2 * z);
+        }
+    }
+    // nodes, back to front
+    float fs = 13 * z, small = 11.5f * z;
+    bool labels = z >= .5f;
+    for (auto& n : g.graph.nodes) {
+        const nodes::NodeDef* d = nodes::find_def(n.kind);
+        if (!d) continue;
+        float nx = l.editor.x + (n.x - g.cam_x) * z, ny = l.editor.y + (n.y - g.cam_y) * z;
+        float nw = kNodeW * z, nh = node_height(*d) * z;
+        if (nx > l.editor.x + l.editor.w || ny > l.editor.y + l.editor.h || nx + nw + 80 * z < l.editor.x || ny + nh + 30 * z < l.editor.y) continue;
+        auto pr = problems.find(n.id);
+        p.box({nx, ny, nw, nh}, 0xf0222930, 6 * z);
+        p.box({nx, ny, nw, kHeadH * z}, group_colour(d->group), 6 * z);
+        p.box({nx, ny + kHeadH * z - 6 * z, nw, 6 * z}, 0xf0222930);
+        if (labels) {
+            p.text(nx + 8 * z, ny, nw - 16 * z, kHeadH * z - 4 * z, widen(d->title), fs, kLight, ANY_GPU_BOLD);
+            p.text(nx + 8 * z, ny + kHeadH * z - 4 * z, nw - 16 * z, kSumH * z, widen(node_summary(n, *d)), small, 0xffd8c27a);
+        }
+        uint32_t outline = n.id == g.selected ? kYellow : pr != problems.end() ? kRed : 0xff3a434d;
+        p.box({nx, ny, nw, nh}, outline, 6 * z, ANY_GPU_STROKE, (n.id == g.selected || pr != problems.end() ? 2 : 1) * z);
+        for (size_t i = 0; i < d->ins.size(); ++i) {
+            float px, py;
+            port_pos(l, n, int(i), true, px, py);
+            bool wired = g.graph.wire_into(n.id, int(i));
+            uint32_t col = d->ins[i].is_bool ? kBoolWire : kNumWire;
+            ellipse(px, py, 5 * z, wired ? col : 0xff222930);
+            ellipse(px, py, 5 * z, col, true, 1.5f * z);
+            if (labels) p.text(px + 9 * z, py - kRowH * z / 2, nw / 2, kRowH * z, widen(d->ins[i].name), small, 0xffb8c2cb);
+        }
+        for (size_t i = 0; i < d->outs.size(); ++i) {
+            float px, py;
+            port_pos(l, n, int(i), false, px, py);
+            uint32_t col = d->outs[i].is_bool ? kBoolWire : kNumWire;
+            ellipse(px, py, 5 * z, col);
+            if (labels && d->outs[i].name[0]) {
+                std::wstring name = widen(d->outs[i].name);
+                float tw = float(name.size()) * small * .6f;
+                p.text(px - 9 * z - tw, py - kRowH * z / 2, tw, kRowH * z, name, small, 0xffb8c2cb);
+            }
+            auto v = values.find(nodes::out_var(n.id, int(i)));
+            if (labels && v != values.end()) {
+                std::wstring t = widen(v->second);
+                float tw = float(t.size()) * small * .62f + 8 * z;
+                Box tag{px + 8 * z, py - 9 * z - kRowH * z / 2, tw, 16 * z};
+                p.box(tag, 0xe0101418, 3 * z);
+                p.text(tag.x + 4 * z, tag.y, tag.w, tag.h, t, small, kYellow);
+            }
+        }
+        if (pr != problems.end() && labels)
+            p.text(nx, ny + nh + 2 * z, 360 * z, 16 * z, widen(pr->second), small, kRed);
+    }
+    if (g.graph.nodes.empty())
+        p.text(l.editor.x, l.editor.y, l.editor.w, l.editor.h, L"No nodes yet. Pick one from Add node on the right.", 15 * s, 0xff5d6873, ANY_GPU_CENTER);
+    // zoom readout
+    p.text(l.editor.x + 8 * s, l.editor.y + l.editor.h - 22 * s, 300 * s, 18 * s,
+           L"Zoom " + std::to_wstring(int(std::lround(g.zoom * 100))) + L"%  •  drag empty space to pan", 11.5f * s, 0xff5d6873);
+    p.unclip();
+}
+
 void draw(const AnyFrameV1* frame, void*) {
     if (!frame || !gpu || !g_ready) return;
     std::lock_guard lock(g_mutex);
@@ -727,7 +1095,7 @@ void draw(const AnyFrameV1* frame, void*) {
         if (i == kUndo) enabled = g.snap.can_undo;
         uint32_t fill = i == kApply ? 0xff2f6f3a : 0xff252c33;
         p.box(l.btn[i], fill, 5 * s);
-        std::wstring label = i == kPause ? (paused ? L"▶ Resume" : L"⏸ Pause") : kBtnLabel[i];
+        std::wstring label = i == kPause ? (paused ? L"▶ Resume" : L"⏸ Pause") : i == kMode ? (g.nodes_mode ? L"Code" : L"Nodes") : kBtnLabel[i];
         p.text(l.btn[i].x, l.btn[i].y, l.btn[i].w, l.btn[i].h, label, (i == kClose ? 20 : 13.5f) * s, enabled ? kLight : 0xff5a636c, ANY_GPU_CENTER | (i == kApply ? uint32_t(ANY_GPU_BOLD) : 0u));
     }
     // status, right of the buttons
@@ -742,9 +1110,18 @@ void draw(const AnyFrameV1* frame, void*) {
         else if (g.fetching) st = L"Reading...";
         else if (g.loaded && g.applied_rev != g.ed.revision()) { st = L"Edited • Ctrl+Enter applies"; color = 0xffffd27f; }
         else if (g.loaded) { st = L"Blocks match the code"; color = 0xff8fd18f; }
-        float x = l.btn[kPaste].x + l.btn[kPaste].w + 14 * s;
+        float x = l.btn[kMode].x + l.btn[kMode].w + 14 * s;
         p.text(x, l.toolbar.y, l.btn[kClose].x - x - 8 * s, l.toolbar.h, st, 13 * s, color);
     }
+    std::vector<int> error_lines;
+    std::vector<std::string> game_errors;
+    for (auto& [row, type] : g.snap.error_rows) {
+        int line = mapping_live() ? row_to_line(row) : -1;
+        error_lines.push_back(line);
+        game_errors.push_back((line >= 0 ? "Line " + std::to_string(line + 1) + ": " : std::string("Game: ")) + error_text(type));
+    }
+    if (g.nodes_mode) draw_node_canvas(l, p);
+    else {
     // editor
     p.box(l.editor, kEditorBg, 6 * s);
     const auto& lines = g.ed.lines();
@@ -763,13 +1140,6 @@ void draw(const AnyFrameV1* frame, void*) {
         if (line >= 0 && (line < g.scroll_line || line >= g.scroll_line + l.rows)) g.scroll_line = std::max(0, line - l.rows / 3);
     }
     g.scroll_line = std::clamp(g.scroll_line, 0, std::max(0, total - 1));
-    std::vector<int> error_lines;
-    std::vector<std::string> game_errors;
-    for (auto& [row, type] : g.snap.error_rows) {
-        int line = mapping_live() ? row_to_line(row) : -1;
-        error_lines.push_back(line);
-        game_errors.push_back((line >= 0 ? "Line " + std::to_string(line + 1) + ": " : std::string("Game: ")) + error_text(type));
-    }
     p.clip(l.editor);
     int step_line = paused && mapping_live() ? row_to_line(g.snap.step_row) : -1;
     Pos a = g.ed.sel_start(), b = g.ed.sel_end();
@@ -828,14 +1198,24 @@ void draw(const AnyFrameV1* frame, void*) {
     }
     p.unclip();
     p.line(l.gutter.x + l.gutter.w, l.editor.y + 4 * s, l.gutter.x + l.gutter.w, l.editor.y + l.editor.h - 4 * s, 0xff222a31, 1 * s);
+    }
     // problems / status strip
     p.box(l.diag, 0xff12171b, 6 * s);
     {
         struct Row { std::string text; uint32_t color; int line; };
         std::vector<Row> rows;
         if (!g.message.empty() && now - g.message_time < 8) rows.push_back({g.message, g.message_color, -1});
+        if (g.nodes_mode) {
+            for (auto& [id, msg] : node_problems()) {
+                const nodes::Node* n = g.graph.node(id);
+                const nodes::NodeDef* d = n ? nodes::find_def(n->kind) : nullptr;
+                rows.push_back({std::string(d ? d->title : "Node") + " (node " + std::to_string(id) + "): " + msg, kRed, -2 - id});
+            }
+            if (g.graph_found && g.ed.revision() != g.gen_rev && g.graph_hand_edited) rows.push_back({"The code was changed by hand, so the nodes may not show all of it.", 0xffffc400, -1});
+        } else {
         for (auto& d : g.live.diags) rows.push_back({"Line " + std::to_string(d.line + 1) + ": " + d.msg, kRed, d.line});
         for (size_t i = 0; i < game_errors.size(); ++i) rows.push_back({game_errors[i], 0xffff9a6b, error_lines[i]});
+        }
         if (rows.empty()) rows.push_back({"No problems found.", 0xff8fd18f, -1});
         g_diag_lines.clear();
         for (auto& r : rows) g_diag_lines.push_back(r.line);
@@ -850,6 +1230,7 @@ void draw(const AnyFrameV1* frame, void*) {
     // side panel
     p.box(l.side, 0xff13181d, 6 * s);
     const wchar_t* tabs[3] = {L"Commands", L"This MC", L"Watch"};
+    if (g.nodes_mode) { tabs[0] = L"Add node"; tabs[1] = L"Selected"; }
     for (int i = 0; i < 3; ++i) {
         p.box(l.tabs[i], g.tab == i ? 0xff2b333b : 0xff1b2127, 5 * s);
         p.text(l.tabs[i].x, l.tabs[i].y, l.tabs[i].w, l.tabs[i].h, tabs[i], 13 * s, g.tab == i ? kYellow : kDim, ANY_GPU_CENTER | (g.tab == i ? uint32_t(ANY_GPU_BOLD) : 0u));
@@ -864,13 +1245,16 @@ void draw(const AnyFrameV1* frame, void*) {
         if (y + row_h < l.side_body.y || y > l.side_body.y + l.side_body.h) continue;
         auto& r = rows[i];
         if (r.header) { p.text(l.side_body.x + 2 * s, y + 4 * s, l.side_body.w, row_h - 4 * s, widen(r.label), 13 * s, kYellow, ANY_GPU_BOLD); continue; }
-        if (!r.insert.empty() && i % 2) p.box({l.side_body.x, y, l.side_body.w, row_h}, 0x0cffffff, 3 * s);
+        bool clickable = !r.insert.empty() || r.act != SideAct::None;
+        if (r.act == SideAct::EditParam && r.arg == g.edit_param) p.box({l.side_body.x, y, l.side_body.w, row_h}, 0x403a6ea5, 3 * s);
+        else if (clickable && i % 2) p.box({l.side_body.x, y, l.side_body.w, row_h}, 0x0cffffff, 3 * s);
         float name_w = r.help.empty() ? l.side_body.w - 8 * s : std::min(l.side_body.w * .45f, 170 * s);
-        p.text(l.side_body.x + 8 * s, y, name_w, row_h, widen(r.label), 13 * s, r.color, r.insert.empty() ? 0u : uint32_t(ANY_GPU_BOLD));
+        p.text(l.side_body.x + 8 * s, y, name_w, row_h, widen(r.label), 13 * s, r.color, clickable ? uint32_t(ANY_GPU_BOLD) : 0u);
         if (!r.help.empty()) p.text(l.side_body.x + 12 * s + name_w, y, l.side_body.w - name_w - 16 * s, row_h, widen(r.help), 12 * s, kDim);
     }
     p.unclip();
-    if (g.tab == 0) p.text(l.side.x + 10 * s, l.side.y + l.side.h - 20 * s, l.side.w - 20 * s, 18 * s, L"Click to insert • F9 breakpoint • F5 pause", 11.5f * s, 0xff5d6873);
+    if (g.tab == 0) p.text(l.side.x + 10 * s, l.side.y + l.side.h - 20 * s, l.side.w - 20 * s, 18 * s,
+                           g.nodes_mode ? L"Click to add • drag ports to wire • wheel zooms" : L"Click to insert • F9 breakpoint • F5 pause", 11.5f * s, 0xff5d6873);
 }
 
 // ================================================================== input
@@ -901,12 +1285,167 @@ void press(int b) {
     case kStepOver: if (g.snap.is_step) g.actions.push_back({ActKind::StepOver, ""}); break;
     case kStepOut: if (g.snap.is_step) g.actions.push_back({ActKind::StepOut, ""}); break;
     case kCopy: set_clipboard(g.ed.text()); set_message("Copied the whole program.", 0xff8fd18f); break;
-    case kPaste: { std::string t = clipboard_text(); if (!t.empty()) { g.ed.insert(t); g.follow_cursor = true; } break; }
+    case kPaste: if (g.nodes_mode) { set_message("Paste works in the Code view.", 0xffffc400); break; } { std::string t = clipboard_text(); if (!t.empty()) { g.ed.insert(t); g.follow_cursor = true; } break; }
+    case kMode: set_nodes_mode(!g.nodes_mode); break;
     case kClose: open_view(false); break;
     }
 }
 
+// ------------------------------------------------------------------ node canvas input
+uint32_t nodes_key_down(uint32_t key) {
+    bool c = ctrl_down(), sh = shift_down();
+    if (g.edit_param >= 0) {
+        switch (key) {
+        case VK_ESCAPE: g.edit_param = -1; return 1;
+        case VK_RETURN: if (c) apply(); else commit_param(); return 1;
+        case VK_BACK: if (!g.edit_buf.empty()) g.edit_buf.pop_back(); return 1;
+        case VK_TAB: commit_param(); return 1;
+        default: break;
+        }
+        if (c && key == 'V') { for (char ch : clipboard_text()) if (ch >= 32 && ch < 127) g.edit_buf += ch; return 1; }
+        if (!c) return 1;   // letters arrive as text input
+    }
+    switch (key) {
+    case VK_ESCAPE:
+        if (g.ndrag != State::NDrag::None) { g.ndrag = State::NDrag::None; return 1; }
+        open_view(false); g_escape_held = true; return 1;
+    case VK_RETURN: if (c) apply(); else if (g.selected >= 0) { g.tab = 1; g.side_scroll = 0; } return 1;
+    case VK_DELETE: case VK_BACK: delete_selected(); return 1;
+    case VK_HOME: frame_graph(); g.zoom = 1; return 1;
+    case VK_F5: press(kPause); return 1;
+    case VK_F10: press(kStepOver); return 1;
+    case VK_F11: press(sh ? kStepOut : kStepIn); return 1;
+    default: break;
+    }
+    if (c) {
+        switch (key) {
+        case 'Z': graph_undo_redo(sh); return 1;
+        case 'Y': graph_undo_redo(true); return 1;
+        case 'S': apply(); return 1;
+        case 'D': duplicate_selected(); return 1;
+        default: break;
+        }
+    }
+    return 1;
+}
+void nodes_side_click(const SideRow& r) {
+    switch (r.act) {
+    case SideAct::AddNode: {
+        Layout l = layout(g.frame_w, g.frame_h);
+        add_node(nodes::library()[size_t(r.arg)].kind, l.editor.w, l.editor.h, canvas_z(l));
+        break;
+    }
+    case SideAct::EditParam: {
+        nodes::Node* n = g.graph.node(g.selected);
+        const nodes::NodeDef* d = n ? nodes::find_def(n->kind) : nullptr;
+        if (!d || r.arg >= int(d->params.size())) break;
+        auto& prm = d->params[size_t(r.arg)];
+        if (prm.kind == nodes::PK::Choice) {
+            commit_param();
+            std::vector<std::string> ch;
+            for (std::string rest = prm.choices; !rest.empty();) {
+                size_t bar = rest.find('|');
+                ch.push_back(rest.substr(0, bar));
+                rest = bar == std::string::npos ? "" : rest.substr(bar + 1);
+            }
+            if (ch.empty()) break;
+            auto it = std::find(ch.begin(), ch.end(), n->params[prm.key]);
+            std::string next = it == ch.end() || it + 1 == ch.end() ? ch.front() : *(it + 1);
+            graph_edit();
+            g.graph.node(g.selected)->params[prm.key] = next;
+            graph_sync();
+        } else if (g.edit_param == r.arg) commit_param();
+        else { commit_param(); g.edit_param = r.arg; g.edit_buf = g.graph.node(g.selected)->params[prm.key]; }
+        break;
+    }
+    case SideAct::DeleteNode: delete_selected(); break;
+    case SideAct::DuplicateNode: duplicate_selected(); break;
+    default: break;
+    }
+}
+void nodes_mouse_down(const Layout& l, float x, float y, int button) {
+    NodeHit h = hit_node(l, x, y);
+    g.mouse_x = x; g.mouse_y = y;
+    g.drag_moved = false;
+    if (button == 2) {   // right-click an input: unplug it
+        if (h.on_port && h.input && g.graph.wire_into(h.node, h.port)) { graph_edit(); g.graph.unwire_input(h.node, h.port); graph_sync(); }
+        return;
+    }
+    if (h.on_port && !h.input) {
+        g.ndrag = State::NDrag::Wire; g.drag_node = h.node; g.drag_port = h.port; g.drag_from_input = false;
+        return;
+    }
+    if (h.on_port && h.input) {
+        if (const nodes::Wire* w = g.graph.wire_into(h.node, h.port)) {   // pick the wire up off this input
+            nodes::Wire wire = *w;
+            graph_edit();
+            g.graph.unwire_input(h.node, h.port);
+            g.drag_moved = true;   // marks the unplug as already recorded for undo
+            g.ndrag = State::NDrag::Wire; g.drag_node = wire.from; g.drag_port = wire.from_port; g.drag_from_input = false;
+        } else {
+            g.ndrag = State::NDrag::Wire; g.drag_node = h.node; g.drag_port = h.port; g.drag_from_input = true;
+        }
+        return;
+    }
+    if (h.node >= 0) {
+        double now = now_seconds();
+        static int last_node = -1;
+        bool dbl = now - g.last_click < .35 && last_node == h.node;
+        g.last_click = now; last_node = h.node;
+        select_node(h.node);
+        if (dbl) { g.tab = 1; g.side_scroll = 0; }
+        const nodes::Node* n = g.graph.node(h.node);
+        float z = canvas_z(l);
+        g.drag_dx = (x - l.editor.x) / z + g.cam_x - n->x;
+        g.drag_dy = (y - l.editor.y) / z + g.cam_y - n->y;
+        g.drag_node = h.node;
+        g.ndrag = State::NDrag::Move;
+        return;
+    }
+    commit_param();
+    g.selected = -1;
+    g.ndrag = State::NDrag::Pan;
+}
+void nodes_mouse_move(const Layout& l, float x, float y) {
+    float z = canvas_z(l);
+    if (g.ndrag == State::NDrag::Pan) { g.cam_x -= (x - g.mouse_x) / z; g.cam_y -= (y - g.mouse_y) / z; }
+    else if (g.ndrag == State::NDrag::Move) {
+        if (nodes::Node* n = g.graph.node(g.drag_node)) {
+            float nx = std::round((x - l.editor.x) / z + g.cam_x - g.drag_dx), ny = std::round((y - l.editor.y) / z + g.cam_y - g.drag_dy);
+            if (!g.drag_moved && (nx != n->x || ny != n->y)) { graph_edit(); g.drag_moved = true; n = g.graph.node(g.drag_node); }
+            if (g.drag_moved) { n->x = nx; n->y = ny; }
+        }
+    }
+    g.mouse_x = x; g.mouse_y = y;
+}
+void nodes_mouse_up(const Layout& l, float x, float y) {
+    auto mode = g.ndrag;
+    g.ndrag = State::NDrag::None;
+    if (mode == State::NDrag::Move && g.drag_moved) graph_sync();
+    if (mode != State::NDrag::Wire) return;
+    bool unplugged = g.drag_moved;
+    NodeHit h = hit_node(l, x, y);
+    bool ok = false;
+    if (h.on_port && h.input != g.drag_from_input) {
+        nodes::Graph trial = g.graph;
+        ok = g.drag_from_input ? trial.connect(h.node, h.port, g.drag_node, g.drag_port) : trial.connect(g.drag_node, g.drag_port, h.node, h.port);
+        if (ok) { if (!unplugged) graph_edit(); g.graph = trial; graph_sync(); return; }
+        if (h.node == g.drag_node) set_message("A node can't wire to itself.", 0xffffc400);
+        else set_message("Number ports (blue) and on/off ports (green) don't connect to each other.", 0xffffc400);
+    }
+    if (unplugged) graph_sync();   // dropped the picked-up wire on nothing: it stays unplugged
+}
+void nodes_wheel(const Layout& l, float x, float y, int notches) {
+    float z = canvas_z(l);
+    float cx = g.cam_x + (x - l.editor.x) / z, cy = g.cam_y + (y - l.editor.y) / z;
+    g.zoom = std::clamp(g.zoom * std::pow(1.15f, float(notches)), .4f, 2.f);
+    float z2 = canvas_z(l);
+    g.cam_x = cx - (x - l.editor.x) / z2;
+    g.cam_y = cy - (y - l.editor.y) / z2;
+}
+
 uint32_t key_down(uint32_t key) {
+    if (g.nodes_mode) return nodes_key_down(key);
     using M = Editor::Move;
     bool c = ctrl_down(), sh = shift_down();
     Editor& ed = g.ed;
@@ -974,12 +1513,14 @@ uint32_t input(const AnyInputV1* e, void*) {
     case ANY_KEY_DOWN: { uint32_t r = key_down(e->key); capture(g.open); return r; }
     case ANY_KEY_UP: return 1;
     case ANY_TEXT_INPUT:
+        if (g.nodes_mode) { if (g.edit_param >= 0 && e->key >= 32 && e->key < 127 && !ctrl_down()) g.edit_buf += char(e->key); return 1; }
         if (e->key >= 32 && e->key < 127 && !ctrl_down()) { g.ed.type_char(char(e->key)); g.follow_cursor = true; }
         return 1;
     case ANY_MOUSE_WHEEL: {
         int notches = e->wheel / 120;
         if (!notches) notches = e->wheel > 0 ? 1 : -1;
         if (l.side.contains(x, y)) g.side_scroll -= notches * 3 * 22 * l.s;
+        else if (g.nodes_mode && l.editor.contains(x, y)) nodes_wheel(l, x, y, notches);
         else if (l.editor.contains(x, y)) {
             if (shift_down()) g.scroll_col = std::max(0, g.scroll_col - notches * 6);
             else g.scroll_line = std::clamp(g.scroll_line - notches * 3, 0, std::max(0, int(g.ed.lines().size()) - 1));
@@ -987,6 +1528,7 @@ uint32_t input(const AnyInputV1* e, void*) {
         return l.panel.contains(x, y) ? 1 : 0;
     }
     case ANY_MOUSE_MOVE:
+        if (g.nodes_mode) { nodes_mouse_move(l, x, y); return 0; }
         if (g.dragging) {
             Pos p = hit_text(l, x, y);
             g.ed.set_cursor(p, true);
@@ -996,21 +1538,35 @@ uint32_t input(const AnyInputV1* e, void*) {
         return 0;
     case ANY_MOUSE_UP:
         g.dragging = false;
+        if (g.nodes_mode && g.ndrag != State::NDrag::None) { nodes_mouse_up(l, x, y); return 1; }
         return l.panel.contains(x, y) || l.button.contains(x, y) ? 1 : 0;
     case ANY_MOUSE_DOWN: {
         if (l.button.contains(x, y)) { if (e->button == 1) open_view(false); capture(g.open); return 1; }
         if (!l.panel.contains(x, y)) return 0;
+        if (g.nodes_mode && e->button == 2 && l.editor.contains(x, y)) { nodes_mouse_down(l, x, y, 2); return 1; }
         if (e->button != 1) return 1;
         for (int i = 0; i < kBtnCount; ++i) if (l.btn[i].contains(x, y)) { press(i); capture(g.open); return 1; }
         for (int i = 0; i < 3; ++i) if (l.tabs[i].contains(x, y)) { g.tab = i; g.side_scroll = 0; return 1; }
         if (l.side_body.contains(x, y)) {
             auto rows = side_rows();
             int i = int((y - l.side_body.y + g.side_scroll) / (22 * l.s));
-            if (i >= 0 && i < int(rows.size()) && !rows[size_t(i)].insert.empty()) insert_snippet(rows[size_t(i)].insert);
+            if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act != SideAct::None) nodes_side_click(rows[size_t(i)]);
+            else if (i >= 0 && i < int(rows.size()) && !rows[size_t(i)].insert.empty() && !g.nodes_mode) insert_snippet(rows[size_t(i)].insert);
             return 1;
         }
         if (l.diag.contains(x, y)) {   // click a problem to jump to it
             int i = int((y - l.diag.y - 6 * l.s) / (18 * l.s));
+            if (g.nodes_mode) {   // click a node's problem to select it and bring it into view
+                if (i >= 0 && i < int(g_diag_lines.size()) && g_diag_lines[size_t(i)] <= -2) {
+                    int id = -2 - g_diag_lines[size_t(i)];
+                    if (const nodes::Node* n = g.graph.node(id)) {
+                        float z = canvas_z(l);
+                        g.cam_x = n->x - l.editor.w / z * .4f; g.cam_y = n->y - l.editor.h / z * .4f;
+                        select_node(id);
+                    }
+                }
+                return 1;
+            }
             if (i >= 0 && i < int(g_diag_lines.size()) && g_diag_lines[size_t(i)] >= 0) {
                 int line = g_diag_lines[size_t(i)];
                 int col = 0;
@@ -1020,6 +1576,7 @@ uint32_t input(const AnyInputV1* e, void*) {
             }
             return 1;
         }
+        if (g.nodes_mode && l.editor.contains(x, y)) { nodes_mouse_down(l, x, y, 1); return 1; }
         if (l.gutter.contains(x, y)) {
             Pos p = hit_text(l, l.text.x, y);
             toggle_breakpoint_line(p.line);

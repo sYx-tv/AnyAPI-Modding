@@ -2,7 +2,7 @@
 
 > MCCode hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
-> [Release notes](../releases/mccode-0.1.0.md). Needs AnyAPI 0.38.0 or newer.
+> [Release notes](../releases/mccode-0.2.0.md). Needs AnyAPI 0.38.0 or newer.
 
 MCCode adds a **Code view** to the microcontroller editor, so you can type the program instead of dragging
 blocks. Open any microcontroller and press **`</> Code`** in the top-right corner.
@@ -69,6 +69,42 @@ on_tick {
 For example, `count = (count + 1) % 60` is sent as `var count = ((var count + 1) % 60)`, and `x != 3` becomes
 `! ((var x == 3))`, because the game has no "not equal". Negative numbers become `(0 - 5)`.
 
+## Nodes
+
+Press **Nodes** in the toolbar to build the program from boxes and wires instead, like Stormworks
+microcontrollers. Press **Code** to go back to the text; both show the same program.
+
+- **Add node** (side panel) lists every node by group. Click one to drop it in the middle of the canvas.
+- Drag from an output (right side of a node) to an input (left side) to wire them. Blue ports carry numbers,
+  green ports carry on/off. An input takes one wire; dragging a wired input picks its wire up again, and
+  right-clicking an input unplugs it.
+- Click a node to select it, drag it to move it, double-click it (or press Enter) for **Selected**, where you
+  set its part name, channel and values. Delete removes it, Ctrl+D duplicates it.
+- Drag empty space to pan, use the wheel to zoom, Home to go back to the start.
+- **Apply** turns the graph into the game's blocks like typed code does. While the applied program runs, each
+  output shows its live value in yellow.
+- Nodes with a problem (a missing part name, or an error the game reports on their blocks) get a red outline
+  and a message under them. Click the message in the problems strip to jump to the node.
+
+| Group | Nodes |
+| --- | --- |
+| Parts | Part input, Part output (number or on/off), Number, On/off |
+| Maths | Add, Subtract, Multiply, Divide, Remainder, Power, Min, Max, Clamp, Absolute, Negate, Square root, Sine, Cosine |
+| Compare | Greater than, Less than, At least, At most, Equal, Not equal, Threshold |
+| Logic | AND, OR, NOT, XOR, Number switch |
+| Memory | SR latch, Push to toggle, Pulse, Memory, Counter, Change |
+| Timing | Timer, Blinker |
+| Control | Ramp, Smooth, PID |
+
+A Part input reads a wired part's channel, for example part `RearLeft` channel `rps`. A Part output sets one,
+for example `Actuator_Stepper_Motor` channel `input`. Every tick the nodes run from inputs to outputs; a wire
+that loops back reads the value from the tick before.
+
+**How it is saved.** The graph is stored in the program itself as comment lines starting with `#@`, so a
+node program reopens as nodes, on any computer with the mod. Players without the mod see ordinary blocks. If
+you change node-made code by hand in the Code view, the nodes no longer match it: MCCode warns you, and editing
+the nodes again replaces the hand-made changes (Ctrl+Z in the Code view brings them back).
+
 ## The side panel
 
 - **Commands**: every keyword and function with a one-line explanation. Click one to insert it at the cursor.
@@ -107,6 +143,9 @@ the log says so and only these line features turn off.
 | Ctrl+arrows | Move by word; Ctrl+Up/Down scrolls |
 | Double-click | Select a word |
 | Mouse wheel | Scroll (Shift+wheel scrolls sideways) |
+
+In the Nodes view: Delete removes the selected node, Ctrl+D duplicates it, Ctrl+Z / Ctrl+Y undo and redo node
+changes, Enter opens its settings, Home recentres, Esc goes back to the blocks.
 
 **Copy all** copies the whole program, handy for sharing or keeping a backup in a text file.
 
