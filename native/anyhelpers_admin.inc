@@ -137,3 +137,41 @@ static void install(){using namespace anymaker::experimental;namespace b=anyhelp
 static void start(){std::thread(install).detach();}
 static void shutdown(){stop=true;if(ready)remove();}
 } // namespace admin
+// The ADMIN settings tab (anyapi.menu v4 button rows). Every button posts a command for the next server tick; weather
+// applies as soon as it changes. There is nothing to Apply, so the tab never reports pending edits.
+namespace adminui {
+static const AnyMenuV4* widgets;static uint32_t chosen{};static double hour{12};static uint32_t weather_index{};
+static uint32_t never_dirty(void*){return 0;}
+static uint32_t always_default(void*){return 1;}
+static void draw(const AnyMenuFrameV1*,void*){
+ if(!admin::hosting()){menu->label("admin.off",admin::ready?"Only the host can use these. Host or load a world, then open Settings again.":"The admin tools are off: this game build doesn't match AnyHelpers.");return;}
+ auto players=admin::player_list();std::vector<std::string> names{"Everyone"};for(auto& p:players)names.push_back("Player "+std::to_string(p.peer+1)+(p.host?" (you)":""));
+ if(chosen>=names.size())chosen=0;std::vector<const char*> choices;for(auto& n:names)choices.push_back(n.c_str());
+ int32_t me=players.empty()?-1:players.front().peer,who=chosen?players[chosen-1].peer:-1;
+ menu->heading("admin.players","PLAYERS");
+ widgets->rows->choice_row("admin.player","PLAYER",choices.data(),uint32_t(choices.size()),&chosen);
+ const char* heal[]{"Heal"};if(widgets->button_row("admin.heal","HEAL",heal,1))admin::post({admin::kHeal,who});
+ const char* move[]{"Go to them","Bring here","Bring everyone"};
+ switch(widgets->button_row("admin.teleport","TELEPORT",move,3)){
+ case 1:if(who<0||who==me)admin::report("pick one other player to go to",1);else admin::post({admin::kTeleportTo,me,who});break;
+ case 2:if(who<0||who==me)admin::report("pick one other player to bring",1);else admin::post({admin::kBring,me,who});break;
+ case 3:admin::post({admin::kBringAll,me});break;}
+ menu->heading("admin.world","WORLD");
+ widgets->rows->number_row("admin.hour","HOUR",&hour,0,23,1,1);
+ const char* time[]{"Set","Freeze","Run","World clock"};
+ switch(widgets->button_row("admin.time","TIME",time,4)){
+ case 1:admin::post({admin::kSetTime,-1,-1,hour/24.0});break;
+ case 2:admin::post({admin::kFreeze,-1,-1,1});break;
+ case 3:admin::post({admin::kFreeze,-1,-1,0});break;
+ case 4:admin::post({admin::kNaturalTime});break;}
+ const char* weathers[]{"Natural","Clear","Cloudy","Rain","Storm","Fog","Snow"};
+ if(widgets->rows->choice_row("admin.weather","WEATHER",weathers,7,&weather_index))admin::set_weather(int(weather_index)-1);
+ const char* clear[]{"Zombies","Creatures","Both"};
+ if(auto c=widgets->button_row("admin.clear","CLEAR",clear,3))admin::post({admin::kClearActors,-1,-1,double(c)});
+ auto status=admin::last_status();menu->label("admin.status",status.empty()?"Actions happen on the next game tick. Weather changes show only for players running AnyHelpers.":status.c_str());
+}
+static bool init(const AnyServicesV1* services){widgets=(const AnyMenuV4*)services->query("anyapi.menu",4);
+ if(!widgets||widgets->version!=4||widgets->struct_size!=sizeof(*widgets)||!widgets->rows||!widgets->button_row){log("ADMIN_TAB_OFF reason=anyapi_menu_v4_missing",1);return false;}
+ AnyMenuTabV2 tab;tab.id="admin";tab.title="ADMIN";tab.order=120;tab.icon=ANY_MENU_ICON_SETTINGS;tab.draw=draw;tab.dirty=never_dirty;tab.defaults=always_default;
+ return menu->add_tab(&tab);}
+} // namespace adminui

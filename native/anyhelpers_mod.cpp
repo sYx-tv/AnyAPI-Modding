@@ -1,7 +1,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
-#include "anyapi_menu_v3.h"
+#include "anyapi_menu_v4.h"
 #include "mod_controls_state.h"
 #include "anyhelpers_settings_state.h"
 #include <mutex>
@@ -59,8 +59,8 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,Any
  auto rejected=state.load();state.file=canonical;callbacks->id="anyhelpers";
  AnyMenuTabV2 section;section.icon=ANY_MENU_ICON_KEYBOARD;section.id="mod_controls";section.title="MOD CONTROLS";section.order=100;section.draw=draw;section.event=event;section.dirty=dirty;section.defaults=defaults;
  if(!menu->add_tab(&section)||!services->input_filter(input,nullptr,100)||!services->publish("modcontrols.bindings",1,&bindings)||!services->publish("anyhelpers.controls",1,&bindings)||!settingsmod::init(services))return false;
- favorites::init();callbacks->shutdown=[](void*){favorites::shutdown();admin::shutdown();};
- log("DLL_READY native_tabs_registered=2 legacy_binding_service=1 rejected_saved_rows="+std::to_string(rejected));return true;}
+ favorites::init();bool admin_tab=adminui::init(services);callbacks->shutdown=[](void*){favorites::shutdown();admin::shutdown();};
+ log("DLL_READY native_tabs_registered="+std::to_string(admin_tab?3:2)+" legacy_binding_service=1 rejected_saved_rows="+std::to_string(rejected));return true;}
 // Game functions are resolved after the JIT has loaded, on a background thread.
 extern "C" __declspec(dllexport) void AnyAPI_ModReady(){favorites::start();admin::start();}
 BOOL APIENTRY DllMain(HMODULE module,DWORD reason,LPVOID){if(reason==DLL_PROCESS_ATTACH)DisableThreadLibraryCalls(module);return TRUE;}
