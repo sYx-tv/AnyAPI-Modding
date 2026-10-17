@@ -27,6 +27,7 @@
 #include "mccode_editor.h"
 #include "mccode_complete.h"
 #include "mccode_nodes.h"
+#include "mccode_scripts.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -765,6 +766,25 @@ bool ac_box(const Layout& l, Box& b, int& count) {
     return true;
 }
 
+// A library script: the whole program when the editor is empty, otherwise added at the end.
+void insert_script(int index) {
+    if (index < 0 || index >= int(script_library().size())) return;
+    const Script& sc = script_library()[size_t(index)];
+    bool empty = g.ed.text().find_first_not_of(" \t\n") == std::string::npos;
+    if (empty) {
+        g.ed.select_all();
+        g.ed.insert(sc.code);
+        g.ed.set_cursor({0, 0}, false);
+        set_message(std::string(sc.name) + " added. Rename the parts in it to yours (This MC lists them), then Apply.", 0xff8fd18f);
+    } else {
+        Pos end{int(g.ed.lines().size()) - 1, int(g.ed.lines().back().size())};
+        g.ed.set_cursor(end, false);
+        g.ed.insert(std::string(g.ed.lines().back().empty() ? "\n" : "\n\n") + sc.code);
+        set_message(std::string(sc.name) + " added at the end. Rename its parts to yours, then Apply.", 0xff8fd18f);
+    }
+    g.follow_cursor = true;
+}
+
 std::string clipboard_text() {
     std::string out;
     if (!OpenClipboard(nullptr)) return out;
@@ -795,7 +815,7 @@ void set_clipboard(const std::string& s) {
 }
 
 // Side panel rows, built the same way for drawing and clicking.
-enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode };
+enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode, InsertScript };
 struct SideRow { std::string label, help, insert; bool header = false; uint32_t color = 0xffe8ecef; SideAct act = SideAct::None; int arg = 0; };
 std::vector<SideRow> side_rows() {
     std::vector<SideRow> rows;
@@ -828,6 +848,9 @@ std::vector<SideRow> side_rows() {
         return rows;
     }
     if (g.tab == 0) {
+        rows.push_back({"Ready-made scripts", "", "", true});
+        for (size_t i = 0; i < script_library().size(); ++i)
+            rows.push_back({script_library()[i].name, script_library()[i].help, "", false, 0xfff1d36b, SideAct::InsertScript, int(i)});
         const char* group = "";
         for (auto& h : kHelp) {
             if (strcmp(group, h.group)) { group = h.group; rows.push_back({h.group, "", "", true}); }
@@ -1645,7 +1668,8 @@ uint32_t input(const AnyInputV1* e, void*) {
         if (l.side_body.contains(x, y)) {
             auto rows = side_rows();
             int i = int((y - l.side_body.y + g.side_scroll) / (22 * l.s));
-            if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act != SideAct::None) nodes_side_click(rows[size_t(i)]);
+            if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act == SideAct::InsertScript) insert_script(rows[size_t(i)].arg);
+            else if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act != SideAct::None) nodes_side_click(rows[size_t(i)]);
             else if (i >= 0 && i < int(rows.size()) && !rows[size_t(i)].insert.empty() && !g.nodes_mode) insert_snippet(rows[size_t(i)].insert);
             return 1;
         }

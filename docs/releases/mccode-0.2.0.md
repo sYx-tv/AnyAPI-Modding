@@ -12,6 +12,8 @@ Stormworks-style canvas next to the typed code and the game's blocks.
 - **Suggestions while you type** in the Code view: names, keywords, functions, wired parts and their channels
   (`RearLeft.` lists `rps`, `brake_factor`). Tab or Enter fills one in. Brackets, braces and quotes close
   themselves.
+- **Ready-made scripts** in the side panel: traction control, ABS, cruise control, launch control, a shift light
+  and a blinker, each commented so you know what to rename and tune.
 - **Saved in the program:** a node program reopens as nodes, and problems are shown on the node they belong to.
 
 Anymaker 0.1.25 only; needs AnyAPI 0.38.0 or newer. See [MCCode](../mods/mccode.md#nodes).

@@ -2,6 +2,7 @@
 #undef NDEBUG
 #include "../mccode_complete.h"
 #include "../mccode_editor.h"
+#include "../mccode_scripts.h"
 #include <cassert>
 #include <iostream>
 
@@ -83,6 +84,13 @@ int main() {
     Editor plain;
     plain.type_char('(');
     assert(plain.text() == "(");
+
+    // every library script compiles as is
+    for (auto& sc : script_library()) {
+        auto c = compile(sc.code);
+        if (!c.ok) for (auto& d : c.diags) std::cerr << sc.name << " line " << d.line + 1 << ": " << d.msg << "\n";
+        assert(c.ok);
+    }
 
     std::cout << "mccode_complete: all tests passed\n";
 }

@@ -113,7 +113,10 @@ the nodes again replaces the hand-made changes (Ctrl+Z in the Code view brings t
 
 ## The side panel
 
-- **Commands**: every keyword and function with a one-line explanation. Click one to insert it at the cursor.
+- **Commands**: ready-made scripts at the top (traction control, ABS, cruise control, launch control, shift
+  light, blinker), then every keyword and function with a one-line explanation. Click a command to insert it at
+  the cursor. Click a script to fill an empty program with it, or add it at the end of yours. The scripts use
+  example part names like `RearLeft` and `Throttle.input`; rename them to the parts This MC lists, then Apply.
 - **This MC**: this microcontroller's inputs, outputs, variables, lists, functions and types, read from your code
   as you type, plus the ports the game reports. Click a name to insert it.
 - **Watch**: live variable and port values from the game's debugger, while the program runs or is paused.
