@@ -25,7 +25,7 @@ enum Weather {kNatural=-1,kClear,kCloudy,kRain,kStorm,kFog,kSnow,kWeatherCount};
 static const char* const kWeatherNames[kWeatherCount]={"Clear","Cloudy","Rain","Storm","Fog","Snow"};
 enum Kind {kHeal,kTeleportTo,kBring,kBringAll,kSetTime,kNaturalTime,kFreeze,kClearActors};
 // peer/target are peer ids; -1 means everyone. kClearActors: value 1 zombies, 2 creatures, 3 both.
-struct Command {Kind kind;int32_t peer{-1},target{-1};double value{};};
+struct Command {Kind kind;int32_t peer{-1},target{-1};double value{};uint8_t* scene{};};   // scene: the world it was posted for
 struct Player {int32_t peer,actor;Vec3 position;bool host;};
 
 using TickFn=void(*)(uint8_t*,uint8_t*);
@@ -45,8 +45,9 @@ static std::mutex mutex;static std::deque<Command> queue;static std::vector<Play
 // Server thread only.
 static bool time_set{},time_frozen{},time_release{};static double time_base{};static int32_t time_tick{};static bool logged_peers{};
 
-static bool hosting(){return ready&&GetTickCount64()-last_tick.load()<3000;}
-static void post(Command c){std::lock_guard<std::mutex> lock(mutex);if(queue.size()<32)queue.push_back(c);}
+static std::atomic<uint8_t*> last_scene{};
+static bool hosting(uint64_t window=3000){return ready&&GetTickCount64()-last_tick.load()<window;}
+static void post(Command c){c.scene=last_scene.load();std::lock_guard<std::mutex> lock(mutex);if(queue.size()<32)queue.push_back(c);}
 static std::vector<Player> player_list(){std::lock_guard<std::mutex> lock(mutex);return players;}
 static std::string last_status(){std::lock_guard<std::mutex> lock(mutex);return status;}
 static void report(const std::string& text,uint32_t level=0){log("ADMIN "+text,level);std::lock_guard<std::mutex> lock(mutex);status=text;}
@@ -99,9 +100,12 @@ static void drive_time(uint8_t* scene){auto tod=scene+kTimeOfDay;
  bool on=true;prop_bool(tod+kTodOverride,&on);prop_f64(tod+kTodValue,&value);}
 
 static void hk_tick(uint8_t* scene,uint8_t* server){
- if(scene&&server){last_tick=GetTickCount64();std::deque<Command> work;{std::lock_guard<std::mutex> lock(mutex);work.swap(queue);}
+ if(scene&&server){last_tick=GetTickCount64();
+  if(last_scene.exchange(scene)!=scene){time_set=time_frozen=time_release=false;weather=kNatural;logged_peers=false;}   // a new world starts clean
+ std::deque<Command> work;{std::lock_guard<std::mutex> lock(mutex);work.swap(queue);}
   static uint64_t refreshed{};if(GetTickCount64()-refreshed>1000||!work.empty()){refreshed=GetTickCount64();refresh_players(scene);}
-  for(auto& c:work)run(scene,server,c);drive_time(scene);}
+  for(auto& c:work)if(c.scene==scene)run(scene,server,c);else log("ADMIN_DROPPED reason=other_world",1);
+  drive_time(scene);}   // commands are never carried into another world
  ((TickFn)h_tick.original)(scene,server);}
 
 // Runs on the main and server threads, so the host's sky and the server's wetness and cold change together. Players
@@ -141,10 +145,14 @@ static void shutdown(){stop=true;if(ready)remove();}
 // applies as soon as it changes. There is nothing to Apply, so the tab never reports pending edits.
 namespace adminui {
 static const AnyMenuV4* widgets;static uint32_t chosen{};static double hour{12};static uint32_t weather_index{};
+// A solo world pauses the server while Settings is open, so "host" is decided when Settings opens: the server was
+// ticking just before. Commands posted while paused run as soon as Settings closes.
+static bool host_at_open{};
+static void event(uint32_t type,void*){if(type==ANY_MENU_OPEN)host_at_open=admin::hosting(60000);else if(type==ANY_MENU_CANCEL)host_at_open=false;}
 static uint32_t never_dirty(void*){return 0;}
 static uint32_t always_default(void*){return 1;}
 static void draw(const AnyMenuFrameV1*,void*){
- if(!admin::hosting()){menu->label("admin.off",admin::ready?"Only the host can use these. Host or load a world, then open Settings again.":"The admin tools are off: this game build doesn't match AnyHelpers.");return;}
+if(!admin::hosting()&&!host_at_open){menu->label("admin.off",admin::ready?"Only the host can use these. Host or load a world, then open Settings again.":"The admin tools are off: this game build doesn't match AnyHelpers.");return;}
  auto players=admin::player_list();std::vector<std::string> names{"Everyone"};for(auto& p:players)names.push_back("Player "+std::to_string(p.peer+1)+(p.host?" (you)":""));
  if(chosen>=names.size())chosen=0;std::vector<const char*> choices;for(auto& n:names)choices.push_back(n.c_str());
  int32_t me=players.empty()?-1:players.front().peer,who=chosen?players[chosen-1].peer:-1;
@@ -168,10 +176,10 @@ static void draw(const AnyMenuFrameV1*,void*){
  if(widgets->rows->choice_row("admin.weather","WEATHER",weathers,7,&weather_index))admin::set_weather(int(weather_index)-1);
  const char* clear[]{"Zombies","Creatures","Both"};
  if(auto c=widgets->button_row("admin.clear","CLEAR",clear,3))admin::post({admin::kClearActors,-1,-1,double(c)});
- auto status=admin::last_status();menu->label("admin.status",status.empty()?"Actions happen on the next game tick. Weather changes show only for players running AnyHelpers.":status.c_str());
+ auto status=admin::last_status();if(status.empty())status=std::string(admin::hosting()?"Actions happen on the next game tick.":"Actions run when you close Settings (the game is paused).")+" Weather changes show only for players running AnyHelpers.";menu->label("admin.status",status.c_str());
 }
 static bool init(const AnyServicesV1* services){widgets=(const AnyMenuV4*)services->query("anyapi.menu",4);
  if(!widgets||widgets->version!=4||widgets->struct_size!=sizeof(*widgets)||!widgets->rows||!widgets->button_row){log("ADMIN_TAB_OFF reason=anyapi_menu_v4_missing",1);return false;}
- AnyMenuTabV2 tab;tab.id="admin";tab.title="ADMIN";tab.order=120;tab.icon=ANY_MENU_ICON_SETTINGS;tab.draw=draw;tab.dirty=never_dirty;tab.defaults=always_default;
+ AnyMenuTabV2 tab;tab.id="admin";tab.title="ADMIN";tab.order=120;tab.icon=ANY_MENU_ICON_SETTINGS;tab.draw=draw;tab.event=event;tab.dirty=never_dirty;tab.defaults=always_default;
  return menu->add_tab(&tab);}
 } // namespace adminui
