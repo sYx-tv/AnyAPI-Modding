@@ -346,6 +346,16 @@ void install_hooks() {
         auto vt = reinterpret_cast<transform_t>(route::function(bind::server_vehicle_get_transform));
         auto ct = reinterpret_cast<transform_t>(route::function(bind::server_component_get_transform));
         auto sc = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
+        if (add && !route::add_cell_ok(add)) {        // a wrong route: look again (route_cell.h)
+            static int logs = 3;
+            if (logs-- > 0) log(1, "the definitions route led to %s, not _add_definitions; looking again", route::what_is(anymaker::readable(add, 8) ? *add : nullptr));
+            add = nullptr;
+        }
+        if (load && !route::file_load_ok((void*)load)) {
+            static int logs = 3;
+            if (logs-- > 0) log(1, "the file load route led to %s, not vehicle_component_definition_file.load; looking again", route::what_is((void*)load));
+            load = nullptr;
+        }
         if (!add || !tick_cell || !get_cell || !ctor || !dtor || !load || !vt || !ct || !sc) {
             if (attempt == 20 || attempt == 179)   // once early, so a stuck start shows in the log
                 log(attempt == 179 ? 2 : 1, "%s the game functions (route root matches %d, add=%d tick=%d get=%d file ctor=%d dtor=%d load=%d transforms=%d/%d string=%d)",
@@ -356,6 +366,7 @@ void install_hooks() {
         g_file_ctor = ctor; g_file_dtor = dtor; g_file_load = load; g_vehicle_transform = vt; g_component_transform = ct; g_string_ctor = sc;
         g_get_definition = reinterpret_cast<get_definition_t>(route::function(bind::definitions_get_by_id));
         if (!g_get_definition) log(1, "definition lookup not found; another mod re-adding definitions may add the GPS Sensor twice");
+        if (!route::add_cell_ok(add)) { log(2, "the definitions hook cell changed to %s before hooking; GpsPart is off", route::what_is(*add)); return; }
         bool ok = h_tick.install(tick_cell, (void*)&hk_tick) && h_get_f64.install(get_cell, (void*)&hk_get_f64) &&
                   h_add_definitions.install(add, (void*)&hk_add_definitions);
         if (!ok) { log(2, "a hook cell was already taken or not writable; GpsPart is off"); remove_hooks(); return; }   // none left half-installed
