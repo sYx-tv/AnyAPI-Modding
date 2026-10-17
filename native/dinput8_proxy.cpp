@@ -5267,6 +5267,7 @@ static void anyapi_creation_balance_render_camera(void*);
 #include "anyapi_creation_balance.inc"
 #include "anyapi_inventory_ui.inc"
 #include "anyapi_client_tasks.inc"
+#include "anyapi_net.inc"
 static DWORD WINAPI loader_thread(void*) {
     g_game_dir=module_dir();g_game_dir_utf8=utf8(g_game_dir);
     if(!p27_build_matches())return 0;
