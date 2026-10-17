@@ -1,0 +1,9 @@
+{
+  "Packages": {
+    "AnyCombat": {
+      "Id": "anycombat",
+      "MinimumApi": 41,
+      "Description": "Hit markers and floating damage numbers for the hits you deal. Anymaker 0.1.25 only."
+    }
+  }
+}
