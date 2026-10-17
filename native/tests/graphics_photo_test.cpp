@@ -50,6 +50,10 @@ int main() {
     assert(key(ANY_KEY_DOWN, 'W'));
     step(m, .05);
     assert(std::fabs(m[11] - (3 + kDefaultSpeed * .05)) < 1e-6 && m[9] == 1 && m[10] == 2);
+    // Calls within the same frame (ThirdPerson calls the camera several times) all get the same position.
+    double first = m[11];
+    hk_transform(m, nullptr); hk_transform(m, nullptr);
+    assert(m[11] == first);
     key(ANY_KEY_UP, 'W');
     // D strafes to screen right, the opposite of the transform's third basis vector (+X here), Space rises.
     assert(key(ANY_KEY_DOWN, 'D') && key(ANY_KEY_DOWN, VK_SPACE));

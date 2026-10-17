@@ -116,9 +116,12 @@ inline void hk_transform(double* ret, uint8_t* scene) {
         last_move = now; have = true;
     }
     if (forward_axis < 0) calibrate(ret);
+    // The position only moves when at least 2 ms have passed, so every call within one frame returns the same
+    // camera. ThirdPerson's steady camera calls this several times per frame and takes the difference between
+    // calls as its "back" direction; a camera that crept between those calls spun its view like a tornado.
     double dt = std::clamp(double(now.QuadPart - last_move.QuadPart) / double(rate.QuadPart), 0.0, 0.1);
-    last_move = now;
     uint32_t k = keys.load();
+    if (dt >= .002) last_move = now; else k = 0;
     if (k && forward_axis >= 0) {
         double f[3], r[3];
         for (int i = 0; i < 3; ++i) f[i] = ret[forward_axis * 3 + i] * forward_sign;
