@@ -150,6 +150,8 @@ with zipfile.ZipFile(sdk,'w',zipfile.ZIP_DEFLATED) as z:
     for p in sorted((source/'examples').glob('*.cpp')):z.write(p,'examples/'+p.name)
     for p in sorted((p for p in contracts.rglob('*.md') if 'releases' not in p.parts)):z.write(p,'docs/'+p.relative_to(contracts).as_posix())
     z.writestr('src/mod.cpp',starter);z.writestr('CMakeLists.txt',cmake);z.writestr('README.md',articles[0]['Body']);z.writestr('docs/LOCAL_MODS.md',local_docs);z.writestr('ExampleMod.anymod.json',json.dumps({'Name':'Example Mod','Version':'1.0.0','Description':'My own Anymaker mod.','MinimumApi':manifest['revision']},indent=2))
-guide={'Revision':manifest['revision'],'GameVersion':manifest['game_version'],'SteamBuild':manifest['steam_build_id'],'Articles':articles,'HeaderCount':len(headers),'LegacyHookCount':len(legacy_hooks),'SourceHashes':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in headers}}
+# The guide describes the API the manager bundles for offline installs (its self-test checks they match).
+bundled_api=json.loads((Path(__file__).resolve().parent/'publishing'/'catalog.json').read_text(encoding='utf-8-sig'))['Api'][0]['Revision']
+guide={'Revision':bundled_api,'GameVersion':manifest['game_version'],'SteamBuild':manifest['steam_build_id'],'Articles':articles,'HeaderCount':len(headers),'LegacyHookCount':len(legacy_hooks),'SourceHashes':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in headers}}
 (out/'guide.json').write_text(json.dumps(guide,ensure_ascii=False,indent=2),encoding='utf-8')
 print(f'Built {len(articles)} guide articles, {len(headers)} headers, {len(legacy_hooks)} disabled legacy hook references and a source-only starter SDK.')
