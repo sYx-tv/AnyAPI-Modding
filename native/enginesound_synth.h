@@ -118,7 +118,7 @@ constexpr Preset kPresets[kLayoutCount][kPresetsPerLayout] = {
      {"Race",           {120, 560, 0.85, 0.10, 0.35, 0.80, 0.80, 0.50, 0, 0.6, 1.0}},
      {"Diesel",         {72,  380, 0.10, 0.80, 0.10, 0.00, 0.45, 0.40, 1, 0.0, 1.0}}},
     {{"Stock",          {80,  360, 0.20, 0.85, 0.10, 0.00, 0.20, 0.25, 0, 0.0, 1.0}},
-     {"Muscle",         {62,  320, 0.45, 0.35, 0.65, 0.35, 0.40, 0.30, 0, 0.0, 1.0}},
+     {"Muscle",         {58,  300, 0.60, 0.20, 0.85, 0.50, 0.55, 0.30, 0, 0.0, 1.25}},
      {"Exotic",         {130, 600, 0.80, 0.25, 0.10, 0.60, 0.70, 0.60, 0, 1.0, 1.0}},
      {"Race",           {110, 520, 0.85, 0.05, 0.40, 0.90, 0.80, 0.50, 0, 0.0, 1.0}},
      {"Truck diesel",   {52,  270, 0.25, 0.40, 0.15, 0.00, 0.85, 0.40, 1, 0.0, 1.0}}},
@@ -175,9 +175,9 @@ struct Synth {
     // burble: the short tone each pulse rings with at a V's idle and overrun
     double blat_phase = 0, blat_hz = 100, blat_amp = 0, blat_age = 1, blat_tau = 0.03;
     Resonator knock_mid;
-    // diesel: turbo spool, whistle and the turbine-damped exhaust roar
-    double spool = 0, whistle_phase = 0, roar_lp = 0;
-    Resonator roar, whoosh;
+    // diesel: how hard it is pulling (builds with revs and load) and its exhaust roar
+    double spool = 0, roar_lp = 0;
+    Resonator roar;
     double soft = 0, soft2 = 0, dc_x = 0, dc_y = 0;
     uint32_t rng = 0x9e3779b9u;
     double noise() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return double(rng) / 2147483648.0 - 1.0; }
@@ -200,7 +200,8 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
     const double pipe_hz = pipe_hz_for(t, n);
     const bool vee = layout == kVee;
     if (s.tuned_pipe != pipe_hz || s.tuned_body != t.body_hz || s.tuned_layout != layout) {
-        const double q = 2.6 + 2.4 * (1.0 - t.muffler);   // open pipes ring longer
+        // Open pipes ring longer; an inline's single pipe is kept tighter so it doesn't flap.
+        const double q = (2.6 + 2.4 * (1.0 - t.muffler)) * (layout == kInline ? 0.75 : 1.0);
         for (int b = 0; b < 2; ++b) {
             // A V's two banks run their own pipes, tuned well apart: with the cross-plane's uneven bank order that
             // is the burble. Other layouts' second bank is only a little longer.
@@ -219,7 +220,6 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         s.knock_mid.set(t.body_hz * 4.2, 3.0);
         s.knock_hi.set(t.body_hz * 6.6, 2.5);
         s.roar.set(pipe_hz * 3.2, 0.9);
-        s.whoosh.set(1500, 0.8);
         s.pop_body.set(pipe_hz * 1.7, 2.0);
         s.tuned_pipe = pipe_hz; s.tuned_body = t.body_hz; s.tuned_layout = layout;
     }
@@ -273,7 +273,8 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         }
 
         // Crank: fire each cylinder as the crank reaches it.
-        s.to_next -= s.rps * 360.0 * dt;
+        // A big cam can't hold a steady idle: the revs hunt up and down with the lope.
+        s.to_next -= s.rps * (1.0 + 0.14 * t.cam * idle * (swell - 0.5)) * 360.0 * dt;
         for (int guard = 0; guard < kMaxCylinders && s.to_next <= 0 && s.rps > 0.2; ++guard) {
             const int cyl = s.next;
             Bank& b = s.bank[s.table.bank[cyl]];
@@ -293,7 +294,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
                 }
                 // Burble: on a V at idle and on the overrun each pulse rings out as a short, round tone, pitched by
                 // its bank's pipe. The cross-plane's L R L L R R R L bank order gives it the V8 rhythm.
-                const double burble = (vee ? 0.75 : 0.18) * (0.45 + t.cam) * (1.0 - 0.6 * t.diesel) *
+                const double burble = (vee ? 0.75 : layout == kBoxer ? 0.18 : 0.05) * (0.45 + t.cam) * (1.0 - 0.6 * t.diesel) *
                                       std::fmax(idle, std::fmax(overrun ? 0.8 : 0.0, 0.5 * (1.0 - s.load) * (1.0 - rpm01)));
                 if (burble > 0.01) {
                     s.blat_age = 0;
@@ -309,7 +310,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
             // Each pulse lasts a fraction of the gap to the next; a muffler stretches it out.
             const double rate = s.rps * n / 2.0;
             b.tau = std::fmin(0.012, std::fmax(0.0010, (0.28 + 0.25 * t.muffler) / std::fmax(rate, 1.0))) * (1.0 - 0.25 * s.load);
-            if (diesel) b.tau = std::fmin(0.02, b.tau * 1.8);   // the turbine soaks up the pulses: a softer, rounder chug
+            if (diesel) b.tau = std::fmin(0.02, b.tau * 1.8);   // slow-burning pulses: a softer, rounder chug
             // The gap to the next cylinder, with a little wander (a lot at a lumpy idle).
             s.next = (cyl + 1) % s.table.count;
             double gap = s.table.angle[s.next] - s.table.angle[cyl];
@@ -328,7 +329,12 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
             const double exc = b.amp * env;
             b.thump += (exc - b.thump) * (1.0 - std::exp(-dt * two_pi * (140.0 + 120.0 * (1.0 - t.muffler))));
             const double side = bi ? (vee ? 0.72 : 0.88) : 1.0;   // the far bank quieter
-            v += side * (0.55 * b.pipe.run(exc) + 0.22 * b.pipe2.run(exc) + 0.32 * b.body.run(exc) + 0.95 * b.thump);
+            const bool in_line = layout == kInline;
+            double bank_out = 0.55 * b.pipe.run(exc) + 0.22 * b.pipe2.run(exc) + (in_line ? 0.45 : 0.32) * b.body.run(exc) +
+                              (in_line ? 0.55 : 0.95) * b.thump;
+            // A V's headers are driven hard under load: the pulses saturate into a growl.
+            if (vee) { const double drive = 1.0 + 3.5 * std::fmax(0.0, t.rasp - 0.3) * s.load; if (drive > 1.001) bank_out = std::tanh(drive * bank_out) / std::sqrt(drive); }
+            v += side * bank_out;
             edge_in += exc * b.noise;
             exc_sum += exc;
         }
@@ -336,18 +342,14 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         const double edge = edge_in * nz * (0.15 + 0.85 * t.rasp) * (0.5 + 0.6 * s.load + 0.8 * rpm01) * (1.0 - 0.6 * idle) * muffle;
         v += 0.85 * s.rasp.run(edge) + 0.35 * t.rasp * s.rasp_hi.run(edge);
 
-        // Diesel turbo: spools with revs and load, whistles on top, and its turbine turns the exhaust into a deep
-        // rushing roar under load (the "whoosh" of a diesel truck pulling).
+        // Diesel exhaust: a deep rushing roar that builds with revs and load (no turbo whistle: real turbos come
+        // from AnyEngineParts).
         if (diesel) {
             const double want = running ? rpm01 * (0.25 + 0.75 * s.load) : 0.0;
             s.spool += (want - s.spool) * (1.0 - std::exp(-dt / (want > s.spool ? 0.9 : 0.6)));
             const double flow = s.spool * s.spool;
             s.roar_lp += (exc_sum - s.roar_lp) * (1.0 - std::exp(-dt * two_pi * 25.0));
             v += 0.9 * (0.15 + 0.85 * flow) * (0.3 + 0.7 * s.load) * s.roar.run(s.noise() * (0.3 + 1.5 * s.roar_lp)) * muffle;
-            v += 0.25 * t.intake * flow * s.whoosh.run(s.noise());
-            s.whistle_phase += two_pi * (2400.0 + 5200.0 * s.spool) * dt;
-            if (s.whistle_phase > two_pi) s.whistle_phase -= two_pi;
-            v += 0.035 * t.intake * flow * std::sin(s.whistle_phase);
         }
 
         // Intake roar: breathing noise that swells with load and revs, chopped by the intake strokes.
