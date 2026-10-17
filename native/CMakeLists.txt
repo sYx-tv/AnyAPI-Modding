@@ -163,7 +163,7 @@ add_test(NAME graphics_plugin COMMAND graphics_plugin_test "$<TARGET_FILE:menu_h
 add_test(NAME graphics_local_lights COMMAND graphics_plugin_test "$<TARGET_FILE:menu_host_fixture>" "$<TARGET_FILE:AnyHelpers>" "$<TARGET_FILE:AnyGraphics>" "--local-lights")
 add_test(NAME graphics_no_scene COMMAND graphics_plugin_test "$<TARGET_FILE:menu_host_fixture>" "$<TARGET_FILE:AnyHelpers>" "$<TARGET_FILE:AnyGraphics>" "--no-scene")
 add_executable(graphics_photo_test tests/graphics_photo_test.cpp)
-target_include_directories(graphics_photo_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
+target_include_directories(graphics_photo_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
 target_compile_options(graphics_photo_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME graphics_photo COMMAND graphics_photo_test)
 
