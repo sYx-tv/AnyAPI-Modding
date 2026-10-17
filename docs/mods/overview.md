@@ -11,7 +11,7 @@ keeps working defaults when it is absent.
 | [AnyInventory](inventory.md) | 0.27.0 | API 0.27.0 | Item search, images, categories, favorites, descriptions; Add in Sandbox/Creative | AnyHelpers settings and controls |
 | [AnyStorage](storage.md) | 0.27.0 | API 0.27.0 | Deposit, withdraw, matching transfer and sorting | AnyInventory layout; AnyHelpers settings |
 | [AnyMap](map.md) | 0.27.2 | API 0.27.0 | Full map, movable minimap, markers and route guidance | AnyHelpers settings and controls |
-| [AnyGraphics](graphics.md) | 0.29.3 | API 0.32.0 | Native graphics presets, scene SMAA, volumetric fog and light beams | None; lives in Settings → Graphics |
+| [AnyGraphics](graphics.md) | 0.31.0 | API 0.36.0 | Native graphics presets, scene AA, volumetric fog and light beams, photo mode with a free camera | None; lives in Settings → Graphics |
 | [AnyClock](clock.md) | 1.0.0 | API 0.30.0 | Temporary game-time popup | AnyHelpers settings and controls |
 | [AnyQuickWheel](quick-wheel.md) | 1.1.0 | API 0.31.0 | Hold-to-open construction-tool wheel | AnyHelpers settings and controls |
 | [AnyBalance](balance.md) | 1.2.0 | API 0.33.0 (fluid mass: 0.34.0); on Anymaker 0.1.25, API 0.35.1 | Centre-of-mass overlay, mass and size with the Properties Tool | AnyHelpers settings |
