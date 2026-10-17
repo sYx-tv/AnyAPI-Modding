@@ -53,7 +53,8 @@ constexpr int kMaxWatched = 16;
 struct Number {
     int32_t actor{-1};
     double damage{}, born{}, last_hit{};
-    Vec3 position;
+    Vec3 position;   // world position the number is drawn at
+    Vec3 offset;     // the hit point relative to the target, so the number can follow it
     int32_t type{};
     bool used{};
     bool kill{};
@@ -63,19 +64,19 @@ struct Number {
 // (and restarts its life at the newest hit point); otherwise a new number replaces the oldest when the pool is full.
 struct Numbers {
     Number items[kMaxNumbers];
-    void add(int32_t actor, double damage, Vec3 position, int32_t type, double now) {
+    void add(int32_t actor, double damage, Vec3 position, Vec3 offset, int32_t type, double now) {
         Number* best = nullptr;
         for (auto& n : items)
             if (n.used && n.actor == actor && actor >= 0 && now - n.last_hit <= kMergeSeconds) { best = &n; break; }
         if (best) {
-            best->damage += damage; best->last_hit = now; best->born = now; best->position = position;
+            best->damage += damage; best->last_hit = now; best->born = now; best->position = position; best->offset = offset;
             if (type != best->type && (type == kGun || type == kMelee)) best->type = type;
             return;
         }
         Number* slot = nullptr;
         for (auto& n : items) if (!n.used) { slot = &n; break; }
         if (!slot) { slot = &items[0]; for (auto& n : items) if (n.born < slot->born) slot = &n; }
-        *slot = Number{actor, damage, now, now, position, type, true, false};
+        *slot = Number{actor, damage, now, now, position, offset, type, true, false};
     }
     // The newest number for this actor turns into a kill (red, and it restarts its life so the kill is seen).
     void mark_kill(int32_t actor, double now) {

@@ -43,7 +43,9 @@ constexpr const char* kModId = "anycombat";
 
 // Layouts from the 0.1.25 reference (metadata).
 namespace off {
-constexpr ptrdiff_t cam_transform_t = 8 + 72;    // application.graphics.camera.m_transform (mat34), translation
+constexpr ptrdiff_t cam_transform = 8;           // application.graphics.camera.m_transform (mat34: v0 right, v1 up, v2 forward, t)
+constexpr ptrdiff_t cam_transform_t = 8 + 72;    // its translation
+constexpr ptrdiff_t cam_transform_build = 192;   // m_transform_build (mat34), a fallback
 constexpr ptrdiff_t cam_near = 104;              // m_near (f64)
 constexpr ptrdiff_t cam_forward = 120;           // m_dir_forward (vec3)
 constexpr ptrdiff_t cam_up = 144;                // m_dir_up
@@ -53,6 +55,7 @@ constexpr ptrdiff_t cam_tan_half_fov = 680;      // m_tan_half_fov
 constexpr size_t cam_size = 720;
 constexpr ptrdiff_t scene_actors = 344;          // client_scene.m_actors (client_scene.actor.container)
 constexpr ptrdiff_t actor_id = 8;                // client_scene.actor.m_id (s32)
+constexpr ptrdiff_t actor_transform_t = 392 + 72; // client_scene.actor.m_transform (mat34) translation
 }  // namespace off
 
 AnyModHostV1 host;
@@ -103,15 +106,45 @@ actor_by_id_t g_actor_by_id;
 incapacitated_t g_incapacitated;
 uint8_t* g_scene;              // the client scene of the last camera sample (main thread only)
 
-// 1 down, 0 up, -1 not found or the lookups are missing. Main thread only.
-int actor_down(uint8_t* scene, int32_t id) {
-    if (!scene || !g_actor_by_id || !g_incapacitated || id < 0) return -1;
+uint8_t* find_actor(uint8_t* scene, int32_t id) {
+    if (!scene || !g_actor_by_id || id < 0) return nullptr;
     uint8_t* actor = nullptr;
     g_actor_by_id(&actor, scene + off::scene_actors, &id);
-    if (!actor) return -1;
+    return actor;
+}
+
+// 1 down, 0 up, -1 not found or the lookups are missing. Main thread only.
+int actor_down(uint8_t* actor) {
+    if (!actor || !g_incapacitated) return -1;
     bool down = false;
     g_incapacitated(&down, actor);
     return down ? 1 : 0;
+}
+
+// The actor's position in the world (client_scene.actor.m_transform), or false.
+bool actor_position(uint8_t* actor, Vec3* out) {
+    if (!actor || !anymaker::readable(actor + off::actor_transform_t, 24)) return false;
+    Vec3 p = rd_vec(actor, off::actor_transform_t);
+    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) return false;
+    *out = p;
+    return true;
+}
+
+// Numbers ride along with their target: each frame, a live target's number sits at its current position plus the
+// hit's offset from it (the game reports hit points relative to the actor).
+void follow_targets(uint8_t* scene) {
+    int32_t ids[kMaxNumbers]; int n = 0;
+    {
+        std::lock_guard lock(g_mutex);
+        for (auto& it : g_numbers.items) if (it.used && it.actor >= 0) ids[n++] = it.actor;
+    }
+    for (int i = 0; i < n; ++i) {
+        Vec3 p;
+        if (!actor_position(find_actor(scene, ids[i]), &p)) continue;
+        std::lock_guard lock(g_mutex);
+        for (auto& it : g_numbers.items)
+            if (it.used && it.actor == ids[i]) it.position = {p.x + it.offset.x, p.y + it.offset.y, p.z + it.offset.z};
+    }
 }
 
 // Polls the targets you recently hit; a kill turns its number and the marker red.
@@ -123,7 +156,7 @@ void watch_kills(uint8_t* scene) {
         for (auto& e : g_watch.items) if (e.used) ids[n++] = e.actor;
     }
     for (int i = 0; i < n; ++i) {
-        int down = actor_down(scene, ids[i]);
+        int down = actor_down(find_actor(scene, ids[i]));
         if (down < 0) continue;   // gone (despawned) or not found: let the window run out
         double now = now_seconds();
         std::lock_guard lock(g_mutex);
@@ -137,11 +170,24 @@ void watch_kills(uint8_t* scene) {
 void hk_get_camera(uint8_t* ret, uint8_t* scene) {
     reinterpret_cast<get_camera_t>(h_camera.original)(ret, scene);
     if (g_stop || !ret || !anymaker::readable(ret, off::cam_size)) return;
+    // The direction vectors are filled in later by the renderer (they read zero here), so the basis comes from
+    // m_transform: v0 right, v1 up, v2 forward (ThirdPerson found the view looks along +v2), falling back to
+    // m_transform_build and then the direction fields.
     Camera c;
+    const char* source = "transform";
     c.position = rd_vec(ret, off::cam_transform_t);
-    c.forward = rd_vec(ret, off::cam_forward);
-    c.up = rd_vec(ret, off::cam_up);
-    c.right = rd_vec(ret, off::cam_right);
+    c.right = rd_vec(ret, off::cam_transform); c.up = rd_vec(ret, off::cam_transform + 24); c.forward = rd_vec(ret, off::cam_transform + 48);
+    auto unit = [](Vec3 v) { return std::fabs(dot(v, v) - 1) < 0.05; };
+    if (!unit(c.forward) || !unit(c.up) || !unit(c.right)) {
+        source = "transform_build";
+        c.position = rd_vec(ret, off::cam_transform_build + 72);
+        c.right = rd_vec(ret, off::cam_transform_build); c.up = rd_vec(ret, off::cam_transform_build + 24); c.forward = rd_vec(ret, off::cam_transform_build + 48);
+    }
+    if (!unit(c.forward) || !unit(c.up) || !unit(c.right)) {
+        source = "direction fields";
+        c.position = rd_vec(ret, off::cam_transform_t);
+        c.forward = rd_vec(ret, off::cam_forward); c.up = rd_vec(ret, off::cam_up); c.right = rd_vec(ret, off::cam_right);
+    }
     c.near_plane = rd<double>(ret, off::cam_near);
     c.tan_half_fov = rd<double>(ret, off::cam_tan_half_fov);
     double fov = rd<double>(ret, off::cam_fov);
@@ -156,8 +202,8 @@ void hk_get_camera(uint8_t* ret, uint8_t* scene) {
         std::lock_guard lock(g_mutex);
         if (g_camera_logs < 2 && c.valid()) {
             ++g_camera_logs;
-            log(0, "camera: position (%.2f, %.2f, %.2f) forward (%.2f, %.2f, %.2f) up (%.2f, %.2f, %.2f) right (%.2f, %.2f, %.2f) fov %.3f rad, tan(half) %.3f, near %.3f; local actor %d",
-                c.position.x, c.position.y, c.position.z, c.forward.x, c.forward.y, c.forward.z, c.up.x, c.up.y, c.up.z,
+            log(0, "camera (%s): position (%.2f, %.2f, %.2f) forward (%.2f, %.2f, %.2f) up (%.2f, %.2f, %.2f) right (%.2f, %.2f, %.2f) fov %.3f rad, tan(half) %.3f, near %.3f; local actor %d",
+                source, c.position.x, c.position.y, c.position.z, c.forward.x, c.forward.y, c.forward.z, c.up.x, c.up.y, c.up.z,
                 c.right.x, c.right.y, c.right.z, fov, c.tan_half_fov, c.near_plane, local);
         } else if (!c.valid() && g_camera_logs == 0) {
             g_camera_logs = -1;
@@ -167,7 +213,7 @@ void hk_get_camera(uint8_t* ret, uint8_t* scene) {
         g_local_actor = local;
     }
     g_scene = scene;
-    if (scene) watch_kills(scene);
+    if (scene) { watch_kills(scene); follow_targets(scene); }
 }
 
 void hk_push_damage(uint8_t* data, const int32_t* actor, const double* damage, const double* position, const double* normal,
@@ -179,19 +225,24 @@ void hk_push_damage(uint8_t* data, const int32_t* actor, const double* damage, c
     Vec3 at{position[0], position[1], position[2]};
     if (!std::isfinite(at.x) || !std::isfinite(at.y) || !std::isfinite(at.z)) return;
     int32_t id = *actor;
-    int down = actor_down(g_scene, id);   // same main thread as the camera hook
+    uint8_t* target = find_actor(g_scene, id);   // same main thread as the camera hook
+    int down = actor_down(target);
+    Vec3 base{}, world = at;
+    bool placed = actor_position(target, &base);
+    if (placed) world = {base.x + at.x, base.y + at.y, base.z + at.z};
     std::lock_guard lock(g_mutex);
     bool self = g_local_actor >= 0 && id == g_local_actor;
     if (g_hit_logs < 20) {
         ++g_hit_logs;
-        Vec3 d = sub(at, g_camera.position);
-        log(0, "hit: actor %d%s, damage %.3f, type %d, flesh %d, at (%.2f, %.2f, %.2f), %.1f m from the camera, %s", id,
-            self ? " (you, not shown)" : "", dmg, *type, flesh ? *flesh : -1, at.x, at.y, at.z, std::sqrt(dot(d, d)),
+        Vec3 d = sub(world, g_camera.position);
+        log(0, "hit: actor %d%s, damage %.3f, type %d, flesh %d, offset (%.2f, %.2f, %.2f), actor at (%.2f, %.2f, %.2f)%s, camera at (%.2f, %.2f, %.2f), %.1f m away, %s",
+            id, self ? " (you, not shown)" : "", dmg, *type, flesh ? *flesh : -1, at.x, at.y, at.z, base.x, base.y, base.z,
+            placed ? "" : " (not found)", g_camera.position.x, g_camera.position.y, g_camera.position.z, std::sqrt(dot(d, d)),
             down == 1 ? "already down" : down == 0 ? "up" : "not found");
     }
     if (self) return;
     double now = now_seconds();
-    g_numbers.add(id, dmg, at, *type, now);
+    if (placed) g_numbers.add(id, dmg, world, at, *type, now);   // without the target there is nowhere to pin it
     if (down == 0) g_watch.hit(id, now);
     g_marker_time = now;
     g_marker_kill = false;

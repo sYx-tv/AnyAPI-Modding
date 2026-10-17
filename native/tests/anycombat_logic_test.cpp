@@ -22,18 +22,18 @@ int main() {
 
     // Merging: quick hits on one actor add up; another actor or a later hit gets its own number.
     Numbers n;
-    n.add(7, 10, {0, 0, 5}, kGun, 0.0);
-    n.add(7, 12, {0, 1, 5}, kGun, 0.2);
+    n.add(7, 10, {0, 0, 5}, {}, kGun, 0.0);
+    n.add(7, 12, {0, 1, 5}, {}, kGun, 0.2);
     assert(n.count() == 1 && near(n.items[0].damage, 22) && near(n.items[0].position.y, 1));
-    n.add(8, 5, {0, 0, 5}, kGun, 0.25);
+    n.add(8, 5, {0, 0, 5}, {}, kGun, 0.25);
     assert(n.count() == 2);
-    n.add(7, 3, {0, 0, 5}, kGun, 0.2 + kMergeSeconds + 0.01);
+    n.add(7, 3, {0, 0, 5}, {}, kGun, 0.2 + kMergeSeconds + 0.01);
     assert(n.count() == 3);
     n.expire(0.25 + kNumberSeconds + 0.01);
     assert(n.count() == 1);
     // Unknown actors (-1) never merge; a full pool replaces the oldest.
     Numbers p;
-    for (int i = 0; i < kMaxNumbers + 3; ++i) p.add(-1, 1, {}, kMelee, i * 0.01);
+    for (int i = 0; i < kMaxNumbers + 3; ++i) p.add(-1, 1, {}, {}, kMelee, i * 0.01);
     assert(p.count() == kMaxNumbers);
     double oldest = 1e9; for (auto& it : p.items) oldest = std::min(oldest, it.born);
     assert(near(oldest, 0.03));
@@ -54,8 +54,8 @@ int main() {
 
     // Kills: the newest number for the actor turns red; only targets that go down soon after your hit count.
     Numbers k;
-    k.add(3, 20, {}, kGun, 0.0);
-    k.add(3, 5, {}, kGun, 1.0);
+    k.add(3, 20, {}, {}, kGun, 0.0);
+    k.add(3, 5, {}, {}, kGun, 1.0);
     k.mark_kill(3, 1.2);
     assert(!k.items[0].kill && k.items[1].kill && near(k.items[1].born, 1.2));
     KillWatch w;

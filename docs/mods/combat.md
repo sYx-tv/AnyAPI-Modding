@@ -42,8 +42,12 @@ For kills, every target that was still up when you hit it is looked up by id
 flag (`client_scene.actor.get_is_incapacitated`, which the server sets when a zombie, creature or player goes down).
 If it goes down inside that window, the hit counts as your kill. Hitting a target that is already down never does.
 
+The reported hit point is relative to the target, so the number is pinned to the target's own position
+(`client_scene.actor.m_transform`) plus that offset, and follows the target while it is on screen.
+
 The camera comes from a hook on `client_scene.get_camera`, which builds the exact camera the frame renders with
-(position, forward/up/right directions and vertical field of view, after hand-held sway and shake). Each frame the
+(its transform and vertical field of view, after hand-held sway and shake; its direction fields are still empty at that
+point, so the basis comes from the transform). Each frame the
 numbers are projected from their world hit point with that camera and drawn with [GPU drawing](../api/gpu-drawing.md).
 
 The pure logic (projection, merging rapid hits, timing, formatting) is in `native/anycombat_logic.h` and covered by
