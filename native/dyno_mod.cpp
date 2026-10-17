@@ -579,25 +579,9 @@ void draw(const AnyFrameV1* f, void*) {
 }
 
 // ------------------------------------------------------------------------------------- install (background thread)
-constexpr const char* kSigAddDefinitions = "53 48 81 ec 90 00 00 00 48 89 4c 24 48 48 89 54 24 50 48 8b 44 24 28 48 89 44 24 58";
-constexpr const char* kSigContainerLoad = "53 48 81 ec a0 00 00 00 48 89 4c 24 40 48 89 54 24 48 48 8d 01 48 8b 1d";
-constexpr const char* kSigFileLoad = "53 55 48 81 ec 98 00 00 00 48 89 4c 24 48 48 89 54 24 50 4c 89 44 24 58";
-bool code_is(const void* fn, const char* sig) {
-    anymaker::pattern pat(sig);
-    return fn && !pat.bytes.empty() && anymaker::readable(fn, pat.bytes.size()) && pat.match(static_cast<const uint8_t*>(fn));
-}
-bool in_other_module(const void* fn) {
-    HMODULE m = nullptr;
-    return fn && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)fn, &m) &&
-           m && m != GetModuleHandleW(nullptr);
-}
 // The add cell must hold _add_definitions or another hook on it (Turbo's and Rotary's live in this DLL, GpsPart's in
-// its own), never container.load (see rotary_mod.cpp: a wrong route once crashed the game).
-bool add_cell_ok(void** cell) {
-    void* fn = cell && anymaker::readable(cell, 8) ? *cell : nullptr;
-    if (!fn || code_is(fn, kSigContainerLoad) || code_is(fn, kSigFileLoad)) return false;
-    return code_is(fn, kSigAddDefinitions) || in_other_module(fn);
-}
+// its own), never container.load, and the load function must be file.load (route::add_cell_ok and
+// route::file_load_ok in route_cell.h).
 void install_hooks() {
     using namespace anymaker::experimental;
     void **add = nullptr, **load_cell = nullptr, **engine = nullptr, **tick = nullptr, **get = nullptr;
@@ -605,19 +589,19 @@ void install_hooks() {
         if (attempt) Sleep(attempt < 30 ? 1000 : 5000);
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; Dyno stays off"); return; }
         if (!add) add = route::cell(bind::definitions_add_definitions);
-        if (add && !add_cell_ok(add)) add = nullptr;
+        if (add && !route::add_cell_ok(add)) add = nullptr;
         if (!g_file_ctor) g_file_ctor = reinterpret_cast<self_fn_t>(function(bind::definition_file_ctor));
         if (!g_file_dtor) g_file_dtor = reinterpret_cast<self_fn_t>(function(bind::definition_file_dtor));
         if (!load_cell) load_cell = route::cell(bind::definition_file_load);
         if (!g_file_load && load_cell) {
-            if (code_is(*load_cell, kSigFileLoad)) g_file_load = reinterpret_cast<file_load_t>(*load_cell);
+            if (route::file_load_ok(*load_cell)) g_file_load = reinterpret_cast<file_load_t>(*load_cell);
             else load_cell = nullptr;            // a wrong route: look again next time
         }
         if (!g_get_definition) g_get_definition = reinterpret_cast<get_definition_t>(function(bind::definitions_get_by_id));
         if (!g_string_ctor) g_string_ctor = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
         if (!engine) {                           // the game's engine tick, or Turbo's hook on it (hot boost air), to chain onto
             void** c = route::cell(bind::engine_tick); void* entry = route::function(bind::engine_tick);
-            if (c && entry && anymaker::readable(c, 8) && (*c == entry || in_other_module(*c))) engine = c;
+            if (c && entry && anymaker::readable(c, 8) && (*c == entry || route::in_other_module(*c))) engine = c;
         }
         if (!tick) tick = hook_cell(bind::altitude_tick);
         if (!get) get = hook_cell(bind::altitude_get_data_f64);
@@ -640,7 +624,7 @@ void install_hooks() {
             log(2, "sensor hooks not installed; Dyno is off");
             return;
         }
-        if (!add_cell_ok(add) || !h_add_definitions.install(add, (void*)&hk_add_definitions)) {
+        if (!route::add_cell_ok(add) || !h_add_definitions.install(add, (void*)&hk_add_definitions)) {
             h_sensor_tick.remove((void*)&hk_sensor_tick); h_get_f64.remove((void*)&hk_get_f64); h_engine_tick.remove((void*)&hk_engine_tick);
             log(2, "the definitions hook cell was taken or changed; Dyno is off");
             return;

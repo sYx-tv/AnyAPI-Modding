@@ -17,6 +17,7 @@
 #include "anyhelpers_settings_state.h"
 #include "mod_controls_v1.h"
 #include <mutex>
+#include "anygraphics_photo.h"
 namespace graphics {
 using namespace graphics_options;
 static AnyModHostV1 host;
@@ -96,9 +97,9 @@ static void draw(const AnyMenuFrameV1*,void*){std::lock_guard lock(mutex);
    uint32_t pick=picking;if(widgets->toggle_row("auto_pick","Auto-pick preset (measures frame rate)",&pick)&&pick!=uint32_t(picking)){picking=pick;pick_went_down=false;pick_seconds=0;pick_frames=0;pick_last=0;
     auto from=preset>=1&&preset<=5?preset:preset==6||preset==VibrantProfile?5:4;pick_tier=from;pick_result=picking?"Auto-pick: close the menu and play; it measures a few seconds per preset.":"";}
    if(!pick_result.empty())widgets->tabs->label("auto_pick_status",pick_result.c_str());
-   uint32_t p=photo;if(widgets->toggle_row("photo_mode","Photo mode (hide HUD)",&p))photo=p;
+   uint32_t p=photo;if(widgets->toggle_row("photo_mode","Photo mode (free camera, hide HUD)",&p))photo=p;
    char key[32]="F1";if(controls&&photo_action)controls->key_name(photo_action,key,sizeof(key));
-   std::string hint=std::string("Press ")+key+" in game to hide or show the HUD. Menus always show.";widgets->tabs->label("photo_hint",hint.c_str());}
+   std::string hint=std::string("Press ")+key+" in game to hide the HUD and fly the camera with WASD. The photo keys are listed in the corner. Menus always show.";widgets->tabs->label("photo_hint",hint.c_str());}
  }
  if(aa&&state.settings[NativeAA].draft.number>=3){AnySceneAntialiasingStatusV1 a;bool active=aa&&aa->status(&a)&&a.ready;auto choice=state.settings[NativeAA].draft.number;widgets->tabs->label("aa_status",active?(choice>=6?"TAA + jitter: scene only, before HUD.":choice>=5?"TAA: scene only, before HUD.":choice==4?"Enhanced SMAA: scene only, before HUD.":"SMAA: scene only, before HUD."):"Scene AA is waiting for the scene renderer; native AA stays available.");}
  if(lighting&&(state.settings[Atmosphere].draft.number>0||state.settings[SunShafts].draft.number>0||state.settings[LocalBeams].draft.number>0)){AnySceneLightingStatusV1 light;bool connected=lighting->status(&light)&&light.ready;widgets->tabs->label("lighting_status",connected?"Volumetric lighting: native scene depth and sun shadows.":"Experimental lighting is waiting for a supported scene.");}
@@ -115,10 +116,10 @@ static void render(const AnyFrameV1* frame,AnyCanvasV1*,void*){
  AnyUiSnapshotV1 snapshot;bool gameplay=ui&&ui->copy(&snapshot)&&snapshot.kind==ANY_UI_GAMEPLAY;if(on&&values[GameplayOnly]>.5f)on=gameplay;
  // Photo mode key: toggles only in gameplay with the game focused; the HUD comes back in every menu.
  bool focused=!frame||frame->focused;auto key=photo_key();bool down=key&&focused&&(GetAsyncKeyState(int(key))&0x8000);if(down&&!photo_key_down&&gameplay){photo=!photo;log(photo?"PHOTO_MODE on=1":"PHOTO_MODE on=0");}photo_key_down=down;
- bool hide=photo&&gameplay&&effects;auto_pick(gameplay&&focused);
+ bool hide=photo&&gameplay&&effects;auto_pick(gameplay&&focused);photocam::update(photo,gameplay);static uint32_t photo_revision{};auto tweaks=photocam::revision.load();
  AnySceneStatusV1 status;bool now_ready=scene->status(&status)&&status.ready;
  const auto now=frame?frame->tick:GetTickCount64();
- if((!configured&&now>=retry_at)||on!=last_on||now_ready!=native_ready||hide!=last_hide){bool all_accepted=true;auto v=effective(values);AnySceneParametersV1 p;
+ if((!configured&&now>=retry_at)||on!=last_on||now_ready!=native_ready||hide!=last_hide||(hide&&tweaks!=photo_revision)){photo_revision=tweaks;bool all_accepted=true;auto v=effective(values);AnySceneParametersV1 p;
   p.enabled=on;p.aa=v[NativeAA]>=3?0:uint32_t(v[NativeAA]);p.bloom=uint32_t(v[NativeBloom]);p.ssao=uint32_t(v[NativeSSAO]);p.shadows=uint32_t(v[NativeShadows]);p.fog_blur=uint32_t(v[NativeFogBlur]);
   p.bloom_threshold=v[BloomThreshold];p.bloom_intensity=v[BloomAmount];p.sun=v[SunLight];p.sky=v[SkyLight];p.ambient=v[AmbientLight];p.fog=v[FogDensity];p.light_exposure=v[SceneExposure];
   if(aa_v2){AnySceneAntialiasingParametersV2 a;a.enabled=on&&v[NativeAA]>=3;a.method=aa_method(v[NativeAA]);a.quality=uint32_t(v[AAQuality]);a.sharpening=sharpen_levels[size_t(v[Sharpening])];if(!aa_v2->set(&a)){all_accepted=false;log("SCENE_AA_UPDATE rejected=1 retry_pending=1");}}
@@ -130,6 +131,7 @@ static void render(const AnyFrameV1* frame,AnyCanvasV1*,void*){
   if(effects){AnySceneEffectsParametersV1 e;bool shading=v[DetailedAO]>0&&v[NativeSSAO]!=1,sky=v[NightSky]>0||v[Moonlight]>0,contact=v[ContactShadows]>0,bounce=v[BounceLight]>0,lens=v[DepthOfField]>0||v[MotionBlur]>0,reach=v[DrawDistance]>0,heavens=v[SunDisc]>0||v[CloudLayer]>0;e.enabled=on&&(v[ToneMapping]>0||shading||sky||contact||bounce||lens||reach||heavens);e.hide_ui=hide;e.sun_disc=sun_disc_levels[size_t(v[SunDisc])];e.clouds=cloud_levels[size_t(v[CloudLayer])];e.draw_distance=draw_distance_levels[size_t(v[DrawDistance])];e.bounce_light=bounce_levels[size_t(v[BounceLight])];e.depth_of_field=std::min(focus_blur_levels[size_t(v[DepthOfField])]*std::clamp(v[FocusBlur],.25f,3.f),4.f);e.motion_blur=motion_blur_levels[size_t(v[MotionBlur])];e.contact_shadows=contact;e.contact_length=contact_levels[size_t(v[ContactShadows])];e.night_sky=sky;e.stars=star_levels[size_t(v[NightSky])];e.moon=moon_levels[size_t(v[NightSky])];e.moonlight=moonlight_levels[size_t(v[Moonlight])];e.finish=v[ToneMapping]>0;e.ambient_occlusion=shading;e.ao_radius=ao_radius_levels[size_t(v[DetailedAO])];e.ao_strength=ao_strength_levels[size_t(v[DetailedAO])];e.tonemap=v[ToneMapping]>=3?2:v[ToneMapping]>=2?1:0;e.look=uint32_t(v[ColourLook]);e.look_strength=look_strength_levels[size_t(v[LookStrength])];e.eye_adaptation=uint32_t(v[EyeAdaptation]);e.exposure=v[Brightness];e.bloom=scene_bloom_levels[size_t(v[SceneBloom])];e.glare=glare_levels[size_t(v[SunGlare])];e.vignette=vignette_levels[size_t(v[Vignette])];
    // Photo mode still works with AnyGraphics off: everything else stays off.
    if(hide&&!e.enabled){e=AnySceneEffectsParametersV1{};e.enabled=1;e.finish=0;e.ambient_occlusion=0;e.night_sky=0;e.contact_shadows=0;e.bounce_light=0;e.hide_ui=1;}
+   if(hide)photocam::apply(e);
    if(!effects->set(&e)){all_accepted=false;log("SCENE_EFFECTS_UPDATE rejected=1 retry_pending=1");}}
   bool accepted=false;if(scene_v2){AnySceneParametersV2 detailed;detailed.scene=p;detailed.clouds=uint32_t(v[Clouds]);detailed.grass=uint32_t(v[Grass]);detailed.foliage=uint32_t(v[Foliage]);accepted=scene_v2->set(&detailed);}else accepted=scene->set(&p);
   if(!accepted){all_accepted=false;log("NATIVE_SCENE_UPDATE rejected=1 retry_pending=1");}configured=all_accepted;retry_at=all_accepted?0:now+500;last_on=on;last_hide=hide;native_ready=now_ready;
@@ -138,9 +140,9 @@ static void render(const AnyFrameV1* frame,AnyCanvasV1*,void*){
 }
 }
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* host,AnyModCallbacksV1* callbacks){
- if(!host||!callbacks||host->abi!=ANYAPI_MOD_ABI||host->struct_size!=sizeof(*host)||!host->log)return false;graphics::host=*host;callbacks->id="anygraphics";callbacks->render=graphics::render;graphics::log("DLL_READY settings=54 presets=12 native_only=1 post_fx_passes=0");return true;
+ if(!host||!callbacks||host->abi!=ANYAPI_MOD_ABI||host->struct_size!=sizeof(*host)||!host->log)return false;graphics::host=*host;callbacks->id="anygraphics";callbacks->render=graphics::render;graphics::photocam::host=*host;callbacks->input=[](const AnyInputV1* e,void*)->uint32_t{return graphics::photocam::input(e);};callbacks->shutdown=[](void*){graphics::photocam::shutdown();};graphics::log("DLL_READY settings=54 presets=12 native_only=1 post_fx_passes=0");return true;
 }
-extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics;auto services=AnyAPI_Services();if(!services)return;
+extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics;auto services=AnyAPI_Services();if(!services)return;photocam::ready(services);
  scene=(const AnySceneControlsV1*)services->query("anyapi.scene_controls",1);if(scene&&(scene->version!=1||scene->struct_size!=sizeof(*scene)||!scene->set||!scene->status))scene=nullptr;
  scene_v2=(const AnySceneControlsV2*)services->query("anyapi.scene_controls",2);if(scene_v2&&(scene_v2->version!=2||scene_v2->struct_size!=sizeof(*scene_v2)||!scene_v2->set||!scene_v2->status))scene_v2=nullptr;
  log(scene?"NATIVE_SCENE service_available=1":"NATIVE_SCENE unavailable requires_API_28=1 overrides_disabled=1");
@@ -152,7 +154,7 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics
  lighting_v2=(const AnySceneLightingV2*)services->query("anyapi.scene_lighting",2);if(lighting_v2&&(lighting_v2->struct_size!=sizeof(*lighting_v2)||lighting_v2->version!=2||!lighting_v2->set||!lighting_v2->status))lighting_v2=nullptr;
  lighting_v3=(const AnySceneLightingV3*)services->query("anyapi.scene_lighting",3);if(lighting_v3&&(lighting_v3->struct_size!=sizeof(*lighting_v3)||lighting_v3->version!=3||!lighting_v3->set||!lighting_v3->status||!lighting_v2))lighting_v3=nullptr;
  ui=(const AnyUiStateV1*)services->query("anyapi.ui_state",1);if(ui&&(ui->version!=1||ui->struct_size!=sizeof(*ui)||!ui->copy))ui=nullptr;
- controls=(const ModControlsV1*)services->query("anyhelpers.controls",1);if(controls&&controls->struct_size==sizeof(*controls)&&controls->version==1&&controls->register_action&&controls->key&&controls->key_name){ModControlActionV1 d;d.mod_id="anygraphics";d.mod_name="AnyGraphics";d.action_id="photo_mode";d.label="Photo mode (hide HUD)";d.default_key=VK_F1;photo_action=controls->register_action(&d);}else controls=nullptr;
+ controls=(const ModControlsV1*)services->query("anyhelpers.controls",1);if(controls&&controls->struct_size==sizeof(*controls)&&controls->version==1&&controls->register_action&&controls->key&&controls->key_name){ModControlActionV1 d;d.mod_id="anygraphics";d.mod_name="AnyGraphics";d.action_id="photo_mode";d.label="Photo mode (free camera, hide HUD)";d.default_key=VK_F1;photo_action=controls->register_action(&d);}else controls=nullptr;
  menu=(const AnyMenuV1*)services->query("anyapi.menu",1);widgets=(const AnyMenuV3*)services->query("anyapi.menu",3);
  if(!menu||menu->version!=1||menu->struct_size!=sizeof(*menu)||!menu->add_section||!widgets||widgets->version!=3||widgets->struct_size!=sizeof(*widgets)){log("GRAPHICS_MENU unavailable=1");return;}
  auto own_file=std::filesystem::path(host.plugin_directory)/L"AnyGraphics"/L"settings.tsv";
