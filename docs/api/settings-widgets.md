@@ -18,3 +18,10 @@ Contracts: 31 complete native GCL function bodies, signatures, code lengths, dep
 The settings_widgets check executes the exact game toggle and f64 slider bodies with controlled element/ref/vtable dependencies. It verifies 600 hover frames without activation, real activation, draft mutation only on slider events, edit capture/back/close release, exact text-results field order, string replacement/destruction, oversize/invalid UTF-8 rejection and balanced row layout. Text-input element internals and the s32 slider are contract-verified, not independently executed in this new fixture. Existing native Settings/update/Apply/Reset/scroll/multi-tab tests remain. Live gameplay acceptance is tracked separately.
 
 Before changing native contracts, run `native/tools/verify_menu_contracts.py` with the installed `bin/game.gcl` and the records JSON produced by `native/tools/parse_gcl.py`. That tool also reads `MENU_NATIVE_CONTRACTS.json`, which is not in this repository, so it does not run from a fresh clone. Check the capability catalog and deployment evidence for the current runtime profile.
+
+## Button rows — anyapi.menu v4
+
+Include anyapi_menu_v4.h and query anyapi.menu version 4. The table points at the unchanged v3 table (`rows`) and adds
+`button_row(id, label, buttons, count)`: a label plus 1-4 native buttons sharing the value column, for one-shot actions
+such as AnyHelpers' ADMIN tab. It returns the 1-based index of the button selected this frame, or 0. Like the v3 rows it
+works only inside a registered native section or tab draw callback, and button text is limited to 63 bytes.

@@ -63,6 +63,8 @@ add_test(NAME platform_render COMMAND platform_render_test)
 
 # AnyHelpers owns Mod Controls and Mod Settings; AnyAPI supplies generic native primitives.
 add_library(AnyHelpers SHARED anyhelpers_mod.cpp)
+# The Duplicate tool favorites reach the game through the experimental SDK.
+target_include_directories(AnyHelpers PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
 target_compile_options(AnyHelpers PRIVATE /W3 /EHsc /Zi /utf-8)
 target_link_options(AnyHelpers PRIVATE /DEBUG:FULL)
 add_executable(mod_controls_state_test mod_controls_state_test.cpp)
@@ -215,6 +217,9 @@ function(anyapi_version_resource target product)
     set(ANYAPI_VERSION_COMMA "1,2,0,0")
     set(ANYAPI_VERSION_TEXT "1.2.0")
   elseif(target STREQUAL "AnyInventory")
+    set(ANYAPI_VERSION_COMMA "0,28,0,0")
+    set(ANYAPI_VERSION_TEXT "0.28.0")
+  elseif(target STREQUAL "AnyHelpers")
     set(ANYAPI_VERSION_COMMA "0,28,0,0")
     set(ANYAPI_VERSION_TEXT "0.28.0")
   elseif(target STREQUAL "MCCode")

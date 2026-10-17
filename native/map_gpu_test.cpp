@@ -23,7 +23,7 @@ static const void* anyapi_scene_timing_service(){return nullptr;}
 #include "anyapi_client_tasks.inc"
 static const AnyMenuV1* anyapi_menu_service(){return nullptr;}
 static const AnyMenuV2* anyapi_menu_service_v2(){return nullptr;}
-static const AnyMenuV3* anyapi_menu_service_v3(){return nullptr;}
+static const AnyMenuV3* anyapi_menu_service_v3(){return nullptr;}static const AnyMenuV4* anyapi_menu_service_v4(){return nullptr;}
 static bool p34_copy_snapshot(AnySessionPlayersV1*,uint32_t*){return false;}
 static const AnyInventoryActionsV1* anyapi_inventory_actions_service(){return nullptr;}
 static const AnyScreenLayoutV1* anyapi_screen_layout_service(){return nullptr;}
