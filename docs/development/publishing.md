@@ -64,13 +64,17 @@ ZIPs:
 ```
 
 - `Packages` maps a package `Name` to any of `Id`, `Revision`, `MinimumApi`,
-  `Description` and `GameBuilds`. A new mod must give `Id`, `MinimumApi` and
+  `Description`, `GameBuilds` and `Replaces`. A new mod must give `Id`, `MinimumApi` and
   `Description`; its `Revision` starts at 1 and its `GameBuilds` default to the
   API's. Version, URL and hashes always come from the ZIP and the tag.
 - `Extra` lists any other download in the release that is not a catalog
   package. Source archives named `<Name>-<Version>-source.zip` are allowed
   without listing them.
 - The API's description usually changes with each API release, so set it here.
+- A bundle ([docs/api/bundles.md](../api/bundles.md)) lists the mods it now carries
+  under `Replaces`, as `{"<old mod Id>": "AnyAPI and Modding/mods/<Old>.dll"}`. The
+  workflow removes those mods' catalog entries; the manager removes their DLLs when
+  it installs the bundle. A replaced mod cannot be in the same release.
 
 The workflow removes `release.json` from the release before publishing it.
 

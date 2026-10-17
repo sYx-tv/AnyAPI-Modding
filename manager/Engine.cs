@@ -104,7 +104,10 @@ namespace AnyApiManager {
   public static string Status(string game,Package p){
    string target=Rules.Target(game,Rules.OnlyFile(p));
    if(File.Exists(target))return Rules.Hash(target)==p.FileHashes[Rules.OnlyFile(p)]?"Installed":"Update / different build";
-   if(File.Exists(target+".disabled"))return "Disabled";return "Not installed";
+   if(File.Exists(target+".disabled"))return "Disabled";
+   // A bundle not installed yet updates the mods it replaces.
+   foreach(var old in p.Replaces??new Dictionary<string,string>()){string file=Rules.Target(game,old.Value);if(File.Exists(file)||File.Exists(file+".disabled"))return "Update / different build";}
+   return "Not installed";
   }
   public static Dictionary<string,Package> Incompatible(string game,Catalog catalog){
    var found=new Dictionary<string,Package>();string folder=Rules.Target(game,"AnyAPI and Modding/mods");if(!Directory.Exists(folder))return found;
@@ -149,7 +152,7 @@ namespace AnyApiManager {
     Rules.Validate(r.Package,r.Package!=null&&r.Package.Id=="anyapi");
     var p=r.Package;string relative=Rules.OnlyFile(p),target=Rules.Target(game,relative),disabled=Rules.Target(game,relative+".disabled");
     var installed=ReadInstalled(game);Receipt previous;installed.Packages.TryGetValue(p.Id,out previous);
-    var changes=new Dictionary<string,byte[]>();
+    var changes=new Dictionary<string,byte[]>();var replaced=new List<string>();
     if(r.Action=="install"){
      if(!Rules.Matches(p,Rules.Hash(Path.Combine(game,"game.exe")),Rules.Hash(Path.Combine(game,"bin/game.gcl"))))throw new IOException("This release has not been verified for your installed game build. Check for updates.");
      if(p.Id!="anyapi"&&ApiRevision(game,r.Catalog)<p.MinimumApi)throw new IOException("Install or update AnyAPI first (revision "+p.MinimumApi+" or newer).");
@@ -162,6 +165,12 @@ namespace AnyApiManager {
       if(previous==null||Rules.Hash(disabled)!=previous.Package.FileHashes[relative])throw new IOException("An unmanaged disabled DLL exists. Enable it or resolve it first.");changes.Add(disabled,null);
      }
      installed.Packages[p.Id]=new Receipt{Package=p,Disabled=false};
+     // A bundle carries mods that used to ship alone: remove their DLLs (Commit backs them up) so nothing loads twice.
+     // Their settings and data folders stay; the bundled copies keep the same ids and files.
+     foreach(var old in p.Replaces){string file=Rules.Target(game,old.Value);
+      foreach(string path in new[]{file,file+".disabled"})if(File.Exists(path)&&!changes.ContainsKey(path)){changes.Add(path,null);replaced.Add(Path.GetFileName(path));}
+      installed.Packages.Remove(old.Key);
+     }
      if(p.Id=="anyapi"&&File.Exists(PausedApi(game))){
       var known=InstalledApi(game,r.Catalog);if(known==null||Rules.Hash(PausedApi(game))!=known.FileHashes["dinput8.dll"])throw new IOException("The paused API changed outside the manager. Resolve it before installing.");changes.Add(PausedApi(game),null);
      }
@@ -182,7 +191,7 @@ namespace AnyApiManager {
     }
     changes.Add(StateFile(game),Encoding.UTF8.GetBytes(Json.Write(installed)));
     if(!test&&Running())throw new IOException("Anymaker started during preparation. Close it and try again.");
-    Commit(game,changes,failAfter);ManagerLog.Write(r.Action+" "+p.Id+" "+p.Version+" in "+game);return new ApplyResult{Success=true,Message=p.Name+": "+(r.Action=="install"?"installed":r.Action=="remove"?"removed (settings kept)":r.Action=="enable"?"enabled":"disabled")+". Ready for the next game launch."};
+    Commit(game,changes,failAfter);ManagerLog.Write(r.Action+" "+p.Id+" "+p.Version+" in "+game);return new ApplyResult{Success=true,Message=p.Name+": "+(r.Action=="install"?"installed":r.Action=="remove"?"removed (settings kept)":r.Action=="enable"?"enabled":"disabled")+(replaced.Count>0?" and replaced "+string.Join(", ",replaced)+" (settings kept)":"")+". Ready for the next game launch."};
    }catch(Exception e){ManagerLog.Error(r.Action+(r.Package==null?"":" "+r.Package.Id),e);return new ApplyResult{Success=false,Message=e.Message};}
   }
   static ApplyResult PrepareLaunch(ApplyRequest r,string game,Action<int> fault,bool test){

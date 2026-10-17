@@ -11,6 +11,7 @@ uses several services together, see the [mod tutorial](../development/mod-tutori
 | --- | --- | --- |
 | DLL lifecycle, input, player copies and canvas | [SDK overview](../../sdk/README.md) | `anyapi_mod_v1.h` |
 | Named services and input filters | [Examples](../../native/examples/) | `anyapi_services_v1.h` |
+| Several mods in one DLL, and switching them on or off (0.39.0) | [Bundles](bundles.md) | `anyapi_bundle_v1.h` |
 | Settings tabs and menu extensions | [Menu integration](menu-extensions.md) | `anyapi_menu_v1.h`, `anyapi_menu_v2.h` |
 | Native settings rows | [Settings widgets](settings-widgets.md) | `anyapi_menu_v3.h` |
 | Current game UI state | [UI state](ui-state.md) | `anyapi_ui_state_v1.h` |

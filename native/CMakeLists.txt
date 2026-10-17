@@ -184,8 +184,8 @@ function(anyapi_version_resource target product)
     set(ANYAPI_BINARY_NAME "dinput8.dll")
   endif()
   if(target STREQUAL "dinput8")
-    set(ANYAPI_VERSION_COMMA "0,38,1,0")
-    set(ANYAPI_VERSION_TEXT "0.38.1")
+    set(ANYAPI_VERSION_COMMA "0,39,0,0")
+    set(ANYAPI_VERSION_TEXT "0.39.0")
   elseif(target STREQUAL "AnyGraphics")
     set(ANYAPI_VERSION_COMMA "0,31,0,0")
     set(ANYAPI_VERSION_TEXT "0.31.0")
@@ -228,7 +228,7 @@ function(anyapi_version_resource target product)
   elseif(target STREQUAL "AnyCombat")
     set(ANYAPI_VERSION_COMMA "0,1,0,0")
     set(ANYAPI_VERSION_TEXT "0.1.0")
-  elseif(target STREQUAL "AnyClock")
+  elseif(target STREQUAL "AnyClock" OR target MATCHES "Bundle$")
     set(ANYAPI_VERSION_COMMA "1,0,0,0")
     set(ANYAPI_VERSION_TEXT "1.0.0")
   endif()
@@ -544,6 +544,26 @@ add_test(NAME rotary_logic COMMAND rotary_logic_test)
 add_executable(dyno_logic_test tests/dyno_logic_test.cpp)
 target_compile_options(dyno_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME dyno_logic COMMAND dyno_logic_test)
+
+# Bundles (native/bundles): several mods in one DLL, each loaded by AnyAPI 0.39.0+ as its own part. They compile the
+# same sources as the standalone mods above, unchanged, and land in bundles/<config>/ under their release file names.
+# A mod added to a bundle brings its standalone target's sources, link libraries and resources here too.
+function(anyapi_bundle target output)
+  add_library(${target} SHARED ${ARGN})
+  set_target_properties(${target} PROPERTIES OUTPUT_NAME ${output} PDB_NAME ${target}
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bundles" ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bundles-lib")
+  target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
+  target_compile_options(${target} PRIVATE /W3 /EHsc /utf-8 /bigobj)
+  anyapi_version_resource(${target} ${output})
+endfunction()
+anyapi_bundle(AnyEnginePartsBundle AnyEngineParts bundles/anyengineparts_bundle.cpp
+  bundles/part_anyengineparts.cpp turbo_mod.cpp rotary_mod.cpp dyno_mod.cpp bundles/part_enginesound.cpp bundles/part_gpspart.cpp)
+anyapi_bundle(AnyHelpersBundle AnyHelpers bundles/anyhelpers_bundle.cpp bundles/part_anyhelpers.cpp
+  bundles/part_anyinventory.cpp bundles/part_anymirror.cpp bundles/part_anybalance.cpp bundles/part_mccode.cpp)
+target_link_libraries(AnyHelpersBundle PRIVATE gdiplus user32)
+anyapi_bundle(AnyGraphicsBundle AnyGraphics bundles/anygraphics_bundle.cpp bundles/part_anygraphics.cpp bundles/part_thirdperson.cpp)
+anyapi_bundle(AnyMapBundle AnyMap bundles/anymap_bundle.cpp bundles/part_anymap.cpp "${CMAKE_CURRENT_BINARY_DIR}/anymap_roads.rc")
+target_link_libraries(AnyMapBundle PRIVATE gdiplus user32 gdi32)
 
 # Public experimental SDK: compile all generated layouts and opt-in examples.
 add_executable(experimental_sdk_test tests/experimental_sdk_test.cpp)

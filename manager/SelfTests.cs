@@ -63,6 +63,15 @@ namespace AnyApiManager {
     mod.MinimumApi=999;Check(!Engine.Apply(request,null,true).Success,"Minimum API revision enforced");mod.MinimumApi=27;
     Check(Engine.Apply(request,null,true).Success,"Mod installs independently of API");request.Action="disable";Check(Engine.Apply(request,null,true).Success&&!File.Exists(Rules.Target(root,relative))&&File.Exists(Rules.Target(root,relative+".disabled")),"Disable removes DLL from loader discovery");
     request.Action="enable";Check(Engine.Apply(request,null,true).Success&&File.Exists(Rules.Target(root,relative)),"Enable restores DLL");
+    // A bundle replaces a mod that used to ship alone: that DLL and its receipt go, the bundle arrives, settings stay.
+    var bundle=Clone(mod);bundle.Id="testbundle";bundle.Name="TestBundle";string bundled="AnyAPI and Modding/mods/TestBundle.dll";bundle.FileHashes=new Dictionary<string,string>{{bundled,mod.FileHashes[relative]}};bundle.Replaces=new Dictionary<string,string>{{mod.Id,relative}};string bundleZip=Path.Combine(root,"bundle.zip");
+    using(var archive=ZipFile.Open(bundleZip,ZipArchiveMode.Create))using(var s=archive.CreateEntry(bundled).Open())s.Write(dllBytes,0,dllBytes.Length);bundle.Sha256=Rules.Hash(bundleZip);
+    Check(Engine.Status(root,bundle)=="Update / different build","A bundle offers itself as the update of a mod it replaces");
+    var bundleRequest=new ApplyRequest{GamePath=root,Action="install",Package=bundle,Catalog=local,ZipPath=bundleZip};var bundleResult=Engine.Apply(bundleRequest,null,true);
+    Check(bundleResult.Success&&bundleResult.Message.Contains("replaced")&&File.Exists(Rules.Target(root,bundled))&&!File.Exists(Rules.Target(root,relative))&&!Engine.ReadInstalled(root).Packages.ContainsKey(mod.Id)&&Engine.ReadInstalled(root).Packages.ContainsKey(bundle.Id),"Bundle install removes the DLLs and receipts it replaces");
+    var selfReplace=Clone(bundle);selfReplace.Replaces=new Dictionary<string,string>{{bundle.Id,relative}};Reject(()=>Rules.Validate(selfReplace,false),"A bundle cannot replace itself");
+    bundleRequest.Action="remove";Check(Engine.Apply(bundleRequest,null,true).Success&&!File.Exists(Rules.Target(root,bundled)),"Bundle removes cleanly");
+    request.Action="install";Check(Engine.Apply(request,null,true).Success&&File.Exists(Rules.Target(root,relative)),"A replaced mod still installs alone");
     var launch=new ApplyRequest{GamePath=root,Action="prepare-vanilla",Catalog=local};
     Check(Engine.Apply(launch,null,true).Success&&Engine.ApiPaused(root)&&!File.Exists(Rules.Target(root,"dinput8.dll")),"Vanilla launch removes AnyAPI from the game's loader path");
     Check(File.Exists(Rules.Target(root,relative))&&File.ReadAllText(settings)=="user markers"&&Engine.ApiRevision(root,local)==api.Revision,"Vanilla preserves mod selection, settings and installed API identity");

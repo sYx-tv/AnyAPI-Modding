@@ -1,5 +1,14 @@
 # Mod library
 
+**Bundles (AnyAPI 0.39.0, Manager 1.5.0).** Most mods now ship inside four bundles,
+so the library lists fewer entries: **AnyEngineParts** (with EngineSound and
+GpsPart), **AnyHelpers** (with AnyInventory, AnyMirror, AnyBalance and MCCode),
+**AnyGraphics** (with ThirdPerson) and **AnyMap**. Every bundled mod works exactly as
+before and keeps its settings, keybinds, saved vehicles and worlds. Each one has an
+**Enabled** row at the top of its group in Mod Settings (applies the next time you
+start the game). Updating a bundle in the manager removes the old separate DLLs. See
+[Bundles](../api/bundles.md).
+
 Every mod is an independent DLL. AnyAPI supplies shared integration services;
 each mod owns its interface, behavior and settings policy. No mod requires another
 mod: AnyHelpers adds settings and keybind tabs when present, and every other mod

@@ -104,6 +104,27 @@ class PublishTests(unittest.TestCase):
         self.assertEqual((balance["MinimumApi"], balance["Revision"]), (34, 2))
         self.assertEqual(balance["Description"], "Centre of mass and tipping.")
 
+    def test_bundle_replaces_mods(self):
+        self.package("AnyHelpers-1.0.0.zip", "AnyAPI and Modding/mods/AnyHelpers.dll")
+        replaces = {"anybalance": "AnyAPI and Modding/mods/AnyBalance.dll", "anyclock": "AnyAPI and Modding/mods/AnyClock.dll"}
+        self.manifest({"Packages": {"AnyHelpers": {"MinimumApi": 33, "Replaces": replaces}}})
+        plan = self.prepare("mods-2026.10.09")
+        catalog = self.catalog()
+        ids = [m["Id"] for m in catalog["Mods"]]
+        self.assertNotIn("anybalance", ids)
+        self.assertNotIn("anyclock", ids)
+        helpers = next(m for m in catalog["Mods"] if m["Id"] == "anyhelpers")
+        self.assertEqual(helpers["Replaces"], replaces)
+        self.assertIn("AnyBalance removed (now part of AnyHelpers)", plan["Changes"])
+
+    def test_bundle_rejects_bad_replaces(self):
+        self.package("AnyHelpers-1.0.0.zip", "AnyAPI and Modding/mods/AnyHelpers.dll")
+        self.manifest({"Packages": {"AnyHelpers": {"MinimumApi": 33, "Replaces": {"anyhelpers": "AnyAPI and Modding/mods/AnyBalance.dll"}}}})
+        self.fails("mods-2026.10.09", "invalid Replaces entry")
+        self.package("AnyBalance-1.1.0.zip", "AnyAPI and Modding/mods/AnyBalance.dll")
+        self.manifest({"Packages": {"AnyHelpers": {"MinimumApi": 33, "Replaces": {"anybalance": "AnyAPI and Modding/mods/AnyBalance.dll"}}}})
+        self.fails("mods-2026.10.09", "which is in this release too")
+
     def test_new_mod_needs_manifest(self):
         self.package("AnyCompass-1.0.0.zip", "AnyAPI and Modding/mods/AnyCompass.dll")
         self.fails("mods-2026.10.09", "add its Id, MinimumApi, Description")

@@ -98,6 +98,9 @@ def check_catalog(path):
         for file in hashes:
             if not re.match(r"^AnyAPI and Modding/mods/[^/\\]+\.dll$", file):
                 fail(path, f"{mod.get('Id')}: {file} is not under AnyAPI and Modding/mods")
+        for old_id, old_path in (mod.get("Replaces") or {}).items():
+            if old_id == mod.get("Id") or not re.match(r"^AnyAPI and Modding/mods/[^/\\]+\.dll$", str(old_path)):
+                fail(path, f"{mod.get('Id')}: invalid Replaces entry {old_id}")
         if mod.get("MinimumApi", 0) > newest_api:
             fail(path, f"{mod.get('Id')}: needs API revision {mod.get('MinimumApi')} but the newest listed is {newest_api}")
 
