@@ -116,17 +116,17 @@ constexpr Preset kPresets[kLayoutCount][kPresetsPerLayout] = {
      {"Sport",          {105, 480, 0.55, 0.45, 0.20, 0.40, 0.50, 0.35, 0, 0.3, 1.0}},
      {"Street tuner",   {100, 520, 0.40, 0.55, 0.10, 0.25, 0.45, 0.40, 0, 0.0, 1.0}},
      {"Race",           {120, 560, 0.85, 0.10, 0.35, 0.80, 0.80, 0.50, 0, 0.6, 1.0}},
-     {"Diesel",         {70,  300, 0.20, 0.70, 0.05, 0.00, 0.30, 0.30, 1, 0.0, 1.0}}},
+     {"Diesel",         {72,  380, 0.10, 0.80, 0.10, 0.00, 0.45, 0.40, 1, 0.0, 1.0}}},
     {{"Stock",          {80,  360, 0.20, 0.85, 0.10, 0.00, 0.20, 0.25, 0, 0.0, 1.0}},
      {"Muscle",         {62,  320, 0.45, 0.35, 0.65, 0.35, 0.40, 0.30, 0, 0.0, 1.0}},
      {"Exotic",         {130, 600, 0.80, 0.25, 0.10, 0.60, 0.70, 0.60, 0, 1.0, 1.0}},
      {"Race",           {110, 520, 0.85, 0.05, 0.40, 0.90, 0.80, 0.50, 0, 0.0, 1.0}},
-     {"Truck diesel",   {60,  280, 0.20, 0.60, 0.05, 0.00, 0.35, 0.30, 1, 0.0, 1.0}}},
+     {"Truck diesel",   {52,  270, 0.25, 0.40, 0.15, 0.00, 0.85, 0.40, 1, 0.0, 1.0}}},
     {{"Stock",          {90,  400, 0.25, 0.85, 0.10, 0.00, 0.20, 0.30, 0, 0.0, 1.0}},
      {"Rally rumble",   {85,  420, 0.50, 0.40, 0.25, 0.60, 0.50, 0.35, 0, 1.0, 1.0}},
      {"Air-cooled",     {110, 520, 0.60, 0.55, 0.15, 0.10, 0.30, 0.70, 0, 0.3, 1.0}},
      {"Race",           {120, 560, 0.85, 0.10, 0.30, 0.80, 0.80, 0.50, 0, 0.5, 1.0}},
-     {"Diesel",         {72,  310, 0.20, 0.70, 0.05, 0.00, 0.30, 0.30, 1, 0.0, 1.0}}},
+     {"Diesel",         {70,  360, 0.10, 0.75, 0.15, 0.00, 0.45, 0.40, 1, 0.0, 1.0}}},
 };
 inline const char* layout_name(Layout l) { return l == kVee ? "V" : l == kBoxer ? "Boxer" : "Inline"; }
 
@@ -175,6 +175,9 @@ struct Synth {
     // burble: the short tone each pulse rings with at a V's idle and overrun
     double blat_phase = 0, blat_hz = 100, blat_amp = 0, blat_age = 1, blat_tau = 0.03;
     Resonator knock_mid;
+    // diesel: turbo spool, whistle and the turbine-damped exhaust roar
+    double spool = 0, whistle_phase = 0, roar_lp = 0;
+    Resonator roar, whoosh;
     double soft = 0, soft2 = 0, dc_x = 0, dc_y = 0;
     uint32_t rng = 0x9e3779b9u;
     double noise() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return double(rng) / 2147483648.0 - 1.0; }
@@ -210,24 +213,30 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         s.rasp_hi.set(3600, 1.3);
         s.intake.set(520, 1.4);
         s.tick.set(5200, 4.0);
-        s.knock.set(1350, 7.0);
-        s.knock_mid.set(2500, 6.0);
-        s.knock_hi.set(3900, 5.0);
+        // Diesel clatter rings the block, pitched off the bark: a truck's is a heavy, hollow knock, a car's a
+        // lighter tick.
+        s.knock.set(t.body_hz * 2.6, 3.5);
+        s.knock_mid.set(t.body_hz * 4.2, 3.0);
+        s.knock_hi.set(t.body_hz * 6.6, 2.5);
+        s.roar.set(pipe_hz * 3.2, 0.9);
+        s.whoosh.set(1500, 0.8);
         s.pop_body.set(pipe_hz * 1.7, 2.0);
         s.tuned_pipe = pipe_hz; s.tuned_body = t.body_hz; s.tuned_layout = layout;
     }
     const double dt = 1.0 / kSampleRate, two_pi = 6.283185307179586;
     const bool diesel = t.diesel > 0.5;
     double target_rps = std::isfinite(in.rps) && in.rps > 0 ? (in.rps > kMaxRps * 1.05 ? kMaxRps * 1.05 : in.rps) : 0;
-    // A diesel idles low and runs out of breath early: the game's range is heard as a 650 to 4,300 rpm diesel.
-    if (diesel && target_rps > kIdleRps) target_rps = kIdleRps * 0.87 + (target_rps - kIdleRps) * 0.5;
+    // A diesel idles low and runs out of breath early: a truck (V) is heard from 650 to 3,300 rpm, a car (inline,
+    // boxer) to 4,500.
+    const double diesel_top = (vee ? 3300.0 : 4500.0) / 60.0;
+    if (diesel && target_rps > kIdleRps) target_rps = kIdleRps * 0.87 + (target_rps - kIdleRps) * (diesel_top - kIdleRps * 0.87) / (kMaxRps - kIdleRps);
     else if (diesel) target_rps *= 0.87;
     const double target_load = std::isfinite(in.load) ? clamp01(in.load) : 0;
     const double k_rps = 1.0 - std::exp(-dt / 0.05), k_load = 1.0 - std::exp(-dt / 0.035), k_run = 1.0 - std::exp(-dt / 0.03);
     // Loudness per pulse: more cylinders fire more often, so each is a little quieter.
     const double per_pulse = std::pow(4.0 / n, 0.25);
     const double muffle = 0.35 + 0.65 * (1.0 - t.muffler);
-    const double top = diesel ? kIdleRps * 0.87 + (kMaxRps - kIdleRps) * 0.5 : kMaxRps;   // the engine's own redline
+    const double top = diesel ? diesel_top : kMaxRps;   // the engine's own redline
     for (int i = 0; i < count; ++i) {
         s.time += dt;
         s.rps += (target_rps - s.rps) * k_rps;
@@ -280,7 +289,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
                 if (diesel && !miss) {
                     // The clatter: hardest at idle and when lugging under load, softer as it revs.
                     s.knock_age = 0;
-                    s.knock_amp = (0.7 + 0.6 * s.random01()) * (1.0 + 0.35 * s.load) * (1.0 - 0.55 * rpm01) * per_pulse;
+                    s.knock_amp = (0.8 + 0.4 * s.random01()) * (0.7 + 0.5 * s.load) * (1.0 - 0.45 * rpm01) * per_pulse;
                 }
                 // Burble: on a V at idle and on the overrun each pulse rings out as a short, round tone, pitched by
                 // its bank's pipe. The cross-plane's L R L L R R R L bank order gives it the V8 rhythm.
@@ -300,6 +309,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
             // Each pulse lasts a fraction of the gap to the next; a muffler stretches it out.
             const double rate = s.rps * n / 2.0;
             b.tau = std::fmin(0.012, std::fmax(0.0010, (0.28 + 0.25 * t.muffler) / std::fmax(rate, 1.0))) * (1.0 - 0.25 * s.load);
+            if (diesel) b.tau = std::fmin(0.02, b.tau * 1.8);   // the turbine soaks up the pulses: a softer, rounder chug
             // The gap to the next cylinder, with a little wander (a lot at a lumpy idle).
             s.next = (cyl + 1) % s.table.count;
             double gap = s.table.angle[s.next] - s.table.angle[cyl];
@@ -326,6 +336,20 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         const double edge = edge_in * nz * (0.15 + 0.85 * t.rasp) * (0.5 + 0.6 * s.load + 0.8 * rpm01) * (1.0 - 0.6 * idle) * muffle;
         v += 0.85 * s.rasp.run(edge) + 0.35 * t.rasp * s.rasp_hi.run(edge);
 
+        // Diesel turbo: spools with revs and load, whistles on top, and its turbine turns the exhaust into a deep
+        // rushing roar under load (the "whoosh" of a diesel truck pulling).
+        if (diesel) {
+            const double want = running ? rpm01 * (0.25 + 0.75 * s.load) : 0.0;
+            s.spool += (want - s.spool) * (1.0 - std::exp(-dt / (want > s.spool ? 0.9 : 0.6)));
+            const double flow = s.spool * s.spool;
+            s.roar_lp += (exc_sum - s.roar_lp) * (1.0 - std::exp(-dt * two_pi * 25.0));
+            v += 0.9 * (0.15 + 0.85 * flow) * (0.3 + 0.7 * s.load) * s.roar.run(s.noise() * (0.3 + 1.5 * s.roar_lp)) * muffle;
+            v += 0.25 * t.intake * flow * s.whoosh.run(s.noise());
+            s.whistle_phase += two_pi * (2400.0 + 5200.0 * s.spool) * dt;
+            if (s.whistle_phase > two_pi) s.whistle_phase -= two_pi;
+            v += 0.035 * t.intake * flow * std::sin(s.whistle_phase);
+        }
+
         // Intake roar: breathing noise that swells with load and revs, chopped by the intake strokes.
         s.intake_env += (exc_sum - s.intake_env) * (1.0 - std::exp(-dt * two_pi * 60.0));
         if (running) v += 0.5 * t.intake * s.load * (0.2 + rpm01) * s.intake.run(s.noise() * (0.4 + 2.0 * s.intake_env));
@@ -343,11 +367,10 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
 
         // Diesel knock: the sharp clatter of each combustion, loudest at idle.
         s.knock_age += dt;
-        if (s.knock_age < 0.012) {
-            // A hard metallic tick (the pressure spike rings the block) over a short gravelly rattle.
-            const double ke = s.knock_amp * (std::exp(-s.knock_age / 0.0006) + 0.25 * std::exp(-s.knock_age / 0.004));
-            const double kn = ke * s.noise();
-            v += 1.1 * t.diesel * (0.9 * s.knock.run(kn) + 0.8 * s.knock_mid.run(kn) + 0.5 * s.knock_hi.run(kn));
+        if (s.knock_age < 0.03) {
+            // The pressure spike strikes the block like a hammer: a short knock that rings out, not a hiss.
+            const double ke = s.knock_amp * (s.knock_age < 0.0003 ? 1.0 : 0.0) + 0.08 * s.knock_amp * std::exp(-s.knock_age / 0.002) * s.noise();
+            v += 0.55 * t.diesel * (0.9 * s.knock.run(ke) + 0.6 * s.knock_mid.run(ke) + 0.3 * s.knock_hi.run(ke));
         } else {
             s.knock.run(0); s.knock_mid.run(0); s.knock_hi.run(0);
         }

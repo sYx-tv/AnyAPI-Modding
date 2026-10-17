@@ -128,6 +128,7 @@ int main(int argc, char** argv) {
             {kInline, 1, 0}, {kInline, 3, 1}, {kInline, 4, 0}, {kInline, 4, 1}, {kInline, 4, 3}, {kInline, 5, 1},
             {kInline, 6, 2}, {kInline, 6, 4}, {kVee, 2, 1}, {kVee, 6, 0}, {kVee, 8, 1}, {kVee, 8, 2}, {kVee, 8, 4},
             {kVee, 10, 3}, {kVee, 12, 2}, {kBoxer, 2, 2}, {kBoxer, 4, 1}, {kBoxer, 6, 2},
+            {kInline, 4, 4}, {kVee, 6, 4},
         };
         int k = 0;
         for (const Clip& c : clips) {
