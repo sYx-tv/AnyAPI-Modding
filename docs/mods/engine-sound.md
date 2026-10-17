@@ -4,93 +4,87 @@
 > so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
 > Its hooks are planned to move into a reviewed AnyAPI service.
 
-EngineSound adds seven engine sound presets and a **Custom** tuner. You choose them in the engine's
-**Properties Tool** window: left click an engine while holding the Properties Tool, then move the
-**Sound effect** slider past the three stock sounds.
+EngineSound gives every engine a real, generated sound instead of a pitched game recording. Each cylinder's
+exhaust pulse is made sample by sample and fired in the engine's real firing order, through its own exhaust
+bank, the same way the AnyEngineParts rotary is made. The sound follows the engine you built:
 
-| Slider value | Sound |
-| --- | --- |
-| 0, 1, 2 | Stock sounds (unchanged) |
-| 3 | Muscle V8 |
-| 4 | Smooth inline |
-| 5 | Tamed sport |
-| 6 | Big diesel |
-| 7 | Built 2JZ (turbo inline-6) |
-| 8 | Powerstroke (turbo diesel V8) |
-| 9 | Hemi (supercharged V8) |
-| 10 | Custom |
+- **Layout.** Inline engines (Engine, Engine B, Engine C), V engines (V Engine, V Engine B, V Engine C) and
+  boxers (Opposed Engine, B, C) each sound like their layout: a cross-plane V8 burbles, a V-twin "potatoes",
+  a flat-4 with unequal headers rumbles, an inline-6 is smooth.
+- **Cylinders.** The count comes from how far the engine is stretched. Unstretched, an inline is a single,
+  a V a V-twin and a boxer a flat-twin. Each stretch step adds one cylinder to an inline and a pair to a V or
+  boxer (steps are 2, 3 and 5 cells for the small, medium and large blocks).
+- **Size.** Bigger blocks sound deeper.
 
-A small **Engine sound** panel appears at the right of the screen while the window is open and names the
-current choice. On a preset or stock sound it shows **Customize this sound**, which copies that sound into
-Custom so you can tune from it. On Custom, drag its sliders:
+Rotary engines (AnyEngineParts) keep their own sound.
+
+## Choosing a sound
+
+Left click an engine while holding the **Properties Tool**. The **Engine sound** panel beside the window
+names the engine (for example "V8 (medium block): Muscle") and lists the sounds for its layout. Click one to
+pick it. The game's **Sound effect** slider moves with it.
+
+| Slider value | Inline | V | Boxer |
+| --- | --- | --- | --- |
+| 0-2 | Game sound 1-3 | Game sound 1-3 | Game sound 1-3 |
+| 3 | Stock | Stock | Stock |
+| 4 | Sport | Muscle | Rally rumble |
+| 5 | Street tuner | Exotic (flat-plane on a V8) | Air-cooled |
+| 6 | Race | Race | Race |
+| 7 | Diesel | Truck diesel | Diesel |
+| 8 | Custom | Custom | Custom |
+
+**Customize this sound** copies the chosen sound into Custom, where every part of it is a slider:
 
 | Slider | What it does |
 | --- | --- |
-| Engine type | Character of the engine: stock 1-3, inline-4, inline-6, V6, cross-plane V8, flat-plane V8, V10, V12, boxer-4, diesel inline-6, diesel V8, big-rig diesel, rotary, electric. Picks the recordings and their base pitch |
-| Idle pitch | Pitch at idle, relative to the type (0.40x-1.30x) |
-| Rev range | How much higher the pitch climbs at full revs (0.6x-2.0x of stock) |
-| Rev curve | Early: pitch rises fast. Late: stays low and screams at the top |
-| Volume | Main engine loudness (0-175%) |
-| Body layer | Loudness of the deeper second layer under the main sound (0-140%) |
-| Cam lope | The lumpy, uneven idle of a big cam. Fades out as revs rise |
-| Induction | None, turbo (whistle that spools with load), supercharger (whine that follows revs) or twin turbo (faster spool) |
-| Boost noise | How loud the turbo or supercharger is |
-| Lift-off crackle | Exhaust pops and crackles when you lift off the throttle at high revs |
-| Throttle response | How much louder and harder the engine sounds under load than coasting |
-| Rev smoothing | Makes the pitch follow the revs a little lazily, like a heavy flywheel |
+| Exhaust note | The pipe's deep boom, 50-170 Hz |
+| Bark | The mid "bark" of each pulse |
+| Rasp | The raspy edge of each pulse |
+| Muffler | Straight pipe to quiet stock muffler |
+| Cam lope | A lumpy, uneven idle that clears with revs |
+| Pops and crackle | Pops when lifting off at speed and on the limiter |
+| Intake roar | Breathing noise under load |
+| Valvetrain | Valve tick and gear whine |
+| Firing / headers | V8: cross-plane or flat-plane. V-twin: 45 to 90 degree. Boxer: equal headers to full rumble. Inline: tuned to raspy headers |
+| Diesel | Diesel clatter, no pops |
+| Volume | 25-200% |
 
-Turbo engines also play a blow-off hiss when you lift off after building boost. At neutral settings Custom
-sounds exactly like stock sound 1.
-
-Every engine type except Stock 1-3 also behaves like a running machine rather than a pitched loop (0.3.0):
-
-- **Start-up flare.** The revs blip above idle when the engine catches, then settle. Diesels blip less.
-- **Rev limiter.** Holding full throttle at the top of the rev range bounces off the limiter in quick fuel cuts,
-  with the odd pop on tunes that crackle.
-- **Rev inertia.** Revs climb quicker than they fall. **Rev smoothing** makes that inertia heavier.
-- **Uneven firing.** A small wobble in pitch and loudness that grows with load, so the note is never perfectly steady.
-- **Overrun.** Coasting at high revs with the throttle shut brings the deeper body layer forward.
-- **Crackle bursts.** Lift-off crackle comes in bursts of two to seven pops with short gaps, and a cold start pops once.
+Every sound cranks on the starter, catches, idles, bounces off the rev limiter at full throttle and pops
+on the overrun (unless it is a diesel or its crackle is off).
 
 ## How it works
 
-The game plays engines from recorded loops and changes their pitch and volume with the engine's speed and
-load. EngineSound changes which loops play, reshapes their pitch and volume, adds cam lope, uses the engine's
-spare knock voice for turbo or supercharger noise (only while the engine is undamaged), and plays pops and
-blow-off as one-shot game sounds.
+The game plays engines from recorded loops. For an engine on a generated sound, EngineSound silences those
+loops and streams its own 48 kHz sound into a positional game voice, the way the AnyEngineParts sounds do. The
+engine's speed and load drive the synth; the game's start speed (360 rpm) sounds like a 750 rpm idle and the
+top stays 8,000 rpm. The engine's knock while damaged and its fuel leak still play.
 
 The choice is stored in the engine's own sound setting. The host keeps it, saves it with the vehicle and sends
-it to every player, so everyone with EngineSound hears the same engine. All twelve Custom sliders are packed
-into that same number. On the host, EngineSound widens the setting's allowed range so these values are
-accepted. Crackle timing is random per player, so pops land at slightly different moments on each machine.
-
-A game sound voice keeps the recording it started with, even when it is later told to play another one. So
-whenever an engine's sound changes while a voice is playing (for example a vehicle spawned from a save, which
-starts on the stock sound before its saved choice arrives), EngineSound stops that voice and lets it start
-again with the right recording. Before 0.3.0 the stock recording could keep playing underneath the new sound.
+it to every player, so everyone with EngineSound hears the same engine. Custom tunes are packed into that same
+number. On the host, EngineSound widens the setting's allowed range so these values are accepted, and tags the
+row with the engine's layout, size and cylinders so every player's panel names the right sounds.
 
 ## Requirements and limits
 
-- **Everyone needs it.** The host must run EngineSound for presets and Custom to be selectable. Players
-  without it hear a stock sound instead.
-- **Saves.** A vehicle saved with a preset or Custom keeps that value. Without EngineSound installed, the game
-  treats it as an unknown sound index; check what it plays before relying on that. Custom tunes from the
-  first prototype build are not read by this one and fall back to stock.
-- No new sound files: every sound uses recordings already in the game. A synthesized engine is a later
-  experiment.
+- **Everyone needs it.** The host must run EngineSound for the generated sounds to be selectable. Players
+  without it hear a game sound instead.
+- **Saves.** A vehicle saved with a generated sound keeps that value. Sounds saved with EngineSound 0.3.0 or
+  older open as this version's sound at the same slider value, and old Custom tunes open as a Custom tune
+  that sounds different; pick again if it is not what you want.
 - No AnyHelpers settings yet; the panel position is fixed.
 
 ## Test plan
 
-Install EngineSound from the manager, or build `EngineSound.dll` with the native CMake project and copy it
-to `AnyAPI and Modding/mods/`. Logging is verbose in 0.2.0. After each step, the lines tagged `enginesound` in
+Launch Anymaker from Steam with EngineSound installed. The lines tagged `enginesound` in
 `anymaker_modding.log` (beside `game.exe`) are what we need.
 
-1. Load a world. Expect `Ready after N s ... audio manager found`.
-2. Open an engine's Properties window. The native slider runs 0-10 and the panel names each value.
-3. Pick 7, 8 and 9 and rev the engine, then lift off sharply at high revs. Expect a turbo whistle on 7 and 8,
-   a supercharger whine on 9, blow-off hiss on 7 and 8, and crackle on 7 and 9 (`one-shot effect` lines).
-4. Press **Customize this sound** on a preset, then drag each slider while the engine runs.
-5. Co-op: a second player joins with EngineSound, then each player changes the sound. Both should hear the
-   same thing.
-6. Save, reload and confirm the choice is kept.
+1. Load a world. Expect `Ready after N s: generated sounds 3..7, Custom 8`.
+2. Place each engine family (Engine, V Engine, Opposed Engine), open its Properties window and pick a
+   sound. The panel names the engine and its layout's sounds; the log names the size, cylinders and sound.
+3. Stretch an engine and confirm the cylinder count in the panel title changes and the sound with it.
+4. Start, idle, rev, hold full throttle at the top, then lift off. Expect starter, idle lope on Muscle,
+   limiter bounce, and pops on lift-off.
+5. Press **Customize this sound**, then drag each slider while the engine runs.
+6. Co-op: a second player joins with EngineSound. Both should hear the same sound.
+7. Save, reload and confirm the choice is kept and only one sound plays.
