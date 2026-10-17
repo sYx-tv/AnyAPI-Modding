@@ -27,6 +27,8 @@ static void step(double* out, double seconds) {
 int main() {
     hook.original = (void*)&fake_transform;
     hook_ready = true;
+    bool game_head = false;
+    head = &game_head;
     double m[12];
 
     // Photo mode off: nothing is consumed and the camera is the game's.
@@ -39,7 +41,7 @@ int main() {
     // Photo mode on: the camera starts where the view was.
     facing = 0; facing_time = GetTickCount64();   // facing +Z
     update(true, true);
-    assert(active && flying);
+    assert(active && flying && game_head);
     hk_transform(m, nullptr);
     assert(m[9] == 1 && m[10] == 2 && m[11] == 3);
     assert(forward_axis == 0 && forward_sign == 1);
@@ -49,12 +51,12 @@ int main() {
     step(m, .05);
     assert(std::fabs(m[11] - (3 + kDefaultSpeed * .05)) < 1e-6 && m[9] == 1 && m[10] == 2);
     key(ANY_KEY_UP, 'W');
-    // D strafes along the renderer's right (-X here), Space rises.
+    // D strafes to screen right, the opposite of the transform's third basis vector (+X here), Space rises.
     assert(key(ANY_KEY_DOWN, 'D') && key(ANY_KEY_DOWN, VK_SPACE));
     double z = m[11];
     step(m, .05);
     double d = kDefaultSpeed * .05 / std::sqrt(2.0);
-    assert(std::fabs(m[9] - (1 - d)) < 1e-6 && std::fabs(m[10] - (2 + d)) < 1e-6 && std::fabs(m[11] - z) < 1e-6);
+    assert(std::fabs(m[9] - (1 + d)) < 1e-6 && std::fabs(m[10] - (2 + d)) < 1e-6 && std::fabs(m[11] - z) < 1e-6);
     key(ANY_KEY_UP, 'D'); key(ANY_KEY_UP, VK_SPACE);
     // Released keys stop the camera.
     double x = m[9];
@@ -109,7 +111,7 @@ int main() {
     // Leaving photo mode returns the game's camera.
     update(false, true);
     hk_transform(m, nullptr);
-    assert(m[11] == 3 && !have);
+    assert(m[11] == 3 && !have && !game_head);
     std::puts("PASS: photo free camera, input consumption, range limit, speed, photo controls, reset, menus");
     return 0;
 }

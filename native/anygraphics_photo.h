@@ -62,6 +62,10 @@ inline void apply(AnySceneEffectsParametersV1& e) {
 using transform_t = void (*)(double* ret, uint8_t* scene);
 inline anymaker::cell_hook hook;
 inline std::atomic<bool> hook_ready{false}, stop{false}, have{false};
+// g_is_debug_render_first_person_head: the game hides the local player's head unless it is set, which looks
+// headless from a free camera. Set while flying, restored after (ThirdPerson sets it the same way).
+inline bool* head;
+inline bool head_set, head_original;
 enum : uint32_t { Forward = 1, Back = 2, Left = 4, Right = 8, Up = 16, Down = 32, Fast = 64 };
 inline std::atomic<uint32_t> keys{0};
 inline std::atomic<double> facing{0};
@@ -118,9 +122,10 @@ inline void hk_transform(double* ret, uint8_t* scene) {
     if (k && forward_axis >= 0) {
         double f[3], r[3];
         for (int i = 0; i < 3; ++i) f[i] = ret[forward_axis * 3 + i] * forward_sign;
-        // The renderer stores the camera as forward, up, right; otherwise take right from a Y-up right-handed world.
-        if (forward_axis == 0 && forward_sign > 0) for (int i = 0; i < 3; ++i) r[i] = ret[6 + i];
-        else { r[0] = -f[2]; r[1] = 0; r[2] = f[0]; }
+        // Screen right. Tested in game on 0.1.25: the transform's third basis vector points left, and the
+        // world is left-handed (right = up x forward), so both paths give the opposite of the naive guess.
+        if (forward_axis == 0 && forward_sign > 0) for (int i = 0; i < 3; ++i) r[i] = -ret[6 + i];
+        else { r[0] = f[2]; r[1] = 0; r[2] = -f[0]; }
         double rl = std::sqrt(dot3(r, r)); if (rl > 1e-6) for (double& x : r) x /= rl;
         double a = double(!!(k & Forward)) - double(!!(k & Back)), s = double(!!(k & Right)) - double(!!(k & Left)), u = double(!!(k & Up)) - double(!!(k & Down));
         double v[3] = {f[0] * a + r[0] * s, f[1] * a + r[1] * s + u, f[2] * a + r[2] * s};
@@ -143,6 +148,8 @@ inline void install() {
         void** cell = hook_cell(thirdperson::bind::client_scene_get_camera_transform);
         if (!cell) { if (attempt == 179) log("PHOTO_CAMERA unavailable=1 reason=not_located"); continue; }
         if (!hook.install(cell, (void*)&hk_transform)) { log("PHOTO_CAMERA unavailable=1 reason=hook_taken"); return; }
+        head = static_cast<bool*>(global(thirdperson::bind::g_render_first_person_head));
+        if (!head) log("PHOTO_CAMERA head_flag=0 (your character may look headless from the camera)");
         hook_ready = true;
         log("PHOTO_CAMERA ready=1");
         return;
@@ -169,6 +176,11 @@ inline void update(bool photo, bool gameplay) {
     bool fly;
     { std::lock_guard lock(mutex); fly = photo && free_camera && hook_ready.load(); if (active && !was) show(); }
     flying = fly;
+    if (head && fly != head_set) {
+        if (fly) head_original = *head;
+        *head = fly ? true : head_original;
+        head_set = fly;
+    } else if (head && fly) *head = true;   // ThirdPerson may have restored it when switching to first person
     if (!photo) keys = 0;
     if (fly && forward_axis < 0) sample_facing();
 }
