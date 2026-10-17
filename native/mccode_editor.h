@@ -3,6 +3,7 @@
 // Columns are byte offsets into a line; the language is ASCII, so typed characters are limited to printable ASCII.
 // Tabs show as kTabWidth columns; visual_col / byte_col convert between the two.
 #include <algorithm>
+#include <cctype>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,7 @@ struct Pos {
 class Editor {
 public:
     Editor() : lines_(1) {}
+    bool auto_pairs = false;   // see type_char
 
     // ------------------------------------------------------------------ whole text
     void set_text(const std::string& text, bool keep_undo = false) {
@@ -184,7 +186,25 @@ public:
         insert("\n" + indent + (opens ? "\t" : ""));
     }
     // Typed character. "}" on an otherwise blank line drops one indent level.
+    // With auto_pairs on, ( [ { " type their closing partner, and typing a closer that is already next steps over it.
     void type_char(char c) {
+        if (auto_pairs && !has_selection()) {
+            const std::string& l = lines_[size_t(cursor_.line)];
+            char next = (size_t)cursor_.col < l.size() ? l[size_t(cursor_.col)] : 0;
+            char prev = cursor_.col > 0 ? l[size_t(cursor_.col - 1)] : 0;
+            bool in_string = std::count(l.begin(), l.begin() + cursor_.col, '"') % 2 == 1;
+            if ((c == ')' || c == ']' || c == '}' || c == '"') && next == c) { set_cursor({cursor_.line, cursor_.col + 1}, false); return; }
+            bool word_next = next && (std::isalnum((unsigned char)next) || next == '_');
+            char close = c == '(' ? ')' : c == '[' ? ']' : c == '{' ? '}' : 0;
+            if (c == '"' && !in_string && !(std::isalnum((unsigned char)prev) || prev == '_') && !word_next) close = '"';
+            if (close && c != '"' && (in_string || word_next)) close = 0;
+            if (close) {
+                insert(std::string(1, c) + close, true);
+                --cursor_.col;
+                anchor_ = cursor_;
+                return;
+            }
+        }
         if (c == '}' && !has_selection()) {
             const std::string& l = lines_[size_t(cursor_.line)];
             bool blank = ltrim(l.substr(0, size_t(cursor_.col))).empty();
@@ -201,6 +221,18 @@ public:
     void backspace(bool word = false) {
         if (has_selection()) { begin_edit(Kind::Other); erase_selection(); ++revision_; return; }
         if (cursor_ == Pos{0, 0}) return;
+        if (auto_pairs && !word && cursor_.col > 0) {   // backspace inside an empty pair removes both
+            const std::string& l = lines_[size_t(cursor_.line)];
+            char prev = l[size_t(cursor_.col - 1)], next = (size_t)cursor_.col < l.size() ? l[size_t(cursor_.col)] : 0;
+            if ((prev == '(' && next == ')') || (prev == '[' && next == ']') || (prev == '{' && next == '}') || (prev == '"' && next == '"')) {
+                begin_edit(Kind::Delete);
+                lines_[size_t(cursor_.line)].erase(size_t(cursor_.col - 1), 2);
+                --cursor_.col;
+                anchor_ = cursor_;
+                ++revision_;
+                return;
+            }
+        }
         begin_edit(Kind::Delete);
         Pos from = cursor_;
         move(word ? Move::WordLeft : Move::Left, true);
