@@ -42,6 +42,7 @@ Built from source only, not in the catalog yet. They use the experimental SDK.
 | --- | --- | --- |
 | [AnyLights](lights.md) | Light colours and flash patterns in the Properties Tool, with data port and microcontroller channels | AnyHelpers settings |
 | [AnyEngineParts](engine-parts.md) | Exhaust-driven turbochargers (3x3x2 and 6x6x2) and superchargers with blow-off valves, wastegate antilag and boost channels, and a stretchable 1-4 rotor rotary engine, each with synthesized sounds; single player | Rotary works alongside EngineSound |
+| [AnyCombat](combat.md) | Hit markers and floating damage numbers for the hits you deal, red on a kill | AnyHelpers settings |
 
 See [validation status](../development/validation.md) for tested behavior and limits,
 including what has and has not been checked in multiplayer.
