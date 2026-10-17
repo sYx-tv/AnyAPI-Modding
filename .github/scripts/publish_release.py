@@ -39,7 +39,7 @@ PACKAGE = re.compile(r"^([A-Za-z][A-Za-z0-9]{0,99})-(\d+(?:\.\d+){1,3})\.zip$")
 SOURCE = re.compile(r"^[A-Za-z][A-Za-z0-9]*-\d+(?:\.\d+){1,3}-source\.zip$")
 MOD_PATH = re.compile(r"^AnyAPI and Modding/mods/[A-Za-z0-9_.-]+\.dll$")
 MOD_ID = re.compile(r"^[a-z][a-z0-9-]{0,47}$")
-OVERRIDABLE = ("Id", "Revision", "MinimumApi", "Description", "GameBuilds")
+OVERRIDABLE = ("Id", "Revision", "MinimumApi", "Description", "GameBuilds", "Replaces")
 
 
 class ReleaseError(Exception):
@@ -210,6 +210,19 @@ def prepare(tag, assets, root=ROOT):
         plan["Assets"].append({"Name": path.name, "Url": entry["Url"], "Sha256": entry["Sha256"],
                                "Size": len(zip_bytes)})
 
+    # A bundle replaces mods that used to ship alone: their entries leave the catalog, and the manager removes their
+    # DLLs when it installs the bundle.
+    for name, _, _ in packages:
+        entry = next(e for e in catalog["Api"] + catalog["Mods"] if e["Name"] == name)
+        for old_id in (entry.get("Replaces") or {}):
+            old = next((mod for mod in catalog["Mods"] if mod["Id"] == old_id), None)
+            if old is None:
+                continue
+            if old["Name"] in names:
+                raise ReleaseError(f"{name} replaces {old['Name']}, which is in this release too")
+            catalog["Mods"].remove(old)
+            plan["Changes"].append(f"{old['Name']} removed (now part of {name})")
+
     write_json(catalog_path, catalog)
     plan["Files"] = ["catalog.json"]
     return plan
@@ -232,6 +245,13 @@ def check_entry(entry, current, api, catalog):
                            f"revision {catalog['Api'][0]['Revision']}")
     if not isinstance(entry["Description"], str) or not entry["Description"].strip():
         raise ReleaseError(f"{name}: Description is empty")
+    replaces = entry.get("Replaces", {})
+    if not isinstance(replaces, dict) or len(replaces) > 16 or (api and replaces):
+        raise ReleaseError(f"{name}: Replaces maps up to 16 mod Ids to the DLL paths they shipped as")
+    for old_id, old_path in replaces.items():
+        if not MOD_ID.match(str(old_id)) or old_id == entry["Id"] or not MOD_PATH.match(str(old_path)) \
+                or old_path in entry["FileHashes"]:
+            raise ReleaseError(f"{name}: invalid Replaces entry {old_id!r}: {old_path!r}")
     if not isinstance(entry["GameBuilds"], list) or not 1 <= len(entry["GameBuilds"]) <= 32:
         raise ReleaseError(f"{name}: needs 1 to 32 GameBuilds")
 

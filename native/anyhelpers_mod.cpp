@@ -55,5 +55,7 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,Any
  AnyMenuTabV2 section;section.icon=ANY_MENU_ICON_KEYBOARD;section.id="mod_controls";section.title="MOD CONTROLS";section.order=100;section.draw=draw;section.event=event;section.dirty=dirty;section.defaults=defaults;
  if(!menu->add_tab(&section)||!services->input_filter(input,nullptr,100)||!services->publish("modcontrols.bindings",1,&bindings)||!services->publish("anyhelpers.controls",1,&bindings)||!settingsmod::init(services))return false;
  log("DLL_READY native_tabs_registered=2 legacy_binding_service=1 rejected_saved_rows="+std::to_string(rejected));return true;}
+// Bundled mods only list their parts once every DLL has loaded.
+extern "C" __declspec(dllexport) void AnyAPI_ModReady(){settingsmod::add_part_rows(AnyAPI_Services());}
 BOOL APIENTRY DllMain(HMODULE module,DWORD reason,LPVOID){if(reason==DLL_PROCESS_ATTACH)DisableThreadLibraryCalls(module);return TRUE;}
 
