@@ -125,6 +125,12 @@ inline Spec spec(int n) {
     return s;
 }
 inline std::string definition_id(int n) { return std::string(kIdPrefix) + char('0' + n); }
+// Survival loot tiers. World loot drops a part while the world's loot level equals its tech tier; a new world starts
+// at loot level 1 and finishing each bunker raises it by one (game code, Anymaker 0.1.25). The starter parts drop
+// after the 2nd bunker and the rest after the 3rd (Nate, 2026-10-17).
+constexpr int kStarterTier = 3;   // Turbo 3x3 and the small supercharger, wastegate, blow-off valve and air filter
+constexpr int kLateTier = 4;      // every other AnyEngineParts part (Rotary and Dyno too)
+inline std::string tech_tier_line(int tier) { return "      \"tech_tier\": " + std::to_string(tier) + ",\n"; }
 // Returns 3 or 6 for a turbo definition id, else 0.
 inline int size_from_id(const char* id, size_t length) {
     size_t p = std::char_traits<char>::length(kIdPrefix);
@@ -269,7 +275,7 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [\n        " + descriptors + "\n      ],\n" +
-        "      \"tech_tier\": 3,\n" +
+        tech_tier_line(n == 3 ? kStarterTier : kLateTier) +
         "      \"spawn_probability\": 0.1,\n" +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
@@ -600,7 +606,7 @@ inline std::string blower_entry(bool large, const std::string& mesh_path) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [\n        " + descriptors + "\n      ],\n" +
-        "      \"tech_tier\": 3,\n" +
+        tech_tier_line(large ? kLateTier : kStarterTier) +
         "      \"spawn_probability\": 0.1,\n" +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
@@ -717,7 +723,7 @@ inline std::string blow_off_entry(bool large, const std::string& mesh) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [{\"type\": \"type_f64_output\", \"name\": \"open\"}, {\"type\": \"type_f64_output\", \"name\": \"flow\"}, {\"type\": \"type_f64_output\", \"name\": \"pressure\"}],\n" +
-        "      \"tech_tier\": 3,\n" +
+        tech_tier_line(large ? kLateTier : kStarterTier) +
         "      \"spawn_probability\": 0.1,\n" +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
@@ -766,7 +772,7 @@ inline std::string wastegate_entry(bool large, const std::string& mesh) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [" + descriptors + "],\n" +
-        "      \"tech_tier\": 3,\n" +
+        tech_tier_line(large ? kLateTier : kStarterTier) +
         "      \"spawn_probability\": 0.1,\n" +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
@@ -801,7 +807,7 @@ inline std::string air_filter_entry(bool large, const std::string& mesh) {
         "      \"category\": \"gas\",\n" +
         "      \"inspection_geometry\": [{\"p1\": [" + last + ".0, " + last + ".0, " + last + ".0]}],\n" +
         "      \"data_descriptors\": [],\n" +
-        "      \"tech_tier\": 3,\n" +
+        tech_tier_line(large ? kLateTier : kStarterTier) +
         "      \"spawn_probability\": 0.1,\n" +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
@@ -856,7 +862,7 @@ inline std::string intercooler_entry(bool built, bool round = false) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 10,\n" +
         "      \"data_descriptors\": [],\n" +
-        "      \"tech_tier\": 3,\n" +
+        tech_tier_line(kLateTier) +
         "      \"spawn_probability\": 0.1,\n" +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]]\n" +
