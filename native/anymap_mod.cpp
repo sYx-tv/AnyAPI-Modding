@@ -26,6 +26,8 @@
 #include "map_markers.h"
 #include "map_gpu_graphics.h"
 #include "map_motion.h"
+#include "map_actors.h"
+#include <thread>
 using namespace Gdiplus;
 static AnyModHostV1 host{};
 static const AnyGpuDrawV1* gpu_api{};static void gpu_render(const AnyFrameV1*,void*);
@@ -39,27 +41,30 @@ static void register_settings(const AnyServicesV1*);
 extern "C" __declspec(dllexport) void AnyAPI_ModReady(){auto services=AnyAPI_Services();if(!services)return;ui_api=(const AnyUiStateV1*)services->query("anyapi.ui_state",1);if(ui_api&&(ui_api->struct_size!=sizeof(*ui_api)||ui_api->version!=1||!ui_api->copy))ui_api=nullptr;menu_api=(const AnyMenuV1*)services->query("anyapi.menu",1);controls=(const ModControlsV1*)services->query("anyhelpers.controls",1);if(!controls)controls=(const ModControlsV1*)services->query("modcontrols.bindings",1);register_settings(services);
  gpu_api=(const AnyGpuDrawV1*)services->query("anyapi.gpu_draw",1);if(gpu_api&&(gpu_api->struct_size!=sizeof(*gpu_api)||gpu_api->version!=1||!gpu_api->register_renderer(gpu_render,nullptr)))gpu_api=nullptr;host.log(0,"anymap",gpu_api?"MAP_RENDER backend=GPU resident_terrain=1 refresh=every_present":"MAP_RENDER backend=CPU compatibility_fallback=1");
  if(controls&&controls->struct_size==sizeof(*controls)&&controls->version==1){ModControlActionV1 action;action.mod_id="anymap";action.mod_name="AnyMap";action.action_id="toggle_map";action.label="Open / close map";action.default_key='M';map_action=controls->register_action(&action);}else controls=nullptr;
- host.log(0,"anymap",map_action?"BINDING_SERVICE registered=1 action=toggle_map default=M":"BINDING_SERVICE available=0 fallback=M");}
-struct MapOptions {bool minimap=true,names=true,guide=true,mini_names=false,grid=true,mini_route=true;double size=100,range=1200,marker=1,opacity=100,pos_x=100,pos_y=0;int corner=0;bool north_up=false;std::string waypoint_label="Waypoint";};
+ host.log(0,"anymap",map_action?"BINDING_SERVICE registered=1 action=toggle_map default=M":"BINDING_SERVICE available=0 fallback=M");
+ // Vehicles and zombies are optional: without client tasks or a matching game build the map works as before.
+ auto tasks=(const AnyClientTasksV1*)services->query("anyapi.client_tasks",1);if(tasks&&tasks->struct_size==sizeof(*tasks)&&tasks->version==1&&tasks->register_owner&&tasks->post&&(mapactors::state.owner=tasks->register_owner())){mapactors::state.tasks=tasks;std::thread([]{mapactors::resolve([](int level,const char* message){host.log(uint32_t(level),"anymap",message);});}).detach();}
+ else host.log(1,"anymap","MINIMAP_ACTORS available=0 reason=no_client_tasks");}
+struct MapOptions {bool minimap=true,names=true,guide=true,mini_names=false,grid=true,mini_route=true;double size=100,range=1200,marker=1,opacity=100,pos_x=100,pos_y=0;int corner=0;bool north_up=false,vehicles=true,zombies=true;std::string waypoint_label="Waypoint";};
 static MapOptions options;
-static const AnyHelpersSettingsV1* settings_api;static uint64_t settings_tokens[15]{},settings_revision=UINT64_MAX;
+static const AnyHelpersSettingsV1* settings_api;static uint64_t settings_tokens[17]{},settings_revision=UINT64_MAX;
 // Optional registration keeps a standalone AnyMap's established defaults intact.
 static void register_settings(const AnyServicesV1* services){settings_api=(const AnyHelpersSettingsV1*)services->query("anyhelpers.settings",1);
  if(!settings_api||settings_api->struct_size!=sizeof(*settings_api)||settings_api->version!=1){settings_api=nullptr;host.log(0,"anymap","SETTINGS_SERVICE available=0 defaults=1");return;}
  const char* choices[]={"Rotate with player","North up"};const char* corners[]={"Top right","Top left","Bottom right","Bottom left","Custom"};
- const char* ids[]={"show_minimap","minimap_size","minimap_range","minimap_orientation","player_names","marker_scale","route_guide","waypoint_label","minimap_corner","minimap_x","minimap_y","minimap_opacity","minimap_names","map_grid","minimap_route"};
- const char* labels[]={"Show minimap","Minimap size (%)","Minimap range (meters)","Minimap orientation","Show player names","Player marker scale","Show route guidance","Waypoint label","Minimap corner","Custom horizontal position (%)","Custom vertical position (%)","Minimap opacity (%)","Minimap player names","Show map grid","Show route on minimap"};
- uint32_t kinds[]={ANY_SETTING_BOOL,ANY_SETTING_INTEGER,ANY_SETTING_NUMBER,ANY_SETTING_CHOICE,ANY_SETTING_BOOL,ANY_SETTING_NUMBER,ANY_SETTING_BOOL,ANY_SETTING_TEXT,ANY_SETTING_CHOICE,ANY_SETTING_NUMBER,ANY_SETTING_NUMBER,ANY_SETTING_INTEGER,ANY_SETTING_BOOL,ANY_SETTING_BOOL,ANY_SETTING_BOOL};
- double defaults[]={1,100,1200,0,1,1,1,0,0,100,0,100,0,1,1},minimum[]={0,60,400,0,0,.6,0,0,0,0,0,25,0,0,0},maximum[]={1,150,4000,1,1,1.6,1,1,4,100,100,100,1,1,1},step[]={1,10,100,1,1,.1,1,1,1,1,1,5,1,1,1};
- unsigned registered=0;for(int i=0;i<15;++i){AnyModSettingV1 d;d.mod_id="anymap";d.mod_name="AnyMap";d.setting_id=ids[i];d.label=labels[i];d.kind=kinds[i];d.order=i;d.default_number=defaults[i];d.minimum=minimum[i];d.maximum=maximum[i];d.step=step[i];d.default_text="Waypoint";d.text_limit=48;if(i>=8&&i<=10)d.description="Position settings override placement made with Move minimap. Choose Custom for percentage positions.";if(i==3){d.choices=choices;d.choice_count=2;}if(i==8){d.choices=corners;d.choice_count=5;}settings_tokens[i]=settings_api->register_setting(&d);registered+=settings_tokens[i]!=0;}
- auto message="SETTINGS_SERVICE registered="+std::to_string(registered);host.log(registered==15?0:2,"anymap",message.c_str());}
+ const char* ids[]={"show_minimap","minimap_size","minimap_range","minimap_orientation","player_names","marker_scale","route_guide","waypoint_label","minimap_corner","minimap_x","minimap_y","minimap_opacity","minimap_names","map_grid","minimap_route","show_vehicles","show_zombies"};
+ const char* labels[]={"Show minimap","Minimap size (%)","Minimap range (meters)","Minimap orientation","Show player names","Player marker scale","Show route guidance","Waypoint label","Minimap corner","Custom horizontal position (%)","Custom vertical position (%)","Minimap opacity (%)","Minimap player names","Show map grid","Show route on minimap","Show vehicles","Show zombies and creatures"};
+ uint32_t kinds[]={ANY_SETTING_BOOL,ANY_SETTING_INTEGER,ANY_SETTING_NUMBER,ANY_SETTING_CHOICE,ANY_SETTING_BOOL,ANY_SETTING_NUMBER,ANY_SETTING_BOOL,ANY_SETTING_TEXT,ANY_SETTING_CHOICE,ANY_SETTING_NUMBER,ANY_SETTING_NUMBER,ANY_SETTING_INTEGER,ANY_SETTING_BOOL,ANY_SETTING_BOOL,ANY_SETTING_BOOL,ANY_SETTING_BOOL,ANY_SETTING_BOOL};
+ double defaults[]={1,100,1200,0,1,1,1,0,0,100,0,100,0,1,1,1,1},minimum[]={0,60,400,0,0,.6,0,0,0,0,0,25,0,0,0,0,0},maximum[]={1,150,4000,1,1,1.6,1,1,4,100,100,100,1,1,1,1,1},step[]={1,10,100,1,1,.1,1,1,1,1,1,5,1,1,1,1,1};
+ unsigned registered=0;for(int i=0;i<17;++i){AnyModSettingV1 d;d.mod_id="anymap";d.mod_name="AnyMap";d.setting_id=ids[i];d.label=labels[i];d.kind=kinds[i];d.order=i;d.default_number=defaults[i];d.minimum=minimum[i];d.maximum=maximum[i];d.step=step[i];d.default_text="Waypoint";d.text_limit=48;if(i>=8&&i<=10)d.description="Position settings override placement made with Move minimap. Choose Custom for percentage positions.";if(i>=15)d.description="Experimental: read from the game for Anymaker 0.1.25 only. Shown on the minimap and the full map.";if(i==3){d.choices=choices;d.choice_count=2;}if(i==8){d.choices=corners;d.choice_count=5;}settings_tokens[i]=settings_api->register_setting(&d);registered+=settings_tokens[i]!=0;}
+ auto message="SETTINGS_SERVICE registered="+std::to_string(registered);host.log(registered==17?0:2,"anymap",message.c_str());}
 static uint64_t painted_at{};
 static bool custom_position{};static double custom_x=1,custom_y=0;static void save_position();
 // Consumers see only committed copies; drafts cannot change gameplay before Apply.
 static bool read_settings(){if(!settings_api)return false;auto revision=settings_api->revision();if(revision==settings_revision)return false;bool initial=settings_revision==UINT64_MAX;settings_revision=revision;int old_corner=options.corner;double old_x=options.pos_x,old_y=options.pos_y;
- for(int i=0;i<15;++i){AnySettingValueV1 v;if(!settings_api->get(settings_tokens[i],&v))continue;switch(i){case 0:options.minimap=v.number!=0;break;case 1:options.size=v.number;break;case 2:options.range=v.number;break;case 3:options.north_up=v.number!=0;break;case 4:options.names=v.number!=0;break;case 5:options.marker=v.number;break;case 6:options.guide=v.number!=0;break;case 7:options.waypoint_label=v.text;break;case 8:options.corner=int(v.number);break;case 9:options.pos_x=v.number;break;case 10:options.pos_y=v.number;break;case 11:options.opacity=v.number;break;case 12:options.mini_names=v.number!=0;break;case 13:options.grid=v.number!=0;break;case 14:options.mini_route=v.number!=0;break;}}
+ for(int i=0;i<17;++i){AnySettingValueV1 v;if(!settings_api->get(settings_tokens[i],&v))continue;switch(i){case 0:options.minimap=v.number!=0;break;case 1:options.size=v.number;break;case 2:options.range=v.number;break;case 3:options.north_up=v.number!=0;break;case 4:options.names=v.number!=0;break;case 5:options.marker=v.number;break;case 6:options.guide=v.number!=0;break;case 7:options.waypoint_label=v.text;break;case 8:options.corner=int(v.number);break;case 9:options.pos_x=v.number;break;case 10:options.pos_y=v.number;break;case 11:options.opacity=v.number;break;case 12:options.mini_names=v.number!=0;break;case 13:options.grid=v.number!=0;break;case 14:options.mini_route=v.number!=0;break;case 15:options.vehicles=v.number!=0;break;case 16:options.zombies=v.number!=0;break;}}
  if(!initial&&(old_corner!=options.corner||old_x!=options.pos_x||old_y!=options.pos_y)){custom_position=false;save_position();}
- auto message="SETTINGS_APPLIED revision="+std::to_string(revision)+" minimap="+std::to_string(options.minimap)+" size="+std::to_string(options.size)+" range="+std::to_string(options.range)+" north_up="+std::to_string(options.north_up)+" names="+std::to_string(options.names)+" marker_scale="+std::to_string(options.marker)+" guidance="+std::to_string(options.guide)+" label_bytes="+std::to_string(options.waypoint_label.size())+" corner="+std::to_string(options.corner)+" opacity="+std::to_string(options.opacity)+" mini_names="+std::to_string(options.mini_names)+" grid="+std::to_string(options.grid)+" mini_route="+std::to_string(options.mini_route);host.log(0,"anymap",message.c_str());return true;}
+ auto message="SETTINGS_APPLIED revision="+std::to_string(revision)+" minimap="+std::to_string(options.minimap)+" size="+std::to_string(options.size)+" range="+std::to_string(options.range)+" north_up="+std::to_string(options.north_up)+" names="+std::to_string(options.names)+" marker_scale="+std::to_string(options.marker)+" guidance="+std::to_string(options.guide)+" label_bytes="+std::to_string(options.waypoint_label.size())+" corner="+std::to_string(options.corner)+" opacity="+std::to_string(options.opacity)+" mini_names="+std::to_string(options.mini_names)+" grid="+std::to_string(options.grid)+" mini_route="+std::to_string(options.mini_route)+" vehicles="+std::to_string(options.vehicles)+" zombies="+std::to_string(options.zombies);host.log(0,"anymap",message.c_str());return true;}
 static HMODULE mod_module{};static ULONG_PTR gdiplus_token{};
 static std::mutex state_mutex;static bool last_focus{};
 static std::filesystem::path game_dir,cache_dir;static bool visible{};
@@ -182,6 +187,18 @@ static void marker(MapGraphics& g,const AnySessionPlayerV1& p,PointF at,bool lab
         label.SetTrimming(StringTrimmingEllipsisCharacter);g.DrawString(name.c_str(),int(name.size()),&font,RectF(x+7,y+3,width-14,18),&label,&ink);
     }
 }
+static std::vector<mapactors::Blip> blips;
+static bool show_blip(const mapactors::Blip& b){return b.kind<=mapactors::Structure?options.vehicles:options.zombies;}
+// Vehicles are squares (parked structures dimmer), zombies small red dots, creatures larger amber dots.
+static void blip(MapGraphics& g,const mapactors::Blip& b,PointF at){Pen edge(Color(230,20,24,22),1.2f);
+ switch(b.kind){
+ case mapactors::Vehicle:{SolidBrush fill(Color(255,96,178,240));g.FillRectangle(&fill,at.X-3.5f,at.Y-3.5f,7.f,7.f);g.DrawRectangle(&edge,at.X-3.5f,at.Y-3.5f,7.f,7.f);break;}
+ case mapactors::Structure:{SolidBrush fill(Color(200,170,176,160));g.FillRectangle(&fill,at.X-3,at.Y-3,6.f,6.f);g.DrawRectangle(&edge,at.X-3,at.Y-3,6.f,6.f);break;}
+ case mapactors::Zombie:{SolidBrush fill(Color(255,232,72,60));g.FillEllipse(&fill,at.X-2.5f,at.Y-2.5f,5.f,5.f);g.DrawEllipse(&edge,at.X-2.5f,at.Y-2.5f,5.f,5.f);break;}
+ case mapactors::Creature:{SolidBrush fill(Color(255,244,160,48));g.FillEllipse(&fill,at.X-4.5f,at.Y-4.5f,9.f,9.f);g.DrawEllipse(&edge,at.X-4.5f,at.Y-4.5f,9.f,9.f);break;}
+ }}
+// Refresh the copied blips for this world; the sample itself runs on the client tick.
+static void update_blips(){if(!live||!(options.minimap||visible)||!(options.vehicles||options.zombies)){blips.clear();return;}mapactors::request(players.world_epoch,visible?100:150);mapactors::copy(players.world_epoch,blips);}
 // Marker editing is a map-owned modal. Its UTF-8 value is staged until a durable save.
 static void begin_marker(uint64_t id,atlas::Point at){editing_marker=id;editing_position=at;auto m=saved_markers.find(id);editing_name=m?m->name:"Marker "+std::to_string(saved_markers.next);naming=true;replace_name=true;dragging=false;zoom_motion.cancel(view);saved_markers.error.clear();memset(editor_held,0,sizeof(editor_held));}
 static bool finish_marker(){if(!saved_markers.save(editing_marker,editing_position,editing_name)){log_event("MARKER_SAVE failed=1 pending_retained=1");return false;}naming=false;log_event("MARKER_SAVE saved=1");return true;}
@@ -223,6 +240,7 @@ static void draw(MapGraphics& g,int w,int h,bool preview) {
         g.DrawLine(&rim,at.X,at.Y-8,at.X,at.Y+3);g.FillEllipse(&pin,at.X-5,at.Y-13,10.f,10.f);g.DrawEllipse(&rim,at.X-5,at.Y-13,10.f,10.f);
     }
     for(auto& pin:saved_markers.records){auto at=pixel(pin.position.x,pin.position.y);SolidBrush fill(Color(255,244,186,101));Pen edge(Color(255,42,49,37),2);g.DrawLine(&edge,at.X,at.Y,at.X,at.Y-9);g.FillEllipse(&fill,at.X-5,at.Y-17,10.f,10.f);g.DrawEllipse(&edge,at.X-5,at.Y-17,10.f,10.f);auto title=utf16(pin.name.c_str());FontFamily family(L"Segoe UI");Font font(&family,12,FontStyleRegular,UnitPixel);RectF measured;g.MeasureString(title.c_str(),int(title.size()),&font,PointF(),&measured);float width=std::min(210.f,measured.Width+14);round_rect(g,{at.X+8,at.Y-22,width,23},6,Color(235,29,46,39));SolidBrush ink(Color(255,251,224,176));StringFormat format;format.SetFormatFlags(StringFormatFlagsNoWrap);format.SetTrimming(StringTrimmingEllipsisCharacter);g.DrawString(title.c_str(),int(title.size()),&font,RectF(at.X+15,at.Y-19,width-14,18),&format,&ink);}
+    if(!preview)for(auto& b:blips){if(show_blip(b))blip(g,b,pixel(b.x,b.z));}
     for(uint32_t i=0;i<players.count;++i){const auto& p=players.players[i];atlas::Point uv{};
         if(!(p.valid_fields&PLAYER_POSITION)||!atlas::project(p.position[0],p.position[2],uv)||uv.x<0||uv.x>1||uv.y<0||uv.y>1)continue;
         marker(g,p,pixel(p.position[0],p.position[2]),true);
@@ -234,6 +252,8 @@ static void draw(MapGraphics& g,int w,int h,bool preview) {
     std::wstring footer=std::to_wstring(players.count)+L" PLAYERS  ·  STEAM NAMES";
     if(missing_names)footer+=L"  ·  "+std::to_wstring(missing_names)+L" NAMES UNAVAILABLE";
     if(missing_positions)footer+=L"  ·  "+std::to_wstring(missing_positions)+L" POSITIONS UNAVAILABLE";
+    if(!preview&&!blips.empty()){unsigned cars=0,undead=0;for(auto& b:blips){if(!show_blip(b))continue;if(b.kind==mapactors::Vehicle)++cars;else if(b.kind>=mapactors::Zombie)++undead;}
+        if(options.vehicles)footer+=L"  ·  "+std::to_wstring(cars)+L" VEHICLES";if(options.zombies)footer+=L"  ·  "+std::to_wstring(undead)+L" ZOMBIES";}
     if(players.dropped)footer+=L"  ·  "+std::to_wstring(players.dropped)+L" OVER CAPACITY";
     if(!preview&&!live)footer=players.count?L"PLAYER DATA PAUSED WHILE MAP HAS FOCUS":L"WAITING FOR LIVE PLAYER DATA";
     text(g,footer,left,top+side+15,12,Color(255,172,192,171));
@@ -277,6 +297,7 @@ static void minimap_draw(MapGraphics& g){SolidBrush background(Color(255,30,30,3
  if(layers[0])g.DrawImage(layers[0].get(),RectF(-192,-192,384,384),float(uv.x)*pixels-source/2,float(uv.y)*pixels-source/2,source,source,UnitPixel);
  auto at=[&](double x,double z){return PointF(float((x-p->position[0])*side/range),float((z-p->position[2])*side/range));};
  Pen line(Color(255,222,119,220),3);if(options.mini_route)for(size_t i=1;i<route.points.size();++i)g.DrawLine(&line,at(route.points[i-1].x,route.points[i-1].z),at(route.points[i].x,route.points[i].z));
+ for(auto& b:blips){if(!show_blip(b))continue;auto point=at(b.x,b.z);if(std::fabs(point.X)>200||std::fabs(point.Y)>200)continue;blip(g,b,point);}
  for(auto& pin:saved_markers.records){auto point=at(pin.position.x,pin.position.y);SolidBrush brush(Color(255,244,186,101));g.FillEllipse(&brush,point.X-3,point.Y-3,6.f,6.f);}
  if(waypoint){auto pin=at(target.x,target.y);SolidBrush brush(Color(255,239,154,227));g.FillEllipse(&brush,pin.X-4,pin.Y-4,8.f,8.f);}g.Restore(saved);
  // Draw arrows in screen space so terrain rotation cannot rotate the local arrow twice.
@@ -373,7 +394,7 @@ static void gpu_render(const AnyFrameV1* frame,void*){
  if(!last_focus){pose_motion.reset();if(visible)close_map();return;}
  if((ui_api&&!gameplay_ui())||(menu_api&&menu_api->settings_open())){pose_motion.reset();m_key.held=false;if(visible)close_map();return;}
  live=host.copy_players(&players,&ui_flags);if(!live){players={};route={};routed_at=0;pose_motion.reset();}
- if(live&&(!local_player()||(routed_at&&route_epoch!=players.world_epoch))){route={};routed_at=0;}update_route();
+ if(live&&(!local_player()||(routed_at&&route_epoch!=players.world_epoch))){route={};routed_at=0;}update_route();update_blips();
  if(!visible&&(!options.minimap||!live||!local_player()||(!ui_api&&(!(ui_flags&2)||(ui_flags&1))))){pose_motion.reset();return;}
  if(live)pose_motion.update(players,frame->tick);if(visible)zoom_motion.advance(view,frame->tick);
  float scale=float(options.size/100);int w=visible?frame->width:int(320*scale),h=visible?frame->height:int((waypoint&&options.guide?385:300)*scale);
@@ -386,7 +407,7 @@ static void mod_render(const AnyFrameV1* frame,AnyCanvasV1* canvas,void*){
  if(gpu_api)return;std::lock_guard<std::mutex> lock(state_mutex);last_focus=frame->focused!=0;frame_width=frame->width;frame_height=frame->height;if(read_settings())painted_at=0;
  if(!last_focus){if(visible)close_map();return;}if((ui_api&&!gameplay_ui())||(menu_api&&menu_api->settings_open())){m_key.held=false;if(visible)close_map();return;}live=host.copy_players(&players,&ui_flags);
  if(!live){players={};route={};routed_at=0;}
- if(live&&(!local_player()||(routed_at&&route_epoch!=players.world_epoch))){route={};routed_at=0;}update_route();
+ if(live&&(!local_player()||(routed_at&&route_epoch!=players.world_epoch))){route={};routed_at=0;}update_route();update_blips();
  if(!visible&&(!options.minimap||!live||!local_player()||(!ui_api&&(!(ui_flags&2)||(ui_flags&1)))))return;
  float scale=float(options.size/100);if(visible&&(!painted_at||frame->tick-painted_at>=16))zoom_motion.advance(view,frame->tick);uint32_t w=visible?frame->width:uint32_t(320*scale),h=visible?frame->height:uint32_t((waypoint&&options.guide?385:300)*scale);
  if(!painted_at||frame->tick-painted_at>=(visible?16:33)||painted_full!=visible||painted_width!=w||painted_height!=h){
@@ -400,7 +421,7 @@ static void mod_render(const AnyFrameV1* frame,AnyCanvasV1* canvas,void*){
 auto position=minimap_position(frame->width,frame->height,w,h);canvas->x=visible?0:int(position.X);canvas->y=visible?0:int(position.Y);
 }
 // Release plugin-owned graphics resources if the host performs an orderly shutdown.
-static void mod_shutdown(void*){std::lock_guard<std::mutex> lock(state_mutex);host.capture_input(0);for(auto& layer:layers)layer.reset();terrain_cache.reset();frame_bitmap.reset();canvas_pixels.clear();MapGraphics::reset_uploads();if(gdiplus_token){GdiplusShutdown(gdiplus_token);gdiplus_token=0;}}
+static void mod_shutdown(void*){mapactors::state.stop=true;std::lock_guard<std::mutex> lock(state_mutex);host.capture_input(0);for(auto& layer:layers)layer.reset();terrain_cache.reset();frame_bitmap.reset();canvas_pixels.clear();MapGraphics::reset_uploads();if(gdiplus_token){GdiplusShutdown(gdiplus_token);gdiplus_token=0;}}
 // Normal DLL plugin entry point, invoked by the host after its build guard succeeds.
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,AnyModCallbacksV1* callbacks){
  if(!api||!callbacks||api->struct_size!=sizeof(*api)||api->abi!=ANYAPI_MOD_ABI||!api->log||!api->copy_players||!api->capture_input||!api->game_directory||!api->plugin_directory)return false;
