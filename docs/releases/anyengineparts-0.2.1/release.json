@@ -1,0 +1,14 @@
+{
+  "Packages": {
+    "AnyEngineParts": {
+      "Id": "anyengineparts",
+      "MinimumApi": 37,
+      "Description": "Turbochargers and belt-driven superchargers with blow-off valves, a wastegate with antilag and launch control, oil ports, air filters and intercoolers, a Dyno sensor, and a 1-4 rotor rotary engine. Anymaker 0.1.25 only."
+    },
+    "GpsPart": {
+      "Id": "gpspart",
+      "MinimumApi": 36,
+      "Description": "Adds a GPS Sensor part with position, altitude, heading, pitch, roll, speed, acceleration and waypoint distance/bearing data channels. Single player only. Uses the experimental SDK; Anymaker 0.1.25 only."
+    }
+  }
+}

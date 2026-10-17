@@ -50,4 +50,39 @@ inline void* function(const anymaker::func_desc& d, int* roots = nullptr) {
     return c ? *c : nullptr;
 }
 
+// Identity checks for the part definition functions, from their first code bytes (Anymaker 0.1.25; only the same
+// functions of the other definition containers share them). Their routes have led to the wrong function: Rotary's
+// to vehicle_component_definition_container.load (laptop, 2026-10-13), and on 2026-10-17 Turbo, which did not
+// check, hooked a cell holding container.load as if it were _add_definitions, so the game was handed Turbo's
+// definition file as a file path and crashed starting a world. Before calling or hooking, a mod checks that the
+// add cell holds _add_definitions (or another mod's hook on it, which lives in a mod DLL) and that the load
+// function is vehicle_component_definition_file.load, and otherwise looks again.
+inline constexpr const char* kSigAddDefinitions =
+    "53 48 81 ec 90 00 00 00 48 89 4c 24 48 48 89 54 24 50 48 8b 44 24 28 48 89 44 24 58 4c 8d 44 24 58 48 8d 44 24 60 "
+    "48 89 84 24 80 00 00 00 48 8d 02 48 8b 15 c8 00 00 00";
+inline constexpr const char* kSigContainerLoad = "53 48 81 ec a0 00 00 00 48 89 4c 24 40 48 89 54 24 48 48 8d 01 48 8b 1d";
+inline constexpr const char* kSigFileLoad =
+    "53 55 48 81 ec 98 00 00 00 48 89 4c 24 48 48 89 54 24 50 4c 89 44 24 58 48 8d 44 24 60 48 8d 1d 14 01 00 00 48 8b 2d 15";
+inline bool code_is(const void* fn, const char* sig) {
+    anymaker::pattern pat(sig);
+    return fn && !pat.bytes.empty() && anymaker::readable(fn, pat.bytes.size()) && pat.match(static_cast<const uint8_t*>(fn));
+}
+// A function inside a loaded DLL other than the game: another mod's hook sitting on the cell.
+inline bool in_other_module(const void* fn) {
+    HMODULE m = nullptr;
+    return fn && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)fn, &m) &&
+           m && m != GetModuleHandleW(nullptr);
+}
+inline bool add_cell_ok(void** cell) {
+    void* fn = cell && anymaker::readable(cell, 8) ? *cell : nullptr;
+    if (!fn || code_is(fn, kSigContainerLoad) || code_is(fn, kSigFileLoad)) return false;
+    return code_is(fn, kSigAddDefinitions) || in_other_module(fn);
+}
+inline bool file_load_ok(const void* fn) { return code_is(fn, kSigFileLoad); }
+// For the log: what a definition route led to.
+inline const char* what_is(const void* fn) {
+    return !fn ? "nothing" : code_is(fn, kSigAddDefinitions) ? "_add_definitions" : code_is(fn, kSigContainerLoad) ? "container.load"
+         : code_is(fn, kSigFileLoad) ? "file.load" : in_other_module(fn) ? "another mod's hook" : "unknown code";
+}
+
 }  // namespace route

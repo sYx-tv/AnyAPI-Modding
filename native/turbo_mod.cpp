@@ -1876,19 +1876,13 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     }
 }
 
-// A function inside a loaded DLL other than the game: another hook sitting on the cell.
-bool in_other_module(const void* fn) {
-    HMODULE m = nullptr;
-    return fn && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)fn, &m) &&
-           m && m != GetModuleHandleW(nullptr);
-}
 void install_intake_air() {
     using namespace anymaker::experimental;
     void** tick = route::cell(bind::engine_tick);
     void* entry = route::function(bind::engine_tick);
     void** remap = route::cell(bind::math_remap);
     // The engine tick cell holds the game's function, or the Dyno's hook on it (any start order works).
-    bool tick_ok = tick && entry && anymaker::readable(tick, 8) && (*tick == entry || in_other_module(*tick));
+    bool tick_ok = tick && entry && anymaker::readable(tick, 8) && (*tick == entry || route::in_other_module(*tick));
     bool ok = tick_ok && remap && *remap && route::executable(*remap);
     if (ok && h_remap.install(remap, (void*)&hk_remap)) {
         if (h_engine_tick.install(tick, (void*)&hk_engine_tick)) { log(0, "hot boost air on: intercoolers matter to every engine"); return; }
@@ -2023,6 +2017,16 @@ void install_hooks() {
         auto pset = reinterpret_cast<property_set_t>(route::function(bind::property_u8_set));
         auto sc = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
         auto dt = static_cast<const double*>(global(bind::server_delta_time));
+        if (add && !route::add_cell_ok(add)) {        // a wrong route: look again (route_cell.h)
+            static int logs = 3;
+            if (logs-- > 0) log(1, "the definitions route led to %s, not _add_definitions; looking again", route::what_is(anymaker::readable(add, 8) ? *add : nullptr));
+            add = nullptr;
+        }
+        if (fload && !route::file_load_ok((void*)fload)) {
+            static int logs = 3;
+            if (logs-- > 0) log(1, "the file load route led to %s, not vehicle_component_definition_file.load; looking again", route::what_is((void*)fload));
+            fload = nullptr;
+        }
         bool core = add && create && destroy && tick && get && fctor && fdtor && fload && cctor && cdtor && nctor && ndtor && ccreate && cmodify && cmove && pset && sc;
         if (!core) {
             if (attempt == 20 || attempt == 179)   // once early, so a stuck start shows in the log
@@ -2057,6 +2061,7 @@ void install_hooks() {
             log(1, "supercharger shaft functions not found (rps %d, torque %d, newtons per joule %d); superchargers make no boost", !!g_get_rps, !!g_apply_torque, !!g_newtons_per_joule);
         else log(0, "supercharger shaft functions found (%.4f newtons per joule)", *g_newtons_per_joule);
         if (!write_definition_file()) { log(2, "could not write the Turbo definitions file; Turbo is off"); return; }
+        if (!route::add_cell_ok(add)) { log(2, "the definitions hook cell changed to %s before hooking; Turbo is off", route::what_is(*add)); return; }
         bool ok = h_destroy.install(destroy, (void*)&hk_destroy) && h_create.install(create, (void*)&hk_create) &&
                   h_tick.install(tick, (void*)&hk_tick) && h_get_f64.install(get, (void*)&hk_get_f64) &&
                   h_add_definitions.install(add, (void*)&hk_add_definitions);
