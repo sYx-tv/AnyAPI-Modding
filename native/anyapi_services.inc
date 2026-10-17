@@ -45,7 +45,7 @@ static const AnyItemCatalogV1* anyapi_item_catalog_service();
 namespace platform {static thread_local int current_plugin=-1;}
 static const AnyMenuV1* anyapi_menu_service();
 static const AnyMenuV2* anyapi_menu_service_v2();
-static const AnyMenuV3* anyapi_menu_service_v3();
+static const AnyMenuV3* anyapi_menu_service_v3();static const AnyMenuV4* anyapi_menu_service_v4();
 static bool anyapi_owner_active(int);
 static void anyapi_owner_fault(int);
 #include "anyapi_scene_controls_state.h"
