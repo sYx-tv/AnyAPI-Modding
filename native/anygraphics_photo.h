@@ -122,8 +122,8 @@ inline void hk_transform(double* ret, uint8_t* scene) {
     if (k && forward_axis >= 0) {
         double f[3], r[3];
         for (int i = 0; i < 3; ++i) f[i] = ret[forward_axis * 3 + i] * forward_sign;
-        // Screen right. Tested in game on 0.1.25: the transform's third basis vector points left, and the
-        // world is left-handed (right = up x forward), so both paths give the opposite of the naive guess.
+        // Screen right. On 0.1.25 forward calibrates to basis 2 and right = up x forward (tested in game). The
+        // basis-0 path is the renderer's forward/up/right layout with the sign flipped to match; it is unverified.
         if (forward_axis == 0 && forward_sign > 0) for (int i = 0; i < 3; ++i) r[i] = -ret[6 + i];
         else { r[0] = f[2]; r[1] = 0; r[2] = -f[0]; }
         double rl = std::sqrt(dot3(r, r)); if (rl > 1e-6) for (double& x : r) x /= rl;
