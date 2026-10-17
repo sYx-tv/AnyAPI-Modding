@@ -132,12 +132,16 @@ static void install(){using namespace anymaker::experimental;
   if(!all){if(attempt==20||attempt==179){std::string found;for(auto c:cells)found+=c?"1":"0";log("FAVORITES_LOOKUP found="+found+" enter="+std::to_string(enter!=nullptr),attempt==179?2:1);}continue;}
   native_enter=(EnterFn)enter;
   bool ok=h_save_entry.install(cells[5],(void*)&hk_save_entry)&&h_entry.install(cells[4],(void*)&hk_entry)&&h_delete.install(cells[3],(void*)&hk_delete)&&
-   h_build.install(cells[2],(void*)&hk_build)&&h_tab.install(cells[1],(void*)&hk_tab)&&h_update.install(cells[0],(void*)&hk_update);
+   h_build.install(cells[2],(void*)&hk_build)&&h_update.install(cells[0],(void*)&hk_update);
   if(!ok){log("FAVORITES_OFF reason=hook_cell_not_writable",2);remove();return;}
   // Registered only once the screen can be hooked, so the key never shows in Mod Controls when the feature is off.
   ModControlActionV1 action;action.default_key='F';action.mod_id="anyhelpers";action.mod_name="AnyHelpers";action.action_id="duplicate.favorite";action.label="Favorite saved creation";
   favorite_action=register_action(&action);
-  ready=true;log("FAVORITES_READY after_s="+std::to_string(attempt)+" key_token="+std::to_string(favorite_action));return;}}
+  ready=true;log("FAVORITES_READY after_s="+std::to_string(attempt)+" key_token="+std::to_string(favorite_action));
+  // AnyAPI's Settings bridge checks that client_ui.tab's cell still holds the game's own code before it turns on, and
+  // keeps the function it found. So the FAVORITES tab hook waits until the bridge is ready, or Settings loses its tabs.
+  for(int wait=0;wait<14400&&!stop;++wait){if(menu->available()){bool ok=h_tab.install(cells[1],(void*)&hk_tab);log("FAVORITES_TAB_HOOK installed="+std::to_string(ok)+" after_s="+std::to_string(attempt+wait),ok?0:2);return;}Sleep(1000);}
+  log("FAVORITES_TAB_HOOK installed=0 reason=settings_bridge_not_ready",1);return;}}
 static void init(){file=std::filesystem::path(host.plugin_directory)/L"AnyHelpers"/L"favorites.tsv";load();}
 static void start(){std::thread(install).detach();}   // resolving scans game memory; keep it off the loader thread
 static void shutdown(){stop=true;if(ready)remove();}
