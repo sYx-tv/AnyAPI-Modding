@@ -492,6 +492,9 @@ add_test(NAME mccode_editor COMMAND mccode_editor_test)
 add_executable(mccode_nodes_test tests/mccode_nodes_test.cpp)
 target_compile_options(mccode_nodes_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME mccode_nodes COMMAND mccode_nodes_test)
+add_executable(mccode_complete_test tests/mccode_complete_test.cpp)
+target_compile_options(mccode_complete_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME mccode_complete COMMAND mccode_complete_test)
 
 # AnyEngineParts: turbochargers, blow-off valves and wastegate (turbo_*), the rotary engine (rotary_*) and the Dyno (dyno_*) in one DLL,
 # through the experimental SDK.

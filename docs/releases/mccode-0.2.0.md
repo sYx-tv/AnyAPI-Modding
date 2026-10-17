@@ -9,6 +9,9 @@ Stormworks-style canvas next to the typed code and the game's blocks.
 - **Apply** turns the graph into the game's blocks, exactly like typed code, so saving, multiplayer and players
   without the mod work as usual.
 - **Live values** show on each output while the program runs.
+- **Suggestions while you type** in the Code view: names, keywords, functions, wired parts and their channels
+  (`RearLeft.` lists `rps`, `brake_factor`). Tab or Enter fills one in. Brackets, braces and quotes close
+  themselves.
 - **Saved in the program:** a node program reopens as nodes, and problems are shown on the node they belong to.
 
 Anymaker 0.1.25 only; needs AnyAPI 0.38.0 or newer. See [MCCode](../mods/mccode.md#nodes).

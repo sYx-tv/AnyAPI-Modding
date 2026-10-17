@@ -25,6 +25,7 @@
 #include "route_cell.h"
 #include "mccode_lang.h"
 #include "mccode_editor.h"
+#include "mccode_complete.h"
 #include "mccode_nodes.h"
 #include <algorithm>
 #include <atomic>
@@ -178,6 +179,7 @@ struct Snapshot {
     std::vector<std::pair<int, int>> error_rows;   // (row, e_script_error_type); row -1 if unplaced
     std::vector<std::string> watch;
     std::vector<std::string> ports;
+    std::vector<complete::PartPort> part_ports;   // the same, split for autocomplete
 };
 
 struct State {
@@ -193,6 +195,9 @@ struct State {
     float frame_w = 0, frame_h = 0;
     // text
     Editor ed;
+    bool ac_open = false;   // autocomplete popup
+    int ac_sel = 0, ac_top = 0, ac_line = 0;
+    complete::Result ac;
     unsigned compiled_rev = ~0u;
     Compiled live;               // compile of the current text
     Symbols live_symbols;
@@ -339,6 +344,7 @@ void read_snapshot(const uint8_t* mc, Snapshot& s) {
         for (auto* d : container_items(mc + list, 0x38)) {
             std::string comp = prop_str(d, off::data_component), name = prop_str(d, off::data_name);
             s.ports.push_back((list == off::mc_value_inputs ? "in  " : "out ") + comp + (comp.empty() || name.empty() ? "" : " \xb7 ") + name);
+            s.part_ports.push_back({comp, name, list == off::mc_value_inputs});
         }
 }
 
@@ -540,6 +546,8 @@ void open_view(bool open) {
     if (g.open == open) return;
     g.open = open;
     g.dragging = false;
+    g.ac_open = false;
+    g.ed.auto_pairs = true;
     if (open) {
         bool same = g.vehicle == g.snap.vehicle && g.component == g.snap.component;
         if (!same) { g.ed.set_text(""); g.loaded = false; g.applied_map.clear(); g.raw = false; }
@@ -710,6 +718,51 @@ void insert_snippet(const std::string& snippet) {
     g.ed.insert(s);
     if (mark.line >= 0) g.ed.set_cursor(mark, false);
     g.follow_cursor = true;
+}
+
+// ------------------------------------------------------------------ autocomplete
+constexpr int kAcRows = 8;
+void ac_update(bool open) {
+    Pos c = g.ed.cursor();
+    if (g.ed.has_selection() || g.nodes_mode) { g.ac_open = false; return; }
+    auto r = complete::suggest(g.ed.lines()[size_t(c.line)], c.col, g.live_symbols, g.snap.part_ports);
+    bool show = !r.items.empty() && (open || g.ac_open) && (r.after_dot || !r.prefix.empty());
+    if (show) {
+        if (!g.ac_open || r.start != g.ac.start || c.line != g.ac_line) { g.ac_sel = 0; g.ac_top = 0; }
+        g.ac = r;
+        g.ac_line = c.line;
+        g.ac_sel = std::clamp(g.ac_sel, 0, int(r.items.size()) - 1);
+    }
+    g.ac_open = show;
+}
+void ac_accept(int index) {
+    if (!g.ac_open || index < 0 || index >= int(g.ac.items.size())) return;
+    complete::Item item = g.ac.items[size_t(index)];
+    Pos c = g.ed.cursor();
+    const std::string& l = g.ed.lines()[size_t(c.line)];
+    int end = c.col;
+    while (end < int(l.size()) && complete::word_char(l[size_t(end)])) ++end;   // replace the whole word
+    g.ed.set_cursor({c.line, g.ac.start}, false);
+    g.ed.set_cursor({c.line, end}, true);
+    g.ac_open = false;
+    insert_snippet(item.insert);
+    if (item.insert.size() >= 2 && item.insert.compare(item.insert.size() - 2, 2, ".$") == 0) ac_update(true);   // a part: show its channels
+}
+// Where the popup sits: under the word, or above it near the bottom of the editor.
+bool ac_box(const Layout& l, Box& b, int& count) {
+    if (!g.ac_open || g.nodes_mode || g.ac_line < g.scroll_line || g.ac_line >= g.scroll_line + l.rows) return false;
+    float s = l.s, row = 20 * s;
+    count = std::min(int(g.ac.items.size()), kAcRows);
+    if (g.ac_sel < g.ac_top) g.ac_top = g.ac_sel;
+    if (g.ac_sel >= g.ac_top + count) g.ac_top = g.ac_sel - count + 1;
+    g.ac_top = std::clamp(g.ac_top, 0, std::max(0, int(g.ac.items.size()) - count));
+    float x = l.text.x + float(g.ed.visual_col(g.ac_line, g.ac.start) - g.scroll_col) * l.cw - 6 * s;
+    float y = l.text.y + float(g.ac_line - g.scroll_line + 1) * l.line_h + 2 * s;
+    float w = 380 * s, h = float(count) * row + 6 * s;
+    if (y + h > l.editor.y + l.editor.h) y = l.text.y + float(g.ac_line - g.scroll_line) * l.line_h - h - 2 * s;
+    x = std::clamp(x, l.editor.x, std::max(l.editor.x, l.editor.x + l.editor.w - w));
+    b = {x, y, w, h};
+    return true;
 }
 
 std::string clipboard_text() {
@@ -1048,6 +1101,28 @@ void draw_node_canvas(const Layout& l, Painter& p) {
     p.unclip();
 }
 
+void draw_autocomplete(const Layout& l, Painter& p) {
+    Box b;
+    int count = 0;
+    if (!ac_box(l, b, count)) return;
+    float s = l.s, row = 20 * s;
+    p.box({b.x + 3 * s, b.y + 4 * s, b.w, b.h}, 0x60000000, 5 * s);
+    p.box(b, 0xfa1e252c, 5 * s);
+    p.box(b, kLine, 5 * s, ANY_GPU_STROKE, 1 * s);
+    for (int i = 0; i < count; ++i) {
+        int idx = g.ac_top + i;
+        const auto& it = g.ac.items[size_t(idx)];
+        float y = b.y + 3 * s + float(i) * row;
+        if (idx == g.ac_sel) p.box({b.x + 3 * s, y, b.w - 6 * s, row}, 0xff2f4f6f, 3 * s);
+        p.text(b.x + 10 * s, y, b.w * .55f, row, widen(it.label), 13.5f * s, it.color, idx == g.ac_sel ? uint32_t(ANY_GPU_BOLD) : 0u);
+        p.text(b.x + b.w * .55f, y, b.w * .45f - 10 * s, row, widen(it.detail), 11.5f * s, kDim);
+    }
+    if (int(g.ac.items.size()) > count)
+        p.text(b.x, b.y + b.h, b.w - 8 * s, 16 * s, std::to_wstring(g.ac_sel + 1) + L" of " + std::to_wstring(g.ac.items.size()) + L"  •  Tab or Enter picks, Esc closes", 11 * s, 0xff5d6873);
+    else
+        p.text(b.x, b.y + b.h, b.w - 8 * s, 16 * s, L"Tab or Enter picks, Esc closes", 11 * s, 0xff5d6873);
+}
+
 void draw(const AnyFrameV1* frame, void*) {
     if (!frame || !gpu || !g_ready) return;
     std::lock_guard lock(g_mutex);
@@ -1255,6 +1330,7 @@ void draw(const AnyFrameV1* frame, void*) {
     p.unclip();
     if (g.tab == 0) p.text(l.side.x + 10 * s, l.side.y + l.side.h - 20 * s, l.side.w - 20 * s, 18 * s,
                            g.nodes_mode ? L"Click to add • drag ports to wire • wheel zooms" : L"Click to insert • F9 breakpoint • F5 pause", 11.5f * s, 0xff5d6873);
+    draw_autocomplete(l, p);
 }
 
 // ================================================================== input
@@ -1446,6 +1522,20 @@ void nodes_wheel(const Layout& l, float x, float y, int notches) {
 
 uint32_t key_down(uint32_t key) {
     if (g.nodes_mode) return nodes_key_down(key);
+    if (g.ac_open && !ctrl_down()) {
+        int n = int(g.ac.items.size());
+        switch (key) {
+        case VK_UP: g.ac_sel = (g.ac_sel + n - 1) % n; return 1;
+        case VK_DOWN: g.ac_sel = (g.ac_sel + 1) % n; return 1;
+        case VK_PRIOR: g.ac_sel = std::max(0, g.ac_sel - kAcRows); return 1;
+        case VK_NEXT: g.ac_sel = std::min(n - 1, g.ac_sel + kAcRows); return 1;
+        case VK_TAB: case VK_RETURN: ac_accept(g.ac_sel); return 1;
+        case VK_ESCAPE: g.ac_open = false; g_escape_held = true; return 1;
+        case VK_BACK: g.ed.backspace(false); g.follow_cursor = true; ac_update(false); return 1;
+        case VK_SHIFT: case VK_CONTROL: case VK_MENU: return 1;
+        default: g.ac_open = false; break;
+        }
+    } else if (key != VK_SHIFT && key != VK_CONTROL && key != VK_MENU) g.ac_open = false;
     using M = Editor::Move;
     bool c = ctrl_down(), sh = shift_down();
     Editor& ed = g.ed;
@@ -1514,7 +1604,12 @@ uint32_t input(const AnyInputV1* e, void*) {
     case ANY_KEY_UP: return 1;
     case ANY_TEXT_INPUT:
         if (g.nodes_mode) { if (g.edit_param >= 0 && e->key >= 32 && e->key < 127 && !ctrl_down()) g.edit_buf += char(e->key); return 1; }
-        if (e->key >= 32 && e->key < 127 && !ctrl_down()) { g.ed.type_char(char(e->key)); g.follow_cursor = true; }
+        if (e->key >= 32 && e->key < 127 && !ctrl_down()) {
+            char ch = char(e->key);
+            g.ed.type_char(ch);
+            g.follow_cursor = true;
+            if (complete::word_char(ch) || ch == '.') { recompile(); ac_update(true); } else g.ac_open = false;
+        }
         return 1;
     case ANY_MOUSE_WHEEL: {
         int notches = e->wheel / 120;
@@ -1577,6 +1672,14 @@ uint32_t input(const AnyInputV1* e, void*) {
             return 1;
         }
         if (g.nodes_mode && l.editor.contains(x, y)) { nodes_mouse_down(l, x, y, 1); return 1; }
+        {
+            Box ab;
+            int count = 0;
+            if (ac_box(l, ab, count)) {
+                if (ab.contains(x, y)) { ac_accept(g.ac_top + std::clamp(int((y - ab.y - 3 * l.s) / (20 * l.s)), 0, count - 1)); return 1; }
+                g.ac_open = false;
+            }
+        }
         if (l.gutter.contains(x, y)) {
             Pos p = hit_text(l, l.text.x, y);
             toggle_breakpoint_line(p.line);

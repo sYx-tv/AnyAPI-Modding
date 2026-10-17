@@ -62,6 +62,12 @@ on_tick {
 | Values | `true`, `false`, `12`, `1.5`, `"text"`, `rand(low, high)` | Fractionals need a dot: `100.0` |
 | Comments | `# note` | A comment at the end of a line moves onto its own line |
 
+**Suggestions while you type.** A list pops up under the word you are typing with the names that fit:
+your variables, inputs and outputs, functions, keywords, and the parts wired to the microcontroller. Type a
+part name and a dot (`RearLeft.`) to list its channels. Up/Down picks, Tab or Enter fills it in, Esc closes.
+Brackets and quotes close themselves: typing `(` gives `()` with the cursor inside, typing `)` steps over
+the closer, and `{` then Enter opens an indented block with its `}` below.
+
 **Names.** Write names on their own. If the same name is both a variable and a port, add what it is:
 `var x`, `in x`, `out x` (or `param x` inside a function).
 
