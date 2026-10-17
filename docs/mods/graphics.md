@@ -12,7 +12,8 @@ fog-independent light beams in 0.29.1 (with API 0.32.0), and bounded retries for
 rejected settings in 0.29.3. 0.30.0 fixes foggy sun shafts and adds TAA,
 sharpening, tone mapping and colour looks, a Cinematic preset and a GPU cost
 readout. 0.31.0 adds a free camera and photo controls (depth of field,
-exposure, look, vignette, bloom) to photo mode. See the
+exposure, look, vignette, bloom) to photo mode. 0.31.1 fixes the free camera spinning
+when photo mode starts in ThirdPerson's third-person view. See the
 [release records](../releases/README.md).
 
 ## Tone mapping and colour (0.30.0)
