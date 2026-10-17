@@ -127,28 +127,16 @@
     {
       "Id": "anymap",
       "Name": "AnyMap",
-      "Version": "0.27.2",
-      "Revision": 29,
-      "MinimumApi": 27,
-      "Description": "World map and minimap with consistent orientation, route placement and zoom.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.08.1/AnyMap-0.27.2.zip",
-      "Sha256": "8c867e260429bcecbc89904b6aac300aeaafe9c0df2f7c1a39dc62ae986aea0a",
+      "Version": "0.28.0",
+      "Revision": 30,
+      "MinimumApi": 36,
+      "Description": "World map and minimap with route placement and zoom; shows vehicles, zombies and creatures with a map key (Anymaker 0.1.25).",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.17/AnyMap-0.28.0.zip",
+      "Sha256": "917ec421fc347ef3baef11ecf5dd676ea09b01ad613ff9c49d765cb3e2f1ce69",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyMap.dll": "a22b13d34da56bfa23bd47e2e76654cd2e33b107ba9929a3fcd8dcd61dddd710"
+        "AnyAPI and Modding/mods/AnyMap.dll": "b129be59a6579dd6b2c2a58d17ace81901d10c31a120ad024d76103caad03f27"
       },
       "GameBuilds": [
-        {
-          "Version": "0.1.23",
-          "SteamBuild": 25755694,
-          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
-          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
-        },
-        {
-          "Version": "0.1.24",
-          "SteamBuild": 25826614,
-          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
-          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
-        },
         {
           "Version": "0.1.25",
           "SteamBuild": 25904830,
@@ -160,14 +148,14 @@
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "0.30.0",
-      "Revision": 33,
+      "Version": "0.31.0",
+      "Revision": 34,
       "MinimumApi": 39,
       "Description": "Graphics overhaul: presets from Off to Cinematic plus Custom, TAA, filmic tone mapping and colour looks, detailed shading, contact shadows, bounce light, sun, clouds, stars and moon, depth of field, motion blur, draw distance, clear sun shafts and photo mode. Needs AnyAPI 0.36.0.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.36.0/AnyGraphics-0.30.0.zip",
-      "Sha256": "2ee8fd5506721ade2720f5ddae0c19ecedcabe4315c7cbb3f203928e9ed01387",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.17/AnyGraphics-0.31.0.zip",
+      "Sha256": "b7a0ec5f72ccb44a00741cbd627c7a2a311a42217631bb397bd747d422ffde2a",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "fbf2d888d938f5138ffd7f8de56035c157d072afd67c6de42b181971f1b64456"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "39c20f06c6f49ee23e8bc7ce30f62b4e4c622da8916e6bf7230904cabe7433d3"
       },
       "GameBuilds": [
         {
@@ -280,14 +268,14 @@
     {
       "Id": "enginesound",
       "Name": "EngineSound",
-      "Version": "0.3.0",
-      "Revision": 4,
+      "Version": "0.4.0",
+      "Revision": 5,
       "MinimumApi": 34,
-      "Description": "Engine sound presets (Muscle V8, Built 2JZ, Powerstroke, Hemi and more) and a Custom sound tuner in the Properties Tool engine window, synced for every player in co-op. Uses the experimental SDK; Anymaker 0.1.25 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.13/EngineSound-0.3.0.zip",
-      "Sha256": "75859521bf640ac590d65e560612d53e152390af67cc5a3324fb57d8c530f3f6",
+      "Description": "Real engine sounds generated live for every inline, V and boxer engine: five sounds per layout plus Custom, cylinder count from the stretch. Anymaker 0.1.25 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.17/EngineSound-0.4.0.zip",
+      "Sha256": "dd3cc6cfff2ff06a696e92249e33fb180cfec82d6d79ae7dee71bcab0679052a",
       "FileHashes": {
-        "AnyAPI and Modding/mods/EngineSound.dll": "1ffc1dc1dc585f2f69c1abc06c091429523cc699414388500db36999b46bdb89"
+        "AnyAPI and Modding/mods/EngineSound.dll": "0521a855e6a6e5e33ed47414c7f1de0986951393a1240a272ea11db9e2d442bc"
       },
       "GameBuilds": [
         {
@@ -322,14 +310,14 @@
     {
       "Id": "gpspart",
       "Name": "GpsPart",
-      "Version": "1.0.2",
-      "Revision": 3,
+      "Version": "1.0.3",
+      "Revision": 4,
       "MinimumApi": 36,
       "Description": "Adds a GPS Sensor part with position, altitude, heading, pitch, roll, speed, acceleration and waypoint distance/bearing data channels. Single player only. Uses the experimental SDK; Anymaker 0.1.25 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.14/GpsPart-1.0.2.zip",
-      "Sha256": "7a1dab48b7f48b55396957d639acf60380f657f116283339bbec180e7aaa26af",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.17/GpsPart-1.0.3.zip",
+      "Sha256": "d5c70995a1be741e9e68a110b32c25b3a2a24276263a4ae279ff2d07f0cf9658",
       "FileHashes": {
-        "AnyAPI and Modding/mods/GpsPart.dll": "5f7dada68903478cb68fa14637a81dde975b25c10222c921cb86ed4ba5b50918"
+        "AnyAPI and Modding/mods/GpsPart.dll": "e3cbaf564f09eab0262e172543eb7f7dc96870b6fa7aa4e72f06594f652b5004"
       },
       "GameBuilds": [
         {
@@ -364,14 +352,14 @@
     {
       "Id": "anyengineparts",
       "Name": "AnyEngineParts",
-      "Version": "0.2.0",
-      "Revision": 2,
+      "Version": "0.2.1",
+      "Revision": 3,
       "MinimumApi": 37,
       "Description": "Turbochargers and belt-driven superchargers with blow-off valves, a wastegate with antilag and launch control, oil ports, air filters and intercoolers, a Dyno sensor, and a 1-4 rotor rotary engine. Anymaker 0.1.25 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.38.1/AnyEngineParts-0.2.0.zip",
-      "Sha256": "9b8904d4d84840793e9fbb46e0d91bef240363e19b518bb71c5a1aa96569e0af",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.17/AnyEngineParts-0.2.1.zip",
+      "Sha256": "2e002651d73133de1b332043cb63c49b428401f3fd62fbfece7ecb8004c19ab6",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyEngineParts.dll": "02c33201be53175544d44e8ce816a20b7f2222395449852016210f7a97f1839a"
+        "AnyAPI and Modding/mods/AnyEngineParts.dll": "7944d874cef7b3b826f1df1f66138e1c872562f4856754417099435ba5172cef"
       },
       "GameBuilds": [
         {
@@ -385,14 +373,35 @@
     {
       "Id": "mccode",
       "Name": "MCCode",
+      "Version": "0.2.0",
+      "Revision": 2,
+      "MinimumApi": 41,
+      "Description": "A Code view in the microcontroller editor: type the program or build it from nodes and wires, with a command list, live values and the game's debugger. Anymaker 0.1.25 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.17/MCCode-0.2.0.zip",
+      "Sha256": "23e7436e2dbbd5642ecada75500b2a91a976430a5642ac95208370a8bde0e658",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/MCCode.dll": "c39f88cbe5465f2402cf77af4649bfb45d2d6a735a89b51077d50c6dd4b79e2b"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
+        }
+      ]
+    },
+    {
+      "Id": "anycombat",
+      "Name": "AnyCombat",
       "Version": "0.1.0",
       "Revision": 1,
       "MinimumApi": 41,
-      "Description": "A Code view in the microcontroller editor: type the program instead of placing blocks, with a command list, live values and the game's debugger. Anymaker 0.1.25 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.16/MCCode-0.1.0.zip",
-      "Sha256": "e6f57e578c236649c03819c39ebecade53d78e23417ccc5808ca6e5b863372da",
+      "Description": "Hit markers and floating damage numbers for the hits you deal, red on a kill. Anymaker 0.1.25 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.17/AnyCombat-0.1.0.zip",
+      "Sha256": "2743e7c7276be0711ba71c323e645a59101dc218618604ff59a9327affa4f3c7",
       "FileHashes": {
-        "AnyAPI and Modding/mods/MCCode.dll": "9bcc80ad8e97a360cc542a44e75b7f8a079c7ea65a9db66601774cd6fb377ae7"
+        "AnyAPI and Modding/mods/AnyCombat.dll": "5b47afd0c4ba98433d8b9e1b58f7a031fc4f1020216a89d2977bfb82cb69dc56"
       },
       "GameBuilds": [
         {
