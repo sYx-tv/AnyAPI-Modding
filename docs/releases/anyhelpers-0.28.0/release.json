@@ -1,8 +1,0 @@
-{
-  "Packages": {
-    "AnyHelpers": {
-      "MinimumApi": 43,
-      "Description": "Native Mod Controls and Mod Settings tabs, a Favorites tab in the Duplicate tool's load screen, and a host ADMIN tab (heal, teleport, time, weather, clear zombies)."
-    }
-  }
-}
