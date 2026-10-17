@@ -1067,7 +1067,7 @@ void draw_node_canvas(const Layout& l, Painter& p) {
         }
     }
     // nodes, back to front
-    float fs = 13 * z, small = 11.5f * z;
+    float fs = 13 * z, text_s = 11.5f * z;
     bool labels = z >= .5f;
     for (auto& n : g.graph.nodes) {
         const nodes::NodeDef* d = nodes::find_def(n.kind);
@@ -1081,7 +1081,7 @@ void draw_node_canvas(const Layout& l, Painter& p) {
         p.box({nx, ny + kHeadH * z - 6 * z, nw, 6 * z}, 0xf0222930);
         if (labels) {
             p.text(nx + 8 * z, ny, nw - 16 * z, kHeadH * z - 4 * z, widen(d->title), fs, kLight, ANY_GPU_BOLD);
-            p.text(nx + 8 * z, ny + kHeadH * z - 4 * z, nw - 16 * z, kSumH * z, widen(node_summary(n, *d)), small, 0xffd8c27a);
+            p.text(nx + 8 * z, ny + kHeadH * z - 4 * z, nw - 16 * z, kSumH * z, widen(node_summary(n, *d)), text_s, 0xffd8c27a);
         }
         uint32_t outline = n.id == g.selected ? kYellow : pr != problems.end() ? kRed : 0xff3a434d;
         p.box({nx, ny, nw, nh}, outline, 6 * z, ANY_GPU_STROKE, (n.id == g.selected || pr != problems.end() ? 2 : 1) * z);
@@ -1092,7 +1092,7 @@ void draw_node_canvas(const Layout& l, Painter& p) {
             uint32_t col = d->ins[i].is_bool ? kBoolWire : kNumWire;
             ellipse(px, py, 5 * z, wired ? col : 0xff222930);
             ellipse(px, py, 5 * z, col, true, 1.5f * z);
-            if (labels) p.text(px + 9 * z, py - kRowH * z / 2, nw / 2, kRowH * z, widen(d->ins[i].name), small, 0xffb8c2cb);
+            if (labels) p.text(px + 9 * z, py - kRowH * z / 2, nw / 2, kRowH * z, widen(d->ins[i].name), text_s, 0xffb8c2cb);
         }
         for (size_t i = 0; i < d->outs.size(); ++i) {
             float px, py;
@@ -1101,20 +1101,20 @@ void draw_node_canvas(const Layout& l, Painter& p) {
             ellipse(px, py, 5 * z, col);
             if (labels && d->outs[i].name[0]) {
                 std::wstring name = widen(d->outs[i].name);
-                float tw = float(name.size()) * small * .6f;
-                p.text(px - 9 * z - tw, py - kRowH * z / 2, tw, kRowH * z, name, small, 0xffb8c2cb);
+                float tw = float(name.size()) * text_s * .6f;
+                p.text(px - 9 * z - tw, py - kRowH * z / 2, tw, kRowH * z, name, text_s, 0xffb8c2cb);
             }
             auto v = values.find(nodes::out_var(n.id, int(i)));
             if (labels && v != values.end()) {
                 std::wstring t = widen(v->second);
-                float tw = float(t.size()) * small * .62f + 8 * z;
+                float tw = float(t.size()) * text_s * .62f + 8 * z;
                 Box tag{px + 8 * z, py - 9 * z - kRowH * z / 2, tw, 16 * z};
                 p.box(tag, 0xe0101418, 3 * z);
-                p.text(tag.x + 4 * z, tag.y, tag.w, tag.h, t, small, kYellow);
+                p.text(tag.x + 4 * z, tag.y, tag.w, tag.h, t, text_s, kYellow);
             }
         }
         if (pr != problems.end() && labels)
-            p.text(nx, ny + nh + 2 * z, 360 * z, 16 * z, widen(pr->second), small, kRed);
+            p.text(nx, ny + nh + 2 * z, 360 * z, 16 * z, widen(pr->second), text_s, kRed);
     }
     if (g.graph.nodes.empty())
         p.text(l.editor.x, l.editor.y, l.editor.w, l.editor.h, L"No nodes yet. Pick one from Add node on the right.", 15 * s, 0xff5d6873, ANY_GPU_CENTER);
