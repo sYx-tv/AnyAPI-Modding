@@ -50,6 +50,26 @@ int main() {
     assert(near(number_alpha(0), 1) && near(number_alpha(kNumberSeconds), 0) && number_alpha(kNumberSeconds + 1) == 0);
     assert(near(number_rise(0), 0) && near(number_rise(kNumberSeconds), 1));
     assert(near(marker_alpha(0), 1) && marker_alpha(kMarkerSeconds + 0.01) == 0);
-    assert(damage_color(10, 50) == 0xfff5f7fa && damage_color(30, 50) == 0xffffd23c && damage_color(60, 50) == 0xffff5a3c);
+    assert(damage_color(false) == kHitColor && damage_color(true) == kKillColor);
+
+    // Kills: the newest number for the actor turns red; only targets that go down soon after your hit count.
+    Numbers k;
+    k.add(3, 20, {}, kGun, 0.0);
+    k.add(3, 5, {}, kGun, 1.0);
+    k.mark_kill(3, 1.2);
+    assert(!k.items[0].kill && k.items[1].kill && near(k.items[1].born, 1.2));
+    KillWatch w;
+    w.hit(3, 0.0);
+    assert(!w.check(3, false, 0.5) && w.count() == 1);
+    assert(w.check(3, true, 0.6) && w.count() == 0);       // went down inside the window: kill, reported once
+    assert(!w.check(3, true, 0.7));
+    w.hit(4, 0.0);
+    assert(!w.check(4, true, kKillWindow + 0.1));           // went down too late (someone else, bleeding out)
+    w.hit(5, 0.0); w.hit(5, 1.0);
+    assert(w.count() == 1 && w.check(5, true, 1.0 + kKillWindow - 0.1));   // a repeat hit restarts the window
+    w.hit(6, 0.0); w.expire(kKillWindow + 0.1); assert(w.count() == 0);
+    for (int i = 0; i < kMaxWatched + 4; ++i) w.hit(100 + i, i * 0.01);
+    assert(w.count() == kMaxWatched);
+    w.hit(-1, 0); assert(w.count() == kMaxWatched);
     return 0;
 }

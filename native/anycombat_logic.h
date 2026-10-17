@@ -1,6 +1,6 @@
 #pragma once
 // AnyCombat pure logic: projecting hit points onto the screen, merging rapid hits on one target into one number,
-// and the timing and formatting of hit markers and damage numbers. No Windows or game dependencies, so
+// watching hit targets for a kill, and the timing and formatting of hit markers and damage numbers. No Windows or game dependencies, so
 // tests/anycombat_logic_test.cpp covers it.
 #include <algorithm>
 #include <cmath>
@@ -47,6 +47,8 @@ constexpr double kNumberSeconds = 1.1;    // damage number rise and fade
 constexpr double kMergeSeconds = 0.35;    // hits on the same target this close together add up (shotgun pellets, bursts)
 constexpr double kRiseFraction = 0.06;    // of screen height, over a number's life
 constexpr int kMaxNumbers = 24;
+constexpr double kKillWindow = 1.5;       // a target that goes down this soon after your hit counts as your kill
+constexpr int kMaxWatched = 16;
 
 struct Number {
     int32_t actor{-1};
@@ -54,6 +56,7 @@ struct Number {
     Vec3 position;
     int32_t type{};
     bool used{};
+    bool kill{};
 };
 
 // Fixed pool of floating numbers. A hit on the same actor within kMergeSeconds of its last hit adds to that number
@@ -72,7 +75,13 @@ struct Numbers {
         Number* slot = nullptr;
         for (auto& n : items) if (!n.used) { slot = &n; break; }
         if (!slot) { slot = &items[0]; for (auto& n : items) if (n.born < slot->born) slot = &n; }
-        *slot = Number{actor, damage, now, now, position, type, true};
+        *slot = Number{actor, damage, now, now, position, type, true, false};
+    }
+    // The newest number for this actor turns into a kill (red, and it restarts its life so the kill is seen).
+    void mark_kill(int32_t actor, double now) {
+        Number* best = nullptr;
+        for (auto& n : items) if (n.used && n.actor == actor && (!best || n.born > best->born)) best = &n;
+        if (best) { best->kill = true; best->born = now; }
     }
     void expire(double now) { for (auto& n : items) if (n.used && now - n.born > kNumberSeconds) n.used = false; }
     int count() const { int c = 0; for (auto& n : items) c += n.used; return c; }
@@ -97,12 +106,36 @@ inline int format_damage(double damage, wchar_t* out, int cap) {
     return std::max(n, 0);
 }
 
-// Colour by size of the hit, relative to the player's "big hit" threshold: white, yellow, then orange-red.
-inline uint32_t damage_color(double damage, double big) {
-    if (!(big > 0)) big = 50;
-    if (damage >= big) return 0xffff5a3c;
-    if (damage >= big * 0.5) return 0xffffd23c;
-    return 0xfff5f7fa;
-}
+// White for a hit, red for the hit that killed.
+constexpr uint32_t kHitColor = 0xfff5f7fa, kKillColor = 0xffff3b30;
+inline uint32_t damage_color(bool kill) { return kill ? kKillColor : kHitColor; }
+
+// Targets you hit while they were still up, watched for kKillWindow seconds. The caller polls each one's
+// "incapacitated" flag and reports it through check(); a target that goes down inside the window is your kill.
+// A target that was already down when hit (a corpse) is never watched.
+struct KillWatch {
+    struct Entry { int32_t actor{-1}; double hit{}; bool used{}; };
+    Entry items[kMaxWatched];
+    void hit(int32_t actor, double now) {
+        if (actor < 0) return;
+        Entry* slot = nullptr;
+        for (auto& e : items) if (e.used && e.actor == actor) { slot = &e; break; }
+        if (!slot) for (auto& e : items) if (!e.used) { slot = &e; break; }
+        if (!slot) { slot = &items[0]; for (auto& e : items) if (e.hit < slot->hit) slot = &e; }
+        *slot = Entry{actor, now, true};
+    }
+    // down: whether the actor is incapacitated now (false when it can't be found). Returns true once, on the kill.
+    bool check(int32_t actor, bool down, double now) {
+        for (auto& e : items) {
+            if (!e.used || e.actor != actor) continue;
+            if (down) { e.used = false; return now - e.hit <= kKillWindow; }
+            if (now - e.hit > kKillWindow) e.used = false;
+            return false;
+        }
+        return false;
+    }
+    void expire(double now) { for (auto& e : items) if (e.used && now - e.hit > kKillWindow) e.used = false; }
+    int count() const { int c = 0; for (auto& e : items) c += e.used; return c; }
+};
 
 }  // namespace anycombat

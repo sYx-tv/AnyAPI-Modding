@@ -11,7 +11,11 @@
 // and fades. Hits on the same target in quick succession (shotgun pellets, bursts) add up into one number. Hits on
 // your own character are never shown.
 //
-// Settings (AnyHelpers, optional): hit marker, damage numbers, number size, "big hit" threshold (colours).
+// Kills: every target you hit while it is still up is looked up by id (client_scene.actor.container.get_actor_by_id)
+// each frame for 1.5 s, and its replicated "incapacitated" flag (client_scene.actor.get_is_incapacitated, set by the
+// server) is read. If it goes down inside that window, the marker flashes red and the number turns red.
+//
+// Settings (AnyHelpers, optional): hit marker, damage numbers, number size.
 //
 // EXPERIMENTAL. Hooks two game functions through the experimental SDK (anycombat_bindings.h): Anymaker 0.1.25 /
 // Steam build 25904830 only. The first hits of each session are logged: read anymaker_modding.log.
@@ -55,20 +59,22 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[4], g_settings_revision = ~0ull;
+uint64_t g_tokens[3], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
 std::atomic<bool> g_show_marker{true}, g_show_numbers{true};
-std::atomic<double> g_number_size{1.0}, g_big_hit{50.0};
+std::atomic<double> g_number_size{1.0};
 
 std::mutex g_mutex;            // camera, numbers and marker: written on the main thread, read by the renderer
 Camera g_camera;
 ULONGLONG g_camera_time;       // GetTickCount64 of the last camera sample
 int32_t g_local_actor = -1;    // local player's actor id, refreshed with the camera
 Numbers g_numbers;
-double g_marker_time = -1, g_marker_big = 0;
-int g_hit_logs, g_camera_logs;
+KillWatch g_watch;
+double g_marker_time = -1;
+bool g_marker_kill;
+int g_hit_logs, g_camera_logs, g_kill_logs;
 
 LARGE_INTEGER g_qpc_freq;
 double now_seconds() { LARGE_INTEGER t; QueryPerformanceCounter(&t); return double(t.QuadPart) / double(g_qpc_freq.QuadPart); }
@@ -89,8 +95,44 @@ using get_camera_t = void (*)(uint8_t* ret, uint8_t* scene);
 using push_damage_t = void (*)(uint8_t* data, const int32_t* actor, const double* damage, const double* position,
                                const double* normal, const int32_t* type, const int32_t* flesh);
 using peer_actor_t = void (*)(uint8_t** ret, uint8_t* container);
+using actor_by_id_t = void (*)(uint8_t** ret, uint8_t* container, const int32_t* id);
+using incapacitated_t = void (*)(bool* ret, uint8_t* actor);
 anymaker::cell_hook h_camera, h_damage;
 peer_actor_t g_peer_actor;
+actor_by_id_t g_actor_by_id;
+incapacitated_t g_incapacitated;
+uint8_t* g_scene;              // the client scene of the last camera sample (main thread only)
+
+// 1 down, 0 up, -1 not found or the lookups are missing. Main thread only.
+int actor_down(uint8_t* scene, int32_t id) {
+    if (!scene || !g_actor_by_id || !g_incapacitated || id < 0) return -1;
+    uint8_t* actor = nullptr;
+    g_actor_by_id(&actor, scene + off::scene_actors, &id);
+    if (!actor) return -1;
+    bool down = false;
+    g_incapacitated(&down, actor);
+    return down ? 1 : 0;
+}
+
+// Polls the targets you recently hit; a kill turns its number and the marker red.
+void watch_kills(uint8_t* scene) {
+    int32_t ids[kMaxWatched]; int n = 0;
+    {
+        std::lock_guard lock(g_mutex);
+        g_watch.expire(now_seconds());
+        for (auto& e : g_watch.items) if (e.used) ids[n++] = e.actor;
+    }
+    for (int i = 0; i < n; ++i) {
+        int down = actor_down(scene, ids[i]);
+        if (down < 0) continue;   // gone (despawned) or not found: let the window run out
+        double now = now_seconds();
+        std::lock_guard lock(g_mutex);
+        if (!g_watch.check(ids[i], down == 1, now)) continue;
+        g_numbers.mark_kill(ids[i], now);
+        g_marker_time = now; g_marker_kill = true;
+        if (g_kill_logs < 20) { ++g_kill_logs; log(0, "kill: actor %d went down", ids[i]); }
+    }
+}
 
 void hk_get_camera(uint8_t* ret, uint8_t* scene) {
     reinterpret_cast<get_camera_t>(h_camera.original)(ret, scene);
@@ -110,18 +152,22 @@ void hk_get_camera(uint8_t* ret, uint8_t* scene) {
         g_peer_actor(&actor, scene + off::scene_actors);
         if (actor && anymaker::readable(actor + off::actor_id, 4)) local = rd<int32_t>(actor, off::actor_id);
     }
-    std::lock_guard lock(g_mutex);
-    if (g_camera_logs < 2 && c.valid()) {
-        ++g_camera_logs;
-        log(0, "camera: position (%.2f, %.2f, %.2f) forward (%.2f, %.2f, %.2f) up (%.2f, %.2f, %.2f) right (%.2f, %.2f, %.2f) fov %.3f rad, tan(half) %.3f, near %.3f; local actor %d",
-            c.position.x, c.position.y, c.position.z, c.forward.x, c.forward.y, c.forward.z, c.up.x, c.up.y, c.up.z,
-            c.right.x, c.right.y, c.right.z, fov, c.tan_half_fov, c.near_plane, local);
-    } else if (!c.valid() && g_camera_logs == 0) {
-        g_camera_logs = -1;
-        log(1, "camera sample looks wrong (fov %.3f, tan %.3f, |forward| %.3f): damage numbers may be misplaced", fov, c.tan_half_fov, std::sqrt(dot(c.forward, c.forward)));
+    {
+        std::lock_guard lock(g_mutex);
+        if (g_camera_logs < 2 && c.valid()) {
+            ++g_camera_logs;
+            log(0, "camera: position (%.2f, %.2f, %.2f) forward (%.2f, %.2f, %.2f) up (%.2f, %.2f, %.2f) right (%.2f, %.2f, %.2f) fov %.3f rad, tan(half) %.3f, near %.3f; local actor %d",
+                c.position.x, c.position.y, c.position.z, c.forward.x, c.forward.y, c.forward.z, c.up.x, c.up.y, c.up.z,
+                c.right.x, c.right.y, c.right.z, fov, c.tan_half_fov, c.near_plane, local);
+        } else if (!c.valid() && g_camera_logs == 0) {
+            g_camera_logs = -1;
+            log(1, "camera sample looks wrong (fov %.3f, tan %.3f, |forward| %.3f): damage numbers may be misplaced", fov, c.tan_half_fov, std::sqrt(dot(c.forward, c.forward)));
+        }
+        if (c.valid()) { g_camera = c; g_camera_time = GetTickCount64(); }
+        g_local_actor = local;
     }
-    if (c.valid()) { g_camera = c; g_camera_time = GetTickCount64(); }
-    g_local_actor = local;
+    g_scene = scene;
+    if (scene) watch_kills(scene);
 }
 
 void hk_push_damage(uint8_t* data, const int32_t* actor, const double* damage, const double* position, const double* normal,
@@ -132,19 +178,23 @@ void hk_push_damage(uint8_t* data, const int32_t* actor, const double* damage, c
     if (!std::isfinite(dmg) || dmg <= 0) return;
     Vec3 at{position[0], position[1], position[2]};
     if (!std::isfinite(at.x) || !std::isfinite(at.y) || !std::isfinite(at.z)) return;
+    int32_t id = *actor;
+    int down = actor_down(g_scene, id);   // same main thread as the camera hook
     std::lock_guard lock(g_mutex);
-    bool self = g_local_actor >= 0 && *actor == g_local_actor;
+    bool self = g_local_actor >= 0 && id == g_local_actor;
     if (g_hit_logs < 20) {
         ++g_hit_logs;
         Vec3 d = sub(at, g_camera.position);
-        log(0, "hit: actor %d%s, damage %.3f, type %d, flesh %d, at (%.2f, %.2f, %.2f), %.1f m from the camera", *actor,
-            self ? " (you, not shown)" : "", dmg, *type, flesh ? *flesh : -1, at.x, at.y, at.z, std::sqrt(dot(d, d)));
+        log(0, "hit: actor %d%s, damage %.3f, type %d, flesh %d, at (%.2f, %.2f, %.2f), %.1f m from the camera, %s", id,
+            self ? " (you, not shown)" : "", dmg, *type, flesh ? *flesh : -1, at.x, at.y, at.z, std::sqrt(dot(d, d)),
+            down == 1 ? "already down" : down == 0 ? "up" : "not found");
     }
     if (self) return;
     double now = now_seconds();
-    g_numbers.add(*actor, dmg, at, *type, now);
+    g_numbers.add(id, dmg, at, *type, now);
+    if (down == 0) g_watch.hit(id, now);
     g_marker_time = now;
-    g_marker_big = dmg >= g_big_hit.load() ? 1 : 0;
+    g_marker_kill = false;
 }
 
 // ------------------------------------------------------------------ settings
@@ -157,7 +207,6 @@ void read_settings() {
     if (g_tokens[0] && settings->get(g_tokens[0], &v)) g_show_marker = v.number != 0;
     if (g_tokens[1] && settings->get(g_tokens[1], &v)) g_show_numbers = v.number != 0;
     if (g_tokens[2] && settings->get(g_tokens[2], &v) && std::isfinite(v.number)) g_number_size = std::clamp(v.number, 0.5, 2.5);
-    if (g_tokens[3] && settings->get(g_tokens[3], &v) && std::isfinite(v.number)) g_big_hit = std::clamp(v.number, 1.0, 10000.0);
 }
 
 // ------------------------------------------------------------------ drawing (render thread)
@@ -183,16 +232,16 @@ void draw(const AnyFrameV1* f, void*) {
     if (!f || !f->focused || !gameplay() || !gpu) return;
     double now = now_seconds();
     float W = float(f->width), H = float(f->height), s = std::max(0.75f, H / 1080.f);
-    Camera cam; bool cam_ok; Number numbers[kMaxNumbers]; double marker_time, marker_big;
+    Camera cam; bool cam_ok; Number numbers[kMaxNumbers]; double marker_time; bool marker_kill;
     {
         std::lock_guard lock(g_mutex);
         g_numbers.expire(now);
         cam = g_camera; cam_ok = g_camera_time && GetTickCount64() - g_camera_time < 250;
         std::memcpy(numbers, g_numbers.items, sizeof numbers);
-        marker_time = g_marker_time; marker_big = g_marker_big;
+        marker_time = g_marker_time; marker_kill = g_marker_kill;
     }
     if (g_show_numbers && cam_ok) {
-        double size = 22.0 * s * g_number_size.load(), big = g_big_hit.load();
+        double size = 22.0 * s * g_number_size.load();
         for (const auto& n : numbers) {
             if (!n.used) continue;
             double age = now - n.born, sx, sy;
@@ -200,16 +249,17 @@ void draw(const AnyFrameV1* f, void*) {
             sy -= number_rise(age) * kRiseFraction * H;
             if (sx < -100 || sx > W + 100 || sy < -100 || sy > H + 100) continue;
             wchar_t buf[24]; int len = format_damage(n.damage, buf, 24);
-            double scale = number_scale(age) * (n.damage >= big ? 1.2 : 1.0);
-            text(buf, len, float(sx), float(sy), float(size * scale), damage_color(n.damage, big), float(number_alpha(age)));
+            double scale = number_scale(age) * (n.kill ? 1.25 : 1.0);
+            text(buf, len, float(sx), float(sy), float(size * scale), damage_color(n.kill), float(number_alpha(age)));
         }
     }
     if (g_show_marker && marker_time >= 0) {
         double age = now - marker_time, a = marker_alpha(age);
         if (a > 0) {
             float cx = W / 2, cy = H / 2, spread = float(marker_spread(age));
-            float r0 = 7 * s * spread, r1 = 15 * s * spread, w = 2.2f * s;
-            uint32_t color = marker_big > 0 ? 0xffff5a3c : 0xfff5f7fa;
+            float grow = marker_kill ? 1.3f : 1.f;
+            float r0 = 7 * s * spread * grow, r1 = 15 * s * spread * grow, w = 2.2f * s * grow;
+            uint32_t color = damage_color(marker_kill);
             for (int i = 0; i < 4; ++i) {
                 float dx = (i & 1) ? 1.f : -1.f, dy = (i & 2) ? 1.f : -1.f;
                 line(cx + dx * r0 + 1, cy + dy * r0 + 1, cx + dx * r1 + 1, cy + dy * r1 + 1, w + 1, 0xff000000, float(a) * 0.6f);
@@ -227,6 +277,8 @@ void install_hooks() {
         if (attempt) Sleep(1000);
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; AnyCombat stays off"); return; }
         if (!g_peer_actor) g_peer_actor = reinterpret_cast<peer_actor_t>(function(bind::actor_container_get_peer_actor));
+        if (!g_actor_by_id) g_actor_by_id = reinterpret_cast<actor_by_id_t>(function(bind::actor_container_get_actor_by_id));
+        if (!g_incapacitated) g_incapacitated = reinterpret_cast<incapacitated_t>(function(bind::actor_get_is_incapacitated));
         if (!camera_done) {
             if (void** cell = hook_cell(bind::client_scene_get_camera)) {
                 if (!h_camera.install(cell, (void*)&hk_get_camera)) { log(2, "the camera hook cell was not writable; AnyCombat is off"); return; }
@@ -241,6 +293,7 @@ void install_hooks() {
         }
         if (camera_done && damage_done) {
             if (!g_peer_actor) log(1, "local player lookup not located: hits on your own character may show numbers");
+            if (!g_actor_by_id || !g_incapacitated) log(1, "actor lookup or incapacitated flag not located: kills are not marked red");
             log(0, "Ready after %d s: hit markers and damage numbers are on.", attempt);
             return;
         }
@@ -271,21 +324,16 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
     if (settings && settings->struct_size == sizeof(*settings) && settings->version == 1 && settings->register_setting && settings->get && settings->revision) {
         AnyModSettingV1 d; d.mod_id = kModId; d.mod_name = "AnyCombat";
         d.setting_id = "hit_marker"; d.label = "Hit marker"; d.kind = ANY_SETTING_BOOL; d.order = 0; d.default_number = 1;
-        d.description = "An X around the crosshair whenever you hit something. Red for a big hit.";
+        d.description = "An X around the crosshair whenever you hit something. Red when the hit kills.";
         g_tokens[0] = settings->register_setting(&d);
         d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyCombat";
         d.setting_id = "damage_numbers"; d.label = "Damage numbers"; d.kind = ANY_SETTING_BOOL; d.order = 1; d.default_number = 1;
-        d.description = "The damage you deal pops up where the hit landed. Quick hits on one target add up.";
+        d.description = "The damage you deal pops up where the hit landed. Quick hits on one target add up; red on a kill.";
         g_tokens[1] = settings->register_setting(&d);
         d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyCombat";
         d.setting_id = "number_size"; d.label = "Number size"; d.kind = ANY_SETTING_NUMBER; d.order = 2;
         d.default_number = 1.0; d.minimum = 0.5; d.maximum = 2.5; d.step = 0.1;
         g_tokens[2] = settings->register_setting(&d);
-        d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyCombat";
-        d.setting_id = "big_hit"; d.label = "Big hit from"; d.kind = ANY_SETTING_NUMBER; d.order = 3;
-        d.default_number = 50; d.minimum = 1; d.maximum = 10000; d.step = 1;
-        d.description = "Damage at or above this is red (and half of it yellow).";
-        g_tokens[3] = settings->register_setting(&d);
         read_settings();
     } else settings = nullptr;
     std::thread(install_hooks).detach();   // resolving scans game memory; keep it off the loader and frame threads
