@@ -10,6 +10,25 @@ Change a setting or keybind, then select **Apply Changes**. Cancel discards pend
 edits. Reset stages defaults for review before Apply. Escape cancels key capture;
 focus loss or leaving the menu ends capture. Saved options remain when a mod is removed.
 
+## Duplicate tool favorites
+
+When you paste with the Duplicate tool, the load screen gets a third tab, **Favorites**, after Local and
+Workshop. It lists only your starred local saves, with the game's own rows, thumbnails and Load.
+Hover a save and press **F** (rebind it under Mod Controls, AnyHelpers) to star or unstar it. Starred saves
+show `* ` before their name in Local. Stars are kept by save name in `AnyAPI and Modding/mods/AnyHelpers/favorites.tsv`,
+so renaming a save file outside the game drops its star. Workshop items can't be starred yet.
+This part uses the experimental SDK and is tied to the game build; after a game update it stays off until it is re-checked.
+
+## Host admin tab
+
+With AnyAPI's `anyapi.menu` v4, AnyHelpers adds an **ADMIN** tab to Settings for the host. Pick a player (or Everyone), then:
+**Heal** refills blood and oxygen and clears hunger, thirst, heat, cold, infection, wetness, bleeding and broken legs;
+**Teleport** goes to a player, brings a player to you, or brings everyone; **Time** sets the hour (Set), stops or restarts
+the clock (Freeze, Run) or hands time back to the world (World clock); **Weather** locks clear, cloudy, rain, storm, fog or
+snow; **Clear** removes all zombies, creatures or both. Actions run on the next game tick. Time reaches every player;
+weather only shows for players running AnyHelpers. Joined players see a note that only the host can use it.
+Experimental SDK: tied to the game build, and it stays off after a game update until it is re-checked.
+
 ## For mod authors
 
 Register settings through `anyhelpers.settings` v1 and actions through
