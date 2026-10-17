@@ -38,7 +38,16 @@ class PublishTests(unittest.TestCase):
         # Pin the versions the tests release against, so publishing a real
         # release (which moves the live catalog forward) doesn't break them.
         catalog = self.catalog()
-        pinned = {"AnyAPI": ("0.33.0", 33, 0), "AnyClock": ("1.0.0", 1, 30), "AnyBalance": ("1.0.0", 1, 33)}
+        pinned = {"AnyAPI": ("0.33.0", 33, 0), "AnyClock": ("1.0.0", 1, 30), "AnyBalance": ("1.0.0", 1, 33), "AnyHelpers": ("0.28.0", 27, 33)}
+        # Mods since folded into bundles are put back as they were.
+        for name in ("AnyBalance", "AnyClock"):
+            if not any(m["Name"] == name for m in catalog["Mods"]):
+                entry = dict(next(m for m in catalog["Mods"] if m["Name"] == "AnyHelpers"))
+                for key in ("Replaces", "Bundle", "Parts"):
+                    entry.pop(key, None)
+                entry.update(Id=name.lower(), Name=name, Url=DOWNLOAD + "v0.33.0/" + name + "-1.0.0.zip")
+                entry["FileHashes"] = {"AnyAPI and Modding/mods/" + name + ".dll": "0" * 64}
+                catalog["Mods"].append(entry)
         for entry in catalog["Api"] + catalog["Mods"]:
             if entry["Name"] in pinned:
                 entry["Version"], entry["Revision"], entry["MinimumApi"] = pinned[entry["Name"]]
