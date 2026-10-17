@@ -216,10 +216,12 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         s.tick.set(5200, 4.0);
         // Diesel clatter rings the block, pitched off the bark: a truck's is a heavy, hollow knock, a car's a
         // lighter tick.
-        s.knock.set(t.body_hz * 2.6, 3.5);
-        s.knock_mid.set(t.body_hz * 4.2, 3.0);
-        s.knock_hi.set(t.body_hz * 6.6, 2.5);
-        s.roar.set(pipe_hz * 3.2, 0.9);
+        // A V (truck) diesel's knock is a deep, dull thud from a big block, not a tick.
+        const double kb = t.body_hz * (vee ? 1.8 : 2.6);
+        s.knock.set(kb, vee ? 2.2 : 3.5);
+        s.knock_mid.set(kb * 1.6, vee ? 2.0 : 3.0);
+        s.knock_hi.set(kb * 2.5, 2.5);
+        s.roar.set(pipe_hz * (vee ? 1.6 : 3.2), 0.7);
         s.pop_body.set(pipe_hz * 1.7, 2.0);
         s.tuned_pipe = pipe_hz; s.tuned_body = t.body_hz; s.tuned_layout = layout;
     }
@@ -294,7 +296,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
                 }
                 // Burble: on a V at idle and on the overrun each pulse rings out as a short, round tone, pitched by
                 // its bank's pipe. The cross-plane's L R L L R R R L bank order gives it the V8 rhythm.
-                const double burble = (vee ? 0.75 : layout == kBoxer ? 0.18 : 0.05) * (0.45 + t.cam) * (1.0 - 0.6 * t.diesel) *
+                const double burble = (vee ? 0.75 : layout == kBoxer ? 0.18 : 0.05) * (0.45 + t.cam) * (1.0 - t.diesel) *
                                       std::fmax(idle, std::fmax(overrun ? 0.8 : 0.0, 0.5 * (1.0 - s.load) * (1.0 - rpm01)));
                 if (burble > 0.01) {
                     s.blat_age = 0;
@@ -339,7 +341,8 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
             exc_sum += exc;
         }
         const double nz = s.noise();
-        const double edge = edge_in * nz * (0.15 + 0.85 * t.rasp) * (0.5 + 0.6 * s.load + 0.8 * rpm01) * (1.0 - 0.6 * idle) * muffle;
+        const double edge = edge_in * nz * (0.15 + 0.85 * t.rasp) * (0.5 + 0.6 * s.load + 0.8 * rpm01) * (1.0 - 0.6 * idle) * muffle *
+                            (diesel && vee ? 0.25 : 1.0);   // a truck diesel's exhaust is a smooth drone, not a rasp
         v += 0.85 * s.rasp.run(edge) + 0.35 * t.rasp * s.rasp_hi.run(edge);
 
         // Diesel exhaust: a deep rushing roar that builds with revs and load (no turbo whistle: real turbos come
@@ -372,7 +375,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         if (s.knock_age < 0.03) {
             // The pressure spike strikes the block like a hammer: a short knock that rings out, not a hiss.
             const double ke = s.knock_amp * (s.knock_age < 0.0003 ? 1.0 : 0.0) + 0.08 * s.knock_amp * std::exp(-s.knock_age / 0.002) * s.noise();
-            v += 0.55 * t.diesel * (0.9 * s.knock.run(ke) + 0.6 * s.knock_mid.run(ke) + 0.3 * s.knock_hi.run(ke));
+            v += (vee ? 0.4 : 0.32) * t.diesel * (0.9 * s.knock.run(ke) + 0.6 * s.knock_mid.run(ke) + 0.3 * s.knock_hi.run(ke));
         } else {
             s.knock.run(0); s.knock_mid.run(0); s.knock_hi.run(0);
         }
@@ -405,7 +408,8 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         }
 
         // Muffler: rounds off the top end; a straight pipe keeps it all.
-        const double cutoff = (1300.0 + 9000.0 * (1.0 - t.muffler)) * (1.0 + 0.6 * rpm01);
+        double cutoff = (1300.0 + 9000.0 * (1.0 - t.muffler)) * (1.0 + 0.6 * rpm01);
+        if (diesel && vee) cutoff = std::fmin(cutoff, 900.0 + 700.0 * rpm01);   // big, heavy and deep: nothing shrill
         const double k = 1.0 - std::exp(-dt * two_pi * cutoff);
         s.soft += (v - s.soft) * k;
         s.soft2 += (s.soft - s.soft2) * k;
