@@ -279,10 +279,14 @@ void walk_rows(const uint8_t* container, std::vector<const uint8_t*>& rows, int 
     }
 }
 
-std::string debug_value_text(const uint8_t* dv) {
+// type_hint: the type the code declares for this name, used when the game's value kind can't be told apart
+// (the replicate methods MCCode compares against aren't statically locatable on 0.1.25).
+std::string debug_value_text(const uint8_t* dv, const std::string& type_hint = "") {
     void* rep = method(dv, 0);
     int kind = -1;
     for (int k = 0; k < kDbgKinds; ++k) if (rep && rep == g_debug_replicate[k]) kind = k;
+    if (kind < 0) kind = type_hint == "fractional" ? kDbgF64 : type_hint == "integer" ? kDbgS32 : type_hint == "bool" ? kDbgBool
+                         : type_hint == "string" ? kDbgString : type_hint == "list" ? kDbgList : -1;
     char buf[64];
     switch (kind) {
     case kDbgS32: snprintf(buf, sizeof buf, "%d", rd<int32_t>(dv, off::dv_value + off::prop_value)); return buf;
@@ -298,7 +302,7 @@ std::string debug_value_text(const uint8_t* dv) {
 int g_walk_countdown = 0;
 Snapshot g_last;   // main thread only
 
-void read_snapshot(const uint8_t* mc, Snapshot& s) {
+void read_snapshot(const uint8_t* mc, Snapshot& s, const std::map<std::string, std::string>& types) {
     s.valid = true;
     s.vehicle = prop_s32(mc, off::mc_vehicle_id);
     s.component = prop_s32(mc, off::mc_component_id);
@@ -337,7 +341,8 @@ void read_snapshot(const uint8_t* mc, Snapshot& s) {
         bool is_param = prop_bool(dv, off::dv_is_param);
         std::string name = "#" + std::to_string(id);
         for (auto& [vid, vname] : is_param ? params : vars) if (vid == id) name = vname;
-        s.watch.push_back(name + " = " + debug_value_text(dv));
+        auto t = types.find(name);
+        s.watch.push_back(name + " = " + debug_value_text(dv, t == types.end() ? std::string() : t->second));
     }
     for (auto* c : container_items(mc + off::mc_debug_components, 0x48))
         s.watch.push_back(std::string(prop_bool(c, off::dc_is_input) ? "in " : "out ") + prop_str(c, off::dc_name) + " = " + prop_str(c, off::dc_value));
@@ -401,7 +406,13 @@ void hk_update_ui(void* a, void* b, void* client, void* d, void* e, void* mc, vo
     } else {
         g_walk_countdown = 6;
         Snapshot s;
-        read_snapshot(m, s);
+        std::map<std::string, std::string> types;   // declared types, for reading debug values
+        {
+            std::lock_guard lock(g_mutex);
+            types = g.live_symbols.vars;
+            for (auto& l : g.live_symbols.lists) types[l] = "list";
+        }
+        read_snapshot(m, s, types);
         g_last = std::move(s);
     }
     std::lock_guard lock(g_mutex);
@@ -1770,7 +1781,7 @@ void install_hooks() {
                                                      &bind::debug_string_replicate, &bind::debug_list_replicate, &bind::debug_object_replicate};
         int found = 0;
         for (int k = 0; k < kDbgKinds; ++k) if ((g_debug_replicate[k] = route::function(*dbg[k]))) ++found;
-        if (found < kDbgKinds) log(1, "found %d of %d debug value kinds; the others show as (analogue) in Watch", found, kDbgKinds);
+        if (found < kDbgKinds) log(0, "found %d of %d debug value kinds; Watch reads the rest by their declared type", found, kDbgKinds);
         bool ok = h_save_data.install(save_cell, (void*)&hk_save_data) && h_update_ui.install(ui_cell, (void*)&hk_update_ui);
         if (!ok) { log(2, "a hook cell was not writable; MCCode is off"); remove_hooks(); return; }
         g_ready = true;
