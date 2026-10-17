@@ -42,11 +42,20 @@ namespace AnyApiManager {
    try{File.WriteAllText(probe,"");File.Delete(probe);}catch(UnauthorizedAccessException){start.Verb="runas";}
    using(var helper=Process.Start(start)){if(helper==null)throw new IOException("Could not start the manager updater.");}
   }
+  [System.Runtime.InteropServices.DllImport("kernel32.dll",CharSet=System.Runtime.InteropServices.CharSet.Unicode,SetLastError=true)]
+  static extern bool QueryFullProcessImageName(IntPtr process,int flags,System.Text.StringBuilder name,ref int size);
+  // The process's EXE path. Unlike MainModule this works the moment the process exists (its modules may not be
+  // listed yet), so a just-started parent is not misread as a different program.
+  static string ImagePath(Process process){
+   var name=new System.Text.StringBuilder(32768);int size=name.Capacity;
+   if(!QueryFullProcessImageName(process.Handle,0,name,ref size))throw new IOException("Could not read the update parent's path.");
+   return name.ToString(0,size);
+  }
   public static void WaitForParent(ManagerUpdateRequest request){
    Process parent;try{parent=Process.GetProcessById(request.ParentId);}catch(ArgumentException){return;}
    using(parent){
     if(parent.StartTime.ToUniversalTime().Ticks!=request.ParentStarted)throw new IOException("The manager process changed. Update cancelled.");
-    if(!string.Equals(Path.GetFullPath(parent.MainModule.FileName),Path.GetFullPath(request.Target),StringComparison.OrdinalIgnoreCase))throw new IOException("The update parent is not this manager.");
+    if(!string.Equals(Path.GetFullPath(ImagePath(parent)),Path.GetFullPath(request.Target),StringComparison.OrdinalIgnoreCase))throw new IOException("The update parent is not this manager.");
     if(!parent.WaitForExit(30000))throw new IOException("The manager is still open. Close it and try again.");
    }
   }
