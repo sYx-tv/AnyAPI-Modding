@@ -4,5 +4,11 @@
 function for the one that adds part definitions (the one that loads a definitions file by name), and when the world
 started the game was handed Turbo's parts as a file name. The Rotary Engine and the Dyno already checked for this;
 Turbo and the GPS Sensor now do too. A part that finds the wrong function looks again, and if it never finds the
-right one it stays off and says so in the log instead of crashing. Nothing else changes: parts, settings and saves
-are as in AnyEngineParts 0.2.0 and GpsPart 1.0.2.
+right one it stays off and says so in the log instead of crashing.
+
+**Loot tiers:** in Survival, the Turbo 3x3, the small supercharger, the small wastegate and the small blow-off valve
+still drop after the 2nd bunker (tech tier 3). Every other AnyEngineParts part now drops after the 3rd bunker (tech
+tier 4): the Turbo 6x6, the large supercharger, wastegate and blow-off valve, both air filters, both intercoolers, the
+Rotary Engine and the Dyno. Parts you already have stay yours, and Sandbox and Creative are unchanged.
+
+Parts, settings and saves are otherwise as in AnyEngineParts 0.2.0, and the GPS Sensor is as in GpsPart 1.0.2.

@@ -111,7 +111,7 @@ inline std::string definition_json(const std::string& mesh) {
         "        {\"type\": \"type_f64_output\", \"name\": \"air_flow\"},\n" +
         "        {\"type\": \"type_f64_output\", \"name\": \"torque\"}\n" +
         "      ],\n" +
-        "      \"tech_tier\": 3,\n" +
+        "      \"tech_tier\": 4,\n" +       // after the 3rd bunker (turbo_logic.h kLateTier)
         "      \"spawn_probability\": 0.15,\n" +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [],\n" +

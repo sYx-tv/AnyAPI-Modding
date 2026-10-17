@@ -194,7 +194,7 @@ constexpr const char* kDynoMeshName = "anyengineparts_dyno_sensor_a";
 constexpr const char* kDynoMeshPath = "meshes/components/anyengineparts_dyno_sensor_a.mesh";
 
 // The part: a 1 x 2 x 1 sensor of the game's altitude sensor class (nothing else hooks that class), shaped like the
-// compass sensor, with the dyno's data channels. tech_tier 3 and the "sensor" category, like the turbos' tier.
+// compass sensor, with the dyno's data channels. tech_tier 4 (world loot after the 3rd bunker) and the "sensor" category.
 inline std::string definition_json(const std::string& mesh_path = kStockMeshPath) {
     std::string descriptors;
     for (const auto& c : kChannels) {
@@ -227,7 +227,7 @@ inline std::string definition_json(const std::string& mesh_path = kStockMeshPath
       "data_descriptors": [
         )") + descriptors + R"(
       ],
-      "tech_tier": 3,
+      "tech_tier": 4,
       "spawn_probability": 0.2,
       "loot_group": "mechanical",
       "constraint_orientations": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],

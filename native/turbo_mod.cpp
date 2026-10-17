@@ -14,7 +14,8 @@
 // belt (apply_torque on their torque node, as the stock impeller does). They replaced the 2x2 and 4x4 turbos, which are
 // gone (a saved vehicle that had one loads without it).
 //
-// Getting it: tech_tier 3 loot in the "gas" category, like the stock impellers. Single player / host only for
+// Getting it: world loot in the "mechanical" group, tech_tier 3 (after the 2nd bunker) for the 3x3 turbo and the small
+// supercharger, wastegate and blow-off valve, 4 (after the 3rd) for the rest (turbo_logic.h). Single player / host only for
 // now: the definitions are added on this game's server and client scene, and every player would need the mod.
 // The hot-side gas is not saved; it refills from the pipes after loading.
 //

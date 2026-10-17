@@ -60,7 +60,7 @@ Power at the wheels is not measured yet.
 
 ## Getting it
 
-- **Survival:** world loot from tech tier 3 (mechanical loot, like the other sensors).
+- **Survival:** world loot after the 3rd bunker (tech tier 4, mechanical loot).
 - **Sandbox and Creative:** in the sensor container.
 
 Source: [`dyno_mod.cpp`](../../native/dyno_mod.cpp), [`dyno_logic.h`](../../native/dyno_logic.h),

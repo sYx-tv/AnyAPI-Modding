@@ -12,7 +12,7 @@
 // 1 street port, 2 peripheral port. Works next to EngineSound: both hook the engine's client tick and the voice
 // update, and the rotary's voices stay silent whichever mod's hook sits on top.
 //
-// Getting it: tech_tier 3 loot in the "mechanical" group, like the medium engine. Single player / host for now: the
+// Getting it: tech_tier 4 loot (after the 3rd bunker) in the "mechanical" group. Single player / host for now: the
 // definition is added on this game's server and client scene, and every player would need the mod.
 //
 // EXPERIMENTAL. Hooks game functions through the experimental SDK (rotary_bindings.h): Anymaker 0.1.25 / Steam
