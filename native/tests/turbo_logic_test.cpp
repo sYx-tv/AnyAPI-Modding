@@ -633,10 +633,10 @@ int main() {
         assert(small.find("\"tech_tier\": 3") != std::string::npos && small.find("\"name\": \"drive_power\"") != std::string::npos);
         for (int n : {2, 4, 5}) assert(full.find("\"id\": \"" + definition_id(n) + "\"") == std::string::npos);
         // Survival loot: the starter parts drop after the 2nd bunker (tier 3), the rest after the 3rd (tier 4).
-        for (const char* id : {"turbocharger_3", "supercharger_small", "turbo_wastegate", "turbo_blow_off_valve"})
+        for (const char* id : {"turbocharger_3", "supercharger_small", "turbo_wastegate", "turbo_blow_off_valve", "turbo_air_filter"})
             assert(entry(id).find("\"tech_tier\": 3,") != std::string::npos);
-        for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_wastegate_large", "turbo_blow_off_valve_large", "turbo_air_filter",
-                               "turbo_air_filter_large", "turbo_intercooler", "turbo_intercooler_round"})
+        for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_wastegate_large", "turbo_blow_off_valve_large", "turbo_air_filter_large",
+                               "turbo_intercooler", "turbo_intercooler_round"})
             assert(entry(id).find("\"tech_tier\": 4,") != std::string::npos);
         assert(count_in(full, "\"tech_tier\": ") == 12);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);

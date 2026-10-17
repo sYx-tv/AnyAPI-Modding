@@ -128,7 +128,7 @@ inline std::string definition_id(int n) { return std::string(kIdPrefix) + char('
 // Survival loot tiers. World loot drops a part while the world's loot level equals its tech tier; a new world starts
 // at loot level 1 and finishing each bunker raises it by one (game code, Anymaker 0.1.25). The starter parts drop
 // after the 2nd bunker and the rest after the 3rd (Nate, 2026-10-17).
-constexpr int kStarterTier = 3;   // Turbo 3x3, Supercharger (Small), Turbo Wastegate (Small), Turbo Blow-Off Valve (Small)
+constexpr int kStarterTier = 3;   // Turbo 3x3 and the small supercharger, wastegate, blow-off valve and air filter
 constexpr int kLateTier = 4;      // every other AnyEngineParts part (Rotary and Dyno too)
 inline std::string tech_tier_line(int tier) { return "      \"tech_tier\": " + std::to_string(tier) + ",\n"; }
 // Returns 3 or 6 for a turbo definition id, else 0.
@@ -807,7 +807,7 @@ inline std::string air_filter_entry(bool large, const std::string& mesh) {
         "      \"category\": \"gas\",\n" +
         "      \"inspection_geometry\": [{\"p1\": [" + last + ".0, " + last + ".0, " + last + ".0]}],\n" +
         "      \"data_descriptors\": [],\n" +
-        tech_tier_line(kLateTier) +
+        tech_tier_line(large ? kLateTier : kStarterTier) +
         "      \"spawn_probability\": 0.1,\n" +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
