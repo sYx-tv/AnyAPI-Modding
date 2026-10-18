@@ -134,6 +134,12 @@ local shadow counts to assist world validation.
 
 ## Limits
 
+AMD GPUs (AnyAPI 0.39.1): local lamp beams turned the whole frame into flat magenta, green and yellow on a
+Radeon RX 6800, and only switching them off cleared it. Until the cause is found, AnyAPI renders AMD GPUs with lamp
+beams off (sun shafts and fog stay) and reports it through [GPU info](api/gpu-info.md); AnyGraphics hides the lamp
+beam rows there. Other GPUs are unchanged.
+
+
 Temporal smoothing covers the volumetric pass only. There is no new point-light shadow generation, cascade
 cross-fading, volumetric cloud replacement or material/water overhaul. Samples
 outside all sun cascades remain unshadowed. More lights and march samples increase
