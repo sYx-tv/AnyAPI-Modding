@@ -66,6 +66,11 @@ float shadow_sample(uint cascade,float2 uv) {
 float4 shaping(){return matrices.Load(int3(0,21,0));}
 float4 temporal_controls(){return matrices.Load(int3(1,21,0));}
 
+// Some GPUs (AMD here) can produce a NaN or infinity where others quietly give
+// zero. One such pixel poisons bloom and eye adaptation and blows out the
+// whole screen. FXC may fold isnan away, so test the exponent bits.
+float3 finite3(float3 v){uint3 b=asuint(v);return (b&0x7f800000)==0x7f800000?0:clamp(v,0,4096);}
+float4 finite4(float4 v){return float4(finite3(v.rgb),(asuint(v.a)&0x7f800000)==0x7f800000?1:saturate(v.a));}
 struct Varying { float4 position : SV_Position; float2 uv : TEXCOORD0; };
 Varying Vertex(uint id : SV_VertexID) {
     Varying v;v.uv=float2((id<<1)&2,id&2);
@@ -131,7 +136,7 @@ float3 local_illumination(float3 position,float3 ray) {
         // Looking straight into a lamp, a strong forward peak (up to ~19x with
         // Focused) whited out the screen. Lights use a gentler lobe, capped.
         float g=min(medium.w,.5),mu=dot(ray,toward_light);float phase=min((1-g*g)/pow(max(1+g*g-2*g*mu,.001),1.5),3);
-        result+=colour.rgb*attenuation*visible*phase*sun_colour.w;
+        result+=finite3(colour.rgb*attenuation*visible*phase*sun_colour.w);
     }
     return result;
 }
@@ -203,7 +208,7 @@ float4 Integrate(Varying v) : SV_Target {
     float3 sun=sun_colour.rgb;
     if(shape.z>.5){float elevation=normalize(sunlight.xyz).y;sun*=lerp(1,.35,smoothstep(.35,.9,elevation))*smoothstep(-.04,.06,elevation)*lerp(float3(1,.78,.55),float3(1,1,1),smoothstep(.06,.45,elevation));}
     scattered+=sun*controls.z*phase*beams;
-    return float4(scattered,transmittance);
+    return finite4(float4(scattered,transmittance));
 }
 // Blends this frame's noisy half-resolution result with reprojected history.
 // The camera reprojection uses scene depth; the 3x3 neighbourhood clamp
@@ -223,7 +228,7 @@ float4 Accumulate(Varying v) : SV_Target {
     uint w,h;volume.GetDimensions(w,h);float2 texel=1/float2(w,h);float4 low=current,high=current;
     float centre=view_distance(scene_depth.SampleLevel(point_sampler,v.uv,0)),tolerance=max(.5,centre*.05);
     [unroll]for(int y=-1;y<=1;++y)[unroll]for(int x=-1;x<=1;++x){float2 uv_n=v.uv+float2(x,y)*texel;if(abs(view_distance(scene_depth.SampleLevel(point_sampler,uv_n,0))-centre)>tolerance)continue;float4 s=volume.SampleLevel(point_sampler,uv_n,0);low=min(low,s);high=max(high,s);}
-    return lerp(current,clamp(history,low,high),saturate(control.y));
+    return finite4(lerp(current,clamp(finite4(history),low,high),saturate(control.y)));
 }
 float4 resolved_lighting(float2 uv) {
     if(shaping().w<.5)return volume.SampleLevel(point_sampler,uv,0);
@@ -250,6 +255,7 @@ float4 Composite(Varying v) : SV_Target {
         [unroll]for(int y=-1;y<3;++y)[unroll]for(int x=-1;x<3;++x){float2 uv=(base+float2(x,y)+.5)/float2(w,h);
             float difference=abs(view_distance(scene_depth.SampleLevel(point_sampler,uv,0))-center_distance);
             if(difference<best){best=difference;lighting=resolved_lighting(uv);}}}
+    lighting=finite4(lighting);
     float4 original=scene_colour.SampleLevel(linear_sampler,v.uv,0);
     return float4(original.rgb*lighting.a+lighting.rgb,original.a);
 }

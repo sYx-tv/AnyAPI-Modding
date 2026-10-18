@@ -14,7 +14,7 @@ class Gpu {
  ComPtr<ID3D12Device> device;ComPtr<ID3D12CommandQueue> queue;
  ComPtr<ID3D12RootSignature> root;ComPtr<ID3D12PipelineState> integrate,accumulate,composite,matrix_pipeline,probe_pipeline;
  ComPtr<ID3D12Resource> source,volume,matrix_texture,depth_input;std::array<ComPtr<ID3D12Resource>,2> history;std::array<D3D12_RESOURCE_STATES,2> history_state{};gpu_timer::Timer timer;std::array<ComPtr<ID3D12Resource>,12> shadow_inputs;
- ComPtr<ID3D12DescriptorHeap> srv,rtv;UINT width{},height{},srv_stride{},rtv_stride{};DXGI_FORMAT format{};bool read{};HRESULT last_error{};
+ ComPtr<ID3D12DescriptorHeap> srv,rtv;UINT width{},height{},srv_stride{},rtv_stride{};DXGI_FORMAT format{};bool read{},history_cleared{};HRESULT last_error{};
  ComPtr<ID3D12Resource> probe_target,probe_readback;ComPtr<ID3D12Fence> probe_fence;ComPtr<ID3D12GraphicsCommandList> probe_list;
  D3D12_PLACED_SUBRESOURCE_FOOTPRINT probe_footprint{};UINT64 probe_bytes{};bool probe_recorded{},probe_submitted{},probe_consumed{},probe_written{};UINT64 probe_sequence{1};
  bool checked(HRESULT h){last_error=h;return SUCCEEDED(h);}
@@ -76,6 +76,8 @@ public:
   // Temporal: read one history, write the other. Both must be shader
   // resources before the composite samples them through the same table.
   auto to=[&](UINT i,D3D12_RESOURCE_STATES state){if(history_state[i]!=state){auto t=barrier(history[i].Get(),history_state[i],state);list->ResourceBarrier(1,&t);history_state[i]=state;}};
+  // New render targets hold whatever was in video memory (garbage on AMD), so clear the history once before reading it.
+  if(!history_cleared){const float clear[4]{0,0,0,1};for(UINT i=0;i<2;++i){to(i,D3D12_RESOURCE_STATE_RENDER_TARGET);list->ClearRenderTargetView(output(4+i),clear,0,nullptr);}history_cleared=true;}
   if(f.temporal[1][3]==1){UINT write=f.temporal[1][4]==1?0:1;to(1-write,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);to(write,D3D12_RESOURCE_STATE_RENDER_TARGET);handle=output(4+write);list->OMSetRenderTargets(1,&handle,FALSE,nullptr);list->SetPipelineState(accumulate.Get());list->DrawInstanced(3,1,0,0);}
   to(0,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);to(1,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   viewport.Width=float(width);viewport.Height=float(height);scissor.right=LONG(width);scissor.bottom=LONG(height);list->RSSetViewports(1,&viewport);list->RSSetScissorRects(1,&scissor);device->CreateRenderTargetView(target,nullptr,output(1));handle=output(1);list->OMSetRenderTargets(1,&handle,FALSE,nullptr);list->SetPipelineState(composite.Get());list->DrawInstanced(3,1,0,0);timer.end(list);
