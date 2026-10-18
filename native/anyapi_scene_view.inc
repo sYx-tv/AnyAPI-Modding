@@ -77,16 +77,18 @@ static void record_view(SceneFn original,uintptr_t renderer,uintptr_t scene,cons
  // Camera constants: copy the game's, rebuild them for the view.
  Constants game{},view{};float camera[scene_view_math::CAMERA_FLOATS]{};
  if(!safe_read_memory(scene+0xf58,&game,sizeof(game))||!game.cpu||!safe_read_memory(game.cpu,camera,sizeof(camera)))return fail(14,"camera_constants");
+ // The game camera, read from its own view matrix: whatever moved it (a third
+ // person mod, a vehicle seat), the constants are what the frame draws with.
  scene_view_math::Pose mainpose,pose;double origin[3]{},graphics_camera[3]{};
- for(int i=0;i<3;++i)mainpose.position[i]=camera[scene_view_math::POSITION+i];
- if(!read3(scene+0x98,mainpose.forward)||!read3(scene+0xb0,mainpose.up)||!read3(scene+0xc8,mainpose.right)||!read3(scene+0x8,origin)||!read3(scene+0x128,graphics_camera))return fail(15,"camera_pose");
+ int layout=scene_view_math::pose_from_constants(camera,mainpose);
+ if(layout<0){static int described{};if(described++<3){char text[640];scene_view_math::describe(camera,text,sizeof text);log_line(ANY_LOG_WARN,"framework",(std::string("SCENE_VIEW camera_constants ")+text).c_str());}return fail(1,"camera_layout");}
+ if(!read3(scene+0x8,origin)||!read3(scene+0x128,graphics_camera))return fail(15,"camera_pose");
  bool posed=false;
  if(p.mode==1)posed=scene_view_math::relative(mainpose,p.position,p.yaw,p.pitch,pose);
  else{posed=scene_view_math::orient(mainpose,p.yaw,p.pitch,pose);for(int i=0;i<3;++i)pose.position[i]=p.position[i]-origin[i]-(graphics_camera[i]-mainpose.position[i]);}
  if(!posed)return fail(4,"pose");
- int layout=scene_view_math::detect_layout(camera,mainpose.position,mainpose.forward);if(layout<0)return fail(1,"camera_layout");
  double scale=scene_view_math::fov_scale_for(camera,layout,p.fov_degrees*3.14159265358979323846/180);scene_view_math::M4 inverse;
- if(auto f=scene_view_math::rebuild(camera,mainpose,pose,scale,&inverse);f!=scene_view_math::OK)return fail(f,"camera_rebuild");
+ if(auto f=scene_view_math::rebuild(camera,layout,mainpose,pose,scale,&inverse);f!=scene_view_math::OK){static int described{};if(described++<3){char text[640];scene_view_math::describe(camera,text,sizeof text);log_line(ANY_LOG_WARN,"framework",("SCENE_VIEW camera_rebuild failure="+std::to_string(int(f))+" "+text).c_str());}return fail(f,"camera_rebuild");}
  auto g=graphics();int32_t bytes=704;if(!g||!natives.allocate)return fail(16,"allocate");natives.allocate(&view,g,&bytes);
  if(!view.cpu||!writable(view.cpu,sizeof(camera)))return fail(16,"allocate");
  // The rest of the 704 bytes (shadows, light, fog) stays the game's.
@@ -116,7 +118,8 @@ static void record_view(SceneFn original,uintptr_t renderer,uintptr_t scene,cons
  f.options[0]=std::max(camera[152],camera[153]);if(!(f.options[0]>0&&f.options[0]<1e7f))f.options[0]=0;f.options[1]=1;
  if(!scene_view_gpu::valid(f))return fail(20,"light");
  shown=f;have_view=true;auto n=++frames;
- if(n==1||n%600==0)log_line(ANY_LOG_INFO,"framework",("SCENE_VIEW frames="+std::to_string(n)+" layout="+std::to_string(layout)+" mode="+std::to_string(p.mode)+" width="+std::to_string(targets.width)+" height="+std::to_string(targets.height)+" fov_scale="+std::to_string(scale)+" far="+std::to_string(f.options[0])+" location=GBUFFER_REPLAY").c_str());
+ double scene_forward[3]{};bool forward_read=read3(scene+0x98,scene_forward);
+ if(n==1||n%600==0)log_line(ANY_LOG_INFO,"framework",("SCENE_VIEW frames="+std::to_string(n)+" layout="+std::to_string(layout)+" mode="+std::to_string(p.mode)+" width="+std::to_string(targets.width)+" height="+std::to_string(targets.height)+" fov_scale="+std::to_string(scale)+" far="+std::to_string(f.options[0])+" camera="+std::to_string(mainpose.position[0])+","+std::to_string(mainpose.position[1])+","+std::to_string(mainpose.position[2])+" forward_agreement="+std::to_string(forward_read?scene_view_math::dot3(scene_forward,mainpose.forward):0.)+" location=GBUFFER_REPLAY").c_str());
 }
 static void gbuffer_hook(void* renderer,void* scene){auto original=(SceneFn)gbuffer_cell.original();auto p=copy();
  if(!p.enabled||broken){have_view=false;original(renderer,scene);return;}

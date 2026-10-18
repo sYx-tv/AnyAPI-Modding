@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 #include <algorithm>
 #include <initializer_list>
 #include <utility>
@@ -29,21 +30,34 @@ inline bool normalize3(double* v){double l=std::sqrt(dot3(v,v));if(!(l>1e-9)||!s
 // Clip w of a point: the view depth for a perspective projection.
 inline double clip_w(const M4& vp,const double* p){return vp.m[3][0]*p[0]+vp.m[3][1]*p[1]+vp.m[3][2]*p[2]+vp.m[3][3];}
 struct Pose {double position[3]{},right[3]{},up[3]{},forward[3]{};};
-// Which float layout makes the constants a perspective camera at `position`
-// looking along `forward`: the camera itself has clip w 0 and a point 10 m
-// ahead has |w| 10. Returns 0 (stored by column), 1 (by row) or -1.
-inline int detect_layout(const float* camera,const double* position,const double* forward){int found=-1;
- for(int layout=0;layout<2;++layout){auto vp=load(camera+VIEW_PROJECTION,layout);double ahead[3];for(int i=0;i<3;++i)ahead[i]=position[i]+forward[i]*10;
-  double w0=clip_w(vp,position),w1=std::abs(clip_w(vp,ahead));if(std::isfinite(w0)&&std::isfinite(w1)&&std::abs(w0)<.05&&w1>9.5&&w1<10.5){if(found>=0)return -1;found=layout;}}
- return found;}
+// The game camera's pose and float layout, read from the view matrix in the
+// constants alone: in the right layout its bottom row is (0,0,0,1) and its
+// rotation is orthonormal. Position is -R^T t; forward is the rotation row
+// along which clip w grows. Returns the layout (0 stored by column, 1 by row)
+// or -1.
+inline int pose_from_constants(const float* camera,Pose& out){int found=-1;Pose pose;
+ for(int layout=0;layout<2;++layout){auto v=load(camera+VIEW,layout);if(std::abs(v.m[3][0])>1e-4||std::abs(v.m[3][1])>1e-4||std::abs(v.m[3][2])>1e-4||std::abs(v.m[3][3]-1)>1e-4)continue;
+  double r[3][3];for(int i=0;i<3;++i)for(int k=0;k<3;++k)r[i][k]=v.m[i][k];bool orthonormal=true;
+  for(int i=0;i<3;++i)for(int j=0;j<3;++j)if(std::abs(dot3(r[i],r[j])-(i==j))>2e-3)orthonormal=false;if(!orthonormal)continue;
+  Pose p;for(int k=0;k<3;++k){p.position[k]=-(r[0][k]*v.m[0][3]+r[1][k]*v.m[1][3]+r[2][k]*v.m[2][3]);p.right[k]=r[0][k];p.up[k]=r[1][k];p.forward[k]=r[2][k];}
+  auto vp=load(camera+VIEW_PROJECTION,layout);double ahead[3];for(int k=0;k<3;++k)ahead[k]=p.position[k]+p.forward[k];
+  if(clip_w(vp,ahead)-clip_w(vp,p.position)<0)for(auto& x:p.forward)x=-x;
+  if(found>=0)return -1;found=layout;pose=p;}
+ if(found>=0)out=pose;return found;}
+// One line of what the constants look like, for the log when they are refused.
+inline void describe(const float* camera,char* text,size_t size){int n=0;
+ for(int layout=0;layout<2&&n>=0&&size_t(n)<size;++layout){auto v=load(camera+VIEW,layout),p=load(camera+PROJECTION,layout),vp=load(camera+VIEW_PROJECTION,layout),pv=mul(p,v);double worst=0,scale=0;
+  for(int i=0;i<4;++i)for(int j=0;j<4;++j){worst=std::max(worst,std::abs(pv.m[i][j]-vp.m[i][j]));scale=std::max(scale,std::abs(vp.m[i][j]));}
+  n+=std::snprintf(text+n,size-size_t(n),"L%d view_row3=%.3g,%.3g,%.3g,%.3g view_row0=%.3g,%.3g,%.3g,%.3g pv_error=%.3g vp_scale=%.3g ",layout,v.m[3][0],v.m[3][1],v.m[3][2],v.m[3][3],v.m[0][0],v.m[0][1],v.m[0][2],v.m[0][3],worst,scale);}
+ if(n>=0&&size_t(n)<size)std::snprintf(text+n,size-size_t(n),"position=%.3g,%.3g,%.3g",camera[POSITION],camera[POSITION+1],camera[POSITION+2]);}
 inline bool close(const M4& a,const M4& b,double tolerance){double scale=0;for(auto& r:b.m)for(double v:r)scale=std::max(scale,std::abs(v));for(int i=0;i<4;++i)for(int j=0;j<4;++j)if(!(std::abs(a.m[i][j]-b.m[i][j])<=tolerance*std::max(1.,scale)))return false;return true;}
 enum Failure : int32_t {OK=0,LAYOUT=1,VIEW_MISMATCH=2,PRODUCT_MISMATCH=3,BASIS=4,SINGULAR=5,NOT_FINITE=6};
-// Rewrites `camera` (a copy of the game's constants) for `view`. `main` is the
-// game camera's pose in the same space as the constants. fov_scale multiplies
+// Rewrites `camera` (a copy of the game's constants) for `view`. `main` and
+// `layout` come from pose_from_constants. fov_scale multiplies
 // the projection's x and y scale (2 halves the field of view). On success the
 // result's inverse view-projection is returned canonically in `inverse_out`.
-inline Failure rebuild(float* camera,const Pose& main,const Pose& view,double fov_scale,M4* inverse_out=nullptr,int* layout_out=nullptr){
- int layout=detect_layout(camera,main.position,main.forward);if(layout<0)return LAYOUT;if(layout_out)*layout_out=layout;
+inline Failure rebuild(float* camera,int layout,const Pose& main,const Pose& view,double fov_scale,M4* inverse_out=nullptr){
+ if(layout!=0&&layout!=1)return LAYOUT;
  auto v=load(camera+VIEW,layout),p=load(camera+PROJECTION,layout),vp=load(camera+VIEW_PROJECTION,layout);
  // The view's rotation rows, expressed in the main camera's axes, carry the
  // game's handedness and axis signs over to the new basis unchanged.
