@@ -249,7 +249,9 @@ namespace AnyApiManager {
    if(string.IsNullOrWhiteSpace(preferences.GamePath)){exeHash=gclHash="";RefreshState();SetStatus("Choose your Anymaker folder in Settings.");return;}
    exeHash=gclHash="";var hashes=await Task.Run(()=>new[]{Rules.Hash(Rules.Target(preferences.GamePath,"game.exe")),Rules.Hash(Rules.Target(preferences.GamePath,"bin/game.gcl"))});exeHash=hashes[0];gclHash=hashes[1];ManagerLog.Write("Game folder "+preferences.GamePath+" game.exe "+exeHash+" game.gcl "+gclHash);RefreshState();
   }
-  async Task Connect(){var fresh=await Engine.Fetch(preferences.Repository);catalog=fresh;Engine.Cache(preferences.Repository,catalog);RefreshState();SetStatus("Catalog updated. "+catalog.Mods.Count+" mods available.");}
+  async Task Connect(){var fresh=await Engine.Fetch(preferences.Repository);
+   if(Engine.Newest(catalog,fresh)!=fresh){RefreshState();SetStatus("The online library is behind the copy you already have. Keeping AnyAPI "+catalog.Api[0].Version+"; check again shortly.");return;}
+   catalog=fresh;Engine.Cache(preferences.Repository,catalog);RefreshState();SetStatus("Catalog updated. "+catalog.Mods.Count+" mods available.");}
   void RefreshState(){
    selectedApi=catalog.Api.Concat(bundled.Api).Where(p=>Rules.Matches(p,exeHash,gclHash)).OrderByDescending(p=>p.Revision).FirstOrDefault();
    int installed=0;try{if(exeHash!="")installed=Engine.ApiRevision(preferences.GamePath,catalog);}catch(Exception e){SetStatus(e.Message);}
@@ -314,7 +316,7 @@ namespace AnyApiManager {
    SetStatus("Preparing "+p.Name+"…");bool embedded=p.Id=="anyapi"&&p.Sha256==bundled.Api[0].Sha256;string zip=await Engine.Acquire(p,embedded);
    try{var result=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Package=p,Catalog=catalog,Action="install",ZipPath=zip,ReplaceUnknown=replace,DisableIncompatible=disable});if(!result.Success)throw new IOException(result.Message);SetStatus(result.Message);await Scan();}finally{File.Delete(zip);}
   }
-  bool ApiNeedsUpdate(){return selectedApi!=null&&installedRevision<selectedApi.Revision;}
+  bool ApiNeedsUpdate(){if(selectedApi==null||installedRevision>=selectedApi.Revision)return false;try{return Engine.NewerUnknownApi(preferences.GamePath,catalog,selectedApi)==null;}catch{return true;}}
   string InstalledVersion(Package p){if(p.Local)return p.Version;try{Receipt r;return exeHash!=""&&Engine.ReadInstalled(preferences.GamePath).Packages.TryGetValue(p.Id,out r)?r.Package.Version:null;}catch{return null;}}
   static string ReleasePage(Package p){if(p==null||p.Local||string.IsNullOrEmpty(p.Url)||!p.Url.Contains("/releases/download/"))return null;return p.Url.Substring(0,p.Url.LastIndexOf('/')).Replace("/releases/download/","/releases/tag/");}
   // Installs or updates several packages in one run. Each failure is logged and skipped so
