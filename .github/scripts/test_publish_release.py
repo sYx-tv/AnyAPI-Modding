@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for publish_release.py against copies of the real catalog and feed."""
+"""Tests for publish_release.py against a fixed catalog (fixtures/catalog.json) and the real manager feed."""
 import json
 import shutil
 import struct
@@ -33,10 +33,11 @@ class PublishTests(unittest.TestCase):
         self.assets = self.temp / "assets"
         self.root.mkdir()
         self.assets.mkdir()
-        for name in ("catalog.json", "manager-update.json"):
-            shutil.copy(REPO / name, self.root / name)
-        # Pin the versions the tests release against, so publishing a real
-        # release (which moves the live catalog forward) doesn't break them.
+        # A fixed catalog (as it was before the mod bundles), so publishing real releases, which
+        # moves the live catalog forward and removes replaced mods, doesn't break these tests.
+        shutil.copy(Path(__file__).resolve().parent / "fixtures" / "catalog.json", self.root / "catalog.json")
+        shutil.copy(REPO / "manager-update.json", self.root / "manager-update.json")
+        # Pin the versions the tests release against.
         catalog = self.catalog()
         pinned = {"AnyAPI": ("0.33.0", 33, 0), "AnyClock": ("1.0.0", 1, 30), "AnyBalance": ("1.0.0", 1, 33)}
         for entry in catalog["Api"] + catalog["Mods"]:
