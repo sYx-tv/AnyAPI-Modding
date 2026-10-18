@@ -68,9 +68,10 @@ float4 temporal_controls(){return matrices.Load(int3(1,21,0));}
 
 // Some GPUs (AMD here) can produce a NaN or infinity where others quietly give
 // zero. One such pixel poisons bloom and eye adaptation and blows out the
-// whole screen. FXC may fold isnan away, so test the exponent bits.
-float3 finite3(float3 v){uint3 b=asuint(v);return (b&0x7f800000)==0x7f800000?0:clamp(v,0,4096);}
-float4 finite4(float4 v){return float4(finite3(v.rgb),(asuint(v.a)&0x7f800000)==0x7f800000?1:saturate(v.a));}
+// whole screen. FXC may fold isnan away, so test the exponent bits. Finite values
+// pass through unchanged, so a frame without a bad value is bit-identical.
+float3 finite3(float3 v){return (asuint(v)&0x7f800000)==0x7f800000?0:v;}
+float4 finite4(float4 v){return float4(finite3(v.rgb),(asuint(v.a)&0x7f800000)==0x7f800000?1:v.a);}
 struct Varying { float4 position : SV_Position; float2 uv : TEXCOORD0; };
 Varying Vertex(uint id : SV_VertexID) {
     Varying v;v.uv=float2((id<<1)&2,id&2);
