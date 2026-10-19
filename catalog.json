@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.39.0",
-      "Revision": 43,
+      "Version": "0.39.1",
+      "Revision": 44,
       "MinimumApi": 0,
-      "Description": "Native mod framework for Anymaker 0.1.25; loads mod bundles (several mods in one DLL, each switchable in Mod Settings) and adds menu v4.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.0/AnyAPI-0.39.0.zip",
-      "Sha256": "679d14c5bd3940e88fed10d1aa41ad568d4d57aad28426ebc1d488625426a036",
+      "Description": "Native mod framework for Anymaker 0.1.25; loads mod bundles (several mods in one DLL, each switchable in Mod Settings), adds menu v4, and switches lamp beams off on AMD graphics cards, where they broke the picture.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.1/AnyAPI-0.39.1.zip",
+      "Sha256": "b9f9b85870b0009eabd03af1f26ce49ecef4aeb4d31a7cc8af09f215136a0866",
       "FileHashes": {
-        "dinput8.dll": "040aa1f3df15f379ef22f02b1cae274b136b272382cea772428e42cc2bc5a6ed"
+        "dinput8.dll": "cf9bf3f7e109e399b9eda10fe12b52cc60a583bd6dc83698790232389f19f3b7"
       },
       "GameBuilds": [
         {
@@ -121,14 +121,14 @@
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "1.0.0",
-      "Revision": 35,
+      "Version": "1.0.2",
+      "Revision": 36,
       "MinimumApi": 43,
       "Description": "Graphics overhaul with presets from Off to Cinematic plus Custom, TAA, tone mapping and colour looks, shading, shadows, sky, depth of field, motion blur and photo mode, plus ThirdPerson's F5 third-person camera. Each piece can be switched off in Mod Settings. Anymaker 0.1.25 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.0/AnyGraphics-1.0.0.zip",
-      "Sha256": "28a94870d8a2e7aafed9befc5cb34b13ae399d959f0b2ea519fdc6d304080ab3",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.1/AnyGraphics-1.0.2.zip",
+      "Sha256": "bb7ef5579140384e36d87c7258662a307a96dfcb215eefe824ba1cec0a5ed5c3",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "72258628af7bb4d10058d327c16ebd56e474e856e4a017d9c6233291f02a4824"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "0ebea90acc2c99548a41bef1f9e6173daa6bdb14d5d6b77924f6455248e5af81"
       },
       "GameBuilds": [
         {
