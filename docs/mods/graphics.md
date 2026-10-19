@@ -13,7 +13,8 @@ rejected settings in 0.29.3. 0.30.0 fixes foggy sun shafts and adds TAA,
 sharpening, tone mapping and colour looks, a Cinematic preset and a GPU cost
 readout. 0.31.0 adds a free camera and photo controls (depth of field,
 exposure, look, vignette, bloom) to photo mode. 0.31.1 fixes the free camera spinning
-when photo mode starts in ThirdPerson's third-person view. See the
+when photo mode starts in ThirdPerson's third-person view. 0.31.2 hides the lamp beam
+settings on AMD graphics cards, where AnyAPI 0.39.1 switches lamp beams off. See the
 [release records](../releases/README.md).
 
 ## Tone mapping and colour (0.30.0)
