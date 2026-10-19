@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.39.1",
-      "Revision": 44,
+      "Version": "0.39.2",
+      "Revision": 45,
       "MinimumApi": 0,
-      "Description": "Native mod framework for Anymaker 0.1.25; loads mod bundles (several mods in one DLL, each switchable in Mod Settings), adds menu v4, and switches lamp beams off on AMD graphics cards, where they broke the picture.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.1/AnyAPI-0.39.1.zip",
-      "Sha256": "b9f9b85870b0009eabd03af1f26ce49ecef4aeb4d31a7cc8af09f215136a0866",
+      "Description": "Native mod framework for Anymaker 0.1.25; loads mod bundles (several mods in one DLL, each switchable in Mod Settings), adds menu v4, and draws lamp beams on AMD graphics cards too.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.2/AnyAPI-0.39.2.zip",
+      "Sha256": "fdc19a9ed072d840a036d7fbe3849531500dab122331acd4afb14abc94c5bb5f",
       "FileHashes": {
-        "dinput8.dll": "cf9bf3f7e109e399b9eda10fe12b52cc60a583bd6dc83698790232389f19f3b7"
+        "dinput8.dll": "71d341269487b68062462c3f2d8a1dc91a5933a8263300423f5a41b1da0fa3f9"
       },
       "GameBuilds": [
         {
