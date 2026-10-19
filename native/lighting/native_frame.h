@@ -12,7 +12,7 @@ struct NativeFrame {Frame gpu;NativeTarget color,depth,shadow;std::array<NativeT
 // Exact 0.1.24 contract: native ref<T> is control block then object pointer.
 // target+0x10 is the D3D12 resource, +0x28 its recorded state, +0x50 its SRV.
 template<class Read> bool target(uintptr_t object,NativeTarget& out,Read read){unsigned char data[0x60]{};if(!object||!read(object,data,sizeof(data)))return false;memcpy(&out.resource,data+0x10,8);memcpy(&out.state,data+0x28,4);memcpy(&out.width,data+0x34,4);memcpy(&out.height,data+0x38,4);memcpy(&out.srv_format,data+0x50,4);memcpy(&out.srv_dimension,data+0x54,4);return out.resource&&out.width>0&&out.width<=8192&&out.height>0&&out.height<=8192&&out.srv_dimension==4;}
-template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,const AnySceneLightingParametersV1& p,NativeFrame& out,Read read,float local_strength=0,uint32_t local_budget=4){
+template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,const AnySceneLightingParametersV1& p,NativeFrame& out,Read read,float local_strength=0,uint32_t local_budget=4,bool local_shadows=true){
  out.gpu.local_shadow_count=out.gpu.fog_color[3]=out.gpu.sun_color[3]=0;out.gpu.lights={};out.gpu.local_shadows={};
  out.failure=1;if(p.quality>3||!std::isfinite(local_strength)||local_strength<0||local_strength>15||local_budget<1||local_budget>8)return false;
  out.failure=2;unsigned char special[4]{};if(!read(scene+0x668,special,4)||special[0]||special[1]||special[2]||special[3])return false;
@@ -49,7 +49,7 @@ template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,const AnySc
   for(unsigned i=0;i<selected;++i){auto& c=lights[i];
    // Match the copied spotlight matrix to the current camera rather than
    // guessing whether a shadow index is relative to the sun-cascade count.
-   if(c.spot&&shadow_slots<4)for(unsigned n=cascade_count;n<camera_count&&n<count;++n){if(!read(cameras+n*720+0x220,matrix,sizeof(matrix)))continue;bool match=true;for(unsigned j=0;j<16;++j)match&=std::abs(float(matrix[j])-c.matrix[j])<=.0001f*std::max(1.f,std::abs(c.matrix[j]));if(!match)continue;
+   if(local_shadows&&c.spot&&shadow_slots<4)for(unsigned n=cascade_count;n<camera_count&&n<count;++n){if(!read(cameras+n*720+0x220,matrix,sizeof(matrix)))continue;bool match=true;for(unsigned j=0;j<16;++j)match&=std::abs(float(matrix[j])-c.matrix[j])<=.0001f*std::max(1.f,std::abs(c.matrix[j]));if(!match)continue;
     uintptr_t object{};NativeTarget local;if(!read(shadows+n*16+8,&object,8)||!target(object,local,read)||(local.srv_format!=41&&local.srv_format!=56))break;
     out.cascades[8+shadow_slots]=local;f.local_shadows[shadow_slots]=c.matrix;c.data[12]=float(8+shadow_slots);if(read(cameras+n*720+0x1a0,matrix,sizeof(matrix)))c.data[13]=matrix[10]<0?2.f:1.f;++shadow_slots;break;
    }

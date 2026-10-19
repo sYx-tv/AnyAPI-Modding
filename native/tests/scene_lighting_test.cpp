@@ -43,6 +43,8 @@ int main(){
  for(unsigned j=0;j<16;++j)cone[j]=float(spot_matrix[j]);cone[16]=2;cone[17]=3;cone[18]=6;cone[19]=10;cone[22]=-1;cone[23]=.5f;cone[24]=cone[25]=cone[26]=1;cone[28]=.9f;write(spot,cone);
  write(scene+0x5c8,uint32_t(5));write(refs+4*16+8,shadow);write(cameras+4*720+0x220,spot_matrix);write(cameras+4*720+0x1a0,spot_matrix);
  assert(volumetric::capture(renderer,scene,p,frame,read,2,4)&&frame.gpu.local_shadow_count==1&&frame.gpu.lights[0][12]==8&&frame.gpu.lights[0][13]==2);
+ assert(volumetric::capture(renderer,scene,p,frame,read,2,4,false)&&frame.gpu.local_shadow_count==0&&frame.gpu.fog_color[3]>0);
+ assert(volumetric::capture(renderer,scene,p,frame,read,2,4)&&frame.gpu.local_shadow_count==1&&frame.gpu.lights[0][12]==8&&frame.gpu.lights[0][13]==2);
  spot_matrix[0]=2;write(cameras+4*720+0x220,spot_matrix);assert(volumetric::capture(renderer,scene,p,frame,read,2,4)&&frame.gpu.local_shadow_count==0&&frame.gpu.lights[0][12]==-1);
  cone[22]=0;write(spot,cone);assert(volumetric::capture(renderer,scene,p,frame,read,2,4)&&frame.gpu.fog_color[3]==0);write(scene+0x5c8,uint32_t(4));
  write(depth+0x34,uint32_t(1280));assert(!volumetric::capture(renderer,scene,p,frame,read));write(depth+0x34,uint32_t(2560));
