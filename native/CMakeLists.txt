@@ -202,8 +202,8 @@ function(anyapi_version_resource target product)
     set(ANYAPI_VERSION_COMMA "1,1,1,0")
     set(ANYAPI_VERSION_TEXT "1.1.1")
   elseif(target STREQUAL "AnyLights")
-    set(ANYAPI_VERSION_COMMA "0,1,0,0")
-    set(ANYAPI_VERSION_TEXT "0.1.0")
+    set(ANYAPI_VERSION_COMMA "0,2,0,0")
+    set(ANYAPI_VERSION_TEXT "0.2.0")
   elseif(target STREQUAL "GpsPart")
     set(ANYAPI_VERSION_COMMA "1,0,3,0")
     set(ANYAPI_VERSION_TEXT "1.0.3")
@@ -479,7 +479,7 @@ add_executable(anymirror_logic_test tests/anymirror_logic_test.cpp)
 target_compile_options(anymirror_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME anymirror_logic COMMAND anymirror_logic_test)
 
-# AnyLights (prototype): light colours, patterns and data channels, through the experimental SDK.
+# AnyLights: one paint tool for every colour (palette panel, modes, undo) and lights that glow their paint colour.
 add_library(AnyLights SHARED anylights_mod.cpp)
 target_include_directories(AnyLights PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
 target_compile_options(AnyLights PRIVATE /W3 /EHsc /utf-8)
@@ -562,7 +562,7 @@ endfunction()
 anyapi_bundle(AnyEnginePartsBundle AnyEngineParts bundles/anyengineparts_bundle.cpp
   bundles/part_anyengineparts.cpp turbo_mod.cpp rotary_mod.cpp dyno_mod.cpp bundles/part_enginesound.cpp bundles/part_gpspart.cpp)
 anyapi_bundle(AnyHelpersBundle AnyHelpers bundles/anyhelpers_bundle.cpp bundles/part_anyhelpers.cpp
-  bundles/part_anyinventory.cpp bundles/part_anymirror.cpp bundles/part_anybalance.cpp bundles/part_mccode.cpp)
+  bundles/part_anyinventory.cpp bundles/part_anymirror.cpp bundles/part_anybalance.cpp bundles/part_mccode.cpp bundles/part_anylights.cpp)
 target_link_libraries(AnyHelpersBundle PRIVATE gdiplus user32)
 anyapi_bundle(AnyGraphicsBundle AnyGraphics bundles/anygraphics_bundle.cpp bundles/part_anygraphics.cpp bundles/part_thirdperson.cpp)
 anyapi_bundle(AnyMapBundle AnyMap bundles/anymap_bundle.cpp bundles/part_anymap.cpp "${CMAKE_CURRENT_BINARY_DIR}/anymap_roads.rc")
