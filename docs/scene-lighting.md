@@ -134,10 +134,10 @@ local shadow counts to assist world validation.
 
 ## Limits
 
-AMD GPUs (AnyAPI 0.39.1): local lamp beams turned the whole frame into flat magenta, green and yellow on a
-Radeon RX 6800, and only switching them off cleared it. Until the cause is found, AnyAPI renders AMD GPUs with lamp
-beams off (sun shafts and fog stay) and reports it through [GPU info](api/gpu-info.md); AnyGraphics hides the lamp
-beam rows there. Other GPUs are unchanged.
+AMD GPUs: local lamp beams turned the whole frame into flat magenta, green and yellow on a Radeon RX 6800.
+AnyAPI 0.39.1 switched them off there. From 0.39.2 AMD GPUs use their own lamp shader, `IntegrateConstants`: the
+lights come from a constant buffer read in an unrolled loop instead of a texture `Load` inside a dynamic loop, and
+lamps cast no shadow maps. That fixed the RX 6800. Other GPUs keep the original `Integrate` shader, byte for byte.
 
 
 Temporal smoothing covers the volumetric pass only. There is no new point-light shadow generation, cascade
