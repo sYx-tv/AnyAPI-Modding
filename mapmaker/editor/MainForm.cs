@@ -323,6 +323,8 @@ namespace AnyMapMaker {
    if(pack==null)return;
    if(!EnsureGame()){SetStatus("Not saved: the Map Maker needs the game folder to know where maps go.",Theme.Bad);return;}
    string maps=game.MapsFolder;Directory.CreateDirectory(maps);
+   string oldName=pack.Name,oldFolder=pack.Folder;
+   Action undoSaveAs=()=>{if(!asNew)return;pack.Name=oldName;pack.Folder=oldFolder;loading=true;nameBox.Text=oldName;loading=false;};
    if(asNew){
     string name=ThemedDialog.Prompt(this,"Save as a new map","Name of the new map (this is what the Custom Game page shows):",pack.Name+" copy","Save");
     if(string.IsNullOrEmpty(name))return;
@@ -336,8 +338,8 @@ namespace AnyMapMaker {
     if(Directory.Exists(want)&&Directory.GetFileSystemEntries(want).Length>0){
      int pick=ThemedDialog.Ask(this,"A map with this name exists","There is already a map called \""+Path.GetFileName(want)+"\" in the maps folder.","Keep both","Replace it","Cancel");
      if(pick==0)want=FreeName(maps,SafeName(pack.Name));
-     else if(pick!=1)return;
-     else if(!File.Exists(Path.Combine(want,"map.json"))){ThemedDialog.Tell(this,"Can't replace it",want+" has other files in it. Rename the map and save again.");return;}
+     else if(pick!=1){undoSaveAs();return;}
+     else if(!File.Exists(Path.Combine(want,"map.json"))){undoSaveAs();ThemedDialog.Tell(this,"Can't replace it",want+" has other files in it. Rename the map and save again.");return;}
     }
     if(Path.GetFileName(want)!=SafeName(pack.Name)){pack.Name=Path.GetFileName(want);loading=true;nameBox.Text=pack.Name;loading=false;}
     foreach(var t in pack.Tiles.Values)t.Dirty=true;folder=want;
@@ -348,7 +350,7 @@ namespace AnyMapMaker {
    }
    Cursor=Cursors.WaitCursor;
    try{pack.Save(folder,game.BuildId);pack.Folder=folder;unsaved=false;UpdateCounts();SetStatus("Saved \""+Path.GetFileName(folder)+"\". In game, pick it on the Custom Game page (Map row).",Theme.Ok);}
-   catch(Exception e){ThemedDialog.Tell(this,"Could not save",e.Message);}
+   catch(Exception e){undoSaveAs();ThemedDialog.Tell(this,"Could not save",e.Message);}
    finally{Cursor=Cursors.Default;}
   }
   void Export(){
@@ -357,10 +359,12 @@ namespace AnyMapMaker {
     if(d.ShowDialog(this)!=DialogResult.OK)return;
     string folder=Path.Combine(d.SelectedPath,SafeName(pack.Name));
     if(Directory.Exists(folder)&&Directory.GetFileSystemEntries(folder).Length>0){ThemedDialog.Tell(this,"Folder not empty",folder+" already exists. Pick another place.");return;}
-    string keep=pack.Folder;var dirty=new List<Tile>();foreach(var t in pack.Tiles.Values){if(!t.Dirty)dirty.Add(t);t.Dirty=true;}
+    // Save writes every tile to the copy and clears its changed mark; put the marks back so the next Save still
+    // writes the tiles changed since the map was last saved.
+    string keep=pack.Folder;var changed=new HashSet<Tile>();foreach(var t in pack.Tiles.Values){if(t.Dirty)changed.Add(t);t.Dirty=true;}
     try{pack.Save(folder,game==null?"":game.BuildId);SetStatus("Exported a copy to "+folder,Theme.Ok);}
     catch(Exception e){ThemedDialog.Tell(this,"Could not export",e.Message);}
-    finally{pack.Folder=keep;if(keep!=null)foreach(var t in dirty)t.Dirty=false;}
+    finally{pack.Folder=keep;foreach(var t in pack.Tiles.Values)t.Dirty=keep==null||changed.Contains(t);}
    }
   }
   void ShiftAll(int steps){if(!Ready())return;editor.Begin();editor.ShiftAll(steps);if(editor.Commit())Edited(true);SetStatus(steps>0?"Raised the whole map 32 m.":"Lowered the whole map 32 m.",Theme.Ok);}
@@ -492,7 +496,8 @@ namespace AnyMapMaker {
    JsonObject data;
    try{data=Json.Parse(tileJson.Text) as JsonObject;if(data==null)throw new FormatException("A tile must be a JSON object { ... }");}
    catch(Exception e){ThemedDialog.Tell(this,"That isn't valid tile JSON",e.Message);return;}
-   var t=pack.Get(key.Value);t.Data=data;t.Dirty=true;unsaved=true;editor=new MapEditor(pack);  // raw edits are not undoable
+   var t=pack.Get(key.Value);if(t==null){ThemedDialog.Tell(this,"No tile there","That tile was removed. Paint terrain there first, then select it again.");return;}
+   t.Data=data;t.Dirty=true;unsaved=true;editor=new MapEditor(pack);  // raw edits are not undoable
    var scene=MapScene.Build(pack);view.ShowScene(scene);view3d.ShowScene(scene,editor);layers.Reload();ShowTile(key);UpdateCounts();UpdateUndo();
   }
  }

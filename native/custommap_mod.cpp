@@ -97,6 +97,17 @@ std::atomic<bool> g_first_read{false}; // log the first redirected read after ea
 std::vector<std::string> g_list;       // last scan, sorted
 std::set<std::string> g_stock_veg;     // tile base names ("tile_088_122_0") that keep the game's vegetation
 
+// Where a key's value starts: the "key" text followed by ':', so a name or description that reads "spawn" is skipped.
+size_t find_key(const std::string& text, const char* key) {
+    std::string quoted = std::string("\"") + key + "\"";
+    for (size_t at = text.find(quoted); at != std::string::npos; at = text.find(quoted, at + 1)) {
+        size_t p = at + quoted.size();
+        while (p < text.size() && (text[p] == ' ' || text[p] == '\t' || text[p] == '\r' || text[p] == '\n')) ++p;
+        if (p < text.size() && text[p] == ':') return p + 1;
+    }
+    return std::string::npos;
+}
+
 // map.json "stock_vegetation": ["tile_...", ...]. A pack without the key keeps all stock vegetation.
 bool read_stock_vegetation(const fs::path& pack, std::set<std::string>& out, bool& all) {
     out.clear(); all = true;
@@ -104,7 +115,7 @@ bool read_stock_vegetation(const fs::path& pack, std::set<std::string>& out, boo
     std::string text; char buf[65536]; size_t n;
     while ((n = fread(buf, 1, sizeof buf, f)) > 0 && text.size() < (64u << 20)) text.append(buf, n);
     fclose(f);
-    size_t at = text.find("\"stock_vegetation\""); if (at == std::string::npos) return true;
+    size_t at = find_key(text, "stock_vegetation"); if (at == std::string::npos) return true;
     at = text.find('[', at); size_t end = at == std::string::npos ? at : text.find(']', at);
     if (at == std::string::npos || end == std::string::npos) return true;
     all = false;
@@ -124,8 +135,9 @@ bool read_spawn(const fs::path& pack, double out[3]) {
     std::string text; char buf[65536]; size_t n;
     while ((n = fread(buf, 1, sizeof buf, f)) > 0 && text.size() < (64u << 20)) text.append(buf, n);
     fclose(f);
-    size_t at = text.find("\"spawn\""); if (at == std::string::npos) return false;
-    at = text.find('[', at); if (at == std::string::npos) return false;
+    size_t at = find_key(text, "spawn"); if (at == std::string::npos) return false;
+    while (at < text.size() && (text[at] == ' ' || text[at] == '\t' || text[at] == '\r' || text[at] == '\n')) ++at;
+    if (at >= text.size() || text[at] != '[') return false;   // "spawn": null keeps the game's start points
     const char* p = text.c_str() + at + 1;
     for (int i = 0; i < 3; ++i) {
         char* end = nullptr; out[i] = strtod(p, &end);
@@ -164,10 +176,8 @@ bool svc_select(const char* name) {
         g_pack_name.clear(); g_pack_tiles.clear(); g_has_spawn = false;
         return true;
     }
-    {   // Called on every world load: re-selecting the current pack is a no-op.
-        std::lock_guard l(g_pack_mutex);
-        if (n == g_pack_name && !g_pack_tiles.empty()) return true;
-    }
+    // Called on every world start and load. map.json is read each time, so a map saved again in the Map Maker while
+    // the game runs gets its new start point and vegetation list; the log only names a pack when it changes.
     fs::path pack = maps_dir() / wide(n);
     if (!valid_name(n) || !loadable(pack)) { log(2, "map pack '%s' is missing or has no tiles; using the normal world", n.c_str()); svc_select(""); return false; }
     if (!g_ready || g_abs_store < 0) { log(2, "map pack '%s' chosen, but CustomMap is not ready (see the errors above)", n.c_str()); svc_select(""); return false; }
@@ -177,11 +187,14 @@ bool svc_select(const char* name) {
     read_stock_vegetation(pack, veg, all);
     double spawn[3]; bool has_spawn = read_spawn(pack, spawn);
     std::lock_guard l(g_pack_mutex);
+    bool fresh = g_pack_name != n || g_pack_tiles.empty();
+    bool moved = has_spawn != g_has_spawn || (has_spawn && memcmp(spawn, g_spawn, sizeof spawn) != 0);
     g_has_spawn = has_spawn; if (has_spawn) memcpy(g_spawn, spawn, sizeof spawn);
-    if (has_spawn && g_pack_name != n) log(0, "map pack '%s' start point: %.1f, %.1f, %.1f", n.c_str(), spawn[0], spawn[1], spawn[2]);
-    if (g_pack_name != n) log(0, "map pack '%s' selected (%s); stock vegetation kept on %s tiles", n.c_str(), root.c_str(),
-                              all ? "all" : std::to_string(veg.size()).c_str());
-    g_pack_name = n; g_pack_tiles = root; g_first_read = true; g_stock_veg = std::move(veg); g_stock_veg_all = all;
+    if (has_spawn && (fresh || moved)) log(0, "map pack '%s' start point: %.1f, %.1f, %.1f", n.c_str(), spawn[0], spawn[1], spawn[2]);
+    if (fresh) log(0, "map pack '%s' selected (%s); stock vegetation kept on %s tiles", n.c_str(), root.c_str(),
+                   all ? "all" : std::to_string(veg.size()).c_str());
+    if (fresh) g_first_read = true;
+    g_pack_name = n; g_pack_tiles = root; g_stock_veg = std::move(veg); g_stock_veg_all = all;
     return true;
 }
 bool svc_selected(char* buf, uint32_t cap) {
