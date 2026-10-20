@@ -164,7 +164,7 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics
  menu=(const AnyMenuV1*)services->query("anyapi.menu",1);widgets=(const AnyMenuV3*)services->query("anyapi.menu",3);
  if(!menu||menu->version!=1||menu->struct_size!=sizeof(*menu)||!menu->add_section||!widgets||widgets->version!=3||widgets->struct_size!=sizeof(*widgets)){log("GRAPHICS_MENU unavailable=1");return;}
  auto own_file=std::filesystem::path(host.plugin_directory)/L"AnyGraphics"/L"settings.tsv";
- state.file=std::filesystem::exists(own_file)?own_file:std::filesystem::path(host.plugin_directory)/L"AnyHelpers"/L"settings.tsv";state.load();bool imported=state.file!=own_file;state.file=own_file;
+ std::error_code missing;state.file=std::filesystem::exists(own_file,missing)?own_file:std::filesystem::path(host.plugin_directory)/L"AnyHelpers"/L"settings.tsv";state.load();bool imported=state.file!=own_file;state.file=own_file;
  // Keep only retained native controls when importing the old shared settings file.
  std::map<std::string,helpersettings::Saved> retained;
  for(auto& o:definitions){std::string group=o.group;std::transform(group.begin(),group.end(),group.begin(),[](unsigned char c){return char(std::tolower(c));});auto key="anygraphics."+group+"\t"+o.id;auto old=state.saved.find(key);if(old!=state.saved.end())retained.emplace(*old);}
@@ -180,7 +180,7 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics
  for(auto i:{SunLight,SkyLight,AmbientLight,FogDensity}){auto& r=state.settings[i];r.committed.number=i==FogDensity?fog_levels[nearest(float(r.committed.number),fog_levels)]:light_levels[nearest(float(r.committed.number),light_levels)];r.draft=r.committed;}
  auto& amount=state.settings[BloomAmount];amount.committed.number=bloom_levels[nearest(float(amount.committed.number),bloom_levels)];amount.draft=amount.committed;
  // Without the V2 AA service the TAA choices are not offered; show SMAA instead.
- if(!aa_v2){auto& r=state.settings[NativeAA];if(r.committed.number>4)r.committed.number=aa?3:2;r.draft=r.committed;}
+ if(!aa_v2){auto& r=state.settings[NativeAA];if(r.committed.number>4)r.committed.number=graphics::aa?3:2;r.draft=r.committed;}
  state.settings[SceneExposure].committed.number=0;state.settings[SceneExposure].draft=state.settings[SceneExposure].committed;
  AnyMenuSectionV1 section;section.id="anygraphics";section.title="AnyGraphics · Modded";section.location=ANY_MENU_SETTINGS_GRAPHICS;section.order=100;section.draw=draw;section.event=event;section.dirty=dirty;section.defaults=defaults;
  if(!menu->add_section(&section)){log("GRAPHICS_MENU registration_failed=1 requires_API_28=1");return;}
