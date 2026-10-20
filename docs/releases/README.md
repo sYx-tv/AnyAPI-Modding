@@ -10,6 +10,7 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Contents | Evidence |
 | --- | --- | --- | --- | --- |
+| 2026-10-20 | [mods-2026.10.20](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.20) | [AnyHelpers 1.0.1](anyhelpers-1.0.1.md) | AnyHelpers bundle 1.0.1 (fixes the Duplicate tool Favorites paste crash and the Workshop tab from Favorites) | |
 | 2026-10-19 | [v0.39.2](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.39.2) | [0.39.2](release-0.39.2.md) | AnyAPI 0.39.2 (lamp beams back on AMD graphics cards through their own lamp path; NVIDIA shaders unchanged) | |
 | 2026-10-19 | [v0.39.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.39.1) | [0.39.1](release-0.39.1.md) | AnyAPI 0.39.1 (lamp beams off on AMD graphics cards, gpu_info service), AnyGraphics bundle 1.0.2 (AnyGraphics 0.31.2: lamp beam settings hidden on AMD; photo free camera fix) | |
 | 2026-10-17 | [v0.39.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.39.0) | [0.39.0](release-0.39.0.md) | AnyAPI 0.39.0 (mod bundles, menu v4) and four bundles at 1.0.0: AnyEngineParts (with EngineSound and GpsPart), AnyHelpers (with Favorites, ADMIN, AnyInventory, AnyMirror, AnyBalance and MCCode), AnyGraphics (with ThirdPerson) and AnyMap | |
