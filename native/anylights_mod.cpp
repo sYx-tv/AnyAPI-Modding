@@ -83,12 +83,11 @@ constexpr ptrdiff_t client_peer_data = 40 + 104;      // client.m_peers.m_data
 std::mutex g_mutex;                         // everything below that more than one thread touches
 Rgb g_palette[kMaxPalette];                // written once, before g_palette_count is published
 std::atomic<int> g_palette_count{0};
-uint64_t g_palette_tried = 0;
+uint64_t g_palette_tried = 0;               // game thread only, like the lookup
+int g_palette_misses = 0;
+constexpr int kPaletteTries = 30;
 
-bool copy_palette() {
-    uint64_t now = GetTickCount64();
-    if (now - g_palette_tried < 2000) return false;   // the lookup scans game code: not every frame
-    g_palette_tried = now;
+bool read_palette() {
     auto* p = static_cast<const uint8_t*>(anymaker::experimental::global(bind::g_color_palette));
     if (!p || !anymaker::readable(p, sizeof(anymaker::gc_vector_raw))) return false;
     anymaker::gc_vector_raw v; std::memcpy(&v, p, sizeof v);
@@ -97,6 +96,16 @@ bool copy_palette() {
     g_palette_count = v.count;
     log(0, "palette: %d colours", v.count);
     return true;
+}
+// Called by the paint tool and by every light tick until it works, so lights glow without a paint tool held first.
+// The lookup scans game code: at most every 2 s, and it gives up after a minute of misses.
+bool copy_palette() {
+    uint64_t now = GetTickCount64();
+    if (g_palette_misses >= kPaletteTries || now - g_palette_tried < 2000) return false;
+    g_palette_tried = now;
+    if (read_palette()) return true;
+    if (++g_palette_misses == kPaletteTries) log(2, "could not read the game's palette: lights stay stock and the paint panel stays closed");
+    return false;
 }
 
 // Reads one component's paint slots. Returns how many were read.
@@ -144,7 +153,11 @@ anymaker::cell_hook h_paint_tick;
 void** g_push_component_cell;
 void** g_push_plate_cell;
 UndoStack g_undo;                            // game thread only
+const uint8_t* g_undo_scene;                 // the world g_undo belongs to (game thread only)
+std::atomic<bool> g_left_world{false};       // main menu or a loading screen seen: the next world reuses vehicle ids
+constexpr int32_t kUiMainMenu = 5, kUiLoadingScreen = 25;   // frontend_ui.e_ui_state
 bool g_lmb_was_down;
+std::atomic<bool> g_panel_shown{false};      // clicks on the panel are not paint clicks
 std::atomic<int> g_paint_logs{4};
 
 bool read_vehicle_paint(const uint8_t* scene, int32_t vehicle_id, Snapshot& out) {
@@ -171,7 +184,7 @@ void run_undo(uint8_t* client, const uint8_t* scene) {
     if (!client || !g_push_component_cell || !*g_push_component_cell || !g_push_plate_cell || !*g_push_plate_cell) return;
     Diff d = g_undo.pop_restore([&](int32_t vehicle, Snapshot& now) { return read_vehicle_paint(scene, vehicle, now); });
     uint8_t* peer = client + off::client_peer_data;
-    if (d.empty()) { g_undo_done = 0; log(0, "undo: nothing left to undo"); return; }
+    if (d.empty()) { g_undo_done = 0; log(0, "undo: the last click changed nothing undo can restore"); return; }
     int32_t vehicle = d.vehicle;
     for (const auto& s : d.slots) {
         int32_t colour = s.colour, component = s.component, slot = s.slot;
@@ -205,12 +218,14 @@ void hk_paint_tick(uint8_t* item, uint8_t* client, uint8_t* scene, void* actor, 
             if (mode >= 0 && mode < kModeCount) wr<int32_t>(item, off::paint_mode, mode);
             if (g_paint_logs.fetch_sub(1) > 0)
                 log(0, "paint tool held: own colour %d mode %d, AnyLights colour %d mode %d", own_colour, own_mode, colour, mode);
+            // Undo history belongs to one world: another world or server has the same vehicle and part ids.
+            if (g_left_world.exchange(false) || scene != g_undo_scene) { g_undo.clear(); g_undo_scene = scene; }
             // Undo: remember the aimed-at vehicle's paint as the click starts, before the tool sends anything.
             bool lmb = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-            if (lmb && !g_lmb_was_down) {
+            if (lmb && !g_lmb_was_down && !g_panel_shown.load()) {
                 Snapshot s;
                 int32_t vehicle = rd<int32_t>(item, off::paint_hovered_vehicle);
-                if (vehicle > 0 && read_vehicle_paint(scene, vehicle, s)) g_undo.push(std::move(s));
+                if (vehicle > 0 && read_vehicle_paint(scene, vehicle, s)) { g_undo.push(std::move(s)); g_undo_done = -1; }
             }
             g_lmb_was_down = lmb;
             for (int n = g_undo_requests.exchange(0); n > 0; --n) run_undo(client, scene);
@@ -231,7 +246,7 @@ std::atomic<int> g_light_logs{8};
 void colour_light(int kind, uint8_t* light) {
     if (!light || !anymaker::readable(light, kLightColour[kind] + 4)) return;
     Rgb c = kStockLight;
-    if (g_lights_enabled.load() && g_palette_count > 0) {
+    if (g_lights_enabled.load() && (g_palette_count > 0 || copy_palette())) {
         int32_t slots[16];
         int n = read_slots(light, slots, 16);
         int32_t index = light_paint_index(slots, n, g_palette_count);
@@ -331,12 +346,15 @@ void hit_test() {
 
 void close_panel() {
     g_panel.open = false;
+    g_panel_shown = false;
     if (host.capture_input) host.capture_input(0);
 }
 
 void frame(const AnyFrameV1* f, AnyCanvasV1*, void*) {
     if (!f) return;
     refresh_settings();
+    AnyUiSnapshotV1 state;
+    if (ui && ui->copy(&state) && (state.native_state == kUiMainMenu || state.native_state == kUiLoadingScreen)) g_left_world = true;
     std::lock_guard lock(g_mutex);
     g_panel.focused = f->focused != 0;
     g_panel.frame_w = float(f->width); g_panel.frame_h = float(f->height);
@@ -406,7 +424,7 @@ void draw(const AnyFrameV1* frame, void*) {
     if (hint_mode >= 0 && hint_mode < kModeCount) text(x + 16 * s, fy, p.w - 32 * s, 18 * s, kModeHints[hint_mode], 11 * s, 0xffdfe4ea);
     int undone = g_undo_done.load();
     text(x + 16 * s, fy + 20 * s, p.w - 32 * s, 18 * s,
-         undone == 0 ? L"Nothing left to undo · Right click or Esc closes" : L"Ctrl+Z undoes your last click · Right click or Esc closes", 11 * s, 0xff929fab);
+         undone == 0 ? L"Nothing to undo for that click · Right click or Esc closes" : L"Ctrl+Z undoes your last click · Right click or Esc closes", 11 * s, 0xff929fab);
 }
 
 void to_renderer(const AnyInputV1* e) {
@@ -427,8 +445,9 @@ uint32_t input(const AnyInputV1* e, void*) {
     // Ctrl+Z undo while holding a paint tool.
     if (e->kind == ANY_KEY_DOWN && e->key == 'Z' && (GetKeyState(VK_CONTROL) & 0x8000)) { ++g_undo_requests; return 1; }
     if (!p.open) {
-        if (e->kind == ANY_MOUSE_DOWN && e->button == 2) {
-            p.open = true; p.hover = p.hover_mode = -1;
+        // Only when the panel can be drawn: an invisible panel would still hold the keyboard and mouse.
+        if (e->kind == ANY_MOUSE_DOWN && e->button == 2 && gpu && g_palette_count > 0) {
+            p.open = true; p.hover = p.hover_mode = -1; g_panel_shown = true;
             if (host.capture_input) host.capture_input(1);
             return 1;
         }

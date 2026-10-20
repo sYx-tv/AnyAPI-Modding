@@ -14,26 +14,35 @@ int main() {
     assert((light_from_paint({0, 0, 0}) == Rgb{255, 255, 255}));
     assert((light_from_paint({120, 124, 118}) == Rgb{255, 255, 255}));
 
-    // Undo: restores only what changed, skips removed parts, and skips clicks that changed nothing.
+    // Undo: restores only what changed and skips removed parts.
     Snapshot before{7, {{1, 0, 79}, {1, 1, 79}, {2, 0, 5}}, {{3, true, 10}}};
     Snapshot after{7, {{1, 0, 30}, {1, 1, 79}}, {{3, true, 11}}};
     Diff d = diff_to_restore(before, after);
     assert(d.slots.size() == 1 && d.slots[0].component == 1 && d.slots[0].slot == 0 && d.slots[0].colour == 79);
     assert(d.plates.size() == 1 && d.plates[0].colour == 10);
     assert(diff_to_restore(before, Snapshot{8}).empty());
+    // Front and back of one plate, and the same slot on two parts, are told apart.
+    Snapshot sides{7, {{1, 0, 4}, {2, 0, 5}}, {{3, true, 10}, {3, false, 20}}};
+    Snapshot sides_now{7, {{2, 0, 6}, {1, 0, 4}}, {{3, false, 21}, {3, true, 10}}};
+    Diff ds = diff_to_restore(sides, sides_now);
+    assert(ds.slots.size() == 1 && ds.slots[0].component == 2 && ds.slots[0].colour == 5);
+    assert(ds.plates.size() == 1 && !ds.plates[0].front && ds.plates[0].colour == 20);
 
     UndoStack stack(3);
     stack.push(before);
     stack.push(before);                 // same paint again: not stored twice
     assert(stack.size() == 1);
     Snapshot unchanged = after;
-    stack.push(unchanged);              // newest snapshot equals the current paint: undo skips it
+    stack.push(unchanged);              // a click undo can't see (an edge, a link, a pixel stroke)
     auto read = [&](int32_t vehicle, Snapshot& out) { if (vehicle != 7) return false; out = after; return true; };
+    assert(stack.pop_restore(read).empty() && stack.size() == 1);   // that click alone: never the one before it
     Diff r = stack.pop_restore(read);
     assert(r.slots.size() == 1 && r.plates.size() == 1 && stack.size() == 0);
     assert(stack.pop_restore(read).empty());
     for (int i = 0; i < 5; ++i) stack.push(Snapshot{i});
     assert(stack.size() == 3);
+    stack.clear();                      // a new world: the old history must not repaint its vehicles
+    assert(stack.size() == 0 && stack.pop_restore(read).empty());
 
     // Palette grid hit tests.
     assert(grid_hit(0, 0, 20, 4, 12, 84) == 0);

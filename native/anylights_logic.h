@@ -2,6 +2,7 @@
 // AnyLights paint-tool and light-colour logic with no game or Windows dependencies (tested by tests/anylights_logic_test.cpp).
 #include <algorithm>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace anylights {
@@ -45,16 +46,26 @@ struct Snapshot {
 struct Diff { int32_t vehicle = 0; std::vector<PaintSlot> slots; std::vector<PlateSide> plates; bool empty() const { return slots.empty() && plates.empty(); } };
 
 // What has to be repainted to bring `now` back to `before` (same vehicle). Parts or plates removed since are skipped.
+// Looked up by key, not pairwise: a big build has tens of thousands of paint slots.
 inline Diff diff_to_restore(const Snapshot& before, const Snapshot& now) {
     Diff d;
     d.vehicle = before.vehicle;
     if (before.vehicle != now.vehicle) return d;
-    for (const auto& b : before.slots)
-        for (const auto& n : now.slots)
-            if (n.component == b.component && n.slot == b.slot) { if (n.colour != b.colour) d.slots.push_back(b); break; }
-    for (const auto& b : before.plates)
-        for (const auto& n : now.plates)
-            if (n.plate == b.plate && n.front == b.front) { if (n.colour != b.colour) d.plates.push_back(b); break; }
+    auto slot_key = [](int32_t component, int32_t slot) { return uint64_t(uint32_t(component)) << 32 | uint32_t(slot); };
+    auto plate_key = [](int32_t plate, bool front) { return uint64_t(uint32_t(plate)) << 1 | (front ? 1u : 0u); };
+    std::unordered_map<uint64_t, int32_t> slots, plates;
+    slots.reserve(now.slots.size());
+    plates.reserve(now.plates.size());
+    for (const auto& n : now.slots) slots.emplace(slot_key(n.component, n.slot), n.colour);
+    for (const auto& n : now.plates) plates.emplace(plate_key(n.plate, n.front), n.colour);
+    for (const auto& b : before.slots) {
+        auto it = slots.find(slot_key(b.component, b.slot));
+        if (it != slots.end() && it->second != b.colour) d.slots.push_back(b);
+    }
+    for (const auto& b : before.plates) {
+        auto it = plates.find(plate_key(b.plate, b.front));
+        if (it != plates.end() && it->second != b.colour) d.plates.push_back(b);
+    }
     return d;
 }
 
@@ -67,19 +78,18 @@ public:
         items_.push_back(std::move(s));
         if (items_.size() > limit_) items_.erase(items_.begin());
     }
-    // Pops snapshots until one differs from the current paint; `current(vehicle, out)` reads it. Returns the repaint.
+    // Pops the newest snapshot and returns what to repaint; `current(vehicle, out)` reads the paint now. Empty when the
+    // last click changed nothing undo can see (an edge, a link, a pixel stroke): undo never reaches past it to an older click.
     template <class Read> Diff pop_restore(Read&& current) {
-        while (!items_.empty()) {
-            Snapshot s = std::move(items_.back());
-            items_.pop_back();
-            Snapshot now;
-            if (!current(s.vehicle, now)) continue;
-            Diff d = diff_to_restore(s, now);
-            if (!d.empty()) return d;
-        }
-        return {};
+        if (items_.empty()) return {};
+        Snapshot s = std::move(items_.back());
+        items_.pop_back();
+        Snapshot now;
+        if (!current(s.vehicle, now)) return {};
+        return diff_to_restore(s, now);
     }
     size_t size() const { return items_.size(); }
+    void clear() { items_.clear(); }
 
 private:
     static bool same(const Snapshot& a, const Snapshot& b) {

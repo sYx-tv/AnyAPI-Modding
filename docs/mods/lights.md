@@ -19,8 +19,9 @@ click. A panel opens with:
 Click a swatch or a mode, then right click or press Esc to close the panel. The pick applies to every paint
 tool you hold and is remembered between sessions (`anylights_paint.txt` in the mods folder).
 
-**Ctrl+Z** undoes your last click with the paint tool on parts and on whole plate sides. Brush and pencil
-pixel strokes can't be undone yet.
+**Ctrl+Z** undoes your last click with the paint tool on parts and on whole plate sides, one click per press.
+Edges, links and brush or pencil pixel strokes can't be undone yet: Ctrl+Z after one of those does nothing
+(it never reaches back to the click before). Undo history starts fresh in each world.
 
 ## Lights
 
