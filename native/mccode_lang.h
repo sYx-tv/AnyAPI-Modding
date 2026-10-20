@@ -709,9 +709,12 @@ private:
     }
 
     void expr(Expr& e) {
-        if (e.a) expr(*e.a);
+        bool target = target_;
+        if (e.a) expr(*e.a);   // for a list item on the left of "=", a is the list being written
+        target_ = false;       // its index, and everything else inside, is read
         if (e.b) expr(*e.b);
         for (auto& a : e.args) expr(*a);
+        target_ = target;
         if (e.k == EK::Call) { error(e.line, e.col, e.len, "A function call can't be used as a value here; call it on its own line"); return; }
         if (e.k != EK::Ref) return;
         auto has = [&](RK k) {

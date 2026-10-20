@@ -134,6 +134,12 @@ local shadow counts to assist world validation.
 
 ## Limits
 
+AMD GPUs: local lamp beams turned the whole frame into flat magenta, green and yellow on a Radeon RX 6800.
+AnyAPI 0.39.1 switched them off there. From 0.39.2 AMD GPUs use their own lamp shader, `IntegrateConstants`: the
+lights come from a constant buffer read in an unrolled loop instead of a texture `Load` inside a dynamic loop, and
+lamps cast no shadow maps. That fixed the RX 6800. Other GPUs keep the original `Integrate` shader, byte for byte.
+
+
 Temporal smoothing covers the volumetric pass only. There is no new point-light shadow generation, cascade
 cross-fading, volumetric cloud replacement or material/water overhaul. Samples
 outside all sun cascades remain unshadowed. More lights and march samples increase
