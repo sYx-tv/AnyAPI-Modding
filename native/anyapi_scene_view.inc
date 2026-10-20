@@ -44,16 +44,27 @@ struct Constants {uintptr_t resource{},cpu{},gpu{};};
 static_assert(sizeof(Constants)==24);
 // What the display pass needs from the last recorded view.
 static scene_view_gpu::Frame shown;static bool have_view{};static uint64_t frame_counter{};static std::atomic<bool> broken{};
+// display() calls so far, and the call count when the last view was recorded:
+// the picture is hidden once the view stops being recorded (a failing frame,
+// or no gbuffer pass outside a world).
+static std::atomic<uint64_t> display_calls{},recorded_at{};
 static scene_view_gpu::Gpu gpu;
 static bool in_game(uintptr_t p){HMODULE m{};return p&&GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCWSTR)p,&m)&&m==GetModuleHandleW(nullptr);}
 static uintptr_t slot_value(uintptr_t body,size_t end,size_t slot){uintptr_t v{};return body&&safe_read_memory(body+end+slot*8,&v,8)?v:0;}
 static uintptr_t slot_function(uintptr_t body,size_t end,size_t slot){uintptr_t cell=slot_value(body,end,slot),fn{};return cell&&safe_read_memory(cell,&fn,8)&&in_game(fn)?fn:0;}
 static void* graphics(){uintptr_t g{};return natives.graphics_global&&safe_read_memory(natives.graphics_global,&g,8)?(void*)g:nullptr;}
 static bool writable(uintptr_t pointer,size_t bytes){MEMORY_BASIC_INFORMATION m{};return pointer&&VirtualQuery((void*)pointer,&m,sizeof(m))&&m.State==MEM_COMMIT&&!(m.Protect&(PAGE_GUARD|PAGE_NOACCESS))&&(m.Protect&(PAGE_READWRITE|PAGE_EXECUTE_READWRITE))&&pointer+bytes>=pointer&&pointer+bytes<=uintptr_t(m.BaseAddress)+m.RegionSize;}
-static void fail(int32_t code,const char* why){error=code;auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework",(std::string("SCENE_VIEW bypass=")+why+" error="+std::to_string(code)).c_str());}
+static void fail(int32_t code,const char* why){error=code;ready=false;auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework",(std::string("SCENE_VIEW bypass=")+why+" error="+std::to_string(code)).c_str());}
 // Creates the view's targets at the game's gbuffer size, through the game.
+// Old sets are never released (see Targets), so a new size must hold for 60
+// recorded frames first (dragging a window edge changes it every frame), and
+// at most 8 sets are made in a process.
 static bool ensure_targets(int32_t w,int32_t h){if(targets.valid&&targets.width==w&&targets.height==h)return true;
- auto g=graphics();if(!g||!natives.create_target||!natives.create_texture||!natives.string_ctor||!natives.string_dtor)return false;
+ static int32_t pending_w{},pending_h{};static int held{},sets{};
+ if(w!=pending_w||h!=pending_h){pending_w=w;pending_h=h;held=0;}
+ if(++held<60){fail(26,"size_settling");return true;}
+ if(sets>=8){static bool said{};if(!said){said=true;log_line(ANY_LOG_WARN,"framework","SCENE_VIEW targets_limit=8 (window size changed too often; restart the game for the view)");}return false;}
+ ++sets;auto g=graphics();if(!g||!natives.create_target||!natives.create_texture||!natives.string_ctor||!natives.string_dtor)return false;
  Targets next;next.width=w;next.height=h;
  for(size_t i=0;i<SPEC_COUNT;++i){auto& s=SPECS[i];int32_t tw=s.half?w/2:w,th=s.half?h/2:h,usage=0,depth=1,format=s.format;unsigned char name[16]{};
   natives.string_ctor(name,s.name);
@@ -74,6 +85,7 @@ static void record_view(SceneFn original,uintptr_t renderer,uintptr_t scene,cons
  for(int i=0;i<3;++i){uintptr_t object{};if(!safe_read_memory(renderer+checks[i],&object,8)||!volumetric::target(object,main[i],safe_read_memory)||main[i].srv_format!=formats[i]||main[i].width!=main[0].width||main[i].height!=main[0].height)return fail(11,"gbuffer_contract");}
  unsigned char flags[4]{};if(!safe_read_memory(renderer+0x63d,flags,4))return fail(12,"flags");for(auto f:flags)if(f>1)return fail(12,"flags");
  if(!ensure_targets(int32_t(main[0].width),int32_t(main[0].height))){broken=true;return fail(13,"create_targets");}
+ if(!targets.valid||targets.width!=int32_t(main[0].width)||targets.height!=int32_t(main[0].height))return;
  // Camera constants: copy the game's, rebuild them for the view.
  Constants game{},view{};float camera[scene_view_math::CAMERA_FLOATS]{};
  if(!safe_read_memory(scene+0xf58,&game,sizeof(game))||!game.cpu||!safe_read_memory(game.cpu,camera,sizeof(camera)))return fail(14,"camera_constants");
@@ -117,7 +129,7 @@ static void record_view(SceneFn original,uintptr_t renderer,uintptr_t scene,cons
  for(int i=0;i<3;++i){f.sun[i]=float(-sun[i]/l);f.view_up[i]=float(c[0][i]);f.view_down[i]=float(c[1][i]);f.sun_light[i]=float(c[4][i]);f.sky_light[i]=float(c[5][i]);f.back_light[i]=float(c[6][i]);}
  f.options[0]=std::max(camera[152],camera[153]);if(!(f.options[0]>0&&f.options[0]<1e7f))f.options[0]=0;f.options[1]=1;
  if(!scene_view_gpu::valid(f))return fail(20,"light");
- shown=f;have_view=true;auto n=++frames;
+ shown=f;have_view=true;recorded_at=display_calls.load();auto n=++frames;
  double scene_forward[3]{};bool forward_read=read3(scene+0x98,scene_forward);
  if(n==1||n%600==0)log_line(ANY_LOG_INFO,"framework",("SCENE_VIEW frames="+std::to_string(n)+" layout="+std::to_string(layout)+" mode="+std::to_string(p.mode)+" width="+std::to_string(targets.width)+" height="+std::to_string(targets.height)+" fov_scale="+std::to_string(scale)+" far="+std::to_string(f.options[0])+" camera="+std::to_string(mainpose.position[0])+","+std::to_string(mainpose.position[1])+","+std::to_string(mainpose.position[2])+" forward_agreement="+std::to_string(forward_read?scene_view_math::dot3(scene_forward,mainpose.forward):0.)+" location=GBUFFER_REPLAY").c_str());
 }
@@ -130,7 +142,7 @@ static void gbuffer_hook(void* renderer,void* scene){auto original=(SceneFn)gbuf
  record_view(original,uintptr_t(renderer),uintptr_t(scene),p,before);
 }
 // Pre-HUD, after antialiasing: light the view and draw it into its rectangle.
-static void display(){auto p=copy();if(!p.enabled||broken||!have_view||p.display[2]<=0||p.display[3]<=0){ready=false;return;}
+static void display(){auto p=copy();auto calls=++display_calls;if(!p.enabled||broken||!have_view||calls-recorded_at>uint64_t(p.interval)+1||p.display[2]<=0||p.display[3]<=0){ready=false;return;}
  volumetric::NativeTarget t[3];static constexpr size_t which[3]={VIEW_DEPTH,VIEW_NORMAL,VIEW_ALBEDO};
  for(int i=0;i<3;++i)if(!volumetric::target(targets.refs[which[i]][1],t[i],safe_read_memory))return fail(21,"view_targets");
  auto list=scene_antialiasing::command_list();auto saved=scene_antialiasing::states.find(list);

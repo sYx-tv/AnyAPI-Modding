@@ -33,16 +33,19 @@ int mode;
 bool placed;
 double placed_position[3];
 float placed_yaw;
+uint64_t placed_epoch;  // the world the fixed camera was dropped in
 
 void log(uint32_t level, const char* text) { if (host.log) host.log(level, kModId, text); }
 
 bool gameplay() { AnyUiSnapshotV1 s; return ui && ui->copy && ui->copy(&s) && s.kind == ANY_UI_GAMEPLAY; }
 
 // Remembers where the local player stands and looks, for the fixed camera.
+AnySessionPlayersV1 players;
+
+bool copy_players() { players = {}; return host.copy_players && host.copy_players(&players, nullptr); }
+
 bool place() {
-    static AnySessionPlayersV1 players;
-    players = {};
-    if (!host.copy_players || !host.copy_players(&players, nullptr)) return false;
+    if (!copy_players()) return false;
     for (uint32_t i = 0; i < players.count && i < ANYAPI_PLAYERS_CAPACITY; ++i) {
         auto& p = players.players[i];
         constexpr uint32_t need = PLAYER_LOCAL | PLAYER_POSITION | PLAYER_FACING;
@@ -51,6 +54,7 @@ bool place() {
         placed_position[1] = p.position[1] + 1.7;  // about eye height
         placed_position[2] = p.position[2];
         placed_yaw = float(p.yaw_radians);
+        placed_epoch = players.world_epoch;
         return placed = true;
     }
     return false;
@@ -67,6 +71,7 @@ void apply() {
     case 1: p.mode = 1; p.position[1] = .3; p.yaw = 3.14159265f; break;                  // rear view
     case 2: p.mode = 1; p.fov_degrees = 15; break;                                       // zoom
     default:
+        if (placed && copy_players() && players.world_epoch != placed_epoch) placed = false;  // another world
         if (!placed && !place()) { p.mode = 1; break; }
         p.mode = 2; p.position[0] = placed_position[0]; p.position[1] = placed_position[1]; p.position[2] = placed_position[2];
         p.yaw = placed_yaw; p.pitch = -.1f; break;
