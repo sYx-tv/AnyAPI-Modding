@@ -12,10 +12,11 @@
 namespace admin {
 // server_scene: +0x40 tick, +0xa8 peers, +0x250 actors, +0xb10 time_of_day (+0x18 override bool, +0x38 override f64).
 constexpr size_t kTick=0x40,kPeers=0xa8,kActors=0x250,kTimeOfDay=0xb10,kTodOverride=0x18,kTodValue=0x38;
-constexpr size_t kActorIdCounter=0x70;                      // server_scene.actor.container _m_id_counter
+constexpr size_t kWorldSeed=0x48+0x18;                       // server_scene.m_world_seed (master property_s32) value
+constexpr size_t kActorElements=0x18;                        // server_scene.actor.container _m_elements: vector<ref<actor>>
 constexpr size_t kActorId=0x40,kActorTransform=0xb8,kActorPeerAuthority=0x1b0;  // server_scene.actor
 constexpr size_t kPeerData=0x19d0,kPeerActor=0x19d8,kPeerPosition=0x19f8;       // server_scene.peer
-constexpr int kSlotIsCreature=54,kSlotIsZombie=55;          // server_scene.actor method table (zombie and creature override them)
+constexpr int kSlotIsCharacter=53,kSlotIsCreature=54,kSlotIsZombie=55;   // server_scene.actor method table (get_is_*)
 constexpr int kMaxPeers=64;
 struct Vec3 {double x,y,z;};
 struct WeatherData {double cloud,precipitation,fog,temperature,wind_x,wind_y;};
@@ -25,7 +26,7 @@ enum Weather {kNatural=-1,kClear,kCloudy,kRain,kStorm,kFog,kSnow,kWeatherCount};
 static const char* const kWeatherNames[kWeatherCount]={"Clear","Cloudy","Rain","Storm","Fog","Snow"};
 enum Kind {kHeal,kTeleportTo,kBring,kBringAll,kSetTime,kNaturalTime,kFreeze,kClearActors};
 // peer/target are peer ids; -1 means everyone. kClearActors: value 1 zombies, 2 creatures, 3 both.
-struct Command {Kind kind;int32_t peer{-1},target{-1};double value{};uint8_t* scene{};};   // scene: the world it was posted for
+struct Command {Kind kind;int32_t peer{-1},target{-1};double value{};uint32_t world{};};   // world: the world it was posted for
 struct Player {int32_t peer,actor;Vec3 position;bool host;};
 
 using TickFn=void(*)(uint8_t*,uint8_t*);
@@ -45,9 +46,10 @@ static std::mutex mutex;static std::deque<Command> queue;static std::vector<Play
 // Server thread only.
 static bool time_set{},time_frozen{},time_release{};static double time_base{};static int32_t time_tick{};static bool logged_peers{};
 
-static std::atomic<uint8_t*> last_scene{};
+// Which world the host runs, bumped whenever another one starts. Commands carry it, so none reaches another world.
+static std::atomic<uint32_t> world_id{};
 static bool hosting(uint64_t window=3000){return ready&&GetTickCount64()-last_tick.load()<window;}
-static void post(Command c){c.scene=last_scene.load();std::lock_guard<std::mutex> lock(mutex);if(queue.size()<32)queue.push_back(c);}
+static void post(Command c){c.world=world_id.load();std::lock_guard<std::mutex> lock(mutex);if(queue.size()<32)queue.push_back(c);}
 static std::vector<Player> player_list(){std::lock_guard<std::mutex> lock(mutex);return players;}
 static std::string last_status(){std::lock_guard<std::mutex> lock(mutex);return status;}
 static void report(const std::string& text,uint32_t level=0){log("ADMIN "+text,level);std::lock_guard<std::mutex> lock(mutex);status=text;}
@@ -55,7 +57,6 @@ static void report(const std::string& text,uint32_t level=0){log("ADMIN "+text,l
 template<class T> static T read(const uint8_t* p,size_t offset){T v;memcpy(&v,p+offset,sizeof(T));return v;}
 static bool virtual_is(const uint8_t* actor,int slot){auto fn=(IsFn)anymaker::typeinfo_of(actor).method(slot);if(!fn)return false;uint8_t r{};fn(&r,actor);return r!=0;}
 static uint8_t* peer(uint8_t* scene,int32_t id){void* p{};peer_by_id(&p,scene+kPeers,&id);return (uint8_t*)p;}
-static uint8_t* actor(uint8_t* scene,int32_t id){void* p{};actor_by_id(&p,scene+kActors,&id);return (uint8_t*)p;}
 
 // Copies who is connected for the panel. The host is assumed to be the lowest peer id (it joins its own world first).
 static void refresh_players(uint8_t* scene){std::vector<Player> list;
@@ -75,7 +76,7 @@ static bool teleport(uint8_t* server,uint8_t* who,Vec3 to){auto data=*(void**)(w
 static void run(uint8_t* scene,uint8_t* server,const Command& c){
  auto targets=[&](int32_t id){std::vector<uint8_t*> out;if(id>=0){if(auto p=peer(scene,id))out.push_back(p);}else for(int32_t i=0;i<kMaxPeers;++i)if(auto p=peer(scene,i))out.push_back(p);return out;};
  switch(c.kind){
- case kHeal:{int n=0;for(auto p:targets(c.peer))if(auto a=*(uint8_t**)(p+kPeerActor)){heal(a);++n;}report("healed "+std::to_string(n)+(n==1?" player":" players"));break;}
+ case kHeal:{int n=0;for(auto p:targets(c.peer))if(auto a=*(uint8_t**)(p+kPeerActor);a&&virtual_is(a,kSlotIsCharacter)){heal(a);++n;}report("healed "+std::to_string(n)+(n==1?" player":" players"));break;}
  case kTeleportTo:case kBring:case kBringAll:{
   // kTeleportTo moves peer to target; kBring moves target to peer; kBringAll moves everyone else to peer.
   int32_t mover=c.kind==kTeleportTo?c.peer:c.target,anchor=c.kind==kTeleportTo?c.target:c.peer;auto to=peer(scene,anchor);
@@ -87,9 +88,14 @@ static void run(uint8_t* scene,uint8_t* server,const Command& c){
  case kFreeze:if(time_set){double now=time_base+(time_frozen?0:double(read<int32_t>(scene,kTick)-time_tick)/std::max(1,*day_ticks));time_base=now-std::floor(now);time_tick=read<int32_t>(scene,kTick);}
   else{report("set a time first, then freeze it",1);break;}time_frozen=c.value!=0;report(time_frozen?"time frozen":"time running");break;
  case kNaturalTime:if(time_set){time_set=false;time_frozen=false;time_release=true;}report("time back to the world clock");break;
- case kClearActors:{auto container=scene+kActors;int32_t last=read<int32_t>(container,kActorIdCounter);std::vector<int32_t> doomed;
-  for(int32_t id=0;id<=last&&id<1000000;++id){auto a=actor(scene,id);if(!a||*(void**)(a+kActorPeerAuthority))continue;
-   if(((c.value==1||c.value==3)&&virtual_is(a,kSlotIsZombie))||((c.value==2||c.value==3)&&virtual_is(a,kSlotIsCreature)))doomed.push_back(id);}
+ case kClearActors:{
+  // One pass over the container's own list. (Looking every id up to the id counter by get_actor_by_id scanned the
+  // whole list per id, which in a long-played world stalled the server for seconds.)
+  auto container=scene+kActors;anymaker::gc_vector_raw list;memcpy(&list,container+kActorElements,sizeof list);std::vector<int32_t> doomed;
+  if(list.element_size==16&&list.count>0&&list.count<=1000000&&list.capacity>=list.count&&list.buffer&&anymaker::readable(list.buffer,size_t(list.capacity)*16))
+   for(int32_t i=0;i<list.count;++i){auto ref=list.at<anymaker::gc_ref_raw<uint8_t>>(i);auto a=ref?ref->ptr:nullptr;
+    if(!a||!anymaker::readable(a,kActorPeerAuthority+8)||*(void**)(a+kActorPeerAuthority))continue;
+    if(((c.value==1||c.value==3)&&virtual_is(a,kSlotIsZombie))||((c.value==2||c.value==3)&&virtual_is(a,kSlotIsCreature)))doomed.push_back(read<int32_t>(a,kActorId));}
   for(int32_t id:doomed)destroy(container,&id,scene);
   report("cleared "+std::to_string(doomed.size())+(c.value==1?" zombies":c.value==2?" creatures":" zombies and creatures"));break;}
  }}
@@ -101,10 +107,12 @@ static void drive_time(uint8_t* scene){auto tod=scene+kTimeOfDay;
 
 static void hk_tick(uint8_t* scene,uint8_t* server){
  if(scene&&server){last_tick=GetTickCount64();
-  if(last_scene.exchange(scene)!=scene){time_set=time_frozen=time_release=false;weather=kNatural;logged_peers=false;}   // a new world starts clean
+  // A new world starts clean. Its scene can sit where the last world's was, so a changed world seed counts as well.
+  static uint8_t* world_scene{};static int32_t world_seed{};int32_t seed=read<int32_t>(scene,kWorldSeed);
+  if(scene!=world_scene||seed!=world_seed){world_scene=scene;world_seed=seed;++world_id;time_set=time_frozen=time_release=false;weather=kNatural;logged_peers=false;}
  std::deque<Command> work;{std::lock_guard<std::mutex> lock(mutex);work.swap(queue);}
   static uint64_t refreshed{};if(GetTickCount64()-refreshed>1000||!work.empty()){refreshed=GetTickCount64();refresh_players(scene);}
-  for(auto& c:work)if(c.scene==scene)run(scene,server,c);else log("ADMIN_DROPPED reason=other_world",1);
+  for(auto& c:work)if(c.world==world_id.load())run(scene,server,c);else log("ADMIN_DROPPED reason=other_world",1);
   drive_time(scene);}   // commands are never carried into another world
  ((TickFn)h_tick.original)(scene,server);}
 
@@ -144,7 +152,7 @@ static void shutdown(){stop=true;if(ready)remove();}
 // The ADMIN settings tab (anyapi.menu v4 button rows). Every button posts a command for the next server tick; weather
 // applies as soon as it changes. There is nothing to Apply, so the tab never reports pending edits.
 namespace adminui {
-static const AnyMenuV4* widgets;static uint32_t chosen{};static double hour{12};static uint32_t weather_index{};
+static const AnyMenuV4* widgets;static uint32_t chosen{};static double hour{12};
 // A solo world pauses the server while Settings is open, so "host" is decided when Settings opens: the server was
 // ticking just before. Commands posted while paused run as soon as Settings closes.
 static bool host_at_open{};
@@ -173,6 +181,7 @@ if(!admin::hosting()&&!host_at_open){menu->label("admin.off",admin::ready?"Only 
  case 3:admin::post({admin::kFreeze,-1,-1,0});break;
  case 4:admin::post({admin::kNaturalTime});break;}
  const char* weathers[]{"Natural","Clear","Cloudy","Rain","Storm","Fog","Snow"};
+ uint32_t weather_index=uint32_t(admin::weather.load()+1);   // what is in force: a new world starts natural
  if(widgets->rows->choice_row("admin.weather","WEATHER",weathers,7,&weather_index))admin::set_weather(int(weather_index)-1);
  const char* clear[]{"Zombies","Creatures","Both"};
  if(auto c=widgets->button_row("admin.clear","CLEAR",clear,3))admin::post({admin::kClearActors,-1,-1,double(c)});
