@@ -354,11 +354,17 @@ void read_snapshot(const uint8_t* mc, Snapshot& s, const std::map<std::string, s
         }
 }
 
+// The Save round trip that reads a program carries the microcontroller in its name, so an answer that arrives
+// after the player moved on to another microcontroller is never shown (and applied) as that one's program.
+std::string fetch_name(int32_t vehicle, int32_t component) {
+    return std::string(kTempScript) + "_" + std::to_string(vehicle) + "_" + std::to_string(component);
+}
+
 void run_action(void* peer, int32_t vehicle, int32_t component, const Action& a) {
     switch (a.k) {
     case ActKind::Fetch: case ActKind::Load: {
         anymaker::gc_string_view s{};
-        const std::string& text = a.k == ActKind::Fetch ? std::string(kTempScript) : a.text;
+        const std::string& text = a.k == ActKind::Fetch ? fetch_name(vehicle, component) : a.text;
         g_string_ctor(&s, text.c_str());
         (a.k == ActKind::Fetch ? g_push_save : g_push_load)(peer, &vehicle, &component, &s);
         g_string_dtor(&s);
@@ -425,7 +431,8 @@ void hk_save_data(void* client, void* event, uint8_t* msg) {
         if (name.rfind(kTempScript, 0) == 0) {   // our read-back: keep it out of the player's saved scripts
             std::string data = gc_str(msg, off::msg_data);
             std::lock_guard lock(g_mutex);
-            if (g.fetching) {
+            if (g.fetching && name != fetch_name(g.vehicle, g.component)) log(1, "dropped a late program read (%s)", name.c_str());
+            else if (g.fetching) {
                 g.fetching = false;
                 Pretty p = prettify(data);
                 g.raw = !p.ok;
@@ -633,12 +640,19 @@ void commit_param() {
     }
     g.edit_param = -1;
 }
+// The selected node is drawn on top without moving it in the node list: that order is saved with the graph and
+// decides which node of a feedback loop reads last tick's value, so a click must not change it.
 void select_node(int id) {
     if (id != g.selected) commit_param();
     g.selected = id;
-    // bring it to the front
-    auto it = std::find_if(g.graph.nodes.begin(), g.graph.nodes.end(), [&](const nodes::Node& n) { return n.id == id; });
-    if (it != g.graph.nodes.end()) std::rotate(it, it + 1, g.graph.nodes.end());
+}
+// Nodes back to front: list order, then the selected node.
+std::vector<const nodes::Node*> stacking() {
+    std::vector<const nodes::Node*> out;
+    const nodes::Node* top = nullptr;
+    for (auto& n : g.graph.nodes) { if (n.id == g.selected) top = &n; else out.push_back(&n); }
+    if (top) out.push_back(top);
+    return out;
 }
 void add_node(const std::string& kind, float canvas_w, float canvas_h, float z) {
     commit_param();
@@ -989,7 +1003,9 @@ void port_pos(const Layout& l, const nodes::Node& n, int port, bool input, float
 NodeHit hit_node(const Layout& l, float x, float y) {
     NodeHit h;
     float z = canvas_z(l), r = std::max(9.f, 9 * z);
-    for (auto it = g.graph.nodes.rbegin(); it != g.graph.nodes.rend(); ++it) {
+    auto order = stacking();
+    for (auto top = order.rbegin(); top != order.rend(); ++top) {
+        const nodes::Node* it = *top;
         const nodes::NodeDef* d = nodes::find_def(it->kind);
         if (!d) continue;
         for (int side = 0; side < 2; ++side) {
@@ -1080,7 +1096,8 @@ void draw_node_canvas(const Layout& l, Painter& p) {
     // nodes, back to front
     float fs = 13 * z, text_s = 11.5f * z;
     bool labels = z >= .5f;
-    for (auto& n : g.graph.nodes) {
+    for (const nodes::Node* np : stacking()) {
+        const nodes::Node& n = *np;
         const nodes::NodeDef* d = nodes::find_def(n.kind);
         if (!d) continue;
         float nx = l.editor.x + (n.x - g.cam_x) * z, ny = l.editor.y + (n.y - g.cam_y) * z;
