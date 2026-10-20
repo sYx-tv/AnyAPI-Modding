@@ -127,7 +127,13 @@ void refresh_defaults() {
     if (g_globals_custom) return;
     bool changed = false;
     for (auto& g : g_f64) if (g.p && std::isfinite(*g.p) && g.def != *g.p) { g.def = *g.p; changed = true; }
-    for (auto& g : g_s32) if (g.p && g.def != *g.p) { g.def = *g.p; changed = true; }
+    for (int i = 0; i < kS32Count; ++i) {
+        auto& g = g_s32[i];
+        // The client tick lowers rain and snow whatever world is loaded, so a later reading may be our own value:
+        // keep the first non-zero one, the game's (only the globals' constructors write them).
+        if ((i == gRainParticles || i == gSnowParticles) && g.def > 0) continue;
+        if (g.p && g.def != *g.p) { g.def = *g.p; changed = true; }
+    }
     for (auto& g : g_bool) if (g.p && g.def != *g.p) { g.def = *g.p; changed = true; }
     static bool logged = false;
     if (!changed && logged) return;
@@ -533,8 +539,13 @@ void hk_client_tick(uint8_t* scene, void* client, const double* a, const double*
         }
         int pct = effective_precipitation();
         if (pct < 0) pct = 100;
-        for (S32Global g : {gRainParticles, gSnowParticles})
-            if (g_s32[g].p) *g_s32[g].p = std::min(g_s32[g].def, scaled_count(g_s32[g].def, pct, 0));
+        for (S32Global g : {gRainParticles, gSnowParticles}) {
+            auto& v = g_s32[g];
+            if (!v.p) continue;
+            // Resolved before the game filled it (it read 0): take the game's count now, never write 0 over it.
+            if (v.def <= 0) { std::lock_guard lock(g_globals_mutex); if (v.def <= 0) v.def = *v.p; }
+            if (v.def > 0) *v.p = std::min(v.def, scaled_count(v.def, pct, 0));
+        }
     }
     reinterpret_cast<client_tick_t>(h_client_tick.original)(scene, client, a, b);
 }
@@ -548,7 +559,8 @@ void hk_get_weather_data(WeatherData* ret, void* manager, const double* position
 void hk_particles_create(void* particles) {
     auto &rain = g_s32[gRainParticles], &snow = g_s32[gSnowParticles];
     int32_t r = rain.p ? *rain.p : 0, s = snow.p ? *snow.p : 0;
-    reset(rain); reset(snow);
+    if (rain.def > 0) reset(rain);
+    if (snow.def > 0) reset(snow);
     reinterpret_cast<particles_create_t>(h_particles.original)(particles);
     if (rain.p) *rain.p = r;
     if (snow.p) *snow.p = s;
