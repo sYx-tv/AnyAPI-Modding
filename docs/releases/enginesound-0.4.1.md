@@ -11,4 +11,9 @@ The real choice is kept beside the save, so it comes back when EngineSound is on
 - **Saved vehicles:** under its own key in the vehicle file, which the game ignores.
 
 A sound changed while the mod was off is kept. Worlds and vehicles saved before 0.4.1 hold the generated sound
-until they are saved again. Ships in the AnyEngineParts bundle 1.0.1. Guide: [EngineSound](../mods/engine-sound.md).
+until they are saved again.
+
+**Fix:** after loading a second world, an engine could take another engine's layout, size and cylinder count
+(or be treated as the rotary) and sound wrong. The engine type cache now checks the part id each time.
+
+Ships in the AnyEngineParts bundle 1.0.1. Guide: [EngineSound](../mods/engine-sound.md).

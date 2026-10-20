@@ -93,30 +93,37 @@ anymaker::cell_hook h_tick, h_vol_speed, h_props, h_row;
 void** g_push_cell;
 
 // ------------------------------------------------------------------ which engine (any thread)
+// Keyed by definition pointer, with the id the kind was worked out from. Every world loads its part definitions anew
+// (client_scene.create and server_scene.create), and one can land where the last world's definition of another engine
+// was: an entry counts only while the definition there still has the same id.
+struct KnownKind { const char* id = nullptr; int32_t length = 0; char text[64]{}; EngineKind kind{}; };
 std::mutex g_kind_mutex;
-std::unordered_map<const void*, EngineKind> g_kinds;   // definition pointer -> engine kind
+std::unordered_map<const void*, KnownKind> g_kinds;
 
 EngineKind kind_of(const void* definition) {
     if (!definition) return engine_kind(nullptr, 0);
+    const auto* base = static_cast<const uint8_t*>(definition);
+    anymaker::gc_string_view id{};
+    if (anymaker::readable(base + off::definition_id, sizeof id)) std::memcpy(&id, base + off::definition_id, sizeof id);
+    const bool usable = id.data && id.length > 0 && id.length < 64;
     std::lock_guard<std::mutex> lock(g_kind_mutex);
     auto found = g_kinds.find(definition);
-    if (found != g_kinds.end()) return found->second;
-    EngineKind k = engine_kind(nullptr, 0);
-    const auto* base = static_cast<const uint8_t*>(definition);
-    if (anymaker::readable(base + off::definition_id, sizeof(anymaker::gc_string_view))) {
-        anymaker::gc_string_view id;
-        std::memcpy(&id, base + off::definition_id, sizeof id);
-        if (id.data && id.length > 0 && id.length < 64 && anymaker::readable(id.data, size_t(id.length))) {
-            k = engine_kind(id.data, size_t(id.length));
-            if (!k.known) {
-                static int logs = 6;
-                if (logs-- > 0) log(1, "engine part '%.*s' is not one EngineSound knows; it sounds like an inline", int(id.length), id.data);
-            }
+    if (found != g_kinds.end() && found->second.id == id.data && found->second.length == id.length &&
+        (!usable || std::memcmp(found->second.text, id.data, size_t(id.length)) == 0)) return found->second.kind;
+    KnownKind known;
+    known.id = id.data; known.length = id.length;
+    known.kind = engine_kind(nullptr, 0);
+    if (usable && anymaker::readable(id.data, size_t(id.length))) {
+        std::memcpy(known.text, id.data, size_t(id.length));
+        known.kind = engine_kind(id.data, size_t(id.length));
+        if (!known.kind.known) {
+            static int logs = 6;
+            if (logs-- > 0) log(1, "engine part '%.*s' is not one EngineSound knows; it sounds like an inline", int(id.length), id.data);
         }
-    }
+    } else known.id = nullptr;                       // not read: never matches, so it is tried again next time
     if (g_kinds.size() > 4096) g_kinds.clear();
-    g_kinds[definition] = k;
-    return k;
+    g_kinds[definition] = known;
+    return known.kind;
 }
 const void* pointer_at(const uint8_t* base, ptrdiff_t offset) {
     if (!base || !anymaker::readable(base + offset, 8)) return nullptr;
