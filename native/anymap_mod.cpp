@@ -438,7 +438,7 @@ static void mod_shutdown(void*){mapactors::state.stop=true;std::lock_guard<std::
 // Normal DLL plugin entry point, invoked by the host after its build guard succeeds.
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,AnyModCallbacksV1* callbacks){
  if(!api||!callbacks||api->struct_size!=sizeof(*api)||api->abi!=ANYAPI_MOD_ABI||!api->log||!api->copy_players||!api->capture_input||!api->game_directory||!api->plugin_directory)return false;
- host=*api;game_dir=api->game_directory;cache_dir=std::filesystem::path(api->plugin_directory)/L"AnyMap";std::filesystem::create_directories(cache_dir);
+ host=*api;game_dir=api->game_directory;cache_dir=std::filesystem::path(api->plugin_directory)/L"AnyMap";std::error_code folder_error;std::filesystem::create_directories(cache_dir,folder_error);
  GdiplusStartupInput input;if(GdiplusStartup(&gdiplus_token,&input,nullptr)!=Ok)return false;
  HRSRC resource=FindResourceW(mod_module,MAKEINTRESOURCEW(101),MAKEINTRESOURCEW(10));HGLOBAL memory=resource?LoadResource(mod_module,resource):nullptr;
  const char* data=memory?(const char*)LockResource(memory):nullptr;DWORD bytes=resource?SizeofResource(mod_module,resource):0;
