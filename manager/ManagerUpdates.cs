@@ -28,7 +28,9 @@ namespace AnyApiManager {
    if(!IsNewer(release,CurrentVersion))throw new InvalidOperationException("Your manager is already up to date.");
    string dir=Path.Combine(Engine.Data,"manager-updates",Guid.NewGuid().ToString("N"));Directory.CreateDirectory(dir);
    string staged=Path.Combine(dir,"manager-new.exe");File.WriteAllBytes(staged,await Engine.DownloadBytes(release.Url,67108864,null,progress));ValidateBinary(staged,release);
-   string target=Assembly.GetExecutingAssembly().Location;File.Copy(target,Path.Combine(dir,"update-helper.exe"));
+   string target=Assembly.GetExecutingAssembly().Location;
+   // The helper is the verified new version, so a fix to the update helper applies to the update that ships it.
+   File.Copy(staged,Path.Combine(dir,"update-helper.exe"));
    using(var parent=Process.GetCurrentProcess()){
     var request=new ManagerUpdateRequest{Target=target,Staged=staged,OriginalSha256=Rules.Hash(target),ParentId=parent.Id,ParentStarted=parent.StartTime.ToUniversalTime().Ticks,Release=release};
     string file=Path.Combine(dir,"request.json");File.WriteAllText(file,Json.Write(request));return file;
@@ -54,8 +56,13 @@ namespace AnyApiManager {
   public static void WaitForParent(ManagerUpdateRequest request){
    Process parent;try{parent=Process.GetProcessById(request.ParentId);}catch(ArgumentException){return;}
    using(parent){
-    if(parent.StartTime.ToUniversalTime().Ticks!=request.ParentStarted)throw new IOException("The manager process changed. Update cancelled.");
-    if(!string.Equals(Path.GetFullPath(ImagePath(parent)),Path.GetFullPath(request.Target),StringComparison.OrdinalIgnoreCase))throw new IOException("The update parent is not this manager.");
+    long started;string image;
+    // The manager usually exits as soon as it starts this helper. Windows can keep an exited process's ID
+    // valid for a while (another program still holds a handle to it), and then StartTime and Handle throw
+    // InvalidOperationException. An exited parent is exactly what we wait for, so carry on.
+    try{if(parent.HasExited)return;started=parent.StartTime.ToUniversalTime().Ticks;image=ImagePath(parent);}catch(InvalidOperationException){return;}
+    if(started!=request.ParentStarted)throw new IOException("The manager process changed. Update cancelled.");
+    if(!string.Equals(Path.GetFullPath(image),Path.GetFullPath(request.Target),StringComparison.OrdinalIgnoreCase))throw new IOException("The update parent is not this manager.");
     if(!parent.WaitForExit(30000))throw new IOException("The manager is still open. Close it and try again.");
    }
   }
