@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.39.0",
-      "Revision": 43,
+      "Version": "0.39.2",
+      "Revision": 45,
       "MinimumApi": 0,
-      "Description": "Native mod framework for Anymaker 0.1.25; loads mod bundles (several mods in one DLL, each switchable in Mod Settings) and adds menu v4.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.0/AnyAPI-0.39.0.zip",
-      "Sha256": "679d14c5bd3940e88fed10d1aa41ad568d4d57aad28426ebc1d488625426a036",
+      "Description": "Native mod framework for Anymaker 0.1.25; loads mod bundles (several mods in one DLL, each switchable in Mod Settings), adds menu v4, and draws lamp beams on AMD graphics cards too.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.2/AnyAPI-0.39.2.zip",
+      "Sha256": "fdc19a9ed072d840a036d7fbe3849531500dab122331acd4afb14abc94c5bb5f",
       "FileHashes": {
-        "dinput8.dll": "040aa1f3df15f379ef22f02b1cae274b136b272382cea772428e42cc2bc5a6ed"
+        "dinput8.dll": "71d341269487b68062462c3f2d8a1dc91a5933a8263300423f5a41b1da0fa3f9"
       },
       "GameBuilds": [
         {
@@ -28,14 +28,14 @@
     {
       "Id": "anyhelpers",
       "Name": "AnyHelpers",
-      "Version": "1.0.0",
-      "Revision": 28,
+      "Version": "1.0.1",
+      "Revision": 29,
       "MinimumApi": 43,
       "Description": "Building and editing helpers in one mod: Mod Controls and Mod Settings, Duplicate tool favorites and a host ADMIN tab, AnyInventory's item search, AnyMirror's mirrored building, AnyBalance's centre of mass, and MCCode's Code view for microcontrollers. Each piece can be switched off in Mod Settings. Anymaker 0.1.25 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.0/AnyHelpers-1.0.0.zip",
-      "Sha256": "c7c566e47a9f693a33f1baa7df2c8a30be14fe1544f5c262760c9aa5c1667d25",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.20/AnyHelpers-1.0.1.zip",
+      "Sha256": "3b3fab7191a62670a731c5989472e2ba70d156fa7a5ed7bdfb4e7e765e7361fd",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyHelpers.dll": "472cfa0e5f040ee422eba6acfe45a1aca9080b39eabdce5cea8710ff44efce97"
+        "AnyAPI and Modding/mods/AnyHelpers.dll": "8ac48e26d0284b94b5c622cf08937d79b90adada981561f888a69e2250f2413d"
       },
       "GameBuilds": [
         {
@@ -121,14 +121,14 @@
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "1.0.0",
-      "Revision": 35,
+      "Version": "1.0.2",
+      "Revision": 36,
       "MinimumApi": 43,
       "Description": "Graphics overhaul with presets from Off to Cinematic plus Custom, TAA, tone mapping and colour looks, shading, shadows, sky, depth of field, motion blur and photo mode, plus ThirdPerson's F5 third-person camera. Each piece can be switched off in Mod Settings. Anymaker 0.1.25 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.0/AnyGraphics-1.0.0.zip",
-      "Sha256": "28a94870d8a2e7aafed9befc5cb34b13ae399d959f0b2ea519fdc6d304080ab3",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.1/AnyGraphics-1.0.2.zip",
+      "Sha256": "bb7ef5579140384e36d87c7258662a307a96dfcb215eefe824ba1cec0a5ed5c3",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "72258628af7bb4d10058d327c16ebd56e474e856e4a017d9c6233291f02a4824"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "0ebea90acc2c99548a41bef1f9e6173daa6bdb14d5d6b77924f6455248e5af81"
       },
       "GameBuilds": [
         {

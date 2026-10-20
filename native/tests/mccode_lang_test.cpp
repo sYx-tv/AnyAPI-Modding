@@ -145,6 +145,9 @@ int main() {
         assert(p.ok);
         Compiled back = compile(p.text);
         assert(back.ok && back.canonical == c.canonical);
+        // a channel used as the index of a list item being set is still read
+        Compiled item = compile("define list integer l\non_tick {\n\tl[Sensor.index] = 1\n}\n");
+        assert(item.ok && item.canonical.find("var l[in Sensor.index] = 1") != std::string::npos);
     }
     std::cout << "mccode_lang_test OK\n";
     return 0;

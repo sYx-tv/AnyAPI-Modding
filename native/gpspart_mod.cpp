@@ -176,8 +176,10 @@ bool already_added(void* container) {
     return found != nullptr;
 }
 
+void forget_definitions();
 void hk_add_definitions(void* container, const void* file) {
     reinterpret_cast<add_definitions_t>(h_add_definitions.original)(container, file);
+    if (g_adding != std::this_thread::get_id()) forget_definitions();
     if (!g_ready.load() || g_adding == std::this_thread::get_id() || !container || already_added(container)) return;
     std::string forward = g_json_path;
     for (char& c : forward) if (c == '\\') c = '/';
@@ -194,8 +196,15 @@ anymaker::cell_hook h_tick, h_get_f64;
 transform_t g_vehicle_transform, g_component_transform;
 
 std::unordered_map<const uint8_t*, Sensor> g_sensors;   // keyed by server component; nodes keep their address
-std::unordered_map<const void*, bool> g_is_gps;         // definition pointer -> gps_sensor?
+std::unordered_map<const void*, bool> g_is_gps;         // definition pointer -> gps_sensor? (cleared on each add)
 std::mutex g_mutex;                                     // tick and data lookups may run on different threads
+
+// Every world loads its part definitions anew, and one can land where the last world's compass or GPS Sensor
+// definition was, so the cache starts afresh whenever definitions are added (as Turbo, Rotary and the Dyno do).
+void forget_definitions() {
+    std::lock_guard lock(g_mutex);
+    g_is_gps.clear();
+}
 
 bool is_gps(const uint8_t* sensor) {
     if (!sensor || !anymaker::readable(sensor + off::component_definition, 8)) return false;

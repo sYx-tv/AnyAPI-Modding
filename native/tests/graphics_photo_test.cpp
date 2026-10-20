@@ -17,32 +17,33 @@ static void fake_transform(double* ret, uint8_t*) {
     std::copy(m, m + 12, ret);
 }
 static uint32_t key(uint32_t kind, uint32_t vk) { AnyInputV1 e{}; e.kind = kind; e.key = vk; return input(&e); }
+static uint8_t world[2];   // stand-ins for two worlds' client scenes
 static void step(double* out, double seconds) {
     // Pretend the last move was `seconds` ago, so the integration is deterministic.
     LARGE_INTEGER rate; QueryPerformanceFrequency(&rate); QueryPerformanceCounter(&last_move);
     last_move.QuadPart -= LONGLONG(seconds * double(rate.QuadPart));
-    hk_transform(out, reinterpret_cast<uint8_t*>(out));
+    hk_transform(out, &world[0]);
 }
 
 int main() {
     hook.original = (void*)&fake_transform;
     hook_ready = true;
     bool game_head = false;
-    head = &game_head;
+    head = &game_head; head_original = game_head;   // as install() reads it
     double m[12];
 
     // Photo mode off: nothing is consumed and the camera is the game's.
     update(false, true);
     assert(!key(ANY_KEY_DOWN, 'W') && !key(ANY_KEY_DOWN, '2'));
     key(ANY_KEY_UP, 'W'); key(ANY_KEY_UP, '2');
-    hk_transform(m, nullptr);
+    hk_transform(m, &world[0]);
     assert(m[9] == 1 && m[10] == 2 && m[11] == 3);
 
     // Photo mode on: the camera starts where the view was.
     facing = 0; facing_time = GetTickCount64();   // facing +Z
     update(true, true);
     assert(active && flying && game_head);
-    hk_transform(m, nullptr);
+    hk_transform(m, &world[0]);
     assert(m[9] == 1 && m[10] == 2 && m[11] == 3);
     assert(forward_axis == 0 && forward_sign == 1);
 
@@ -50,6 +51,10 @@ int main() {
     assert(key(ANY_KEY_DOWN, 'W'));
     step(m, .05);
     assert(std::fabs(m[11] - (3 + kDefaultSpeed * .05)) < 1e-6 && m[9] == 1 && m[10] == 2);
+    // Calls within the same frame (ThirdPerson calls the camera several times) all get the same position.
+    double first = m[11];
+    hk_transform(m, &world[0]); hk_transform(m, &world[0]);
+    assert(m[11] == first);
     key(ANY_KEY_UP, 'W');
     // D strafes to screen right, the opposite of the transform's third basis vector (+X here), Space rises.
     assert(key(ANY_KEY_DOWN, 'D') && key(ANY_KEY_DOWN, VK_SPACE));
@@ -95,7 +100,7 @@ int main() {
     update(true, true);
     assert(!flying && !key(ANY_KEY_DOWN, 'W') && key(ANY_KEY_DOWN, '3'));
     key(ANY_KEY_UP, 'W'); key(ANY_KEY_UP, '3');
-    hk_transform(m, nullptr);
+    hk_transform(m, &world[0]);
     assert(m[9] == 1 && m[11] == 3 && !have);
     key(ANY_KEY_DOWN, 'V'); key(ANY_KEY_UP, 'V');
 
@@ -106,12 +111,29 @@ int main() {
     update(true, false);
     assert(!active && flying && !key(ANY_KEY_DOWN, 'W') && !key(ANY_KEY_DOWN, '2'));
     key(ANY_KEY_UP, 'W'); key(ANY_KEY_UP, '2');
-    hk_transform(m, nullptr);
+    hk_transform(m, &world[0]);
     assert(m[11] == flown);
+    // Loading another world starts the camera at that world's view, not at the last world's spot.
+    update(true, true);
+    key(ANY_KEY_DOWN, 'W'); step(m, .05); key(ANY_KEY_UP, 'W');
+    assert(m[11] > 3);
+    hk_transform(m, &world[1]);
+    assert(m[9] == 1 && m[10] == 2 && m[11] == 3 && have);
     // Leaving photo mode returns the game's camera.
     update(false, true);
-    hk_transform(m, nullptr);
+    hk_transform(m, &world[1]);
     assert(m[11] == 3 && !have && !game_head);
-    std::puts("PASS: photo free camera, input consumption, range limit, speed, photo controls, reset, menus");
+
+    // ThirdPerson keeps the head flag on in third person. Switched to first person while flying (it puts the flag
+    // back once), the head stays shown to the free camera and is hidden again when photo mode ends.
+    game_head = true;
+    update(true, true);
+    assert(flying && game_head);
+    game_head = false;
+    update(true, true);
+    assert(game_head);
+    update(false, true);
+    assert(!game_head);
+    std::puts("PASS: photo free camera, input consumption, range limit, speed, photo controls, reset, menus, worlds, head");
     return 0;
 }
