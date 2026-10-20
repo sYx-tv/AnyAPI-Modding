@@ -59,6 +59,7 @@ static void pre_hud_hook(void* renderer,void* scene){
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  anyapi_creation_balance_render_camera(scene);
  scene_antialiasing::record(renderer,scene);
+ scene_view::display();
 #endif
  if(calls==1||calls%600==0){uintptr_t target{};int32_t dimensions[2]{};
   bool valid=safe_read_memory(uintptr_t(renderer)+0x3c0,&target,8)&&target&&safe_read_memory(target+0x34,dimensions,8)&&dimensions[0]>0&&dimensions[0]<=16384&&dimensions[1]>0&&dimensions[1]<=16384;
@@ -115,6 +116,8 @@ static DWORD WINAPI worker(void*){for(unsigned attempt=0;attempt<120&&!ready;++a
   if(ssao&&composite_cell.install(composite,(void*)composite_hook)){if(ssao_cell.install(ssao,(void*)ssao_hook)){scene_effects::ao_available=true;log_line(ANY_LOG_INFO,"framework","SCENE_AO resolved=1 location=COMPOSITE_AFTER_NATIVE_SSAO");}else composite_cell.remove();}}
  if(!scene_effects::ao_available)log_line(ANY_LOG_WARN,"framework","SCENE_AO unavailable=1 native_ssao_kept=1");
  scene_effects::install_distance(resolve_cell,scan_exact);scene_effects::install_photo(record);
+ // A second camera replays the gbuffer pass (renderer._record_commands_gbuffer, slot 27).
+ scene_view::install(resolve_unique_cell(record,2600,27,scene_view::GBUFFER,sizeof(scene_view::GBUFFER)),uintptr_t(scene_cell.original()),scan_exact(scene_view::SCREEN_RESOURCES,sizeof(scene_view::SCREEN_RESOURCES)));
 #endif
  log_line(ANY_LOG_INFO,"framework","SCENE_AA_STAGE resolved=1 location=AFTER_SCENE_COMPOSITION_BEFORE_HUD scene_replacement_available=1");}
  else log_line(ANY_LOG_WARN,"framework","SCENE_AA_STAGE unavailable=1 replacement_AA_not_exposed=1");
