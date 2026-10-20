@@ -55,7 +55,7 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,Any
  host=*api;auto services=AnyAPI_Services();menu=services?(const AnyMenuV2*)services->query("anyapi.menu",2):nullptr;if(!menu||menu->struct_size!=sizeof(*menu))return false;
  state.file=std::filesystem::path(api->plugin_directory)/L"AnyHelpers"/L"bindings.tsv";
  auto canonical=state.file,legacy=std::filesystem::path(api->plugin_directory)/L"ModControls"/L"bindings.tsv";
- if(!std::filesystem::exists(canonical)&&std::filesystem::exists(legacy))state.file=legacy;
+ std::error_code missing;if(!std::filesystem::exists(canonical,missing)&&std::filesystem::exists(legacy,missing))state.file=legacy;
  auto rejected=state.load();state.file=canonical;callbacks->id="anyhelpers";
  AnyMenuTabV2 section;section.icon=ANY_MENU_ICON_KEYBOARD;section.id="mod_controls";section.title="MOD CONTROLS";section.order=100;section.draw=draw;section.event=event;section.dirty=dirty;section.defaults=defaults;
  if(!menu->add_tab(&section)||!services->input_filter(input,nullptr,100)||!services->publish("modcontrols.bindings",1,&bindings)||!services->publish("anyhelpers.controls",1,&bindings)||!settingsmod::init(services))return false;
