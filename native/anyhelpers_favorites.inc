@@ -63,14 +63,16 @@ static void hk_tab(uint8_t* out,void* ui,const gc_string_view* id,const gc_strin
  if(!in_update||tab_calls>=2||!out||!ui||!width||!icon||!focus){original(out,ui,id,label,width,icon,focus);return;}
  int index=tab_calls++;int32_t narrow=std::max(1,*width*2/3);bool selected=*focus&&!(index==0&&active);
  original(out,ui,id,label,&narrow,icon,&selected);
- uint8_t enter{};if(*out&&native_enter){native_enter(&enter,ui);if(enter)active=false;}
+ // client_ui.is_input_enter asks the hovered element for its enter event, which can be used up by the first ask. The
+ // game asks right after this returns, so this hook has to do what the game would: select the tab and leave FAVORITES.
+ uint8_t enter{};if(*out&&native_enter){native_enter(&enter,ui);if(enter){active=false;*(int32_t*)(paste()+kTab)=index;}}
  if(!logged_tabs&&label){logged_tabs=true;log("FAVORITES_TAB_SEEN index="+std::to_string(index)+" label="+std::string(label->view())+" width="+std::to_string(*width)+" drawn="+std::to_string(narrow));}
  if(index!=1)return;
  // Native tab.render dereferences its atlas region, so FAVORITES borrows the workshop tab's icon.
  std::string tab_label="FAVORITES";if(label)for(char c:label->view())if(c>='a'&&c<='z'){tab_label="Favorites";break;}
  static const std::string fav_id="anyhelpers.duplicate.favorites";auto a=text(fav_id),b=text(tab_label);uint8_t hover{};bool focus_fav=active;
  original(&hover,ui,&a,&b,&narrow,icon,&focus_fav);
- if(hover&&native_enter){enter=0;native_enter(&enter,ui);if(enter&&!active){active=true;*(int32_t*)(paste()+kTab)=0;log("FAVORITES_TAB_SELECT");}}}
+ if(hover&&native_enter){enter=0;native_enter(&enter,ui);if(enter&&!active){active=true;fav_scroll=0;fav_hover={};*(int32_t*)(paste()+kTab)=0;log("FAVORITES_TAB_SELECT");}}}
 
 // Ring-buffer slot i of the local list, valid for any i below capacity (gc_vector_raw::at stops at count).
 static LocalFile* slot(gc_vector_raw* v,int32_t i){return (LocalFile*)(v->buffer+size_t((int64_t(v->offset)+i)%v->capacity)*v->element_size);}
@@ -89,18 +91,22 @@ static void hk_build(void* self,void* fui,void* client,void* ui_data,void* scene
   std::vector<LocalFile> moved(total);for(int32_t k=0;k<total;++k)moved[k]=*slot(v,original_index(k));
   for(int32_t k=0;k<total;++k)*slot(v,k)=moved[k];
   v->count=shown;
+  gc_vector_raw before=*v;
   auto p=paste();int32_t local_scroll=*(int32_t*)(p+kScroll);Vec2 local_hover=*(Vec2*)(p+kHover);*(int32_t*)(p+kScroll)=fav_scroll;*(Vec2*)(p+kHover)=fav_hover;
   in_build=true;original(self,fui,client,ui_data,scene);in_build=false;
   fav_scroll=*(int32_t*)(p+kScroll);fav_hover=*(Vec2*)(p+kHover);*(int32_t*)(p+kScroll)=local_scroll;*(Vec2*)(p+kHover)=local_hover;
-  int32_t after=v->count;
-  if(after==shown){for(int32_t k=0;k<total;++k)moved[k]=*slot(v,k);for(int32_t k=0;k<total;++k)*slot(v,original_index(k))=moved[k];v->count=total;}
-  else if(after>=0&&after<shown){
-   // The builder erased a row (a save that failed to load). Slide the hidden rows down behind what is left and
-   // clear the freed tail slots; the game re-sorts the list by date the next time it loads it.
-   int32_t hidden=total-shown;for(int32_t j=0;j<hidden;++j)*slot(v,after+j)=*slot(v,shown+j);
+  // Loading a save closes the screen, and closing can clear or free this list; a save that fails to load is erased
+  // from it. So check the list again before touching it: a ring index on a freed list divides by a zero capacity.
+  int32_t after=v->count;bool same_buffer=v->buffer==before.buffer&&v->capacity==before.capacity&&v->element_size==before.element_size&&v->capacity>0;
+  if(!same_buffer||after<0||after>shown){view.clear();log("FAVORITES_LIST_REPLACED shown="+std::to_string(shown)+" after="+std::to_string(after),1);}
+  else if(after==shown&&v->offset==before.offset){for(int32_t k=0;k<total;++k)moved[k]=*slot(v,k);for(int32_t k=0;k<total;++k)*slot(v,original_index(k))=moved[k];v->count=total;}
+  else {
+   // Rows were erased or the list was cleared. The hidden rows still sit where they were, by the old ring start; put
+   // them back behind what is left and clear the freed slots. The game re-sorts the list the next time it loads it.
+   int32_t hidden=total-shown;std::vector<LocalFile> rows(hidden);for(int32_t j=0;j<hidden;++j)rows[j]=*slot(&before,shown+j);
+   for(int32_t j=0;j<hidden;++j)*slot(v,after+j)=rows[j];
    for(int32_t k=after+hidden;k<total;++k)memset(slot(v,k),0,sizeof(LocalFile));
-   v->count=after+hidden;view.clear();log("FAVORITES_ROW_ERASED shown="+std::to_string(shown)+" left="+std::to_string(after),1);}
-  else {for(int32_t k=0;k<total;++k)moved[k]=*slot(v,k);for(int32_t k=0;k<total;++k)*slot(v,original_index(k))=moved[k];v->count=total;log("FAVORITES_UNEXPECTED_COUNT shown="+std::to_string(shown)+" after="+std::to_string(after),2);}
+   v->count=after+hidden;view.clear();log("FAVORITES_ROWS_REMOVED shown="+std::to_string(shown)+" left="+std::to_string(after),after?1:0);}
  }
  if(toggle_pending.exchange(false)&&!hovered_name.empty())toggle(hovered_name);}
 
