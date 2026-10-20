@@ -28,14 +28,14 @@
     {
       "Id": "anyhelpers",
       "Name": "AnyHelpers",
-      "Version": "1.0.0",
-      "Revision": 28,
+      "Version": "1.0.1",
+      "Revision": 29,
       "MinimumApi": 43,
       "Description": "Building and editing helpers in one mod: Mod Controls and Mod Settings, Duplicate tool favorites and a host ADMIN tab, AnyInventory's item search, AnyMirror's mirrored building, AnyBalance's centre of mass, and MCCode's Code view for microcontrollers. Each piece can be switched off in Mod Settings. Anymaker 0.1.25 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.0/AnyHelpers-1.0.0.zip",
-      "Sha256": "c7c566e47a9f693a33f1baa7df2c8a30be14fe1544f5c262760c9aa5c1667d25",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.20/AnyHelpers-1.0.1.zip",
+      "Sha256": "3b3fab7191a62670a731c5989472e2ba70d156fa7a5ed7bdfb4e7e765e7361fd",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyHelpers.dll": "472cfa0e5f040ee422eba6acfe45a1aca9080b39eabdce5cea8710ff44efce97"
+        "AnyAPI and Modding/mods/AnyHelpers.dll": "8ac48e26d0284b94b5c622cf08937d79b90adada981561f888a69e2250f2413d"
       },
       "GameBuilds": [
         {
