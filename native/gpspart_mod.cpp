@@ -6,11 +6,11 @@
 // height difference to a waypoint. Inputs waypoint_x, waypoint_y and waypoint_z set the waypoint (world
 // coordinates). north_angle still works as on the compass.
 //
-// Getting it: the part is a vehicle component with tech_tier 4 in the
+// Getting it: the part is a vehicle component with tech_tier 3 (like the stock sensors since 0.1.27) in the
 // "sensor" category (the sandbox and creative sensor container). World loot spawns items whose tech_tier equals
 // the loot level being generated; a new world starts at loot level 1 and each bunker's end sequence
-// (dungeon_<n>_end_sequence -> dungeon_manager.complete_dungeon) raises it by one, so tier 4 loot starts
-// generating the moment the 3rd bunker is triggered to explode (game code, Anymaker 0.1.25). Single player only for now: the definition
+// (dungeon_<n>_end_sequence -> dungeon_manager.complete_dungeon) raises it by one, so tier 3 loot starts
+// generating the moment the 2nd bunker is triggered to explode (game code, Anymaker 0.1.25 and 0.1.27). Single player only for now: the definition
 // is added on both the server and the client scene of this game, and every player would need the mod.
 //
 // How: the part definition is embedded below (gpspart_logic.h), written to "AnyAPI and Modding/GpsPart" and added
