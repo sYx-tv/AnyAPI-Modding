@@ -1,0 +1,17 @@
+{
+  "Packages": {
+    "AnyEngineParts": {
+      "Id": "anyengineparts",
+      "MinimumApi": 46,
+      "GameBuilds": [
+        {
+          "Version": "0.1.27",
+          "SteamBuild": 26113663,
+          "ExeSha256": "097e1167477587c51a3b93ab7e7843382d99d30010678c9bd89a2fee648fec23",
+          "GclSha256": "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22"
+        }
+      ],
+      "Description": "Engine parts and sound in one mod: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine; EngineSound's generated engine sounds; and the GPS Sensor part. Each piece can be switched off in Mod Settings. Anymaker 0.1.27 only."
+    }
+  }
+}
