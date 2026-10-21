@@ -199,21 +199,21 @@
     {
       "Id": "anyengineparts",
       "Name": "AnyEngineParts",
-      "Version": "1.0.0",
-      "Revision": 4,
-      "MinimumApi": 43,
-      "Description": "Engine parts and sound in one mod: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine; EngineSound's generated engine sounds; and the GPS Sensor part. Each piece can be switched off in Mod Settings. Anymaker 0.1.25 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.0/AnyEngineParts-1.0.0.zip",
-      "Sha256": "387bf8be6ad144c2af8d18e6e6cec4a2e3c213a139ca278a219cb9417bd8343b",
+      "Version": "1.0.2",
+      "Revision": 5,
+      "MinimumApi": 46,
+      "Description": "Engine parts and sound in one mod: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine; EngineSound's generated engine sounds; and the GPS Sensor part. Each piece can be switched off in Mod Settings. Anymaker 0.1.27 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.21/AnyEngineParts-1.0.2.zip",
+      "Sha256": "cbdd2d61e34efc67386066f82e4a5ec309e11aafa5e7953921314866136c7b1c",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyEngineParts.dll": "ebf58e8f82023666789336cc201848a62dbac08757e92f89c3a8192d6d6d03ee"
+        "AnyAPI and Modding/mods/AnyEngineParts.dll": "541dbd21dad07b40933edfc2791ab28440e0beb8f0675a25162919864350b47f"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.25",
-          "SteamBuild": 25904830,
-          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
-          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
+          "Version": "0.1.27",
+          "SteamBuild": 26113663,
+          "ExeSha256": "097e1167477587c51a3b93ab7e7843382d99d30010678c9bd89a2fee648fec23",
+          "GclSha256": "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22"
         }
       ],
       "Replaces": {
@@ -274,6 +274,27 @@
       "Sha256": "771567ca5580cf6285ba18c7fccf43ee91fa9ec705297a2e50756b35524572d9",
       "FileHashes": {
         "AnyAPI and Modding/mods/CustomGame.dll": "171ffc54251c531fafb4fcceed2aaa8333916e80d0cf18f054abb8fae0184597"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.27",
+          "SteamBuild": 26113663,
+          "ExeSha256": "097e1167477587c51a3b93ab7e7843382d99d30010678c9bd89a2fee648fec23",
+          "GclSha256": "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22"
+        }
+      ]
+    },
+    {
+      "Id": "anycareer",
+      "Name": "AnyCareer",
+      "Version": "0.0.6",
+      "Revision": 1,
+      "MinimumApi": 46,
+      "Description": "A survival career: earn Cash from delivery and kill jobs and small finds in houses and shops, and trade with nine traders spread over the map (Hayzeco Autoparts, Builder, Junkyard, Grocer, Medic, Marine & Air, Mod Shop, Outfitter, Gunsmith). Survival only; the host runs it. Trader map pins need AnyMap 1.0.1 or later. Standalone mod, not part of a bundle. Anymaker 0.1.27 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.21/AnyCareer-0.0.6.zip",
+      "Sha256": "ca494755cad3551751b4342e1257c7b4a05f9a3247b2ad19a6ba1006c0b9c08a",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/AnyCareer.dll": "2f6364ec927d7413b7e04937a3812483ad75ae6261d2dfa4e8a4ef3c870f4dec"
       },
       "GameBuilds": [
         {
