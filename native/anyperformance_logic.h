@@ -10,7 +10,7 @@ namespace anyperformance {
 
 // Named steps timed inside one frame or server tick (bunker loading on the server, pieces of client.tick on the
 // main thread), indexed by the mod's step table. Times include the steps nested inside.
-constexpr int kMaxSteps = 32;
+constexpr int kMaxSteps = 48;
 struct Steps {
     double ms[kMaxSteps] = {};
     int calls[kMaxSteps] = {};
@@ -82,7 +82,7 @@ struct ServerParts {
     double physics = 0;       //   physics.scene.update: the physics engine's step (Jolt, native code in game.exe)
     double network = 0;       // replication.master.replicate_peer: packing the world for each player
     double autosave = 0;      // server.autosave_game
-    Steps steps;              // bunker loading steps
+    Steps steps;              // bunker loading and terrain streaming steps
 };
 
 // The biggest piece of a slow server tick. "Other simulation" is what is left of server_scene.tick after the parts
