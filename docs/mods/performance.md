@@ -48,6 +48,16 @@ tree bodies going into physics (with `physics bodies added` counting every body 
 sleeping creatures, keycards and dead-drop loot in wrecks, wreck loot, navmesh tiles, and the save and unload of tiles
 left behind.
 
+## Wreck loot on new terrain
+
+When a terrain tile loads on the host, the game fills every wreck on it with loot (`server_scene.vehicle.generate_loot`:
+required, floor and furniture items) in one server tick, about 7 ms a wreck. A tile with 80 wrecks held the server for
+over 600 ms, the biggest cause of slow motion while driving. **Spread wreck loot** (on by default) lets 8 ms of wreck
+loot run per server tick and queues the rest by vehicle id, filling it over the next ticks (80 wrecks take about 1.3 s,
+on tiles at the edge of the loaded area). A wreck that is gone by then is skipped, and every save or tile save on the
+server thread fills the whole queue first. Only a save from the pause menu in that second can miss queued loot; the log
+says so when it happens. Each batch logs `Spread wreck loot: N wrecks filled over M server ticks`.
+
 ## Frame hitches
 
 **Hitch logger.** Every frame slower than the hitch threshold (50 ms by default) is written to
@@ -108,6 +118,7 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Precise timer | On | The 1 ms Windows timer described above. Applies at once |
 | Hitch threshold (ms) | 50 | Frames slower than this are logged (20 to 1000) |
 | FPS overlay | Off | The live readout in the top-left corner |
+| Spread wreck loot | On | Fills wrecks on newly loaded terrain a few at a time, as above |
 
 Without AnyHelpers the mod works with these defaults.
 

@@ -23,7 +23,10 @@
 // catch up, which shows as stutter on vehicles and physics in solo and when hosting. "Precise timer" asks Windows
 // for a 1 ms timer (timeBeginPeriod(1)), as most games do. The summary's server spacing jitter shows the effect.
 //
-// Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay.
+// Fix 3, spread wreck loot (on by default): a terrain tile that loads on the host fills all its wrecks with loot in
+// one server tick (about 7 ms a wreck); the mod lets 8 ms of it run per tick and fills the rest over the next ticks.
+//
+// Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot.
 //
 // EXPERIMENTAL. Hooks game functions through the experimental SDK (anyperformance_bindings.h): Anymaker 0.1.27 /
 // Steam build 26113663 only. Read anymaker_modding.log.
@@ -50,6 +53,7 @@
 #include <thread>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 #include <string>
 
 namespace anyperformance {
@@ -63,7 +67,7 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[4], g_settings_revision = ~0ull;
+uint64_t g_tokens[5], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
@@ -162,6 +166,7 @@ constexpr StepSpec kSteps[] = {
     {&bind::navmesh_add_tile, "navmesh tile add", true},
     {&bind::vehicle_bunker_keycard, "wreck keycard", true},
     {&bind::vehicle_loot_deaddrop, "dead-drop loot", true},
+    {&bind::save_game_inner, "world save", true},
     {&bind::apply_update, "network update", false},
     {&bind::client_network_state, "network state", false},
     {&bind::client_update_ui, "UI update", false},
@@ -176,15 +181,106 @@ const char* const* step_names() {
     for (int i = 0; i < kStepCount; ++i) names[i] = kSteps[i].name;
     return names;
 }
+constexpr int step_index(const anymaker::func_desc* desc) {
+    for (int i = 0; i < kStepCount; ++i) if (kSteps[i].desc == desc) return i;
+    return -1;
+}
+constexpr int kTileStep = step_index(&bind::tile_task_integrate_server), kLootStep = step_index(&bind::vehicle_generate_loot),
+              kSaveStep = step_index(&bind::save_game_inner);
+static_assert(kTileStep >= 0 && kLootStep >= 0 && kSaveStep >= 0, "the wreck loot queue needs these steps");
+constexpr bool is_tile_save(int i) {
+    return kSteps[i].desc == &bind::tile_save_level_1 || kSteps[i].desc == &bind::tile_save_level_2 ||
+           kSteps[i].desc == &bind::tile_save_level_3;
+}
 using six_t = void (*)(void*, void*, void*, void*, void*, void*);
 anymaker::cell_hook h_steps[kStepCount];
+
+// ------------------------------------------------------------------ spread wreck loot (server thread)
+// When a terrain tile goes into the world, server_scene.environment_tile_task.integrate loops over every vehicle, calls
+// vehicle.generate_loot (required, floor and furniture items) for each wreck on that tile that has none yet, then marks
+// the tile's loot as done. Each call creates the wreck's items, about 7 ms in 0.1.27, so a tile with 80 wrecks held the
+// server for over 600 ms and the world went into slow motion. With "Spread wreck loot" on, wreck loot inside a tile
+// integrate runs until kLootBudgetMs of loot has run this tick; the rest is queued by vehicle id and filled after the
+// following ticks, kLootBudgetMs a tick (80 wrecks take about 1.3 s, on tiles at the edge of the loaded area). A
+// queued wreck that is gone by then is skipped. Before any save or tile save on the server thread the whole queue is
+// filled first, so a save never stores a wreck as looted without its items. Only a save from the main thread (the
+// pause menu's save in the first second after a tile loads) can miss queued loot; that is logged.
+constexpr double kLootBudgetMs = 8;
+constexpr ptrdiff_t kServerScene = 0xa0;      // server.m_scene, ref<server_scene> at +0x98: object pointer at +0xa0
+constexpr ptrdiff_t kSceneVehicles = 0x1b0;   // server_scene.m_vehicles (server_scene.vehicle.container)
+constexpr ptrdiff_t kVehicleId = 0x40;        // server_scene.vehicle.m_id (s32)
+using vehicle_by_id_t = void (*)(void** ret, void* container, const int32_t* id);
+struct PendingLoot { void* scene; void* vehicle; int32_t id, tier; };
+std::atomic<bool> g_spread_loot{true};
+std::vector<PendingLoot> g_loot_queue;        // server thread only
+std::atomic<int> g_loot_pending{0};
+size_t g_loot_next;                           // first entry of g_loot_queue not filled yet
+int g_tile_depth;                             // inside a server tile integrate
+double g_loot_ms_tick;                        // wreck loot run in the server tick in progress
+int g_loot_queued_total, g_loot_skipped_total, g_loot_ticks;   // the batch since the queue was last empty
+vehicle_by_id_t g_vehicle_by_id;
+
+// Queues one generate_loot call from a tile integrate once this tick's budget is used. True when queued.
+bool queue_loot(void* vehicle, void* scene, const void* tier) {
+    if (!g_spread_loot || !g_vehicle_by_id || g_loot_ms_tick < kLootBudgetMs) return false;
+    auto* v = static_cast<uint8_t*>(vehicle);
+    if (!v || !scene || !anymaker::readable(v + kVehicleId, 4) || (tier && !anymaker::readable(tier, 4))) return false;
+    g_loot_queue.push_back({scene, vehicle, *reinterpret_cast<const int32_t*>(v + kVehicleId),
+                            tier ? *static_cast<const int32_t*>(tier) : 0});
+    g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
+    ++g_loot_queued_total;
+    return true;
+}
+// Fills queued wreck loot for scene until budget_ms of loot has run this tick (all of it with budget_ms < 0).
+void fill_loot(void* scene, double budget_ms) {
+    auto original = reinterpret_cast<six_t>(h_steps[kLootStep].original);
+    while (g_loot_next < g_loot_queue.size() && (budget_ms < 0 || g_loot_ms_tick < budget_ms)) {
+        PendingLoot p = g_loot_queue[g_loot_next++];
+        void* now = nullptr;
+        if (p.scene == scene) g_vehicle_by_id(&now, static_cast<uint8_t*>(scene) + kSceneVehicles, &p.id);
+        if (now != p.vehicle) { ++g_loot_skipped_total; continue; }   // gone, or another world
+        double start = now_ms();
+        original(p.vehicle, scene, &p.tier, nullptr, nullptr, nullptr);
+        double ms = now_ms() - start;
+        g_loot_ms_tick += ms;
+        g_tick.steps.add(kLootStep, ms);
+    }
+    ++g_loot_ticks;
+    if (g_loot_next >= g_loot_queue.size()) {
+        log(0, "Spread wreck loot: %d wrecks filled over %d server ticks%s", g_loot_queued_total - g_loot_skipped_total,
+            g_loot_ticks, g_loot_skipped_total ? " (some wrecks were gone by then)" : "");
+        g_loot_queue.clear(); g_loot_next = 0; g_loot_queued_total = g_loot_skipped_total = g_loot_ticks = 0;
+    }
+    g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
+}
+void* server_scene_of(void* server) {
+    auto* s = static_cast<uint8_t*>(server);
+    return s && anymaker::readable(s + kServerScene, 8) ? *reinterpret_cast<void**>(s + kServerScene) : nullptr;
+}
+
 template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void* f) {
     auto original = reinterpret_cast<six_t>(h_steps[I].original);
     bool mine = kSteps[I].server ? on_server_thread() : GetCurrentThreadId() == g_main_thread;
-    if (!mine) { original(a, b, c, d, e, f); return; }
+    if (!mine) {
+        if constexpr (I == kSaveStep)
+            if (int n = g_loot_pending.load(std::memory_order_relaxed))
+                log(1, "a save from outside the server thread ran with %d wrecks still waiting for their loot", n);
+        original(a, b, c, d, e, f); return;
+    }
+    if constexpr (I == kLootStep)
+        if (g_tile_depth > 0 && queue_loot(a, b, c)) return;
+    if constexpr (I == kSaveStep)   // server._save_game (server, ...)
+        if (g_loot_pending.load(std::memory_order_relaxed))
+            if (void* scene = server_scene_of(a)) fill_loot(scene, -1);
+    if constexpr (is_tile_save(I))  // environment_tile.save_level_N (tile, server_scene, ...)
+        if (g_loot_pending.load(std::memory_order_relaxed) && b) fill_loot(b, -1);
+    if constexpr (I == kTileStep) ++g_tile_depth;
     double start = now_ms();
     original(a, b, c, d, e, f);
-    (kSteps[I].server ? g_tick.steps : g_parts.steps).add(I, now_ms() - start);
+    double ms = now_ms() - start;
+    if constexpr (I == kTileStep) --g_tile_depth;
+    if constexpr (I == kLootStep) g_loot_ms_tick += ms;
+    (kSteps[I].server ? g_tick.steps : g_parts.steps).add(I, ms);
 }
 template <int... I> std::array<void*, sizeof...(I)> step_hooks(std::integer_sequence<int, I...>) {
     return {reinterpret_cast<void*>(&hk_step<I>)...};
@@ -278,6 +374,7 @@ void read_settings() {
     if (g_tokens[1] && settings->get(g_tokens[1], &v) && std::isfinite(v.number)) g_hitch_ms = std::clamp(v.number, 20.0, 1000.0);
     if (g_tokens[2] && settings->get(g_tokens[2], &v)) g_overlay = v.number != 0;
     if (g_tokens[3] && settings->get(g_tokens[3], &v) && std::isfinite(v.number)) g_smoothing = std::clamp(int(v.number), 0, 2);
+    if (g_tokens[4] && settings->get(g_tokens[4], &v)) g_spread_loot = v.number != 0;
 }
 
 // Counts one hitch or slow-motion log line; false once the session's limit is used up.
@@ -515,8 +612,11 @@ void hk_update_tasks(void* container, void* client, void* scene) {
 void hk_server_tick(void* server) {
     g_server_thread.store(GetCurrentThreadId(), std::memory_order_relaxed);
     g_tick = ServerParts{};
+    g_loot_ms_tick = 0;
     double start = now_ms();
     reinterpret_cast<server_tick_t>(h_server_tick.original)(server);
+    if (g_loot_pending.load(std::memory_order_relaxed))
+        if (void* scene = server_scene_of(server)) fill_loot(scene, kLootBudgetMs);
     double ms = now_ms() - start;
     g_tick.total = ms;
     g_server_last_ms = ms;
@@ -619,6 +719,8 @@ void install_hooks() {
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; AnyPerformance stays off"); return; }
         if (!g_client_tick_code) g_client_tick_code = static_cast<uint8_t*>(function(bind::client_tick));   // before its hook
         bool all = true;
+        if (!g_vehicle_by_id) g_vehicle_by_id = reinterpret_cast<vehicle_by_id_t>(function(bind::vehicle_by_id));
+        if (!g_vehicle_by_id) all = false;   // until found, wreck loot runs as in the game
         for (auto& h : specs) {
             if (h.done) continue;
             if (void** cell = hook_cell(*h.desc)) {
@@ -652,6 +754,7 @@ void install_hooks() {
     }
     for (auto& h : specs) if (!h.done && !g_stop) log(1, "could not locate or hook the %s function; it is not timed", h.name);
     for (int i = 0; i < kStepCount; ++i) if (!steps_done[i] && !g_stop) log(1, "could not locate or hook the %s step; it is not timed", kSteps[i].name);
+    if (!g_vehicle_by_id && !g_stop) log(1, "could not locate the vehicle lookup; wreck loot is not spread out");
 }
 
 void shutdown(void*) {
@@ -694,6 +797,11 @@ void register_settings() {
     d.description = "Smooths the slow-down and speed-up after a stall. Light and Strong hide short stalls and cap the catch-up speed, "
                     "at the cost of 17 to 50 ms more delay on screen. Off is the game's own behaviour.";
     g_tokens[3] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "spread_loot"; d.label = "Spread wreck loot"; d.kind = ANY_SETTING_BOOL; d.order = 4; d.default_number = 1;
+    d.description = "Fills the wrecks on newly loaded terrain a few at a time instead of all at once, which stops the big stall "
+                    "while driving. Wrecks far ahead may get their items a second later. Host and solo only.";
+    g_tokens[4] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace

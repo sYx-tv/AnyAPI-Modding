@@ -163,4 +163,10 @@ inline constexpr func_desc vehicle_bunker_keycard{"() server_scene.vehicle.gener
 // Dead-drop loot in a wreck on a new tile.
 // () server_scene.vehicle.generate_loot_deaddrop (server_scene.vehicle, server_scene)
 inline constexpr func_desc vehicle_loot_deaddrop{"() server_scene.vehicle.generate_loot_deaddrop (server_scene.vehicle, server_scene)","53 55 56 57 41 54 48 81 ec b0 00 00 00 48 89 4c 24 40 48 89 54 24 48 48 8d 44 24 50 48 8d 9a 88",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,87};
+// Looks up a server vehicle by id (null when it is gone); used to replay queued wreck loot.
+// (ptr<server_scene.vehicle>) server_scene.vehicle.container.get_vehicle_by_id (const server_scene.vehicle.container, const s32)
+inline constexpr func_desc vehicle_by_id{"(ptr<server_scene.vehicle>) server_scene.vehicle.container.get_vehicle_by_id (const server_scene.vehicle.container, const s32)","48 81 ec 98 00 00 00 48 89 4c 24 48 48 89 54 24 50 4c 89 44 24 58 48 8b 44 24 28 48 89 44 24 60 4c 8d 4c 24 60 48 8d 44 24 68 48 89 84 24 80 00 00 00 48 8d 12 48 8b 05 d4 00 00 00 48 89 4c 24 78 4c 89 c9 48 89 4c 24 40 48 89 54 24 20 4c 89 44 24 38 ff 10 48 8d 44 24 70 48 8b 0d b7 00 00 00 48 89 44 24 30 48 89 8c 24 88 00 00 00 48 8b 84 24 88 00 00 00 48 8b 4c 24 30 48 8b 54 24 20 ff 10 48 8b 44 24 70 48 39 44 24 60 0f 84 63",{"", {}, 0},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 45 00 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05 3c 00 00 00 48 8b 4c 24 28 48 89 01 8b 05 1e 00 00 00 89 41 78 48 8d 89 80 00 00 00 48 8b 05 25",96u,29};
+// Writes a save: autosave and peer saves on the server thread, menu saves from the main thread.
+// () server._save_game (server, const string, const string)
+inline constexpr func_desc save_game_inner{"() server._save_game (server, const string, const string)","53 55 56 57 41 54 48 81 ec 60 03 00 00 48 89 8c 24 80 01 00 00 48 89 94 24 88 01 00 00 4c 89 84",{"53 55 48 83 ec 58 48 89 4c 24 20 48 89 54 24 28 48 8d 44 24 30 48 8d 1d 54 00 00 00 48 8b 2d 55", {128u}, 1},"",0u,-1};
 } // namespace anyperformance::bind
