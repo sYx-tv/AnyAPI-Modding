@@ -87,16 +87,18 @@ struct Entry {
 };
 
 // First-pass price: a base per loot group, times (1 + tier), times rarity from the spawn probability (0.2 is
-// "normal"; rarer items cost up to 4x, common ones down to half). Hand overrides come later.
+// "normal"; rarer items cost up to 4x, common ones down to half), plus a quarter on top (Nate: "make everything a
+// little more expensive"). What the trader pays and what jobs pay stay where they were before that markup.
 inline int base_price(int32_t loot_group, bool part) {
     static constexpr int kBase[] = {10, 30, 10, 15, 80, 20, 40, 35, 20, 15, 25};
     int b = loot_group >= 0 && loot_group < kLootGroupCount ? kBase[loot_group] : 10;
     return part ? b + 10 : b;
 }
+inline constexpr double kMarkup = 1.25;
 inline int price(const Entry& e) {
     int tier = std::clamp(e.tech_tier, 1, 6);
     double rarity = e.spawn_probability > 0 ? std::clamp(0.2 / e.spawn_probability, 0.5, 4.0) : 4.0;
-    return std::max(1, int(std::lround(base_price(e.loot_group, e.part) * (1 + tier) * rarity)));
+    return std::max(1, int(std::lround(base_price(e.loot_group, e.part) * (1 + tier) * rarity * kMarkup)));
 }
 
 // Can drop as loot by now: in a loot group, a spawn chance, and a tier the world has reached. Items with no tier
@@ -253,8 +255,8 @@ inline std::vector<StockRow> pick_stock(size_t candidates, uint64_t seed, int64_
     return out;
 }
 
-// What the trader pays for something he sells for `price`: 40%, at least 1.
-inline int sell_price(int price) { return std::max(1, price * 40 / 100); }
+// What the trader pays for something he sells for `price`: 32% (40% of the price before the markup), at least 1.
+inline int sell_price(int price) { return std::max(1, price * 32 / 100); }
 
 // ------------------------------------------------------------------ paying with Cash stacks
 struct Stack { int32_t item_id = 0; int32_t count = 0; };
@@ -295,12 +297,14 @@ inline std::vector<int32_t> cash_stacks(int64_t amount) {
 // their prices; places are world spots. The same seed and board number always give the same offers.
 // A delivery (item: index into the goods, spot: index into the places) or a kill job (item: -1 for any zombie, else an
 // index into the special zombies; no spot).
-struct Offer { int item = -1; int count = 0; int spot = -1; int reward = 0; bool kill = false; };
+// Hard offers (see make_hard_offers) are worth more and unlock after kHardUnlock finished jobs.
+struct Offer { int item = -1; int count = 0; int spot = -1; int reward = 0; bool kill = false; bool hard = false; };
 
 inline int round5(double v) { return std::max(5, int(std::lround(v / 5)) * 5); }
 inline int delivery_count(int price, uint64_t r) { return price <= 40 ? 2 + int(r % 4) : price <= 120 ? 1 + int(r % 3) : 1; }
-// Half again the goods' trader price, plus a little per metre (about 60 Cash a kilometre).
-inline int delivery_reward(int price, int count, double metres) { return round5(price * count * 1.5 + metres * 0.06); }
+// Half again the goods' price before the markup (1.2 x the shop price), plus a little per metre (about 60 Cash a
+// kilometre).
+inline int delivery_reward(int price, int count, double metres) { return round5(price * count * 1.2 + metres * 0.06); }
 
 inline std::vector<Offer> make_offers(const std::vector<int>& item_prices, const std::vector<Spot>& spots, Zone from, uint64_t seed,
                                       int64_t board, int n) {
@@ -396,6 +400,58 @@ inline std::vector<Offer> make_kill_offers(const std::vector<int>& specials, uin
     return out;
 }
 
+// ------------------------------------------------------------------ hard jobs
+// Two hard offers a board, after the ordinary ones: a delivery of one of the pricier half of the goods, one or two more
+// than usual, 3 to 6 km out (failing that, the farthest third of the places), paying double; and a kill job for 6-10
+// of one special kind (40-60 ordinary zombies while the world has none yet), paying half again. Hard jobs open once
+// kHardUnlock jobs have been finished in the world.
+inline constexpr int kHardUnlock = 3;
+inline int hard_delivery_reward(int price, int count, double metres) { return round5((price * count * 1.2 + metres * 0.06) * 2); }
+inline int hard_kill_reward(int count, bool special) { return round5(kill_reward(count, special) * 1.5); }
+
+inline std::vector<Offer> make_hard_offers(const std::vector<int>& item_prices, const std::vector<Spot>& spots, Zone from,
+                                           const std::vector<int>& specials, uint64_t seed, int64_t board, bool kills) {
+    std::vector<Offer> out;
+    uint64_t state = mix(seed ^ mix(uint64_t(board) + 0x4a2d));
+    if (!item_prices.empty() && !spots.empty()) {
+        auto dist = [&](const Spot& s) { return std::hypot(s.at.x - from.x, s.at.z - from.z); };
+        std::vector<int> distant;
+        for (size_t i = 0; i < spots.size(); ++i) { double d = dist(spots[i]); if (d >= 3000 && d <= 6000) distant.push_back(int(i)); }
+        if (distant.empty()) {
+            std::vector<int> all(spots.size());
+            for (size_t i = 0; i < all.size(); ++i) all[i] = int(i);
+            std::stable_sort(all.begin(), all.end(), [&](int a, int b) { return dist(spots[size_t(a)]) > dist(spots[size_t(b)]); });
+            all.resize(std::max<size_t>(1, all.size() / 3));
+            distant = all;
+        }
+        std::vector<int> sorted = item_prices;
+        std::sort(sorted.begin(), sorted.end());
+        int median = sorted[sorted.size() / 2];
+        std::vector<int> dear;
+        for (size_t i = 0; i < item_prices.size(); ++i) if (item_prices[i] >= median) dear.push_back(int(i));
+        Offer o;
+        o.hard = true;
+        state = mix(state); o.item = dear[size_t(state % dear.size())];
+        state = mix(state); o.spot = distant[size_t(state % distant.size())];
+        state = mix(state); o.count = delivery_count(item_prices[size_t(o.item)], state) + 1 + int((state >> 20) % 2);
+        o.reward = hard_delivery_reward(item_prices[size_t(o.item)], o.count, dist(spots[size_t(o.spot)]));
+        out.push_back(o);
+    }
+    if (kills) {
+        Offer k;
+        k.hard = true; k.kill = true;
+        if (!specials.empty()) {
+            state = mix(state); k.item = specials[size_t(state % specials.size())];
+            state = mix(state); k.count = 6 + int(state % 5);
+        } else {
+            state = mix(state); k.count = 40 + int(state % 21);
+        }
+        k.reward = hard_kill_reward(k.count, k.item >= 0);
+        out.push_back(k);
+    }
+    return out;
+}
+
 // Up to three different parts to offer instead of the Cash reward: worth about the same (half to 1.3 times),
 // else the closest prices.
 inline std::vector<int> reward_parts(const std::vector<int>& part_prices, int reward, uint64_t seed) {
@@ -437,6 +493,8 @@ struct WorldState {
     std::vector<std::string> job_parts;   // the three part choices once delivered
     bool job_kill = false;    // a kill job: job_item is the zombie kind ("any" for any zombie), no place
     int job_progress = 0;     // kills so far
+    bool job_hard = false;    // taken from a hard offer
+    int jobs_done = 0;        // jobs finished (reward claimed) in this world; hard jobs open at kHardUnlock
 };
 
 inline std::string save_world(const WorldState& w) {
@@ -453,6 +511,8 @@ inline std::string save_world(const WorldState& w) {
         o << "job " << w.job_state << " " << w.job_count << " " << w.job_reward << " " << (w.job_place.empty() ? "place" : w.job_place) << " " << w.job_at.x << " " << w.job_at.y << " "
           << w.job_at.z << " " << w.job_item << "\n";
     if (w.job_state && w.job_kill) o << "job_kill " << w.job_progress << "\n";
+    if (w.job_state && w.job_hard) o << "job_hard\n";
+    o << "done " << w.jobs_done << "\n";
     if (!w.job_parts.empty()) {
         o << "job_parts";
         for (const auto& id : w.job_parts) o << " " << id;
@@ -500,6 +560,11 @@ inline bool load_world(const std::string& text, WorldState& w) {
             int n = 0;
             r.job_kill = true;
             if (row >> n && n >= 0) r.job_progress = n;
+        } else if (key == "job_hard") {
+            r.job_hard = true;
+        } else if (key == "done") {
+            int n = 0;
+            if (row >> n && n >= 0) r.jobs_done = n;
         } else if (key == "job_parts") {
             std::string id;
             while (row >> id && r.job_parts.size() < 3) r.job_parts.push_back(id);

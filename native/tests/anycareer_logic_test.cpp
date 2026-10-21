@@ -23,7 +23,7 @@ int main() {
     Entry common; common.loot_group = 2; common.tech_tier = 1; common.spawn_probability = 0.2;   // food
     Entry rare = common; rare.spawn_probability = 0.05;
     Entry high = common; high.tech_tier = 4;
-    assert(price(common) == 20 && price(rare) == 80 && price(high) == 50);
+    assert(price(common) == 25 && price(rare) == 100 && price(high) == 63);
     Entry part = common; part.part = true;
     assert(price(part) > price(common));
     Entry never = common; never.spawn_probability = 0;
@@ -37,7 +37,7 @@ int main() {
     Entry c = common; c.id = kCashId; assert(!findable(c, 5));
 
     common.price = price(common);
-    assert(tsv_row(common).find("\tfood\t1\t0.2000\t20\t") != std::string::npos);
+    assert(tsv_row(common).find("\tfood\t1\t0.2000\t25\t") != std::string::npos);
 
     // Gas station spots from a made-up tile in the stock format.
     std::vector<Zone> zones;
@@ -74,7 +74,7 @@ int main() {
         if (i) assert(a[i].candidate > a[i - 1].candidate);   // sorted, no repeats
     }
     assert(same && differs && pick_stock(3, 1, 0, 10).size() == 3 && pick_stock(0, 1, 0, 10).empty());
-    assert(sell_price(100) == 40 && sell_price(1) == 1);
+    assert(sell_price(100) == 32 && sell_price(125) == 40 && sell_price(1) == 1);
 
     // Paying: smallest stacks first; not enough cash means no plan.
     std::vector<Payment> plan;
@@ -145,7 +145,24 @@ int main() {
             assert(a[size_t(i)].reward == delivery_reward(price, a[size_t(i)].count, d) && a[size_t(i)].reward % 5 == 0);
         }
         assert(same && differ);
-        assert(delivery_reward(20, 3, 1000) == 150 && delivery_reward(1, 1, 0) == 5);
+        assert(delivery_reward(25, 3, 1000) == 150 && delivery_reward(1, 1, 0) == 5);
+        // Hard offers: a pricier item, more of it, 3-6 km out, double pay; same board, same offers.
+        {
+            auto h = make_hard_offers(prices, places, {0, 0, 0}, {}, 77, 3, true), h2 = make_hard_offers(prices, places, {0, 0, 0}, {}, 77, 3, true);
+            assert(h.size() == 2 && h[0].hard && !h[0].kill && h[1].hard && h[1].kill && h[0].item == h2[0].item && h[0].spot == h2[0].spot);
+            int hp = prices[size_t(h[0].item)];
+            double d = places[size_t(h[0].spot)].at.x;
+            assert(hp >= 60 && d >= 3000 && d <= 6000 && h[0].count >= delivery_count(hp, 0) + 1);
+            assert(h[0].reward == hard_delivery_reward(hp, h[0].count, d));
+            assert(h[1].item == -1 && h[1].count >= 40 && h[1].count <= 60 && h[1].reward == hard_kill_reward(h[1].count, false));
+            auto hs = make_hard_offers(prices, places, {0, 0, 0}, {1, 2}, 77, 3, true);
+            assert(hs[1].item >= 1 && hs[1].count >= 6 && hs[1].count <= 10);
+            assert(make_hard_offers(prices, places, {0, 0, 0}, {}, 77, 3, false).size() == 1);
+            // Nothing 3-6 km out: the farthest third.
+            std::vector<Spot> near3 = {{{100, 0, 0}, "town"}, {{200, 0, 0}, "town"}, {{2500, 0, 0}, "town"}};
+            assert(make_hard_offers(prices, near3, {0, 0, 0}, {}, 1, 1, false)[0].spot == 2);
+            assert(hard_kill_reward(10, false) == 225 && hard_delivery_reward(25, 3, 1000) == 300);
+        }
         // Nothing far enough at first: falls back to 150 m - 6 km.
         std::vector<Spot> close = {{{200, 0, 0}, "town"}, {{5000, 0, 0}, "town"}, {{9000, 0, 0}, "town"}};
         auto f = make_offers(prices, close, {0, 0, 0}, 1, 1, 3);
@@ -169,7 +186,9 @@ int main() {
                back.job_count == 3 && back.job_reward == 140 && back.job_place == "gas_station" && back.job_at.z == -40 && back.job_parts.size() == 3 &&
                back.job_parts[2] == "pipe_c");
         WorldState none;
-        assert(load_world(save_world(WorldState{}), none) && none.job_state == 0 && none.board == -1);
+        assert(load_world(save_world(WorldState{}), none) && none.job_state == 0 && none.board == -1 && none.jobs_done == 0 && !none.job_hard);
+        w.job_hard = true; w.jobs_done = 7;
+        assert(load_world(save_world(w), back) && back.job_hard && back.jobs_done == 7);
     }
     // Kill jobs.
     {

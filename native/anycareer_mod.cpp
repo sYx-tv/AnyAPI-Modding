@@ -32,6 +32,10 @@
 //      spawns them (kinds from the player's own rom/data/zombie_definitions.json). A kill counts when one of the host's
 //      hits takes a zombie's blood to zero (server_scene.actor_zombie.damage is hooked; its damage source names the
 //      attacking actor). Then back to the Mechanic for the reward. Without the hook the board only has deliveries.
+//   Hard jobs: two more rows on the board (a pricier delivery, more of it, 3-6 km out, double pay; and a big kill job,
+//      special zombies when the world has them, half again the pay). They unlock after 3 finished jobs in the world.
+//   Prices are a quarter higher than the first pass; what the Mechanic pays for things and what jobs pay are not.
+//   The test keys below (F2-F6) are only in test builds (ANYCAREER_DEV_KEYS, default 1; the release sets it to 0).
 //   F2 (host, test key): toggles the game's own free move (the developers' debug-menu fly mode, client_scene.
 //      m_is_free_move): you fly where you look, through anything, and sprint flies faster. For crossing the map quickly.
 //   F6 (host, test key): teleports you to the delivery's drop-off, or to the Mechanic (the game's own peer teleport).
@@ -133,6 +137,12 @@ constexpr int32_t kStoreSystem = 1;                 // file.e_store.system (stat
 constexpr uint32_t kRefDtorRva = 0x4eb00;           // N:() $ref_dtor (uptr) [metadata]
 constexpr int32_t kGiveAmount = 250;
 constexpr int32_t kMechanical = 6;                  // e_loot_group mechanical
+// The test keys F2-F6. On in test builds; the release build sets ANYCAREER_DEV_KEYS=0 (Nate: remove the dev stuff
+// when it's done).
+#ifndef ANYCAREER_DEV_KEYS
+#define ANYCAREER_DEV_KEYS 1
+#endif
+constexpr bool kDevKeys = ANYCAREER_DEV_KEYS != 0;
 constexpr double kTradeRange = 30;                  // metres from the gas station spot (the building stands on it)
 constexpr int64_t kRestockDays = 2;
 constexpr int kShelfSize = 16;                // Nate (2026-10-21): "a wee bit larger" than 10
@@ -690,15 +700,18 @@ void refresh_offers() {
     if (h_zombie_damage.cell)
         for (const auto& o : logic::make_kill_offers(logic::special_zombies(g_zombies, T.level), uint64_t(uint32_t(T.seed)), T.world.board))
             T.offers.push_back(o);
+    for (const auto& o : logic::make_hard_offers(prices, g_places, T.world.trader, logic::special_zombies(g_zombies, T.level), uint64_t(uint32_t(T.seed)),
+                                                 T.world.board, h_zombie_damage.cell != nullptr))
+        T.offers.push_back(o);
     T.offers_board = T.world.board;
     std::string list;
     for (const auto& o : T.offers)
-        if (o.kill) list += " kill " + std::to_string(o.count) + "x" + (o.item < 0 ? std::string("any") : g_zombies[size_t(o.item)].id) + "=" + std::to_string(o.reward);
-        else list += " " + std::to_string(o.count) + "x" + T.goods[size_t(o.item)].id + "->" + g_places[size_t(o.spot)].filter + "(" +
+        if (o.kill) list += std::string(o.hard ? " HARD" : "") + " kill " + std::to_string(o.count) + "x" + (o.item < 0 ? std::string("any") : g_zombies[size_t(o.item)].id) + "=" + std::to_string(o.reward);
+        else list += std::string(o.hard ? " HARD" : "") + " " + std::to_string(o.count) + "x" + T.goods[size_t(o.item)].id + "->" + g_places[size_t(o.spot)].filter + "(" +
                 std::to_string(int(std::hypot(g_places[size_t(o.spot)].at.x - T.world.trader.x, g_places[size_t(o.spot)].at.z - T.world.trader.z))) +
                 "m)=" + std::to_string(o.reward);
-    log(0, "ANYCAREER_JOBS board=%lld goods=%d places=%d offers=%d:%s", (long long)T.world.board, int(T.goods.size()), int(g_places.size()),
-        int(T.offers.size()), list.c_str());
+    log(0, "ANYCAREER_JOBS board=%lld goods=%d places=%d done=%d offers=%d:%s", (long long)T.world.board, int(T.goods.size()), int(g_places.size()),
+        T.world.jobs_done, int(T.offers.size()), list.c_str());
 }
 
 std::wstring metres_text(double m) {
@@ -745,6 +758,7 @@ bool near_spot(uint8_t* peer, const logic::Zone& at) {
 void clear_job() {
     T.world.job_state = 0; T.world.job_item.clear(); T.world.job_count = T.world.job_reward = 0; T.world.job_place.clear();
     T.world.job_parts.clear(); T.job_name.clear(); T.world.job_kill = false; T.world.job_progress = 0;
+    T.world.job_hard = false;
 }
 
 // The three part choices for the job's reward, then the reward is owed (delivered, or all the kills made).
@@ -767,15 +781,17 @@ void take(uint8_t* scene, const Work& w) {
     if (w.key < 0 || w.key >= int(T.offers.size()) || T.offers_board != T.world.board) return fail("no_such_offer", L"The board changed. Pick again.");
     if (std::find(T.world.taken.begin(), T.world.taken.end(), w.key) != T.world.taken.end()) return fail("taken", L"That job is taken.");
     const logic::Offer& o = T.offers[size_t(w.key)];
+    if (o.hard && T.world.jobs_done < logic::kHardUnlock) return fail("hard_locked", L"Finish a few more jobs to unlock hard jobs.");
     if (o.kill) {
         if (o.item >= int(g_zombies.size())) return fail("stale_offer", L"The board changed. Pick again.");
         T.world.taken.push_back(w.key);
         clear_job();
         T.world.job_state = 1; T.world.job_kill = true; T.world.job_item = o.item < 0 ? "any" : g_zombies[size_t(o.item)].id;
         T.world.job_count = o.count; T.world.job_reward = o.reward; T.world.job_place = "mechanic"; T.world.job_at = T.world.trader;
+        T.world.job_hard = o.hard;
         save_world();
         T.status = L"Job taken: kill " + kill_text(o.count, T.world.job_item) + L", then come back here.";
-        log(0, "ANYCAREER_TAKE ok=1 kill=%s count=%d reward=%d", T.world.job_item.c_str(), o.count, o.reward);
+        log(0, "ANYCAREER_TAKE ok=1 kill=%s count=%d reward=%d hard=%d", T.world.job_item.c_str(), o.count, o.reward, o.hard ? 1 : 0);
         return;
     }
     if (size_t(o.item) >= T.goods.size() || size_t(o.spot) >= g_places.size()) return fail("stale_offer", L"The board changed. Pick again.");
@@ -783,10 +799,11 @@ void take(uint8_t* scene, const Work& w) {
     const logic::Spot& at = g_places[size_t(o.spot)];
     T.world.taken.push_back(w.key);
     T.world.job_state = 1; T.world.job_item = g.id; T.world.job_count = o.count; T.world.job_reward = o.reward;
-    T.world.job_place = at.filter; T.world.job_at = at.at; T.job_name = g.name;
+    T.world.job_place = at.filter; T.world.job_at = at.at; T.job_name = g.name; T.world.job_hard = o.hard;
     save_world();
     T.status = L"Job taken: bring " + std::to_wstring(o.count) + L" x " + wide(g.name) + L". It is on your map.";
-    log(0, "ANYCAREER_TAKE ok=1 item=%s count=%d place=%s at=(%.0f, %.0f) reward=%d", g.id.c_str(), o.count, at.filter.c_str(), at.at.x, at.at.z, o.reward);
+    log(0, "ANYCAREER_TAKE ok=1 item=%s count=%d place=%s at=(%.0f, %.0f) reward=%d hard=%d", g.id.c_str(), o.count, at.filter.c_str(), at.at.x, at.at.z,
+        o.reward, o.hard ? 1 : 0);
 }
 
 void abandon(uint8_t*, const Work&) {
@@ -836,6 +853,7 @@ void claim(uint8_t* scene, const Work& w) {
     int reward = T.world.job_reward;
     if (w.key == 0) {
         clear_job();
+        ++T.world.jobs_done;
         save_world();
         int paid = 0;
         for (int32_t stack : logic::cash_stacks(reward)) if (drop_cash(scene, peer, w.yaw, stack)) paid += stack;
@@ -855,6 +873,7 @@ void claim(uint8_t* scene, const Work& w) {
     std::string id = c->id;
     std::wstring name = wide(c->name);
     clear_job();
+    ++T.world.jobs_done;
     save_world();
     bool dropped = drop(scene, peer, w.yaw, item);
     T.status = L"Your reward: " + name + L". New jobs come every day.";
@@ -953,15 +972,27 @@ void job_rows(View& v, uint8_t* peer, int have) {
     if (T.world.job_kill) { v.job_text = kill_text(T.world.job_count, T.world.job_item); v.job_have = T.world.job_progress; }
     else if (T.world.job_state) v.job_text = std::to_wstring(T.world.job_count) + L" x " + wide(job_name()) + L" to the " + wide(logic::place_name(T.world.job_place));
     if (T.world.job_state == 0 && T.offers_board == T.world.board) {
+        int to_unlock = logic::kHardUnlock - T.world.jobs_done;
         for (size_t i = 0; i < T.offers.size(); ++i) {
             const auto& o = T.offers[i];
             bool taken = std::find(T.world.taken.begin(), T.world.taken.end(), int(i)) != T.world.taken.end();
+            bool locked = o.hard && to_unlock > 0;
+            // Hard jobs: marked, and greyed out with what unlocks them until enough jobs are done.
+            auto hard = [&](Row& r) {
+                if (!o.hard) return;
+                r.name = L"HARD: " + r.name;
+                if (locked) {
+                    r.name += L" (finish " + std::to_wstring(to_unlock) + L" more job" + (to_unlock == 1 ? L"" : L"s") + L" to unlock)";
+                    r.off = true; r.button = L"locked";
+                }
+            };
             if (o.kill) {
                 if (o.item >= int(g_zombies.size())) continue;
                 Row r;
                 r.name = L"Kill " + kill_text(o.count, o.item < 0 ? std::string("any") : g_zombies[size_t(o.item)].id) + L" (any weapon, anywhere), then come back";
                 r.price = o.reward; r.key = int32_t(i); r.off = taken;
                 r.button = taken ? L"taken" : L"Take  " + std::to_wstring(o.reward);
+                hard(r);
                 v.jobs.push_back(std::move(r));
                 continue;
             }
@@ -973,6 +1004,7 @@ void job_rows(View& v, uint8_t* peer, int have) {
                      metres_text(std::hypot(at.at.x - T.world.trader.x, at.at.z - T.world.trader.z));
             r.price = o.reward; r.key = int32_t(i); r.id = g.id; r.off = taken;
             r.button = taken ? L"taken" : L"Take  " + std::to_wstring(o.reward);
+            hard(r);
             v.jobs.push_back(std::move(r));
         }
     } else if (T.world.job_state == 1 && T.world.job_kill) {
@@ -1403,7 +1435,7 @@ void draw_shop(const AnyFrameV1* f, const View& v) {
     if (g_tab == 2 && v.job_state == 1 && v.job_kill)
         restock = L"Kills so far: " + std::to_wstring(v.job_have) + L" of " + std::to_wstring(v.job_count) + L". Only kills by you count.";
     else if (g_tab == 2 && v.job_state == 1)
-        restock = L"Bring " + v.job_text + L". The blue pin on the map marks the drop-off. (Test: F5 drops the items.)";
+        restock = L"Bring " + v.job_text + L". The blue pin on the map marks the drop-off." + (kDevKeys ? L" (Test: F5 drops the items.)" : L"");
     else if (g_tab == 2 && v.job_state == 2)
         restock = L"Pick one reward.";
     else if (g_tab == 2)
@@ -1569,7 +1601,8 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     if ((e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) || e->key >= 256) return 0;
     bool& was = held[e->key];
     if (e->kind == ANY_KEY_UP) { bool consume = was; was = false; return consume ? 1 : 0; }
-    if (e->key != VK_F2 && e->key != VK_F3 && e->key != VK_F4 && e->key != VK_F5 && e->key != VK_F6 && e->key != trade) return 0;
+    bool dev = kDevKeys && (e->key == VK_F2 || e->key == VK_F3 || e->key == VK_F4 || e->key == VK_F5 || e->key == VK_F6);
+    if (!dev && e->key != trade) return 0;
     if (!g_ready || !gameplay()) return 0;
     if (was) return 1;   // a held key repeats; one press, one action
     if (e->key == trade) {
@@ -1647,8 +1680,9 @@ void install() {
         log(kills ? 0 : 1, "ANYCAREER_KILLS hook=%d%s teleport=%d free_move=%d", kills ? 1 : 0, kills ? "" : " (no kill jobs this session)",
             teleport_event ? 1 : 0, g_client_ref.load() ? 1 : 0);
         g_ready = true;
-        log(0, "ANYCAREER_READY after_s=%d cash_file=%s draw=%d: in Survival the Mechanic waits at a gas station (Buy, Sell, Jobs); "
-            "F3 gives 250 Cash (host), F4 writes the price list, F5 drops a delivery job's items, F2 free move, F6 teleport (tests)", attempt, g_cash_json.c_str(), gpu ? 1 : 0);
+        log(0, "ANYCAREER_READY after_s=%d cash_file=%s draw=%d dev_keys=%d: in Survival the Mechanic waits at a gas station (Buy, Sell, Jobs)%s",
+            attempt, g_cash_json.c_str(), gpu ? 1 : 0, kDevKeys ? 1 : 0,
+            kDevKeys ? "; F3 gives 250 Cash (host), F4 writes the price list, F5 drops a delivery job's items, F2 free move, F6 teleport (tests)" : "");
         load_stations();
         return;
     }
