@@ -29,6 +29,7 @@ keeps working defaults when it is absent.
 | [GpsPart](gps.md) | 1.0.1 | API 0.35.0; single player | A new GPS Sensor part: position, heading, pitch, roll, speed, acceleration and waypoint outputs for the data port and microcontroller | None |
 | [ThirdPerson](third-person.md) | 0.1.3 | API 0.35.0 | Third-person camera on F5 with an adjustable follow distance (Alt + mouse wheel) | AnyHelpers settings and controls |
 | [MCCode](mccode.md) | 0.2.0 | API 0.38.0 | A Code view in the microcontroller editor: type the program or build it from nodes and wires, with a command list and the game's debugger | None; `</> Code` in the microcontroller editor |
+| [CustomGame](custom-game.md) | 0.1.0 | API 0.40.0 | A Custom Game page on the New Game screen: day cycle, starting tier, up to 20 players, survival, enemy and world settings saved per world | Map packs from CustomMap |
 
 All mods are in the published catalog ([`catalog.json`](../../catalog.json)).
 All versions target Anymaker 0.1.27 / Steam build 26113663. On that build every mod needs AnyAPI 0.40.0 or newer, and the experimental-SDK mods ship
