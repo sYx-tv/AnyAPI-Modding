@@ -124,17 +124,55 @@ inline std::string tsv_row(const Entry& e) {
 // ------------------------------------------------------------------ trader placement
 struct Zone { double x{}, y{}, z{}; };
 
-// Building spots a tile file marks "gas_station" (spawn_zones: pos in world metres, filter). Tolerates other keys.
-inline void gas_stations(const std::string& tile_json, std::vector<Zone>& out) {
-    if (tile_json.find("gas_station") == std::string::npos) return;
-    assetjson::Value v;
-    try { v = assetjson::Parser(tile_json).parse(); } catch (const std::exception&) { return; }
-    for (const auto& zone : v.get("spawn_zones").array) {
-        if (zone.kind != 'o' || zone.get("filter").text != "gas_station") continue;
-        const auto& pos = zone.get("pos").array;
-        if (pos.size() != 3) continue;
-        out.push_back({pos[0].number, pos[1].number, pos[2].number});
+// Spots in the world tiles (spawn_zones: pos in world metres, and a filter such as gas_station, town, house).
+struct Spot { Zone at; std::string filter; };
+
+// Places a delivery can go: towns, houses, gas stations and other buildings, not open-country spawn areas.
+inline bool delivery_place(const std::string& filter) {
+    for (const char* f : {"town", "house", "gas_station"}) if (filter == f) return true;
+    for (const char* f : {"farm", "shop", "store", "village", "industrial", "office", "garage", "barn", "station"})
+        if (filter.find(f) != std::string::npos) return true;
+    return false;
+}
+// "gas_station" -> "gas station"
+inline std::string place_name(std::string filter) {
+    for (char& c : filter) if (c == '_') c = ' ';
+    return filter.empty() ? "place" : filter;
+}
+
+// Only the spawn_zones array is parsed (tiles also hold thousands of props), found by bracket matching.
+inline void spawn_spots(const std::string& tile_json, std::vector<Spot>& out) {
+    size_t key = tile_json.find("\"spawn_zones\"");
+    if (key == std::string::npos) return;
+    size_t open = tile_json.find('[', key);
+    if (open == std::string::npos) return;
+    int depth = 0;
+    bool in_string = false;
+    size_t close = std::string::npos;
+    for (size_t i = open; i < tile_json.size(); ++i) {
+        char c = tile_json[i];
+        if (in_string) { if (c == '\\') ++i; else if (c == '"') in_string = false; continue; }
+        if (c == '"') in_string = true;
+        else if (c == '[' || c == '{') ++depth;
+        else if ((c == ']' || c == '}') && --depth == 0) { close = i; break; }
     }
+    if (close == std::string::npos) return;
+    assetjson::Value v;
+    try { v = assetjson::Parser(tile_json.substr(open, close - open + 1)).parse(); } catch (const std::exception&) { return; }
+    for (const auto& zone : v.array) {
+        if (zone.kind != 'o') continue;
+        const std::string& filter = zone.get("filter").text;
+        const auto& pos = zone.get("pos").array;
+        if (filter.empty() || filter.size() > 40 || filter.find_first_of(" \t\r\n") != std::string::npos || pos.size() != 3) continue;
+        out.push_back({{pos[0].number, pos[1].number, pos[2].number}, filter});
+    }
+}
+
+// Gas station spots only (where traders stand).
+inline void gas_stations(const std::string& tile_json, std::vector<Zone>& out) {
+    std::vector<Spot> spots;
+    spawn_spots(tile_json, spots);
+    for (const auto& s : spots) if (s.filter == "gas_station") out.push_back(s.at);
 }
 
 // The spot nearest to (x, z) on the ground plane; -1 when there are none.
@@ -252,6 +290,63 @@ inline std::vector<int32_t> cash_stacks(int64_t amount) {
     return out;
 }
 
+// ------------------------------------------------------------------ delivery jobs
+// "Bring N of an item to a place". Items are findable ones the caller lists (sorted the same way on every PC) with
+// their prices; places are world spots. The same seed and board number always give the same offers.
+struct Offer { int item = -1; int count = 0; int spot = -1; int reward = 0; };
+
+inline int round5(double v) { return std::max(5, int(std::lround(v / 5)) * 5); }
+inline int delivery_count(int price, uint64_t r) { return price <= 40 ? 2 + int(r % 4) : price <= 120 ? 1 + int(r % 3) : 1; }
+// Half again the goods' trader price, plus a little per metre (about 60 Cash a kilometre).
+inline int delivery_reward(int price, int count, double metres) { return round5(price * count * 1.5 + metres * 0.06); }
+
+inline std::vector<Offer> make_offers(const std::vector<int>& item_prices, const std::vector<Spot>& spots, Zone from, uint64_t seed,
+                                      int64_t board, int n) {
+    std::vector<Offer> out;
+    if (item_prices.empty() || spots.empty()) return out;
+    auto dist = [&](const Spot& s) { return std::hypot(s.at.x - from.x, s.at.z - from.z); };
+    std::vector<int> in_reach;
+    for (double lo : {400.0, 150.0}) {   // 400 m to 3 km away; failing that, anywhere from 150 m to 6 km
+        in_reach.clear();
+        double hi = lo > 200 ? 3000 : 6000;
+        for (size_t i = 0; i < spots.size(); ++i) { double d = dist(spots[i]); if (d >= lo && d <= hi) in_reach.push_back(int(i)); }
+        if (int(in_reach.size()) >= n) break;
+    }
+    if (in_reach.empty()) return out;
+    uint64_t state = mix(seed ^ mix(uint64_t(board) + 0xde11));
+    for (int k = 0; k < n; ++k) {
+        Offer o;
+        state = mix(state); o.item = int(state % item_prices.size());
+        state = mix(state); o.spot = in_reach[size_t(state % in_reach.size())];
+        state = mix(state); o.count = delivery_count(item_prices[size_t(o.item)], state);
+        o.reward = delivery_reward(item_prices[size_t(o.item)], o.count, dist(spots[size_t(o.spot)]));
+        out.push_back(o);
+    }
+    return out;
+}
+
+// Up to three different parts to offer instead of the Cash reward: worth about the same (half to 1.3 times),
+// else the closest prices.
+inline std::vector<int> reward_parts(const std::vector<int>& part_prices, int reward, uint64_t seed) {
+    std::vector<int> pool, out;
+    for (size_t i = 0; i < part_prices.size(); ++i)
+        if (part_prices[i] >= reward / 2 && part_prices[i] * 10 <= reward * 13) pool.push_back(int(i));
+    if (pool.size() < 3) {
+        std::vector<int> all(part_prices.size());
+        for (size_t i = 0; i < all.size(); ++i) all[i] = int(i);
+        std::sort(all.begin(), all.end(), [&](int a, int b) { return std::abs(part_prices[size_t(a)] - reward) < std::abs(part_prices[size_t(b)] - reward); });
+        for (int i : all) { if (pool.size() >= 3) break; if (std::find(pool.begin(), pool.end(), i) == pool.end()) pool.push_back(i); }
+    }
+    uint64_t state = mix(seed);
+    while (!pool.empty() && out.size() < 3) {
+        state = mix(state);
+        size_t pick = size_t(state % pool.size());
+        out.push_back(pool[pick]);
+        pool.erase(pool.begin() + std::ptrdiff_t(pick));
+    }
+    return out;
+}
+
 // ------------------------------------------------------------------ per-world saved state
 // One small text file per world (mods/AnyCareer/worlds/<seed>.txt), "key value" lines; unknown keys are kept out.
 struct WorldState {
@@ -260,6 +355,15 @@ struct WorldState {
     int64_t days = 0;
     int64_t restock = -1;
     std::vector<int> sold;    // per shelf row, how many have been bought since the last restock
+    // Delivery jobs: the board number the offers came from, which of them were taken, and the job in hand.
+    int64_t board = -1;
+    std::vector<int> taken;
+    int job_state = 0;        // 0 none, 1 carrying it, 2 delivered: reward to pick
+    std::string job_item;     // item definition id
+    int job_count = 0, job_reward = 0;
+    std::string job_place;    // the spot's filter (gas_station, town, ...)
+    Zone job_at;
+    std::vector<std::string> job_parts;   // the three part choices once delivered
 };
 
 inline std::string save_world(const WorldState& w) {
@@ -269,7 +373,17 @@ inline std::string save_world(const WorldState& w) {
     if (w.placed) o << "mechanic " << w.trader.x << " " << w.trader.y << " " << w.trader.z << "\n";
     o << "days " << w.days << "\nrestock " << w.restock << "\nsold";
     for (int n : w.sold) o << " " << n;
+    o << "\nboard " << w.board << "\ntaken";
+    for (int n : w.taken) o << " " << n;
     o << "\n";
+    if (w.job_state && !w.job_item.empty())
+        o << "job " << w.job_state << " " << w.job_count << " " << w.job_reward << " " << (w.job_place.empty() ? "place" : w.job_place) << " " << w.job_at.x << " " << w.job_at.y << " "
+          << w.job_at.z << " " << w.job_item << "\n";
+    if (!w.job_parts.empty()) {
+        o << "job_parts";
+        for (const auto& id : w.job_parts) o << " " << id;
+        o << "\n";
+    }
     return o.str();
 }
 
@@ -294,6 +408,23 @@ inline bool load_world(const std::string& text, WorldState& w) {
         } else if (key == "sold") {
             int n;
             while (row >> n && r.sold.size() < 64) r.sold.push_back(std::max(0, n));
+        } else if (key == "board") {
+            int64_t d;
+            if (row >> d && d >= -1) r.board = d;
+        } else if (key == "taken") {
+            int n;
+            while (row >> n && r.taken.size() < 16) r.taken.push_back(n);
+        } else if (key == "job") {
+            int state = 0, count = 0, reward = 0;
+            Zone z;
+            std::string item, place;
+            if (row >> state >> count >> reward >> place >> z.x >> z.y >> z.z >> item && (state == 1 || state == 2) && count > 0 && reward >= 0 &&
+                std::isfinite(z.x) && std::isfinite(z.z)) {
+                r.job_state = state; r.job_count = count; r.job_reward = reward; r.job_place = place; r.job_at = z; r.job_item = item;
+            }
+        } else if (key == "job_parts") {
+            std::string id;
+            while (row >> id && r.job_parts.size() < 3) r.job_parts.push_back(id);
         }
     }
     w = r;

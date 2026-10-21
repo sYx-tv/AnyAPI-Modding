@@ -120,5 +120,56 @@ int main() {
     double mb[6]; std::memcpy(mb, cash_mesh.data() + ml.bounds, sizeof mb);
     assert(mb[1] < 0 && mb[3] > 0.079 && mb[4] > anycareer::cashmesh::kHeight && mb[0] < -0.079);
     assert(anycareer::cashmesh::build({1, 2, 3}, "x").empty());
+    // Spots and delivery jobs.
+    {
+        std::vector<Spot> spots;
+        spawn_spots("{\"props\": [1, 2], \"spawn_zones\": [{\"pos\": [0, 0, 500], \"filter\": \"town\"}, {\"pos\": [0, 0, 900], \"filter\": \"house\", "
+                    "\"x\": [1, {\"y\": \"]\"}]}, {\"pos\": [9, 9], \"filter\": \"house\"}], \"after\": {\"filter\": \"gas_station\"}}", spots);
+        assert(spots.size() == 2 && spots[0].filter == "town" && spots[1].at.z == 900);
+        assert(delivery_place("town") && delivery_place("gas_station") && delivery_place("big_farm") && !delivery_place("zombie_horde"));
+        assert(place_name("gas_station") == "gas station");
+        std::vector<Spot> places;
+        for (int i = 0; i < 40; ++i) places.push_back({{double(i * 200), 0, 0}, "house"});
+        std::vector<int> prices = {20, 60, 300, 35};
+        auto a = make_offers(prices, places, {0, 0, 0}, 77, 3, 3), b = make_offers(prices, places, {0, 0, 0}, 77, 3, 3),
+             c = make_offers(prices, places, {0, 0, 0}, 77, 4, 3);
+        assert(a.size() == 3 && c.size() == 3);
+        bool same = true, differ = false;
+        for (int i = 0; i < 3; ++i) {
+            same = same && a[size_t(i)].item == b[size_t(i)].item && a[size_t(i)].spot == b[size_t(i)].spot && a[size_t(i)].reward == b[size_t(i)].reward;
+            differ = differ || a[size_t(i)].item != c[size_t(i)].item || a[size_t(i)].spot != c[size_t(i)].spot;
+            double d = places[size_t(a[size_t(i)].spot)].at.x;
+            assert(d >= 400 && d <= 3000);
+            int price = prices[size_t(a[size_t(i)].item)];
+            assert(a[size_t(i)].count >= 1 && (price > 120 ? a[size_t(i)].count == 1 : a[size_t(i)].count <= 5));
+            assert(a[size_t(i)].reward == delivery_reward(price, a[size_t(i)].count, d) && a[size_t(i)].reward % 5 == 0);
+        }
+        assert(same && differ);
+        assert(delivery_reward(20, 3, 1000) == 150 && delivery_reward(1, 1, 0) == 5);
+        // Nothing far enough at first: falls back to 150 m - 6 km.
+        std::vector<Spot> close = {{{200, 0, 0}, "town"}, {{5000, 0, 0}, "town"}, {{9000, 0, 0}, "town"}};
+        auto f = make_offers(prices, close, {0, 0, 0}, 1, 1, 3);
+        assert(f.size() == 3);
+        for (const auto& o : f) assert(o.spot == 0 || o.spot == 1);
+        assert(make_offers({}, close, {}, 1, 1, 3).empty() && make_offers(prices, {}, {}, 1, 1, 3).empty());
+        // Part rewards: three different parts near the reward.
+        std::vector<int> parts = {10, 90, 100, 110, 400, 120, 95};
+        auto r = reward_parts(parts, 100, 5);
+        assert(r.size() == 3 && r[0] != r[1] && r[1] != r[2] && r[0] != r[2]);
+        for (int i : r) assert(parts[size_t(i)] >= 50 && parts[size_t(i)] <= 130);
+        auto few = reward_parts({10, 1000}, 100, 5);
+        assert(few.size() == 2);
+        // A job in hand survives a save.
+        WorldState w;
+        w.placed = true; w.board = 6; w.taken = {0, 2}; w.job_state = 2; w.job_item = "bandage"; w.job_count = 3; w.job_reward = 140;
+        w.job_place = "gas_station"; w.job_at = {10.5, 2, -40}; w.job_parts = {"engine_a", "wheel_b", "pipe_c"};
+        WorldState back;
+        assert(load_world(save_world(w), back));
+        assert(back.board == 6 && back.taken.size() == 2 && back.taken[1] == 2 && back.job_state == 2 && back.job_item == "bandage" &&
+               back.job_count == 3 && back.job_reward == 140 && back.job_place == "gas_station" && back.job_at.z == -40 && back.job_parts.size() == 3 &&
+               back.job_parts[2] == "pipe_c");
+        WorldState none;
+        assert(load_world(save_world(WorldState{}), none) && none.job_state == 0 && none.board == -1);
+    }
     return 0;
 }

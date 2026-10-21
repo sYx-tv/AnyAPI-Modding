@@ -1,4 +1,4 @@
-// AnyCareer TEST BUILD (step 2): Cash plus the first trader, the Mechanic, with buying and selling.
+// AnyCareer TEST BUILD (step 3): Cash, the first trader (the Mechanic) with buying and selling, and delivery jobs.
 //
 //   Cash item: a new inventory item, "Cash", added to the game's item definitions right after the game adds its
 //      own (inventory_definition_container._add_definitions, on the server and the client scene). Its definition is
@@ -22,6 +22,12 @@
 //      server_scene.inventory.destroy_item) and drops the part at your feet; selling removes the item first and
 //      then drops the Cash. The shop's stock only exists in the mod, so there is no box to break, steal from or
 //      duplicate. Host and solo only in this build.
+//   Delivery jobs: the Mechanic's Jobs tab shows three jobs a day ("bring 3 x Bandage to a town, 1.2 km"), made from
+//      the world seed and the day number: findable items (medical, food, mechanical, electronics, survival,
+//      construction) to a town, house, gas station or other building 400 m - 3 km away (spawn_zones from the tiles).
+//      One job at a time. The drop-off shows as a blue AnyMap pin and a line at the top of the screen; there, J opens
+//      the Delivery panel: Deliver takes the items (each carried item counts once) and then you pick the reward:
+//      the Cash, or one of three mechanical parts worth about the same. The job in hand is saved with the world.
 //   F3 (host): gives the host a stack of 250 Cash, dropped at your feet (test money).
 //   F4 (host): writes the price list to "AnyAPI and Modding/mods/AnyCareer/prices.tsv" (stays on this PC: it is
 //      game data). The log gets a summary line.
@@ -162,24 +168,32 @@ ref_dtor_t ref_dtor;
 std::string g_cash_json;                            // absolute path of our definition file (UTF-8); fixed before g_ready
 std::filesystem::path g_data_dir;                   // mods/AnyCareer
 std::vector<logic::Zone> g_stations;                // gas station spots; fixed before g_stations_ready
+std::vector<logic::Spot> g_places;                  // delivery places (towns, houses, ...); fixed before g_stations_ready
 thread_local bool t_adding = false;
 std::atomic<uint64_t> g_last_tick{0};
 std::atomic<bool> g_shop_open{false};
 std::atomic<uint32_t> g_mode{ANY_MODE_UNKNOWN};
 
-enum class Job { give_cash, price_list, buy, sell };
-struct Work { Job job; double yaw; ULONGLONG posted; int32_t key; };   // key: shelf row (buy) or item id (sell)
+enum class Job { give_cash, price_list, buy, sell, take, abandon, deliver, claim };
+// key: shelf row (buy), item id (sell), offer number (take), reward choice (claim: 0 Cash, 1-3 a part)
+struct Work { Job job; double yaw; ULONGLONG posted; int32_t key; };
 std::mutex g_mutex;
 std::deque<Work> g_queue;   // key presses waiting for the next server tick
 
 // What the shop screen shows, written by the server tick and read by the renderer.
-struct Row { std::wstring name; int price = 0, quantity = 0; int32_t key = 0; std::string id; };   // id: part or item definition, for its picture
+// id: part or item definition, for its picture. Job rows name their own button (and key says which job it posts).
+struct Row { std::wstring name; int price = 0, quantity = 0; int32_t key = 0; std::string id; std::wstring button; bool off = false; };
+constexpr int32_t kKeyAbandon = 100, kKeyDeliver = 200, kKeyClaim = 300;
 struct View {
     bool placed = false;
     logic::Zone trader;
-    int64_t cash = 0, days = 0, restock_in = 0;
-    std::vector<Row> buy, sell;
+    int64_t cash = 0, days = 0, restock_in = 0, board = -1;
+    std::vector<Row> buy, sell, jobs;
     std::wstring status;
+    int job_state = 0;                            // 0 none, 1 carrying it, 2 delivered (reward to pick)
+    logic::Zone job_at;
+    std::wstring job_text;                        // "3 x Bandage to the town"
+    int job_have = 0, job_count = 0;
 };
 std::mutex g_view_mutex;
 View g_view;
@@ -269,7 +283,7 @@ bool write_cash_definition() {
 void load_stations() {
     ULONGLONG start = GetTickCount64();
     std::filesystem::path dir = std::filesystem::path(host.game_directory) / L"rom" / L"data" / L"tiles" / L"0";
-    std::vector<logic::Zone> found;
+    std::vector<logic::Spot> spots;
     int files = 0;
     std::error_code ec;
     for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end && !g_stop; it.increment(ec)) {
@@ -277,12 +291,21 @@ void load_stations() {
         ++files;
         std::ifstream in(it->path(), std::ios::binary);
         std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        logic::gas_stations(text, found);
+        logic::spawn_spots(text, spots);
     }
-    g_stations = std::move(found);
+    std::vector<std::pair<std::string, int>> kinds;   // filter -> spots, for the log
+    for (const auto& s : spots) {
+        if (s.filter == "gas_station") g_stations.push_back(s.at);
+        if (logic::delivery_place(s.filter)) g_places.push_back(s);
+        auto k = std::find_if(kinds.begin(), kinds.end(), [&](const auto& p) { return p.first == s.filter; });
+        if (k == kinds.end()) kinds.push_back({s.filter, 1}); else ++k->second;
+    }
+    std::sort(kinds.begin(), kinds.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::string list;
+    for (size_t i = 0; i < kinds.size() && i < 24; ++i) list += (i ? "," : "") + kinds[i].first + "=" + std::to_string(kinds[i].second);
     g_stations_ready = true;
-    log(g_stations.empty() ? 2 : 0, "ANYCAREER_STATIONS found=%d tile_files=%d ms=%llu", int(g_stations.size()), files,
-        (unsigned long long)(GetTickCount64() - start));
+    log(g_stations.empty() ? 2 : 0, "ANYCAREER_STATIONS found=%d delivery_places=%d tile_files=%d ms=%llu kinds=%s", int(g_stations.size()),
+        int(g_places.size()), files, (unsigned long long)(GetTickCount64() - start), list.c_str());
 }
 
 // ------------------------------------------------------------------ adding Cash to the game's items (both scenes)
@@ -447,6 +470,10 @@ struct Trader {
     int32_t level = -1;
     int64_t restock = -1;
     std::vector<logic::StockRow> shelf;
+    std::vector<Candidate> goods;                 // findable items a delivery can ask for, sorted by id
+    std::vector<logic::Offer> offers;             // today's board
+    int64_t offers_board = -2;
+    std::string job_name;                         // display name of the job's item (looked up once)
     const uint8_t* cash_def = nullptr;
     const uint8_t* part_item_def = nullptr;       // "vehicle_editor_add_component"
     uint32_t ticks = 0;
@@ -596,6 +623,212 @@ void sell(uint8_t* scene, const Work& w) {
     log(paid == value ? 0 : 2, "ANYCAREER_SELL ok=%d item=%s value=%d paid=%d", paid == value ? 1 : 0, name.c_str(), value, paid);
 }
 
+// ------------------------------------------------------------------ delivery jobs (server thread)
+// Items a delivery can ask for: findable now, in the loot groups people carry around (medical, food, mechanical,
+// electronics, survival, construction), never Cash, ammo or clothing. Sorted by id so every PC builds the same list.
+void build_goods(uint8_t* scene) {
+    T.goods.clear();
+    vehicle_reads::for_each_ref(scene + off::server_inventory_defs, 8192, [&](uint8_t* def) {
+        if (def == T.cash_def || def == T.part_item_def || !anymaker::readable(def, off::item_category + 16)) return true;
+        logic::Entry e = entry_of(def, false);
+        bool group = e.loot_group == 1 || e.loot_group == 2 || e.loot_group == 6 || e.loot_group == 7 || e.loot_group == 8 || e.loot_group == 9;
+        if (e.id.empty() || !group || e.cls == "ammo_box" || !logic::findable(e, std::max(T.level, 1))) return true;
+        T.goods.push_back({def, e.id, e.name.empty() ? e.id : e.name, e.price, 1});
+        return true;
+    });
+    std::sort(T.goods.begin(), T.goods.end(), [](const Candidate& a, const Candidate& b) { return a.id < b.id; });
+}
+
+void refresh_offers() {
+    std::vector<int> prices;
+    for (const auto& g : T.goods) prices.push_back(g.price);
+    T.offers = logic::make_offers(prices, g_places, T.world.trader, uint64_t(uint32_t(T.seed)), T.world.board, 3);
+    T.offers_board = T.world.board;
+    std::string list;
+    for (const auto& o : T.offers)
+        list += " " + std::to_string(o.count) + "x" + T.goods[size_t(o.item)].id + "->" + g_places[size_t(o.spot)].filter + "(" +
+                std::to_string(int(std::hypot(g_places[size_t(o.spot)].at.x - T.world.trader.x, g_places[size_t(o.spot)].at.z - T.world.trader.z))) +
+                "m)=" + std::to_string(o.reward);
+    log(0, "ANYCAREER_JOBS board=%lld goods=%d places=%d offers=%d:%s", (long long)T.world.board, int(T.goods.size()), int(g_places.size()),
+        int(T.offers.size()), list.c_str());
+}
+
+std::wstring metres_text(double m) {
+    wchar_t b[32];
+    if (m >= 1000) swprintf_s(b, L"%.1f km", m / 1000); else swprintf_s(b, L"%d m", int(m / 10) * 10);
+    return b;
+}
+
+std::string job_name() {
+    if (T.job_name.empty() && T.scene) {
+        const uint8_t* def = find_definition(T.scene + off::server_inventory_defs, T.world.job_item.c_str());
+        logic::Entry e = def ? entry_of(def, false) : logic::Entry{};
+        T.job_name = e.name.empty() ? T.world.job_item : e.name;
+    }
+    return T.job_name;
+}
+
+// The job's items the player carries (each item counts once).
+int job_items(int n, const uint8_t* def, std::vector<int32_t>* ids = nullptr) {
+    int have = 0;
+    for (int i = 0; i < n; ++i)
+        if (def && g_carried[i].def == def) { ++have; if (ids) ids->push_back(g_carried[i].id); }
+    return have;
+}
+
+bool near_spot(uint8_t* peer, const logic::Zone& at) {
+    Vec3 p = rd<Vec3>(peer, off::peer_position);
+    double dx = p.x - at.x, dz = p.z - at.z;
+    return dx * dx + dz * dz <= (kTradeRange + 10) * (kTradeRange + 10);
+}
+
+void clear_job() {
+    T.world.job_state = 0; T.world.job_item.clear(); T.world.job_count = T.world.job_reward = 0; T.world.job_place.clear();
+    T.world.job_parts.clear(); T.job_name.clear();
+}
+
+void take(uint8_t* scene, const Work& w) {
+    uint8_t* peer = host_peer(scene);
+    auto fail = [&](const char* why, const wchar_t* say) { T.status = say; log(1, "ANYCAREER_TAKE ok=0 reason=%s offer=%d", why, w.key); };
+    if (!peer) return fail("no_host_player", L"You need to be alive to take a job.");
+    if (!near_trader(peer)) return fail("too_far", L"Walk back to the Mechanic to take a job.");
+    if (T.world.job_state) return fail("job_in_hand", L"Finish or abandon your job first.");
+    if (w.key < 0 || w.key >= int(T.offers.size()) || T.offers_board != T.world.board) return fail("no_such_offer", L"The board changed. Pick again.");
+    if (std::find(T.world.taken.begin(), T.world.taken.end(), w.key) != T.world.taken.end()) return fail("taken", L"That job is taken.");
+    const logic::Offer& o = T.offers[size_t(w.key)];
+    if (size_t(o.item) >= T.goods.size() || size_t(o.spot) >= g_places.size()) return fail("stale_offer", L"The board changed. Pick again.");
+    const Candidate& g = T.goods[size_t(o.item)];
+    const logic::Spot& at = g_places[size_t(o.spot)];
+    T.world.taken.push_back(w.key);
+    T.world.job_state = 1; T.world.job_item = g.id; T.world.job_count = o.count; T.world.job_reward = o.reward;
+    T.world.job_place = at.filter; T.world.job_at = at.at; T.job_name = g.name;
+    save_world();
+    T.status = L"Job taken: bring " + std::to_wstring(o.count) + L" x " + wide(g.name) + L". It is on your map.";
+    log(0, "ANYCAREER_TAKE ok=1 item=%s count=%d place=%s at=(%.0f, %.0f) reward=%d", g.id.c_str(), o.count, at.filter.c_str(), at.at.x, at.at.z, o.reward);
+}
+
+void abandon(uint8_t*, const Work&) {
+    if (T.world.job_state != 1) { log(1, "ANYCAREER_ABANDON ok=0 reason=no_job"); return; }
+    log(0, "ANYCAREER_ABANDON ok=1 item=%s", T.world.job_item.c_str());
+    clear_job();
+    save_world();
+    T.status = L"Job abandoned. Today's other jobs are still on the board.";
+}
+
+void deliver(uint8_t* scene, const Work&) {
+    uint8_t* peer = host_peer(scene);
+    uint8_t* inventory = peer_inventory(peer);
+    auto fail = [&](const char* why, const std::wstring& say) { T.status = say; log(1, "ANYCAREER_DELIVER ok=0 reason=%s", why); };
+    if (!inventory) return fail("no_host_player", L"You need to be alive to deliver.");
+    if (T.world.job_state != 1) return fail("no_job", L"No delivery in hand.");
+    if (!near_spot(peer, T.world.job_at)) return fail("too_far", L"This isn't the drop-off. Follow the blue pin.");
+    const uint8_t* def = find_definition(scene + off::server_inventory_defs, T.world.job_item.c_str());
+    int n = carried(inventory);
+    std::vector<int32_t> ids;
+    int have = job_items(n, def, &ids);
+    if (have < T.world.job_count)
+        return fail("not_enough", L"You have " + std::to_wstring(have) + L" of " + std::to_wstring(T.world.job_count) + L" " + wide(job_name()) + L".");
+    // Take the goods first, then the reward is owed: nothing can be handed in twice.
+    int removed = 0;
+    for (int i = 0; i < T.world.job_count; ++i) {
+        Ref gone{};
+        destroy_item(&gone, inventory, &ids[size_t(i)]);
+        if (gone.ptr) { ++removed; ref_dtor(&gone); }
+    }
+    std::vector<int> prices;
+    for (const auto& c : T.candidates) prices.push_back(c.price);
+    T.world.job_parts.clear();
+    for (int i : logic::reward_parts(prices, T.world.job_reward, logic::mix(uint64_t(uint32_t(T.seed)) ^ uint64_t(T.world.board) ^ 0xca5e)))
+        T.world.job_parts.push_back(T.candidates[size_t(i)].id);
+    T.world.job_state = 2;
+    save_world();
+    T.status = L"Delivered! Pick your reward.";
+    log(removed == T.world.job_count ? 0 : 2, "ANYCAREER_DELIVER ok=%d item=%s count=%d removed=%d reward=%d part_choices=%d", removed == T.world.job_count ? 1 : 0,
+        T.world.job_item.c_str(), T.world.job_count, removed, T.world.job_reward, int(T.world.job_parts.size()));
+}
+
+const Candidate* candidate(const std::string& id) {
+    for (const auto& c : T.candidates) if (c.id == id) return &c;
+    return nullptr;
+}
+
+void claim(uint8_t* scene, const Work& w) {
+    uint8_t* peer = host_peer(scene);
+    auto fail = [&](const char* why, const wchar_t* say) { T.status = say; log(1, "ANYCAREER_CLAIM ok=0 reason=%s choice=%d", why, w.key); };
+    if (!peer) return fail("no_host_player", L"You need to be alive to take your reward.");
+    if (T.world.job_state != 2) return fail("nothing_owed", L"No reward waiting.");
+    int reward = T.world.job_reward;
+    if (w.key == 0) {
+        clear_job();
+        save_world();
+        int paid = 0;
+        for (int32_t stack : logic::cash_stacks(reward)) if (drop_cash(scene, peer, w.yaw, stack)) paid += stack;
+        T.status = L"Paid " + std::to_wstring(reward) + L" Cash. New jobs come every day.";
+        log(paid == reward ? 0 : 2, "ANYCAREER_CLAIM ok=%d choice=cash reward=%d paid=%d", paid == reward ? 1 : 0, reward, paid);
+        return;
+    }
+    if (w.key < 1 || w.key > int(T.world.job_parts.size())) return fail("no_such_choice", L"Pick again.");
+    const Candidate* c = candidate(T.world.job_parts[size_t(w.key - 1)]);
+    if (!c) return fail("part_not_found", L"That part isn't available. Pick another reward.");
+    Ref item{};
+    create_item(&item, T.part_item_def, scene);
+    if (!item.ptr || rd<const uint8_t*>(item.ptr, off::item_world_definition) != T.part_item_def) return fail("create_item_failed", L"That failed (see the log).");
+    int32_t count = c->stack;
+    component_set(item.ptr, c->def, &count);
+    if (rd<const uint8_t*>(item.ptr, off::part_definition) != c->def) return fail("part_not_set", L"That failed (see the log).");
+    std::string id = c->id;
+    std::wstring name = wide(c->name);
+    clear_job();
+    save_world();
+    bool dropped = drop(scene, peer, w.yaw, item);
+    T.status = L"Your reward: " + name + L". New jobs come every day.";
+    log(dropped ? 0 : 2, "ANYCAREER_CLAIM ok=%d choice=part part=%s reward_cash=%d", dropped ? 1 : 0, id.c_str(), reward);
+}
+
+// The Jobs tab: today's offers, or the job in hand, or the reward choice.
+void job_rows(View& v, uint8_t* peer, int have) {
+    v.job_state = T.world.job_state;
+    v.job_at = T.world.job_at;
+    v.board = T.world.board;
+    v.job_have = have;
+    v.job_count = T.world.job_count;
+    if (T.world.job_state) v.job_text = std::to_wstring(T.world.job_count) + L" x " + wide(job_name()) + L" to the " + wide(logic::place_name(T.world.job_place));
+    if (T.world.job_state == 0 && T.offers_board == T.world.board) {
+        for (size_t i = 0; i < T.offers.size(); ++i) {
+            const auto& o = T.offers[i];
+            if (size_t(o.item) >= T.goods.size() || size_t(o.spot) >= g_places.size()) continue;
+            const Candidate& g = T.goods[size_t(o.item)];
+            const auto& at = g_places[size_t(o.spot)];
+            bool taken = std::find(T.world.taken.begin(), T.world.taken.end(), int(i)) != T.world.taken.end();
+            Row r;
+            r.name = L"Bring " + std::to_wstring(o.count) + L" x " + wide(g.name) + L" to a " + wide(logic::place_name(at.filter)) + L", " +
+                     metres_text(std::hypot(at.at.x - T.world.trader.x, at.at.z - T.world.trader.z));
+            r.price = o.reward; r.key = int32_t(i); r.id = g.id; r.off = taken;
+            r.button = taken ? L"taken" : L"Take  " + std::to_wstring(o.reward);
+            v.jobs.push_back(std::move(r));
+        }
+    } else if (T.world.job_state == 1) {
+        bool there = peer && near_spot(peer, T.world.job_at);
+        Row r;
+        r.name = L"Bring " + v.job_text + L" (you have " + std::to_wstring(have) + L")";
+        r.price = T.world.job_reward; r.id = T.world.job_item;
+        r.key = there ? kKeyDeliver : kKeyAbandon;
+        r.button = there ? L"Deliver" : L"Abandon";
+        v.jobs.push_back(std::move(r));
+    } else {
+        Row cash;
+        cash.name = L"Reward: " + std::to_wstring(T.world.job_reward) + L" Cash"; cash.key = kKeyClaim; cash.id = logic::kCashId; cash.button = L"Take";
+        v.jobs.push_back(std::move(cash));
+        for (size_t i = 0; i < T.world.job_parts.size(); ++i) {
+            const Candidate* c = candidate(T.world.job_parts[i]);
+            Row r;
+            r.name = L"Or: " + (c ? wide(c->name) + (c->stack > 1 ? L" x" + std::to_wstring(c->stack) : L"") : wide(T.world.job_parts[i]));
+            r.key = kKeyClaim + int32_t(i) + 1; r.id = T.world.job_parts[i]; r.button = L"Take"; r.off = !c;
+            v.jobs.push_back(std::move(r));
+        }
+    }
+}
+
 void publish_view(uint8_t* scene) {
     View v;
     v.placed = T.world.placed;
@@ -610,9 +843,13 @@ void publish_view(uint8_t* scene) {
         if (c.stack > 1) name += L" x" + std::to_wstring(c.stack);
         v.buy.push_back({name, c.price, std::max(0, T.shelf[i].quantity - T.world.sold[i]), int32_t(i), c.id});
     }
-    uint8_t* inventory = g_shop_open && T.cash_def ? peer_inventory(host_peer(scene)) : nullptr;
-    if (inventory) {
-        int n = carried(inventory);
+    uint8_t* peer = host_peer(scene);
+    uint8_t* inventory = (g_shop_open || T.world.job_state == 1) && T.cash_def ? peer_inventory(peer) : nullptr;
+    int n = inventory ? carried(inventory) : 0;
+    int have = 0;
+    if (T.world.job_state == 1 && inventory) have = job_items(n, find_definition(scene + off::server_inventory_defs, T.world.job_item.c_str()));
+    job_rows(v, peer, have);
+    if (inventory && g_shop_open) {
         for (int i = 0; i < n; ++i) {
             if (g_carried[i].def == T.cash_def) { v.cash += rd<int32_t>(g_carried[i].item, off::ammo_count + off::property_value); continue; }
             std::string name, id;
@@ -671,6 +908,8 @@ void trader_tick(uint8_t* scene) {
         T.restock = restock;
         build_candidates(scene);
         T.shelf = logic::pick_stock(T.candidates.size(), uint64_t(uint32_t(T.seed)), restock, kShelfSize);
+        build_goods(scene);
+        T.offers_board = -2;   // offers follow the goods
         if (new_shelf) { T.world.restock = restock; T.world.sold.assign(T.shelf.size(), 0); dirty = true; }
         static int stock_logs = 0;
         if (stock_logs++ < 20 || new_shelf)
@@ -678,6 +917,9 @@ void trader_tick(uint8_t* scene) {
                 (long long)restock);
     }
     if (T.world.sold.size() != T.shelf.size()) { T.world.sold.resize(T.shelf.size(), 0); dirty = true; }
+    // A new job board every in-game day.
+    if (T.world.placed && T.world.board != T.world.days) { T.world.board = T.world.days; T.world.taken.clear(); dirty = true; }
+    if (T.world.placed && g_stations_ready && T.offers_board != T.world.board && !T.goods.empty()) refresh_offers();
     if (dirty) save_world();
 }
 
@@ -695,6 +937,10 @@ void run_job(uint8_t* scene, const Work& w) {
         case Job::price_list: price_list(scene); break;
         case Job::buy: buy(scene, w); break;
         case Job::sell: sell(scene, w); break;
+        case Job::take: take(scene, w); break;
+        case Job::abandon: abandon(scene, w); break;
+        case Job::deliver: deliver(scene, w); break;
+        case Job::claim: claim(scene, w); break;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) { log(2, "ANYCAREER_JOB ok=0 job=%d reason=native_exception", int(w.job)); }
 }
@@ -719,7 +965,10 @@ void hk_tick(uint8_t* scene, uint8_t* server) {
 struct Local { bool ok = false; double x = 0, z = 0, yaw = 0; };
 std::mutex g_ui_mutex;                            // the screen state below, shared by render and input
 bool g_open = false;
-int g_tab = 0, g_cursor = 0;
+bool g_dropoff = false;                           // opened at the delivery's drop-off: the Jobs tab only
+int g_tab = 0, g_cursor = 0;                      // tabs: 0 Buy, 1 Sell, 2 Jobs
+int64_t g_seen_board = -1;
+ULONGLONG g_toast_until = 0;
 Local g_local;
 ULONGLONG g_local_at = 0;
 // Mouse: the pointer in frame pixels, and the clickable areas the last shop frame drew.
@@ -747,9 +996,25 @@ Local local_player() {
 
 bool hosting() { return GetTickCount64() - g_last_tick < 2000; }
 
-bool in_range(const View& v, const Local& l) {
-    double dx = l.x - v.trader.x, dz = l.z - v.trader.z;
-    return v.placed && l.ok && dx * dx + dz * dz <= kTradeRange * kTradeRange;
+void post(Job job, int32_t key);
+
+bool close_to(const logic::Zone& at, const Local& l) {
+    double dx = l.x - at.x, dz = l.z - at.z;
+    return l.ok && dx * dx + dz * dz <= kTradeRange * kTradeRange;
+}
+bool in_range(const View& v, const Local& l) { return v.placed && close_to(v.trader, l); }
+bool at_dropoff(const View& v, const Local& l) { return v.job_state && close_to(v.job_at, l); }
+const std::vector<Row>& tab_rows(const View& v) { return g_tab == 0 ? v.buy : g_tab == 1 ? v.sell : v.jobs; }
+
+// What a row's button posts.
+void act(const Row& r) {
+    if (r.off) return;
+    if (g_tab == 0) post(Job::buy, r.key);
+    else if (g_tab == 1) post(Job::sell, r.key);
+    else if (r.key == kKeyAbandon) post(Job::abandon, 0);
+    else if (r.key == kKeyDeliver) post(Job::deliver, 0);
+    else if (r.key >= kKeyClaim) post(Job::claim, r.key - kKeyClaim);
+    else post(Job::take, r.key);
 }
 
 void close_shop() { g_open = false; g_shop_open = false; g_areas.clear(); host.capture_input(0); }
@@ -838,6 +1103,25 @@ const AnyMapPinsV1* g_pins;
 bool g_pin_shown = false;
 logic::Zone g_pin_at;
 ULONGLONG g_pins_looked = 0;
+// The delivery's drop-off pin.
+bool g_drop_shown = false;
+logic::Zone g_drop_at;
+void update_drop_pin(const View* v) {
+    if (!g_pins) return;
+    bool want = v && v->job_state == 1;
+    if (!want) {
+        if (g_drop_shown) { g_pins->remove(kModId, "delivery"); g_drop_shown = false; }
+        return;
+    }
+    if (g_drop_shown && g_drop_at.x == v->job_at.x && g_drop_at.z == v->job_at.z) return;
+    AnyMapPinV1 pin;
+    pin.x = v->job_at.x; pin.z = v->job_at.z; pin.color = 0xff6ac8e8;
+    strcpy_s(pin.owner, kModId); strcpy_s(pin.id, "delivery"); strcpy_s(pin.label, "Delivery drop-off");
+    g_drop_shown = g_pins->set(&pin);
+    g_drop_at = v->job_at;
+    log(g_drop_shown ? 0 : 1, "ANYCAREER_MAP delivery_pin_set=%d at=(%.0f, %.0f)", g_drop_shown ? 1 : 0, pin.x, pin.z);
+}
+
 void update_pin(const View* v) {
     ULONGLONG now = GetTickCount64();
     if (!g_pins && services_api && now - g_pins_looked > 3000) {
@@ -846,6 +1130,7 @@ void update_pin(const View* v) {
         if (p && p->struct_size == sizeof(*p) && p->version == 1 && p->set && p->remove) { g_pins = p; log(0, "ANYCAREER_MAP pins=1"); }
     }
     if (!g_pins) return;
+    update_drop_pin(v);
     if (!v || !v->placed) {
         if (g_pin_shown) { g_pins->remove(kModId, "mechanic"); g_pin_shown = false; }
         return;
@@ -871,17 +1156,17 @@ void draw_shop(const AnyFrameV1* f, const View& v) {
         text(cx, cy, 30, 30, L"X", 15, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER | ANY_GPU_BOLD);
         g_areas.push_back({cx, cy, 30, 30, Hit::close, 0});
     }
-    text(x + 20, y + 14, w - 220, 30, L"Mechanic", 22, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_BOLD);
-    text(x + w - 230, y + 14, 180, 30, L"Cash: " + std::to_wstring(v.cash), 18, 0xffe8c66a);
-    const wchar_t* tabs[] = {L"Buy", L"Sell"};
-    for (int i = 0; i < 2; ++i) {
-        float tx = x + 20 + i * 110;
+    text(x + 20, y + 14, w - 220, 30, g_dropoff ? L"Delivery" : L"Mechanic", 22, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_BOLD);
+    if (!g_dropoff) text(x + w - 230, y + 14, 180, 30, L"Cash: " + std::to_wstring(v.cash), 18, 0xffe8c66a);
+    const wchar_t* tabs[] = {L"Buy", L"Sell", L"Jobs"};
+    for (int i = g_dropoff ? 2 : 0; i < 3; ++i) {
+        float tx = x + 20 + (g_dropoff ? 0 : i) * 110;
         bool hover = Area{tx, y + 56, 100, 30, Hit::tab, i}.contains(g_mouse_x, g_mouse_y);
         box(ANY_GPU_ROUND_RECT, tx, y + 56, 100, 30, g_tab == i ? 0xff3a6ea5 : hover ? 0xff3a3f48 : 0xff2a2e35, 5);
         g_areas.push_back({tx, y + 56, 100, 30, Hit::tab, i});
         text(tx, y + 56, 100, 30, tabs[i], 16, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
-    const auto& rows = g_tab == 0 ? v.buy : v.sell;
+    const auto& rows = tab_rows(v);
     float list_y = y + 100, row_h = 44;
     int budget = 3;
     int visible = std::max(1, int((h - 100 - 90) / row_h));
@@ -891,35 +1176,45 @@ void draw_shop(const AnyFrameV1* f, const View& v) {
     g_first = std::clamp(g_first, 0, std::max(0, int(rows.size()) - visible));
     int first = g_first;
     if (rows.empty())
-        text(x + 20, list_y, w - 40, row_h, g_tab == 0 ? L"Nothing on the shelf right now." : L"You carry nothing the Mechanic buys (mechanical parts and items).",
-             15, 0xffaeb7c2);
+        text(x + 20, list_y, w - 40, row_h, g_tab == 0 ? L"Nothing on the shelf right now." : g_tab == 1 ? L"You carry nothing the Mechanic buys (mechanical parts and items)."
+             : L"No jobs on the board right now. New ones come every day.", 15, 0xffaeb7c2);
     for (int i = first; i < int(rows.size()) && i < first + visible; ++i) {
         float ry = list_y + float(i - first) * row_h;
         if (i == g_cursor) box(ANY_GPU_ROUND_RECT, x + 14, ry, w - 28, row_h - 2, 0xff2f4f73, 4);
         g_areas.push_back({x + 14, ry, w - 160, row_h - 2, Hit::row, i});
         const Row& r = rows[size_t(i)];
-        bool out = g_tab == 0 && r.quantity <= 0;
+        bool out = (g_tab == 0 && r.quantity <= 0) || r.off;
         if (uint64_t texture = picture(r.id, &budget)) {
             AnyGpuCommandV1 c;
             c.kind = ANY_GPU_IMAGE; c.texture = texture; c.rect[0] = x + 20; c.rect[1] = ry + 2; c.rect[2] = c.rect[3] = row_h - 6;
             c.source[2] = c.source[3] = 128; c.opacity = out ? 0.4f : 1;
             gpu->emit(&c);
         }
-        text(x + 24 + row_h, ry, w - 260 - row_h, row_h, r.name, 15, out ? 0xff7d848c : 0xfff5f7fa);
+        float name_w = g_tab == 2 ? w - 190 - row_h : w - 260 - row_h;
+        text(x + 24 + row_h, ry, name_w, row_h, r.name, g_tab == 2 ? 13 : 15, out ? 0xff7d848c : 0xfff5f7fa,
+             g_tab == 2 ? ANY_GPU_VCENTER : ANY_GPU_NOWRAP | ANY_GPU_VCENTER);
         if (g_tab == 0) text(x + w - 220, ry, 80, row_h, out ? L"sold out" : std::to_wstring(r.quantity) + L" left", 13, 0xffaeb7c2);
         // The button that buys or sells this row, with the price on it.
         Area button{x + w - 140, ry + 2, 122, row_h - 6, Hit::action, i};
         bool hover = !out && button.contains(g_mouse_x, g_mouse_y);
         box(ANY_GPU_ROUND_RECT, button.x, button.y, button.w, button.h, out ? 0xff2a2e35 : hover ? 0xff4f8a3c : 0xff3b6b2e, 4);
-        text(button.x, button.y, button.w, button.h, (g_tab == 0 ? L"Buy  " : L"Sell  ") + std::to_wstring(r.price), 14,
+        std::wstring label = !r.button.empty() ? r.button : g_tab == 0 && r.quantity <= 0 ? L"sold out"
+                             : (g_tab == 0 ? L"Buy  " : L"Sell  ") + std::to_wstring(r.price);
+        text(button.x, button.y, button.w, button.h, label, 14,
              out ? 0xff7d848c : 0xfffff3c4, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
         if (!out) g_areas.push_back(button);
     }
     std::wstring restock = L"Restock in " + std::to_wstring(v.restock_in) + (v.restock_in == 1 ? L" day" : L" days") + L" (day " +
                            std::to_wstring(v.days) + L" of this world)";
     text(x + 20, y + h - 84, w - 40, 22, v.status, 15, 0xff9fd39a);
+    if (g_tab == 2 && v.job_state == 1)
+        restock = L"Bring " + v.job_text + L". The blue pin on the map marks the drop-off.";
+    else if (g_tab == 2 && v.job_state == 2)
+        restock = L"Pick one reward.";
+    else if (g_tab == 2)
+        restock = L"Take one job at a time. New jobs every day (day " + std::to_wstring(v.days) + L").";
     text(x + 20, y + h - 58, w - 40, 20, restock, 13, 0xffaeb7c2);
-    text(x + 20, y + h - 34, w - 40, 20, L"Click Buy or Sell (or Up/Down and Enter)   Wheel scrolls   Esc closes", 13, 0xffaeb7c2);
+    text(x + 20, y + h - 34, w - 40, 20, L"Click a button (or Up/Down and Enter)   Wheel scrolls   Esc closes", 13, 0xffaeb7c2);
     // The game hides the Windows pointer in play, so the shop draws its own.
     AnyGpuPointV1 arrow[3] = {{g_mouse_x, g_mouse_y}, {g_mouse_x, g_mouse_y + 18}, {g_mouse_x + 12, g_mouse_y + 13}};
     AnyGpuCommandV1 c;
@@ -940,18 +1235,38 @@ void draw(const AnyFrameV1* f, void*) {
     if (now - g_local_at > 100) { g_local = local_player(); g_local_at = now; }
     View v;
     { std::lock_guard view_lock(g_view_mutex); v = g_view; }
-    if (g_open && !in_range(v, g_local)) close_shop();
+    if (g_open && !(g_dropoff ? at_dropoff(v, g_local) : in_range(v, g_local))) close_shop();
     update_pin(&v);
+    if (v.board >= 0 && v.board != g_seen_board) {   // a new job board (not the one already there when the world loaded)
+        if (g_seen_board >= 0 && v.job_state == 0) g_toast_until = now + 8000;
+        g_seen_board = v.board;
+    }
     if (g_open) { host.capture_input(1); draw_shop(f, v); return; }
     if (!v.placed || !g_local.ok) return;
-    float w = 460, x = (float(f->width) - w) / 2;
-    if (in_range(v, g_local)) {
+    float w = 520, x = (float(f->width) - w) / 2;
+    if (now < g_toast_until) {
+        float y = float(f->height) * 0.2f;
+        box(ANY_GPU_ROUND_RECT, x, y, w, 34, 0xd0181b20, 6);
+        text(x, y, w, 34, L"New jobs on the Mechanic's board", 16, 0xffe8c66a, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+    }
+    std::wstring prompt;
+    if (in_range(v, g_local)) prompt = L"Press " + key_name() + L" to trade with the Mechanic";
+    else if (at_dropoff(v, g_local)) prompt = L"Press " + key_name() + (v.job_state == 1 ? L" to deliver" : L" to pick your reward");
+    if (!prompt.empty()) {
         float y = float(f->height) * 0.62f;
         box(ANY_GPU_ROUND_RECT, x, y, w, 34, 0xd0181b20, 6);
-        text(x, y, w, 34, L"Press " + key_name() + L" to trade with the Mechanic", 16, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
-    } else {
+        text(x, y, w, 34, prompt, 16, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+    }
+    if (!in_range(v, g_local)) {
         std::wstring hint = L"Mechanic: " + wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.trader.x, v.trader.z));
         text(x, 8, w, 22, hint, 14, 0xffd8dde3, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+    }
+    if (v.job_state == 1 && !at_dropoff(v, g_local)) {
+        std::wstring hint = L"Delivery: " + v.job_text + L" (" + std::to_wstring(v.job_have) + L"/" + std::to_wstring(v.job_count) + L"), " +
+                            wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.job_at.x, v.job_at.z));
+        text(x - 100, 30, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+    } else if (v.job_state == 2) {
+        text(x, 30, w, 22, L"Delivered: pick your reward in the Mechanic's Jobs tab", 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
 }
 
@@ -976,7 +1291,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
         if (e->kind == ANY_MOUSE_WHEEL || e->kind == ANY_MOUSE_DOWN) {
             View v;
             { std::lock_guard view_lock(g_view_mutex); v = g_view; }
-            const auto& rows = g_tab == 0 ? v.buy : v.sell;
+            const auto& rows = tab_rows(v);
             if (e->kind == ANY_MOUSE_WHEEL) {
                 int step = e->wheel > 0 ? -1 : 1;
                 g_first = std::max(0, g_first + step);
@@ -991,7 +1306,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
                 if (a.kind == Hit::close) close_shop();
                 else if (a.kind == Hit::tab) { if (g_tab != a.index) { g_tab = a.index; g_cursor = 0; g_first = 0; } }
                 else if (a.kind == Hit::row) g_cursor = a.index;
-                else if (a.index < int(rows.size())) { g_cursor = a.index; post(g_tab == 0 ? Job::buy : Job::sell, rows[size_t(a.index)].key); }
+                else if (a.index < int(rows.size())) { g_cursor = a.index; act(rows[size_t(a.index)]); }
                 break;
             }
             return 1;
@@ -1003,13 +1318,14 @@ uint32_t on_input(const AnyInputV1* e, void*) {
         held[k] = true;
         View v;
         { std::lock_guard view_lock(g_view_mutex); v = g_view; }
-        const auto& rows = g_tab == 0 ? v.buy : v.sell;
+        const auto& rows = tab_rows(v);
         if (k == VK_ESCAPE || (k == trade && !repeat)) close_shop();
         else if (k == VK_UP || k == 'W') g_cursor = std::max(0, g_cursor - 1);
         else if (k == VK_DOWN || k == 'S') g_cursor = std::min(std::max(0, int(rows.size()) - 1), g_cursor + 1);
-        else if ((k == VK_LEFT || k == VK_RIGHT || k == 'A' || k == 'D' || k == VK_TAB) && !repeat) { g_tab ^= 1; g_cursor = 0; g_first = 0; }
-        else if ((k == VK_RETURN || k == VK_SPACE || k == 'E') && !repeat && g_cursor < int(rows.size()))
-            post(g_tab == 0 ? Job::buy : Job::sell, rows[size_t(g_cursor)].key);
+        else if ((k == VK_LEFT || k == VK_RIGHT || k == 'A' || k == 'D' || k == VK_TAB) && !repeat && !g_dropoff) {
+            g_tab = (g_tab + (k == VK_LEFT || k == 'A' ? 2 : 1)) % 3; g_cursor = 0; g_first = 0;
+        } else if ((k == VK_RETURN || k == VK_SPACE || k == 'E') && !repeat && g_cursor < int(rows.size()))
+            act(rows[size_t(g_cursor)]);
         return 1;
     }
     if ((e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) || e->key >= 256) return 0;
@@ -1021,12 +1337,14 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     if (e->key == trade) {
         View v;
         { std::lock_guard view_lock(g_view_mutex); v = g_view; }
-        if (!hosting() || !career_mode() || !in_range(v, g_local)) return 0;
+        if (!hosting() || !career_mode()) return 0;
+        bool mechanic = in_range(v, g_local);
+        if (!mechanic && !at_dropoff(v, g_local)) return 0;
         was = true;
-        g_open = true; g_shop_open = true; g_tab = 0; g_cursor = 0; g_first = 0;
+        g_open = true; g_shop_open = true; g_dropoff = !mechanic; g_tab = mechanic && v.job_state != 2 ? 0 : 2; g_cursor = 0; g_first = 0;
         host.capture_input(1);
         centre_pointer();
-        log(0, "ANYCAREER_SHOP opened=1 buy_rows=%d", int(v.buy.size()));
+        log(0, "ANYCAREER_SHOP opened=1 at=%s buy_rows=%d job_rows=%d", mechanic ? "mechanic" : "dropoff", int(v.buy.size()), int(v.jobs.size()));
         return 1;
     }
     was = true;
@@ -1078,8 +1396,8 @@ void install() {
             return;
         }
         g_ready = true;
-        log(0, "ANYCAREER_READY after_s=%d cash_file=%s draw=%d: in Survival the Mechanic waits at a gas station; F3 gives 250 Cash (host), "
-            "F4 writes the price list", attempt, g_cash_json.c_str(), gpu ? 1 : 0);
+        log(0, "ANYCAREER_READY after_s=%d cash_file=%s draw=%d: in Survival the Mechanic waits at a gas station (Buy, Sell, Jobs); "
+            "F3 gives 250 Cash (host), F4 writes the price list", attempt, g_cash_json.c_str(), gpu ? 1 : 0);
         load_stations();
         return;
     }
