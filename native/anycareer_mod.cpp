@@ -96,7 +96,10 @@ constexpr ptrdiff_t server_loot_level = 5336;       // m_loot_level (s32)
 constexpr ptrdiff_t peer_position = 0x19f8;         // position (vec3), as AnyHelpers' admin uses it
 // client (render side)
 constexpr ptrdiff_t client_scene = 0xf50;           // client.m_scene (embedded), as AnyMap reads it
-constexpr ptrdiff_t scene_free_move = 0x276;        // client_scene.m_is_free_move (bool): the game's debug-menu fly mode
+constexpr ptrdiff_t scene_free_move = 0x276;        // client_scene.m_is_free_move (bool): the game's creative-mode fly (free move)
+constexpr ptrdiff_t scene_free_move_transform = 0x280;  // m_free_move_transform (mat34): where free move flies from
+constexpr ptrdiff_t scene_authority_actor = 0x188;  // m_actors.m_authority_actor (ptr<client_scene.actor>)
+constexpr ptrdiff_t client_actor_transform = 392;   // client_scene.actor.m_transform (mat34)
 constexpr ptrdiff_t peer_data = 0x19d0;            // server_peer.data (as AnyHelpers' admin teleport uses it)
 constexpr ptrdiff_t peer_actor_id = 6480 + 24;      // m_authority_actor_id (property_s32), its value: the id damage sources carry
 constexpr ptrdiff_t peer_actor = 6616;              // m_authority_actor (ptr<server_scene.actor>)
@@ -1464,6 +1467,18 @@ void toggle_free_move() {
     uint8_t* scene = hosting() ? local_scene() : nullptr;
     if (!scene) { log(1, "ANYCAREER_FREE_MOVE ok=0 reason=%s", hosting() ? "no_client_scene" : "not_hosting"); return; }
     bool on = !rd<bool>(scene, off::scene_free_move);
+    // As the game's own toggle does (client_scene.on_action_digital_begin): free move starts from the character's
+    // transform. Test 8 flipped only the flag, so the character jumped to a stale transform.
+    if (on) {
+        uint8_t* actor = anymaker::readable(scene + off::scene_authority_actor, 8) ? rd<uint8_t*>(scene, off::scene_authority_actor) : nullptr;
+        if (!actor || !anymaker::readable(actor + off::client_actor_transform, sizeof(Mat34))) {
+            log(1, "ANYCAREER_FREE_MOVE ok=0 reason=no_local_character");
+            return;
+        }
+        Mat34 m = rd<Mat34>(actor, off::client_actor_transform);
+        std::memcpy(scene + off::scene_free_move_transform, &m, sizeof m);
+        log(0, "ANYCAREER_FREE_MOVE from=(%.0f, %.0f, %.0f) speed=%.2f", m.t[0], m.t[1], m.t[2], rd<double>(scene, off::scene_free_move + 2));
+    }
     *reinterpret_cast<bool*>(scene + off::scene_free_move) = on;
     g_free_move = on;
     log(0, "ANYCAREER_FREE_MOVE on=%d", on ? 1 : 0);
