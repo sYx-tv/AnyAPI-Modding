@@ -106,3 +106,4 @@ static const AnyMenuV1* anyapi_menu_service(){return &menus::api;}
 static const AnyMenuV2* anyapi_menu_service_v2(){return &menus::api_v2;}
 static const AnyMenuV3* anyapi_menu_service_v3(){return &menus::api_v3;}
 static const AnyMenuV4* anyapi_menu_service_v4(){return &menus::api_v4;}
+static const AnyMenuV5* anyapi_menu_service_v5(){return &menus::api_v5;}
