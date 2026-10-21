@@ -304,7 +304,9 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 - **Survival:** world loot. The Turbo 3x3 and the small supercharger, wastegate, blow-off valve and air filter drop
   after the 2nd bunker (tech tier 3). The Turbo 6x6, the large supercharger, wastegate, blow-off valve and air filter,
   and the intercoolers drop after the 3rd bunker (tech tier 4). As with the stock parts, new loot carries
-  the tier the world has reached, so each tier drops until the next bunker is done.
+  the tier the world has reached, so each tier drops until the next bunker is done. They are mechanical loot
+  (industrial, construction, aircraft and bunker loot spots) and turn up about a quarter less often than the
+  game's own parts of the same tier.
 - **Sandbox and Creative:** with the gas parts.
 
 ## How it works
