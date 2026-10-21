@@ -11,7 +11,7 @@ This release also contains rebuilds of every mod that reads the game directly, b
 only run on the exact build they were made for:
 
 - **AnyHelpers 1.0.2** (with AnyInventory, AnyMirror, AnyBalance and MCCode)
-- **AnyEngineParts 1.0.1** (with EngineSound and GpsPart)
+- **AnyEngineParts 1.0.1** (with EngineSound 0.4.1 and GpsPart)
 - **AnyGraphics 1.0.3** (with ThirdPerson)
 - **AnyMap 1.0.1**
 - **AnyCombat 0.1.1**
@@ -44,6 +44,9 @@ AnyStorage, AnyClock and AnyQuickWheel are unchanged and gain the new build in t
   AnyEngineParts 0.2.2 and GpsPart 1.0.4 (turbo ring lists, stale part caches), AnyHelpers
   (Favorites deleted the wrong row, admin, inventory, mirror and MCCode fixes), AnyGraphics
   (photo mode head flag, world change) and AnyMap 0.28.1 (cache folder).
+- **EngineSound 0.4.1:** saves only hold one of the game's three engine sounds, so worlds and saved
+  vehicles still play with mods off (the generated sound comes back with EngineSound on), and turning
+  the key off no longer leaves a whine sweeping down with the revs. [Notes](enginesound-0.4.1.md)
 
 ## How the port was checked
 

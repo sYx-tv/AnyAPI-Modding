@@ -60,8 +60,8 @@ loops and streams its own 48 kHz sound into a positional game voice, the way the
 engine's speed and load drive the synth; the game's start speed (360 rpm) sounds like a 750 rpm idle and the
 top stays 8,000 rpm. The engine's knock while damaged and its fuel leak still play.
 
-The choice is stored in the engine's own sound setting. The host keeps it, saves it with the vehicle and sends
-it to every player, so everyone with EngineSound hears the same engine. Custom tunes are packed into that same
+The choice is stored in the engine's own sound setting. The host keeps it and sends it to every player, so
+everyone with EngineSound hears the same engine. Custom tunes are packed into that same
 number. On the host, EngineSound widens the setting's allowed range so these values are accepted, and tags the
 row with the engine's layout, size and cylinders so every player's panel names the right sounds.
 
@@ -69,7 +69,13 @@ row with the engine's layout, size and cylinders so every player's panel names t
 
 - **Everyone needs it.** The host must run EngineSound for the generated sounds to be selectable. Players
   without it hear a game sound instead.
-- **Saves.** A vehicle saved with a generated sound keeps that value. Sounds saved with EngineSound 0.3.0 or
+- **Saves.** Saves only ever hold one of the game's three sounds, so a world or saved vehicle still plays
+  without EngineSound (mods off, or a game update that turns them off): its engines get the game's first sound.
+  The game itself has no fallback for a sound it doesn't know, so before 0.4.1 such an engine could go silent
+  or play the wrong sound. The real choice is kept beside the save: for a world, in `enginesound_sounds.json`,
+  which travels inside the save; for a saved vehicle, under its own key in the vehicle file, which the game
+  ignores. With EngineSound back on, the choice returns. A sound changed while the mod was off is kept. A world
+  or saved vehicle saved before 0.4.1 still holds the modded value until it is saved again with 0.4.1. Sounds saved with EngineSound 0.3.0 or
   older open as this version's sound at the same slider value, and old Custom tunes open as a Custom tune
   that sounds different; pick again if it is not what you want.
 - No AnyHelpers settings yet; the panel position is fixed.
@@ -84,7 +90,13 @@ Launch Anymaker from Steam with EngineSound installed. The lines tagged `engines
    sound. The panel names the engine and its layout's sounds; the log names the size, cylinders and sound.
 3. Stretch an engine and confirm the cylinder count in the panel title changes and the sound with it.
 4. Start, idle, rev, hold full throttle at the top, then lift off. Expect starter, idle lope on Muscle,
-   limiter bounce, and pops on lift-off.
+   limiter bounce, and pops on lift-off. Then turn the key off at speed: the engine winds down with no
+   whine (`engine stopped firing at N rpm ...` in the log).
 5. Press **Customize this sound**, then drag each slider while the engine runs.
 6. Co-op: a second player joins with EngineSound. Both should hear the same sound.
-7. Save, reload and confirm the choice is kept and only one sound plays.
+7. Save, reload and confirm the choice is kept and only one sound plays. Expect `engine N sound S saved as
+   stock sound 0 (world)` when saving and `engine N sound S restored` when loading.
+8. Save a vehicle with a generated sound to a file, spawn it again and confirm the sound comes back
+   (`... (saved vehicle)` in the log).
+9. Turn EngineSound off (Mod Settings), restart, and load the world and the saved vehicle from steps 7 and 8.
+   Their engines play the game's first sound. Turn it back on, restart, load again: the generated sounds are back.
