@@ -1,4 +1,4 @@
-// AnyCareer 0.0.5: a survival career. Cash, nine traders with buying, selling and job boards, delivery and kill jobs.
+// AnyCareer 0.0.6: a survival career. Cash, nine traders with buying, selling and job boards, delivery and kill jobs.
 //
 //   Cash item: a new inventory item, "Cash", added to the game's item definitions right after the game adds its
 //      own (inventory_definition_container._add_definitions, on the server and the client scene). Its definition is
@@ -28,9 +28,9 @@
 //      doesn't list). Also the Outfitter (clothing) and the Gunsmith (guns and ammo, a bit dearer). One of each,
 //      spread over the map (Nate): each at the spot of his kind of place (town, industrial, farm, ...) farthest from
 //      the traders already standing, never on the top island (logic::place_spread, logic::kTopIsland), placed once
-//      per world and saved with it, with his own AnyMap pin. A trader whose goods start at a later loot tier (Marine &
-//      Air and the Mod Shop at tier 1) stands there with an empty shelf that says when. The Mechanic is called
-//      Hayzeco Autoparts on screen (Nate). Items are bought as themselves (create_item with their definition), parts
+//      per world and saved with it, with his own AnyMap pin. A trader whose goods all start at a later loot tier (Marine &
+//      Air and the Mod Shop at tier 1) sells the first tier of them early, at half again his price (logic::early_price).
+//      The Mechanic is called Hayzeco Autoparts on screen (Nate). Items are bought as themselves (create_item with their definition), parts
 //      as part items.
 //   Delivery jobs: every trader but the Mod Shop has a Jobs tab with three jobs a day ("bring 3 x Bandage to a town,
 //      1.2 km"), made from the world seed, the trader and the day number: findable goods of his own class
@@ -42,7 +42,8 @@
 //   Kill jobs: two a day on the Gunsmith's board: a number of zombies, and a few of one special kind once the world
 //      spawns them (kinds from the player's own rom/data/zombie_definitions.json). A kill counts when one of the host's
 //      hits takes a zombie's blood to zero (server_scene.actor_zombie.damage is hooked; its damage source names the
-//      attacking actor). Then back to the Gunsmith for the reward. Without the hook the board only has deliveries.
+//      attacking actor), or when a zombie dies within kKillReach of the host (shots' source ids didn't match in tests).
+//      Then back to the Gunsmith for the reward. Without the hook the board only has deliveries.
 //   Hard jobs: more rows on each board (a pricier delivery, more of it, 3-6 km out, double pay; and a big kill job,
 //      special zombies when the world has them, half again the pay). They unlock after 3 finished jobs in the world.
 //   Loot Cash: Cash turns up in house, office and shop furniture (the clothing loot group), a little at a time
@@ -144,6 +145,8 @@ constexpr ptrdiff_t actor_id = 64;                  // m_id (s32)
 constexpr ptrdiff_t actor_blood = 72 + 24;          // _m_blood_factor (property_f64_compressed_u8), its value
 constexpr ptrdiff_t zombie_definition = 536;        // m_definition (ptr<const zombie_definition>); its m_id string is at +0
 constexpr ptrdiff_t damage_src_actor = 0;           // m_actor_id_src (s32)
+constexpr ptrdiff_t damage_src_type = 4;            // m_type (e_actor_damage_type, s32; logged only)
+constexpr ptrdiff_t server_actor_position = 336 + 72;  // server_scene.actor.m_transform (mat34) .t
 }  // namespace off
 
 constexpr int kPropertySetSlot = 5;                 // property_type_simple<T>.set in the property's method table
@@ -156,6 +159,7 @@ constexpr int32_t kGiveAmount = 250;
 #define ANYCAREER_DEV_KEYS 0
 #endif
 constexpr bool kDevKeys = ANYCAREER_DEV_KEYS != 0;
+constexpr double kKillReach = 120;                  // metres: a zombie that dies this close to the host is his kill
 constexpr double kTradeRange = 30;                  // metres from the gas station spot (the building stands on it)
 constexpr int64_t kRestockDays = 2;
 constexpr int kShelfSize = 16;                // Nate (2026-10-21): "a wee bit larger" than 10
@@ -571,6 +575,7 @@ struct Trader {
     std::vector<Candidate> goods[logic::kShopCount];   // what each trader's deliveries can ask for (findable now), sorted by id
     std::vector<logic::Offer> offers[logic::kShopCount];   // today's boards
     int next_tier[logic::kShopCount] = {};        // a trader with nothing to sell yet: the loot tier his goods start at
+    bool stock_early[logic::kShopCount] = {};     // his shelf is that tier, sold early
     int64_t offers_board = -2;
     std::string job_name;                         // display name of the job's item (looked up once)
     ULONGLONG tp_check = 0;                       // when to log where the host ended up after F6
@@ -632,7 +637,10 @@ void build_stock(uint8_t* scene) {
     for (auto& s : T.stock) s.clear();
     for (auto& s : T.goods) s.clear();
     std::fill(std::begin(T.next_tier), std::end(T.next_tier), 0);
+    std::fill(std::begin(T.stock_early), std::end(T.stock_early), false);
     int level = std::max(T.level, 1);
+    struct Later { int shop, tier; Candidate c; };
+    std::vector<Later> later;   // goods a trader sells, but not at this loot tier yet
     auto add = [&](uint8_t* def, bool part) {
         logic::Entry e = entry_of(def, part);
         if (e.id.empty() || def == T.cash_def || def == T.part_item_def) return;
@@ -646,12 +654,14 @@ void build_stock(uint8_t* scene) {
             if (logic::job_goods(s, g) && logic::findable(e, level) && !(!part && e.cls == "ammo_box"))
                 T.goods[s].push_back({def, e.id, name, e.price, stack, part, e.price});
             if (!logic::shop_sells(s, g)) continue;
-            if (!can) {   // not yet: remember the earliest tier, for an empty shop's note
+            int price = std::max(1, e.price * logic::kShops[s].price_pct / 100);
+            if (!can) {   // not yet: remember the earliest tier (an empty shop sells that tier early, dearer)
                 int tier = std::max(e.tech_tier, 1);
-                if ((g.modded || e.spawn_probability > 0) && (!T.next_tier[s] || tier < T.next_tier[s])) T.next_tier[s] = tier;
+                if (!(g.modded || e.spawn_probability > 0)) continue;
+                if (!T.next_tier[s] || tier < T.next_tier[s]) T.next_tier[s] = tier;
+                later.push_back({s, tier, {def, e.id, name, logic::early_price(price), stack, part, e.price}});
                 continue;
             }
-            int price = std::max(1, e.price * logic::kShops[s].price_pct / 100);
             T.stock[s].push_back({def, e.id, name, price, stack, part, e.price});
         }
     };
@@ -663,6 +673,11 @@ void build_stock(uint8_t* scene) {
         if (anymaker::readable(def, off::item_category + 16)) add(def, false);
         return true;
     });
+    // A specialist with nothing at this tier (Marine & Air, the Mod Shop early on) still has a shelf: the first tier
+    // of his goods, before it can be found, at logic::kEarlyPct of the price. Other traders keep to the loot tier.
+    for (const auto& l : later)
+        if (T.stock[l.shop].empty() || T.stock_early[l.shop])
+            if (l.tier == T.next_tier[l.shop]) { T.stock[l.shop].push_back(l.c); T.stock_early[l.shop] = true; }
     auto by_id = [](const Candidate& a, const Candidate& b) { return a.id < b.id; };
     for (auto& s : T.stock) std::sort(s.begin(), s.end(), by_id);
     for (auto& s : T.goods) std::sort(s.begin(), s.end(), by_id);
@@ -1097,7 +1112,15 @@ void on_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double b
     const uint8_t* def = rd<const uint8_t*>(zombie, off::zombie_definition);
     std::string kind = def ? read_string(def) : std::string();
     int32_t client_id = g_client_actor_id.load();
-    bool mine = by >= 0 && (by == host_id || by == client_id);
+    int32_t type = src && anymaker::readable(src + off::damage_src_type, 4) ? rd<int32_t>(src, off::damage_src_type) : -1;
+    // Where it died, from the host. The final test logged sources that were neither id (28, 66, 121, 627, ...: shots
+    // can carry other ids), so a kill close to the host counts too: in Survival a zombie that drops next to you is yours.
+    double metres = -1;
+    if (peer && anymaker::readable(zombie + off::server_actor_position, sizeof(Vec3))) {
+        Vec3 z = rd<Vec3>(zombie, off::server_actor_position), p = rd<Vec3>(peer, off::peer_position);
+        metres = std::hypot(z.x - p.x, z.z - p.z);
+    }
+    bool mine = (by >= 0 && (by == host_id || by == client_id)) || (metres >= 0 && metres <= kKillReach);
     bool counts = mine && T.world.job_state == 1 && T.world.job_kill && (T.world.job_item == "any" || T.world.job_item == kind);
     if (counts) {
         ++T.world.job_progress;
@@ -1110,8 +1133,8 @@ void on_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double b
     }
     static int logs = 0;
     if (logs++ < 40 || counts)
-        log(0, "ANYCAREER_KILL zombie=%s by_actor=%d host_actor=%d actor_field=%d client_actor=%d mine=%d counted=%d job=%s progress=%d/%d", kind.c_str(), by,
-            host_id, actor_field, client_id, mine ? 1 : 0, counts ? 1 : 0, T.world.job_kill && T.world.job_state == 1 ? T.world.job_item.c_str() : "none", T.world.job_progress,
+        log(0, "ANYCAREER_KILL zombie=%s by_actor=%d type=%d metres=%.0f host_actor=%d actor_field=%d client_actor=%d mine=%d counted=%d job=%s progress=%d/%d",
+            kind.c_str(), by, type, metres, host_id, actor_field, client_id, mine ? 1 : 0, counts ? 1 : 0, T.world.job_kill && T.world.job_state == 1 ? T.world.job_item.c_str() : "none", T.world.job_progress,
             T.world.job_count);
 }
 void run_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double blood_before) {
