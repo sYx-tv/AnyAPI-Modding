@@ -2,7 +2,7 @@
 // AnyHelpers game bindings (Duplicate tool favorites and the host admin panel), generated for Anymaker 0.1.27 /
 // Steam build 26113663 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
-// run from the SDK reference root (reference-0.1.25), one --signature per binding below.
+// run from the SDK reference root (reference-0.1.27), one --signature per binding below.
 // Experimental: located by code signature or call-cell route, not reviewed as an AnyAPI service.
 // Regenerate and re-test after any game update.
 #include "anymaker_sdk_runtime.hpp"

@@ -1,6 +1,6 @@
 {
   "revision": 46,
-  "date": "2026-10-09",
+  "date": "2026-10-21",
   "game_version": "0.1.27",
   "steam_build_id": 26113663,
   "architecture": "Windows x64",
@@ -71,6 +71,6 @@
   "balance_version": "1.1.0",
   "balance_gameplay_acceptance": "USER_CONFIRMED: fluid mass (0.34.0); marker anchored; bare chassis, plate edge, door handle and tyre targeting; hides on look-away/tool switch; Properties actions and simulation speed unaffected; publication authorized",
   "balance_mechanism": "Properties overlay plus copied local server connection IDs and tank fluid masses; mass-weighted connected body and fluid centres",
-  "game_update_audit": "native/tools/game_update_audit.py: 408 unchanged after refresh, 33 stale legacy telemetry, 7 missing (6 legacy telemetry, 1 test fixture)",
-  "previous_profile": "API 0.34.1 (revision 35) stays the release for Anymaker 0.1.23 / Steam build 25755694"
+  "game_update_audit": "native/tools/game_update_audit.py (0.1.27): 672 unchanged after refresh, 2 changed (re-anchored bindings that still resolve: AnyLights, turbo server_delta_time), 30 stale legacy telemetry, 9 missing (legacy telemetry, 1 test fixture)",
+  "previous_profile": "API 0.39.2 (revision 45) stays the release for Anymaker 0.1.25 / Steam build 25904830"
 }

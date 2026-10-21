@@ -79,7 +79,7 @@ AnyAPI 0.34.1 fixes the [quick wheel](docs/mods/quick-wheel.md) refusing to equi
 
 ## Compatibility
 
-The current native profile (API 0.37.0) targets **Anymaker 0.1.27**, Steam build **26113663**,
+The current native profile (API 0.40.0) targets **Anymaker 0.1.27**, Steam build **26113663**,
 on **Windows x64**. API 0.36.0 remains for Anymaker 0.1.24 / Steam build 25826614 and API 0.34.1 for Anymaker 0.1.23 / Steam build 25755694. Exact executable and game-data fingerprints are recorded in
 [the build manifest](native/BUILD_MANIFEST.json). API ABI/service version numbers
 are compatibility contracts and remain part of SDK names.

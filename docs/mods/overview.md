@@ -31,8 +31,9 @@ keeps working defaults when it is absent.
 | [MCCode](mccode.md) | 0.2.0 | API 0.38.0 | A Code view in the microcontroller editor: type the program or build it from nodes and wires, with a command list and the game's debugger | None; `</> Code` in the microcontroller editor |
 
 All mods are in the published catalog ([`catalog.json`](../../catalog.json)).
-All versions target Anymaker 0.1.27 / Steam build 26113663. On that build every mod needs AnyAPI 0.40.0 or newer, and the experimental-SDK mods need their 0.1.27 builds
-(AnyMirror 1.1.1, EngineSound 0.2.2, GpsPart 1.0.1, ThirdPerson 0.1.1). Anymaker 0.1.24 keeps AnyAPI 0.36.0 and 0.1.23 keeps 0.34.1.
+All versions target Anymaker 0.1.27 / Steam build 26113663. On that build every mod needs AnyAPI 0.40.0 or newer, and the experimental-SDK mods ship
+in the AnyHelpers 1.0.2, AnyEngineParts 1.0.1, AnyGraphics 1.0.3 and AnyMap 1.0.1 bundles and AnyCombat 0.1.1. Anymaker 0.1.25 keeps AnyAPI 0.39.2,
+0.1.24 keeps 0.36.0 and 0.1.23 keeps 0.34.1.
 
 ## Prototypes
 

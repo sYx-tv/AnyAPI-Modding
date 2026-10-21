@@ -51,8 +51,12 @@ AnyStorage, AnyClock and AnyQuickWheel are unchanged and gain the new build in t
   mod and wrote the new build identity.
 - A multi-agent audit then checked AnyAPI and every mod against the new game code: hard-coded
   offsets, virtual slots, enums, `game.exe` addresses and each patch-note change our mods touch.
-- The pattern audit now also catches the three kinds of breakage it missed this time: natives
+- The pattern audit now also catches four kinds of breakage it missed this time: natives
   called through a plain `*_rva` constant (`--current-json`), a pattern whose former twin
-  stopped matching, and a pattern that runs into run-time relocation cells.
+  stopped matching, a pattern that runs into run-time relocation cells, and hand-written
+  signatures outside the bindings (AnyMap's creature blips). The graphics context address is
+  still checked by hand.
+- The release planner now understands the mod bundles, so the next port bumps and packages
+  them instead of the old standalone mods.
 
 See [porting to a new game build](../development/game-updates.md).
