@@ -66,7 +66,7 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  if(absent){assert(!submissions);event(ANY_MENU_OPEN);stage(0,0);assert(rows()>3);event(ANY_MENU_CANCEL);}
  else if(local){
  assert(lighting_policy.enabled&&local_policy.local_strength==1&&local_policy.local_budget==4);
- // Presets hide most rows; Custom shows every row so each one can be set.
+ // Presets keep the fine-tuning groups closed; choosing Custom opens them all so each row can be set.
  apply(Preset,CustomProfile);
  apply(Atmosphere,0);apply(SunShafts,0);assert(lighting_policy.enabled&&lighting_policy.fog_strength==0&&lighting_policy.sun_shafts==0);
  apply(LocalBeams,4);apply(LocalIntensity,3);apply(LocalBudget,3);assert(local_policy.local_strength==9&&local_policy.local_budget==8);
@@ -77,7 +77,7 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  // Presets 1-6: Performance, Low, Medium, High, Ultra, Cinematic.
  const float densities[]={.002f,.002f,.001f,.001f,.001f,.001f},sun_strength[]={0,.5f,1,2,3,4.5f},local_strength[]={0,.5f,1,1,2,2.4f};
  const uint32_t quality[]={0,0,1,3,3,3},budgets[]={2,2,4,8,8,8};
- const float clarity[]={.85f,.85f,.85f,.85f,1,1},reach[]={60,60,120,120,250,250},sharpening[]={0,0,0,.3f,.3f,.55f};const uint32_t methods[]={1,1,3,3,4,4};
+ const float clarity[]={.85f,.85f,.85f,.85f,1,1},reach[]={60,60,120,120,250,250},sharpening[]={0,0,0,.3f,.3f,.55f};const uint32_t methods[]={1,1,4,4,4,4};
  for(int preset=1;preset<=6;++preset){apply(Preset,preset);auto i=preset-1;std::cout<<"PRESET "<<preset<<" enabled="<<lighting_policy.enabled<<" density="<<lighting_policy.fog_density<<" sun="<<lighting_policy.sun_shafts<<" local="<<local_policy.local_strength<<" quality="<<lighting_policy.quality<<" budget="<<local_policy.local_budget<<" height="<<lighting_policy.height_falloff<<std::endl;assert(lighting_policy.enabled==(preset>1)&&lighting_policy.fog_density==densities[i]&&std::abs(lighting_policy.sun_shafts-sun_strength[i])<.001f&&std::abs(local_policy.local_strength-local_strength[i])<.001f&&lighting_policy.quality==quality[i]&&local_policy.local_budget==budgets[i]&&lighting_policy.height_falloff==0);
   assert(shaped_policy.clarity==clarity[i]&&shaped_policy.beam_reach==reach[i]&&shaped_policy.sun_response==1&&shaped_policy.temporal==1);
   assert(aa2_policy.enabled==(preset>1)&&(preset==1||aa2_policy.method==methods[i])&&std::abs(aa2_policy.sharpening-sharpening[i])<.001f);
@@ -98,13 +98,13 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  apply(Preset,NaturalProfile);assert(effects_policy.tonemap==2&&effects_policy.look==0&&effects_policy.vignette==0&&lighting_policy.fog_strength==0);
  apply(Preset,VibrantProfile);assert(effects_policy.look==5&&effects_policy.look_strength==1&&effects_policy.clouds==1.5f&&effects_policy.sun_disc==1.5f&&lighting_policy.fog_density==.001f&&shaped_policy.clarity==1);
  apply(Preset,MoodyProfile);assert(effects_policy.look==1&&effects_policy.look_strength==1&&effects_policy.vignette==.5f&&lighting_policy.fog_density==.001f&&std::abs(lighting_policy.sun_shafts-2)<.001f);
- // Presets show only the common rows; Custom keeps the current values and shows every row.
+ // Presets show the top rows and closed groups; Custom keeps the current values and opens every group.
  event(ANY_MENU_OPEN);stage(0,0);auto preset_rows=rows();event(ANY_MENU_CANCEL);
  apply(Preset,ClearDayProfile);assert(effects_policy.tonemap==2&&effects_policy.look==0&&lighting_policy.fog_strength==0&&std::abs(aa2_policy.sharpening-.55f)<.001f);
  apply(Preset,MoodyProfile);apply(Preset,CustomProfile);assert(effects_policy.look==1&&effects_policy.vignette==.5f);event(ANY_MENU_OPEN);stage(0,0);std::cout<<"ROWS preset="<<preset_rows<<" custom="<<rows()<<std::endl;assert(rows()>preset_rows+15);event(ANY_MENU_CANCEL);
  // Shaping rows submit their own values; the GPU cost readout polls timing while the menu draws.
  apply(Preset,3);apply(Preset,CustomProfile);apply(ShaftClarity,3);apply(BeamReach,3);apply(SunResponse,0);apply(TemporalLighting,0);assert(shaped_policy.clarity==0&&shaped_policy.beam_reach==0&&!shaped_policy.sun_response&&!shaped_policy.temporal);
- apply(NativeAA,5);apply(Sharpening,3);assert(aa2_policy.enabled&&aa2_policy.method==3&&std::abs(aa2_policy.sharpening-.8f)<.001f);apply(NativeAA,6);assert(aa2_policy.method==4);apply(NativeAA,2);assert(!aa2_policy.enabled);
+ apply(NativeAA,5);apply(Sharpening,3);apply(AAQuality,1);assert(aa2_policy.enabled&&aa2_policy.method==4&&aa2_policy.quality==1&&std::abs(aa2_policy.sharpening-.8f)<.001f);apply(NativeAA,6);assert(aa2_policy.method==4&&aa2_policy.quality==2);apply(NativeAA,2);assert(!aa2_policy.enabled);
  event(ANY_MENU_OPEN);stage(0,0);assert(timing_reads>0&&effects_reads>0);event(ANY_MENU_CANCEL);
  apply(ToneMapping,3);apply(ColourLook,3);apply(LookStrength,0);apply(SunGlare,0);apply(Vignette,3);apply(Brightness,1);
  assert(effects_policy.enabled&&effects_policy.tonemap==2&&effects_policy.look==3&&effects_policy.look_strength==.5f&&effects_policy.glare==0&&effects_policy.vignette==.8f&&effects_policy.exposure==1);

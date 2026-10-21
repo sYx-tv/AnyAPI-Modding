@@ -9,9 +9,9 @@ struct Option {const char* id;const char* group;const char* label;const char* de
 static constexpr Option definitions[]={
  {"enabled","General","Enable AnyGraphics","Use the selected native graphics settings. Off restores the game's own settings.",ANY_SETTING_BOOL,1,0,1,1},
  {"gameplay_only","General","Gameplay only","Apply native overrides during gameplay; bypass them in menus and inventories.",ANY_SETTING_BOOL,1,0,1,1},
- {"quality_profile","General","Preset","Off keeps the game's look. Performance to Cinematic trade frame rate for looks; Natural, Clear Day, Vibrant and Moody are styles. Presets show a few common settings; Custom shows them all, starting from your last preset.",ANY_SETTING_CHOICE,3,0,11,1},
+ {"quality_profile","General","Preset","Off keeps the game's look. Performance to Cinematic trade frame rate for looks; Natural, Clear Day, Vibrant and Moody are styles. Open the groups below for fine tuning; changing anything there switches to Custom, starting from your last preset.",ANY_SETTING_CHOICE,3,0,11,1},
  {"advanced","General","Advanced options","Show lighting strength and scene-detail choices.",ANY_SETTING_BOOL,0,0,1,1},
- {"native_aa","Scene","Antialiasing","Choose native FXAA or scene AA before the HUD. SMAA replaces FXAA; Enhanced SMAA adds subpixel smoothing. TAA blends recent frames to stop shimmer; TAA + jitter is the smoothest and can trail slightly behind fast motion.",ANY_SETTING_CHOICE,2,0,6,1},
+ {"native_aa","Scene","Antialiasing","Choose native FXAA or scene AA before the HUD. SMAA replaces FXAA; Enhanced SMAA adds subpixel smoothing. TAA blends recent frames to stop shimmer and jagged edges; Extra smooth keeps more of them and can trail slightly behind fast motion.",ANY_SETTING_CHOICE,2,0,6,1},
  {"native_bloom","Scene","Bloom","Use the game setting, turn bloom off, or choose the strength of native bloom.",ANY_SETTING_CHOICE,2,0,2,1},
  {"bloom_amount","Bloom","Bloom intensity","Native bloom intensity when Bloom is Custom.",ANY_SETTING_NUMBER,.1f,0,2,.05f},
  {"bloom_threshold","Bloom","Bloom threshold","Native brightness threshold when Bloom is Custom.",ANY_SETTING_NUMBER,.75f,0,4,.025f},
@@ -76,18 +76,32 @@ inline constexpr float focus_blur_levels[]={0,.5f,1,1.6f},motion_blur_levels[]={
 inline constexpr float contact_levels[]={.6f,.3f,.6f,1};
 inline constexpr float star_levels[]={0,.6f,1,1.5f},moon_levels[]={0,.7f,1,1.3f},moonlight_levels[]={0,.6f,1,1.6f};
 inline constexpr float ao_radius_levels[]={1,.75f,1,1.4f},ao_strength_levels[]={.8f,.6f,.8f,1};
-// Native AA choice -> scene AA method: 3 SMAA, 4 Enhanced SMAA, 5 TAA, 6 TAA + jitter.
-inline uint32_t aa_method(float choice){return choice>=6?4:choice>=5?3:choice>=4?2:1;}
+// Native AA choice -> scene AA method: 3 SMAA, 4 Enhanced SMAA, 5 TAA and 6 TAA (extra smooth) both jitter the camera,
+// since TAA without jitter blends identical frames and smooths nothing. Extra smooth keeps one quality level more history.
+inline uint32_t aa_method(float choice){return choice>=5?4:choice>=4?2:1;}
+inline uint32_t aa_quality(float choice,float quality){return uint32_t(std::min(3.f,quality+(choice>=6?1.f:0.f)));}
 // Menu order: new rows sit next to the controls they modify.
 inline constexpr Index order[]={Enabled,GameplayOnly,Preset,Advanced,NativeAA,AAQuality,Sharpening,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,DetailedAO,NativeShadows,ContactShadows,BounceLight,DrawDistance,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,Clouds,Grass,Foliage,
  ToneMapping,ColourLook,LookStrength,Brightness,EyeAdaptation,SceneBloom,SunGlare,Vignette,DepthOfField,FocusBlur,MotionBlur,SunDisc,CloudLayer,NightSky,Moonlight,
  Atmosphere,SunShafts,ShaftIntensity,ShaftClarity,BeamReach,SunResponse,BeamFocus,LightingQuality,TemporalLighting,GroundFog,LocalBeams,LocalIntensity,LocalBudget,CostReadout};
 static_assert(std::size(order)==Count);
 template<size_t N> inline uint32_t nearest(float value,const float(&levels)[N]){uint32_t best=0;for(uint32_t i=1;i<N;++i)if(std::abs(value-levels[i])<std::abs(value-levels[best]))best=i;return best;}
+// Menu groups: the top level holds the preset and a few main choices; the rest sit in fine-tuning groups that open
+// and close.
+enum Group {Top,Lighting,Shadows,Sky,AntiAliasing,Camera,Finish,Performance,GroupCount};
+inline constexpr const char* group_names[GroupCount]={"","Lighting and sun shafts","Shadows and shading","Sky and weather","Anti-aliasing and sharpness","Camera and photo","Colour and finish","Performance"};
+inline constexpr Group group_of(Index i){
+ switch(i){
+ case Atmosphere:case SunShafts:case ShaftIntensity:case ShaftClarity:case BeamReach:case SunResponse:case BeamFocus:case LightingQuality:case TemporalLighting:case GroundFog:case LocalBeams:case LocalIntensity:case LocalBudget:case SunLight:case SkyLight:case AmbientLight:return Lighting;
+ case NativeShadows:case ContactShadows:case NativeSSAO:case DetailedAO:case BounceLight:return Shadows;
+ case SunDisc:case CloudLayer:case NightSky:case Moonlight:case Clouds:case NativeFogBlur:return Sky;
+ case AAQuality:case Sharpening:return AntiAliasing;
+ case DepthOfField:case FocusBlur:case MotionBlur:return Camera;
+ case ToneMapping:case LookStrength:case EyeAdaptation:case SceneBloom:case SunGlare:case Vignette:case NativeBloom:case BloomAmount:case BloomThreshold:case SceneExposure:return Finish;
+ case Grass:case Foliage:return Performance;
+ default:return Top;}}
 // Preset choices: 0 Off, 1-6 Performance..Cinematic, then the looks and Custom.
 inline constexpr int NaturalProfile=7,VibrantProfile=8,MoodyProfile=9,ClearDayProfile=10,CustomProfile=11;
-// Presets show only these rows; Custom shows every row.
-inline bool common(size_t i){return i==Enabled||i==GameplayOnly||i==Preset||i==NativeAA||i==Brightness||i==ColourLook||i==FogDensity||i==DepthOfField||i==FocusBlur||i==MotionBlur||i==DrawDistance||i==CostReadout;}
 inline Values profile(const Values& current,int level){
  if(!level)return current; // Off bypasses overrides and keeps the previous individual choices.
  // Custom starts from the current values so tweaks begin where the last preset left off.
