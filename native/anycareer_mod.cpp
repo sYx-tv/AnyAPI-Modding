@@ -32,6 +32,7 @@
 //      spawns them (kinds from the player's own rom/data/zombie_definitions.json). A kill counts when one of the host's
 //      hits takes a zombie's blood to zero (server_scene.actor_zombie.damage is hooked; its damage source names the
 //      attacking actor). Then back to the Mechanic for the reward. Without the hook the board only has deliveries.
+//   F2 (host, test key): teleports you to the delivery's drop-off, or to the Mechanic (the game's own peer teleport).
 //   F5 (host, test key): drops the items the delivery in hand asks for, so a delivery can be tested quickly.
 //   F3 (host): gives the host a stack of 250 Cash, dropped at your feet (test money).
 //   F4 (host): writes the price list to "AnyAPI and Modding/mods/AnyCareer/prices.tsv" (stays on this PC: it is
@@ -91,6 +92,7 @@ constexpr ptrdiff_t server_component_defs = 0x1028 + 8;  // m_component_definiti
 constexpr ptrdiff_t server_loot_level = 5336;       // m_loot_level (s32)
 // server_scene.peer
 constexpr ptrdiff_t peer_position = 0x19f8;         // position (vec3), as AnyHelpers' admin uses it
+constexpr ptrdiff_t peer_data = 0x19d0;            // server_peer.data (as AnyHelpers' admin teleport uses it)
 constexpr ptrdiff_t peer_actor = 6616;              // m_authority_actor (ptr<server_scene.actor>)
 // server_scene.actor_character
 constexpr ptrdiff_t actor_inventory = 1920;         // m_inventory (server_scene.inventory, 248 bytes, embedded)
@@ -148,6 +150,9 @@ using get_items_t = void (*)(uint8_t* inventory, anymaker::gc_vector_raw* out);
 using destroy_item_t = void (*)(Ref* ret, uint8_t* inventory, const int32_t* item_id);
 using component_set_t = void (*)(uint8_t* item, const uint8_t* component_definition, const int32_t* count);
 using ref_dtor_t = void (*)(Ref*);
+struct TeleportEvent { uint8_t header[0x10]; Vec3 position; };   // client_peer.data.event.peer_teleport, 40 bytes
+static_assert(sizeof(TeleportEvent) == 40, "peer_teleport");
+using teleport_t = void (*)(uint8_t* server, void* peer_data, const TeleportEvent* e);
 using zombie_damage_t = void (*)(uint8_t* zombie, uint8_t* scene, const double* amount, const uint8_t* src);
 
 AnyModHostV1 host;
@@ -175,6 +180,7 @@ get_items_t get_items;
 destroy_item_t destroy_item;
 component_set_t component_set;
 ref_dtor_t ref_dtor;
+teleport_t teleport_event;                          // optional (F2 test key)
 
 std::string g_cash_json;                            // absolute path of our definition file (UTF-8); fixed before g_ready
 std::filesystem::path g_data_dir;                   // mods/AnyCareer
@@ -186,7 +192,7 @@ std::atomic<uint64_t> g_last_tick{0};
 std::atomic<bool> g_shop_open{false};
 std::atomic<uint32_t> g_mode{ANY_MODE_UNKNOWN};
 
-enum class Job { give_cash, price_list, buy, sell, take, abandon, deliver, claim, test_items };
+enum class Job { give_cash, price_list, buy, sell, take, abandon, deliver, claim, test_items, teleport };
 // key: shelf row (buy), item id (sell), offer number (take), reward choice (claim: 0 Cash, 1-3 a part)
 struct Work { Job job; double yaw; ULONGLONG posted; int32_t key; };
 std::mutex g_mutex;
@@ -482,6 +488,7 @@ struct Carried { uint8_t* item; int32_t id; const uint8_t* def; };
 
 struct Trader {
     uint8_t* scene = nullptr;
+    uint8_t* server = nullptr;                    // the server the tick runs for (F2 teleport)
     int32_t seed = 0;
     bool loaded = false;
     logic::WorldState world;
@@ -859,6 +866,20 @@ void test_items(uint8_t* scene, const Work& w) {
         T.world.job_item.c_str(), T.world.job_count, dropped);
 }
 
+// F2 (host, test key): jumps to the delivery's drop-off, or to the Mechanic (no job, a kill job, or a reward waiting).
+void teleport(uint8_t* scene, const Work&) {
+    uint8_t* peer = host_peer(scene);
+    void* data = peer && anymaker::readable(peer + off::peer_data, 8) ? rd<void*>(peer, off::peer_data) : nullptr;
+    if (!teleport_event || !T.server || !data || !T.world.placed) { log(1, "ANYCAREER_TELEPORT ok=0 reason=%s", !teleport_event ? "no_teleport_function" : "not_ready"); return; }
+    bool drop_off = T.world.job_state == 1 && !T.world.job_kill;
+    logic::Zone at = drop_off ? T.world.job_at : T.world.trader;
+    TeleportEvent e{};
+    e.position = {at.x + 3, at.y + 2, at.z + 3};   // beside the spot, a little up, so you land on the ground
+    teleport_event(T.server, data, &e);
+    T.status = drop_off ? L"Teleported to the drop-off (test key)." : L"Teleported to the Mechanic (test key).";
+    log(0, "ANYCAREER_TELEPORT ok=1 to=%s at=(%.0f, %.0f, %.0f)", drop_off ? "dropoff" : "mechanic", e.position.x, e.position.y, e.position.z);
+}
+
 // A zombie hit (server thread, inside the game's damage call): a kill when its blood went from above zero to zero.
 // Credited when the damage source is the host's character.
 void on_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double blood_before) {
@@ -1074,6 +1095,7 @@ void run_job(uint8_t* scene, const Work& w) {
         case Job::deliver: deliver(scene, w); break;
         case Job::claim: claim(scene, w); break;
         case Job::test_items: test_items(scene, w); break;
+        case Job::teleport: teleport(scene, w); break;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) { log(2, "ANYCAREER_JOB ok=0 job=%d reason=native_exception", int(w.job)); }
 }
@@ -1082,6 +1104,7 @@ void hk_tick(uint8_t* scene, uint8_t* server) {
     if (scene && !g_stop) {
         g_last_tick = GetTickCount64();
         run_trader(scene);
+        T.server = server;   // after: a new scene resets T
         std::deque<Work> work;
         { std::lock_guard lock(g_mutex); work.swap(g_queue); }
         for (auto& w : work) {
@@ -1471,7 +1494,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     if ((e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) || e->key >= 256) return 0;
     bool& was = held[e->key];
     if (e->kind == ANY_KEY_UP) { bool consume = was; was = false; return consume ? 1 : 0; }
-    if (e->key != VK_F3 && e->key != VK_F4 && e->key != VK_F5 && e->key != trade) return 0;
+    if (e->key != VK_F2 && e->key != VK_F3 && e->key != VK_F4 && e->key != VK_F5 && e->key != trade) return 0;
     if (!g_ready || !gameplay()) return 0;
     if (was) return 1;   // a held key repeats; one press, one action
     if (e->key == trade) {
@@ -1490,7 +1513,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     was = true;
     if (!hosting()) { log(1, "ANYCAREER_JOB ok=0 reason=not_hosting (the host runs these)"); return 1; }
     g_local = local_player();
-    post(e->key == VK_F3 ? Job::give_cash : e->key == VK_F5 ? Job::test_items : Job::price_list, 0);
+    post(e->key == VK_F2 ? Job::teleport : e->key == VK_F3 ? Job::give_cash : e->key == VK_F5 ? Job::test_items : Job::price_list, 0);
     return 1;
 }
 
@@ -1535,10 +1558,11 @@ void install() {
             log(2, "ANYCAREER_OFF reason=hook_cell_not_writable");
             return;
         }
+        teleport_event = reinterpret_cast<teleport_t>(route::function(bind::server_on_teleport));
         // Kill jobs need the zombie damage hook; without it the board only has deliveries.
         void** zombie_cell = route::cell(bind::zombie_damage);
         bool kills = zombie_cell && h_zombie_damage.install(zombie_cell, (void*)&hk_zombie_damage);
-        log(kills ? 0 : 1, "ANYCAREER_KILLS hook=%d%s", kills ? 1 : 0, kills ? "" : " (no kill jobs this session)");
+        log(kills ? 0 : 1, "ANYCAREER_KILLS hook=%d%s teleport=%d", kills ? 1 : 0, kills ? "" : " (no kill jobs this session)", teleport_event ? 1 : 0);
         g_ready = true;
         log(0, "ANYCAREER_READY after_s=%d cash_file=%s draw=%d: in Survival the Mechanic waits at a gas station (Buy, Sell, Jobs); "
             "F3 gives 250 Cash (host), F4 writes the price list, F5 drops a delivery job's items (test)", attempt, g_cash_json.c_str(), gpu ? 1 : 0);
