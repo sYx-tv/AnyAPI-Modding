@@ -293,7 +293,9 @@ inline std::vector<int32_t> cash_stacks(int64_t amount) {
 // ------------------------------------------------------------------ delivery jobs
 // "Bring N of an item to a place". Items are findable ones the caller lists (sorted the same way on every PC) with
 // their prices; places are world spots. The same seed and board number always give the same offers.
-struct Offer { int item = -1; int count = 0; int spot = -1; int reward = 0; };
+// A delivery (item: index into the goods, spot: index into the places) or a kill job (item: -1 for any zombie, else an
+// index into the special zombies; no spot).
+struct Offer { int item = -1; int count = 0; int spot = -1; int reward = 0; bool kill = false; };
 
 inline int round5(double v) { return std::max(5, int(std::lround(v / 5)) * 5); }
 inline int delivery_count(int price, uint64_t r) { return price <= 40 ? 2 + int(r % 4) : price <= 120 ? 1 + int(r % 3) : 1; }
@@ -322,6 +324,66 @@ inline std::vector<Offer> make_offers(const std::vector<int>& item_prices, const
         o.reward = delivery_reward(item_prices[size_t(o.item)], o.count, dist(spots[size_t(o.spot)]));
         out.push_back(o);
     }
+    return out;
+}
+
+// ------------------------------------------------------------------ kill jobs
+// Zombie kinds from the player's own rom/data/zombie_definitions.json. zombie_basic is the ordinary one; the rest
+// (acid, ambush, ...) are "special".
+inline constexpr const char* kBasicZombie = "zombie_basic";
+struct ZombieKind { std::string id, name; int tier = 0; double spawn_probability = 0; };
+
+inline void find_zombies(const assetjson::Value& v, std::vector<ZombieKind>& out) {
+    if (v.kind == 'o') {
+        const std::string& id = v.get("id").text;
+        if (!id.empty() && id.find("zombie") != std::string::npos && v.get("id").kind == 's') {
+            ZombieKind z;
+            z.id = id;
+            z.name = v.get("display_name").text.empty() ? v.get("name").text : v.get("display_name").text;
+            z.tier = v.get("spawn_tier").kind == 'd' ? int(v.get("spawn_tier").number) : 0;
+            z.spawn_probability = v.get("spawn_probability").kind == 'd' ? v.get("spawn_probability").number : 0;
+            out.push_back(std::move(z));
+            return;
+        }
+        for (const auto& [key, child] : v.object) find_zombies(child, out);
+    } else if (v.kind == 'a') {
+        for (const auto& child : v.array) find_zombies(child, out);
+    }
+}
+inline std::vector<ZombieKind> parse_zombies(const std::string& json) {
+    std::vector<ZombieKind> out;
+    try { find_zombies(assetjson::Parser(json).parse(), out); } catch (const std::exception&) { out.clear(); }
+    std::sort(out.begin(), out.end(), [](const ZombieKind& a, const ZombieKind& b) { return a.id < b.id; });
+    return out;
+}
+// Special zombies the world can spawn by now (their spawn tier reached, a spawn chance), as indices.
+inline std::vector<int> special_zombies(const std::vector<ZombieKind>& kinds, int loot_level) {
+    std::vector<int> out;
+    for (size_t i = 0; i < kinds.size(); ++i)
+        if (kinds[i].id != kBasicZombie && kinds[i].spawn_probability > 0 && std::max(kinds[i].tier, 1) <= std::max(loot_level, 1)) out.push_back(int(i));
+    return out;
+}
+inline int kill_reward(int count, bool special) { return round5(count * (special ? 45.0 : 12.0) + 30); }
+
+// Two kill jobs a board: some ordinary zombies, and (when the world has any yet) a few of one special kind.
+inline std::vector<Offer> make_kill_offers(const std::vector<int>& specials, uint64_t seed, int64_t board) {
+    std::vector<Offer> out;
+    uint64_t state = mix(seed ^ mix(uint64_t(board) + 0x6b11));
+    Offer basic;
+    basic.kill = true;
+    state = mix(state); basic.count = 6 + int(state % 10);
+    basic.reward = kill_reward(basic.count, false);
+    out.push_back(basic);
+    Offer second;
+    second.kill = true;
+    if (!specials.empty()) {
+        state = mix(state); second.item = specials[size_t(state % specials.size())];
+        state = mix(state); second.count = 2 + int(state % 4);
+    } else {
+        state = mix(state); second.count = 15 + int(state % 11);
+    }
+    second.reward = kill_reward(second.count, second.item >= 0);
+    out.push_back(second);
     return out;
 }
 
@@ -364,6 +426,8 @@ struct WorldState {
     std::string job_place;    // the spot's filter (gas_station, town, ...)
     Zone job_at;
     std::vector<std::string> job_parts;   // the three part choices once delivered
+    bool job_kill = false;    // a kill job: job_item is the zombie kind ("any" for any zombie), no place
+    int job_progress = 0;     // kills so far
 };
 
 inline std::string save_world(const WorldState& w) {
@@ -379,6 +443,7 @@ inline std::string save_world(const WorldState& w) {
     if (w.job_state && !w.job_item.empty())
         o << "job " << w.job_state << " " << w.job_count << " " << w.job_reward << " " << (w.job_place.empty() ? "place" : w.job_place) << " " << w.job_at.x << " " << w.job_at.y << " "
           << w.job_at.z << " " << w.job_item << "\n";
+    if (w.job_state && w.job_kill) o << "job_kill " << w.job_progress << "\n";
     if (!w.job_parts.empty()) {
         o << "job_parts";
         for (const auto& id : w.job_parts) o << " " << id;
@@ -422,6 +487,10 @@ inline bool load_world(const std::string& text, WorldState& w) {
                 std::isfinite(z.x) && std::isfinite(z.z)) {
                 r.job_state = state; r.job_count = count; r.job_reward = reward; r.job_place = place; r.job_at = z; r.job_item = item;
             }
+        } else if (key == "job_kill") {
+            int n = 0;
+            r.job_kill = true;
+            if (row >> n && n >= 0) r.job_progress = n;
         } else if (key == "job_parts") {
             std::string id;
             while (row >> id && r.job_parts.size() < 3) r.job_parts.push_back(id);

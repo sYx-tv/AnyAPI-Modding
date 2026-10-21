@@ -1,4 +1,4 @@
-// AnyCareer TEST BUILD (step 3): Cash, the first trader (the Mechanic) with buying and selling, and delivery jobs.
+// AnyCareer TEST BUILD (step 4): Cash, the first trader (the Mechanic) with buying and selling, delivery and kill jobs.
 //
 //   Cash item: a new inventory item, "Cash", added to the game's item definitions right after the game adds its
 //      own (inventory_definition_container._add_definitions, on the server and the client scene). Its definition is
@@ -28,6 +28,11 @@
 //      One job at a time. The drop-off shows as a blue AnyMap pin and a line at the top of the screen; there, J opens
 //      the Delivery panel: Deliver takes the items (each carried item counts once) and then you pick the reward:
 //      the Cash, or one of three mechanical parts worth about the same. The job in hand is saved with the world.
+//   Kill jobs: two a day on the same board: a number of zombies, and a few of one special kind once the world
+//      spawns them (kinds from the player's own rom/data/zombie_definitions.json). A kill counts when one of the host's
+//      hits takes a zombie's blood to zero (server_scene.actor_zombie.damage is hooked; its damage source names the
+//      attacking actor). Then back to the Mechanic for the reward. Without the hook the board only has deliveries.
+//   F5 (host, test key): drops the items the delivery in hand asks for, so a delivery can be tested quickly.
 //   F3 (host): gives the host a stack of 250 Cash, dropped at your feet (test money).
 //   F4 (host): writes the price list to "AnyAPI and Modding/mods/AnyCareer/prices.tsv" (stays on this PC: it is
 //      game data). The log gets a summary line.
@@ -104,6 +109,11 @@ constexpr ptrdiff_t ammo_count = 144;               // server_scene.item_world.a
 constexpr ptrdiff_t part_stack_count = 176;         // vehicle_editor_add_component._m_stack_count (property_s32)
 constexpr ptrdiff_t part_definition = 208;          // vehicle_editor_add_component.m_component_definition
 constexpr ptrdiff_t property_value = 24;            // replication.master.property_type_simple<s32>._m_value
+// server_scene.actor / actor_zombie / actor_damage_src
+constexpr ptrdiff_t actor_id = 64;                  // m_id (s32)
+constexpr ptrdiff_t actor_blood = 72 + 24;          // _m_blood_factor (property_f64_compressed_u8), its value
+constexpr ptrdiff_t zombie_definition = 536;        // m_definition (ptr<const zombie_definition>); its m_id string is at +0
+constexpr ptrdiff_t damage_src_actor = 0;           // m_actor_id_src (s32)
 }  // namespace off
 
 constexpr int kPropertySetSlot = 5;                 // property_type_simple<T>.set in the property's method table
@@ -138,6 +148,7 @@ using get_items_t = void (*)(uint8_t* inventory, anymaker::gc_vector_raw* out);
 using destroy_item_t = void (*)(Ref* ret, uint8_t* inventory, const int32_t* item_id);
 using component_set_t = void (*)(uint8_t* item, const uint8_t* component_definition, const int32_t* count);
 using ref_dtor_t = void (*)(Ref*);
+using zombie_damage_t = void (*)(uint8_t* zombie, uint8_t* scene, const double* amount, const uint8_t* src);
 
 AnyModHostV1 host;
 const AnyUiStateV1* ui;
@@ -151,7 +162,7 @@ const AnyServicesV1* services_api;
 uint64_t trade_action;
 std::atomic<bool> g_stop{false}, g_ready{false}, g_stations_ready{false};
 
-anymaker::cell_hook h_tick, h_add_definitions;
+anymaker::cell_hook h_tick, h_add_definitions, h_zombie_damage;
 get_by_id_t peer_by_id;
 file_ctor_t file_ctor, file_dtor;
 file_load_t file_load;
@@ -169,12 +180,13 @@ std::string g_cash_json;                            // absolute path of our defi
 std::filesystem::path g_data_dir;                   // mods/AnyCareer
 std::vector<logic::Zone> g_stations;                // gas station spots; fixed before g_stations_ready
 std::vector<logic::Spot> g_places;                  // delivery places (towns, houses, ...); fixed before g_stations_ready
+std::vector<logic::ZombieKind> g_zombies;           // from rom/data/zombie_definitions.json; fixed before g_stations_ready
 thread_local bool t_adding = false;
 std::atomic<uint64_t> g_last_tick{0};
 std::atomic<bool> g_shop_open{false};
 std::atomic<uint32_t> g_mode{ANY_MODE_UNKNOWN};
 
-enum class Job { give_cash, price_list, buy, sell, take, abandon, deliver, claim };
+enum class Job { give_cash, price_list, buy, sell, take, abandon, deliver, claim, test_items };
 // key: shelf row (buy), item id (sell), offer number (take), reward choice (claim: 0 Cash, 1-3 a part)
 struct Work { Job job; double yaw; ULONGLONG posted; int32_t key; };
 std::mutex g_mutex;
@@ -193,7 +205,8 @@ struct View {
     int job_state = 0;                            // 0 none, 1 carrying it, 2 delivered (reward to pick)
     logic::Zone job_at;
     std::wstring job_text;                        // "3 x Bandage to the town"
-    int job_have = 0, job_count = 0;
+    int job_have = 0, job_count = 0;              // delivery: items carried; kill job: kills so far
+    bool job_kill = false;
 };
 std::mutex g_view_mutex;
 View g_view;
@@ -299,6 +312,13 @@ void load_stations() {
         if (logic::delivery_place(s.filter)) g_places.push_back(s);
         auto k = std::find_if(kinds.begin(), kinds.end(), [&](const auto& p) { return p.first == s.filter; });
         if (k == kinds.end()) kinds.push_back({s.filter, 1}); else ++k->second;
+    }
+    {
+        std::ifstream zin(std::filesystem::path(host.game_directory) / L"rom" / L"data" / L"zombie_definitions.json", std::ios::binary);
+        g_zombies = logic::parse_zombies(std::string((std::istreambuf_iterator<char>(zin)), std::istreambuf_iterator<char>()));
+        std::string z;
+        for (const auto& k : g_zombies) z += " " + k.id + "(tier " + std::to_string(k.tier) + ")";
+        log(g_zombies.empty() ? 1 : 0, "ANYCAREER_ZOMBIES kinds=%d:%s", int(g_zombies.size()), z.c_str());
     }
     std::sort(kinds.begin(), kinds.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
     std::string list;
@@ -643,10 +663,14 @@ void refresh_offers() {
     std::vector<int> prices;
     for (const auto& g : T.goods) prices.push_back(g.price);
     T.offers = logic::make_offers(prices, g_places, T.world.trader, uint64_t(uint32_t(T.seed)), T.world.board, 3);
+    if (h_zombie_damage.cell)
+        for (const auto& o : logic::make_kill_offers(logic::special_zombies(g_zombies, T.level), uint64_t(uint32_t(T.seed)), T.world.board))
+            T.offers.push_back(o);
     T.offers_board = T.world.board;
     std::string list;
     for (const auto& o : T.offers)
-        list += " " + std::to_string(o.count) + "x" + T.goods[size_t(o.item)].id + "->" + g_places[size_t(o.spot)].filter + "(" +
+        if (o.kill) list += " kill " + std::to_string(o.count) + "x" + (o.item < 0 ? std::string("any") : g_zombies[size_t(o.item)].id) + "=" + std::to_string(o.reward);
+        else list += " " + std::to_string(o.count) + "x" + T.goods[size_t(o.item)].id + "->" + g_places[size_t(o.spot)].filter + "(" +
                 std::to_string(int(std::hypot(g_places[size_t(o.spot)].at.x - T.world.trader.x, g_places[size_t(o.spot)].at.z - T.world.trader.z))) +
                 "m)=" + std::to_string(o.reward);
     log(0, "ANYCAREER_JOBS board=%lld goods=%d places=%d offers=%d:%s", (long long)T.world.board, int(T.goods.size()), int(g_places.size()),
@@ -659,7 +683,19 @@ std::wstring metres_text(double m) {
     return b;
 }
 
+// "Acid Zombie" for a special kind, "zombie" for any.
+std::string zombie_name(const std::string& id) {
+    if (id == "any" || id == logic::kBasicZombie) return "zombie";
+    for (const auto& z : g_zombies) if (z.id == id) return z.name.empty() ? logic::place_name(id) : z.name;
+    return logic::place_name(id);
+}
+std::wstring kill_text(int count, const std::string& id) {
+    std::string n = zombie_name(id);
+    return std::to_wstring(count) + L" " + wide(n) + (count == 1 ? L"" : L"s");
+}
+
 std::string job_name() {
+    if (T.world.job_kill) return zombie_name(T.world.job_item);
     if (T.job_name.empty() && T.scene) {
         const uint8_t* def = find_definition(T.scene + off::server_inventory_defs, T.world.job_item.c_str());
         logic::Entry e = def ? entry_of(def, false) : logic::Entry{};
@@ -684,7 +720,18 @@ bool near_spot(uint8_t* peer, const logic::Zone& at) {
 
 void clear_job() {
     T.world.job_state = 0; T.world.job_item.clear(); T.world.job_count = T.world.job_reward = 0; T.world.job_place.clear();
-    T.world.job_parts.clear(); T.job_name.clear();
+    T.world.job_parts.clear(); T.job_name.clear(); T.world.job_kill = false; T.world.job_progress = 0;
+}
+
+// The three part choices for the job's reward, then the reward is owed (delivered, or all the kills made).
+void job_done() {
+    std::vector<int> prices;
+    for (const auto& c : T.candidates) prices.push_back(c.price);
+    T.world.job_parts.clear();
+    for (int i : logic::reward_parts(prices, T.world.job_reward, logic::mix(uint64_t(uint32_t(T.seed)) ^ uint64_t(T.world.board) ^ 0xca5e)))
+        T.world.job_parts.push_back(T.candidates[size_t(i)].id);
+    T.world.job_state = 2;
+    save_world();
 }
 
 void take(uint8_t* scene, const Work& w) {
@@ -696,6 +743,17 @@ void take(uint8_t* scene, const Work& w) {
     if (w.key < 0 || w.key >= int(T.offers.size()) || T.offers_board != T.world.board) return fail("no_such_offer", L"The board changed. Pick again.");
     if (std::find(T.world.taken.begin(), T.world.taken.end(), w.key) != T.world.taken.end()) return fail("taken", L"That job is taken.");
     const logic::Offer& o = T.offers[size_t(w.key)];
+    if (o.kill) {
+        if (o.item >= int(g_zombies.size())) return fail("stale_offer", L"The board changed. Pick again.");
+        T.world.taken.push_back(w.key);
+        clear_job();
+        T.world.job_state = 1; T.world.job_kill = true; T.world.job_item = o.item < 0 ? "any" : g_zombies[size_t(o.item)].id;
+        T.world.job_count = o.count; T.world.job_reward = o.reward; T.world.job_place = "mechanic"; T.world.job_at = T.world.trader;
+        save_world();
+        T.status = L"Job taken: kill " + kill_text(o.count, T.world.job_item) + L", then come back here.";
+        log(0, "ANYCAREER_TAKE ok=1 kill=%s count=%d reward=%d", T.world.job_item.c_str(), o.count, o.reward);
+        return;
+    }
     if (size_t(o.item) >= T.goods.size() || size_t(o.spot) >= g_places.size()) return fail("stale_offer", L"The board changed. Pick again.");
     const Candidate& g = T.goods[size_t(o.item)];
     const logic::Spot& at = g_places[size_t(o.spot)];
@@ -720,7 +778,7 @@ void deliver(uint8_t* scene, const Work&) {
     uint8_t* inventory = peer_inventory(peer);
     auto fail = [&](const char* why, const std::wstring& say) { T.status = say; log(1, "ANYCAREER_DELIVER ok=0 reason=%s", why); };
     if (!inventory) return fail("no_host_player", L"You need to be alive to deliver.");
-    if (T.world.job_state != 1) return fail("no_job", L"No delivery in hand.");
+    if (T.world.job_state != 1 || T.world.job_kill) return fail("no_job", L"No delivery in hand.");
     if (!near_spot(peer, T.world.job_at)) return fail("too_far", L"This isn't the drop-off. Follow the blue pin.");
     const uint8_t* def = find_definition(scene + off::server_inventory_defs, T.world.job_item.c_str());
     int n = carried(inventory);
@@ -735,13 +793,7 @@ void deliver(uint8_t* scene, const Work&) {
         destroy_item(&gone, inventory, &ids[size_t(i)]);
         if (gone.ptr) { ++removed; ref_dtor(&gone); }
     }
-    std::vector<int> prices;
-    for (const auto& c : T.candidates) prices.push_back(c.price);
-    T.world.job_parts.clear();
-    for (int i : logic::reward_parts(prices, T.world.job_reward, logic::mix(uint64_t(uint32_t(T.seed)) ^ uint64_t(T.world.board) ^ 0xca5e)))
-        T.world.job_parts.push_back(T.candidates[size_t(i)].id);
-    T.world.job_state = 2;
-    save_world();
+    job_done();
     T.status = L"Delivered! Pick your reward.";
     log(removed == T.world.job_count ? 0 : 2, "ANYCAREER_DELIVER ok=%d item=%s count=%d removed=%d reward=%d part_choices=%d", removed == T.world.job_count ? 1 : 0,
         T.world.job_item.c_str(), T.world.job_count, removed, T.world.job_reward, int(T.world.job_parts.size()));
@@ -785,6 +837,67 @@ void claim(uint8_t* scene, const Work& w) {
     log(dropped ? 0 : 2, "ANYCAREER_CLAIM ok=%d choice=part part=%s reward_cash=%d", dropped ? 1 : 0, id.c_str(), reward);
 }
 
+// F5 (host, test key): drops the items the delivery in hand asks for.
+void test_items(uint8_t* scene, const Work& w) {
+    uint8_t* peer = host_peer(scene);
+    if (!peer || T.world.job_state != 1 || T.world.job_kill) {
+        T.status = L"F5 drops a delivery job's items. Take a delivery job first.";
+        log(1, "ANYCAREER_TEST_ITEMS ok=0 reason=no_delivery_in_hand");
+        return;
+    }
+    const uint8_t* def = find_definition(scene + off::server_inventory_defs, T.world.job_item.c_str());
+    int dropped = 0;
+    for (int i = 0; def && i < T.world.job_count && i < 20; ++i) {
+        Ref item{};
+        create_item(&item, def, scene);
+        if (item.ptr && drop(scene, peer, w.yaw + 0.25 * i, item)) ++dropped;
+    }
+    log(dropped == T.world.job_count ? 0 : 2, "ANYCAREER_TEST_ITEMS ok=%d item=%s wanted=%d dropped=%d", dropped == T.world.job_count ? 1 : 0,
+        T.world.job_item.c_str(), T.world.job_count, dropped);
+}
+
+// A zombie hit (server thread, inside the game's damage call): a kill when its blood went from above zero to zero.
+// Credited when the damage source is the host's character.
+void on_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double blood_before) {
+    if (scene != T.scene || !T.loaded || !anymaker::readable(zombie, off::zombie_definition + 8)) return;
+    double blood = rd<double>(zombie, off::actor_blood);
+    if (!(blood_before > 0 && blood <= 0)) return;
+    int32_t by = src && anymaker::readable(src, 4) ? rd<int32_t>(src, off::damage_src_actor) : -1;
+    uint8_t* peer = host_peer(scene);
+    uint8_t* actor = peer && anymaker::readable(peer + off::peer_actor, 8) ? rd<uint8_t*>(peer, off::peer_actor) : nullptr;
+    int32_t host_id = actor && anymaker::readable(actor + off::actor_id, 4) ? rd<int32_t>(actor, off::actor_id) : -2;
+    const uint8_t* def = rd<const uint8_t*>(zombie, off::zombie_definition);
+    std::string kind = def ? read_string(def) : std::string();
+    bool mine = by == host_id;
+    bool counts = mine && T.world.job_state == 1 && T.world.job_kill && (T.world.job_item == "any" || T.world.job_item == kind);
+    if (counts) {
+        ++T.world.job_progress;
+        if (T.world.job_progress >= T.world.job_count) {
+            job_done();
+            T.status = L"Kill job done! Pick your reward in the Jobs tab.";
+        } else {
+            save_world();
+        }
+    }
+    static int logs = 0;
+    if (logs++ < 40 || counts)
+        log(0, "ANYCAREER_KILL zombie=%s by_actor=%d host_actor=%d counted=%d progress=%d/%d", kind.c_str(), by, host_id, counts ? 1 : 0,
+            T.world.job_progress, T.world.job_count);
+}
+void run_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double blood_before) {
+    __try { on_zombie_hit(zombie, scene, src, blood_before); } __except (EXCEPTION_EXECUTE_HANDLER) { log(2, "ANYCAREER_KILL ok=0 reason=native_exception"); }
+}
+double blood_of(uint8_t* actor) {
+    __try { return anymaker::readable(actor + off::actor_blood, 8) ? rd<double>(actor, off::actor_blood) : 0; }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+}
+void hk_zombie_damage(uint8_t* zombie, uint8_t* scene, const double* amount, const uint8_t* src) {
+    bool watch = zombie && scene && !g_stop && g_ready;
+    double before = watch ? blood_of(zombie) : 0;
+    reinterpret_cast<zombie_damage_t>(h_zombie_damage.original)(zombie, scene, amount, src);
+    if (watch && before > 0) run_zombie_hit(zombie, scene, src, before);
+}
+
 // The Jobs tab: today's offers, or the job in hand, or the reward choice.
 void job_rows(View& v, uint8_t* peer, int have) {
     v.job_state = T.world.job_state;
@@ -792,14 +905,25 @@ void job_rows(View& v, uint8_t* peer, int have) {
     v.board = T.world.board;
     v.job_have = have;
     v.job_count = T.world.job_count;
-    if (T.world.job_state) v.job_text = std::to_wstring(T.world.job_count) + L" x " + wide(job_name()) + L" to the " + wide(logic::place_name(T.world.job_place));
+    v.job_kill = T.world.job_kill;
+    if (T.world.job_kill) { v.job_text = kill_text(T.world.job_count, T.world.job_item); v.job_have = T.world.job_progress; }
+    else if (T.world.job_state) v.job_text = std::to_wstring(T.world.job_count) + L" x " + wide(job_name()) + L" to the " + wide(logic::place_name(T.world.job_place));
     if (T.world.job_state == 0 && T.offers_board == T.world.board) {
         for (size_t i = 0; i < T.offers.size(); ++i) {
             const auto& o = T.offers[i];
+            bool taken = std::find(T.world.taken.begin(), T.world.taken.end(), int(i)) != T.world.taken.end();
+            if (o.kill) {
+                if (o.item >= int(g_zombies.size())) continue;
+                Row r;
+                r.name = L"Kill " + kill_text(o.count, o.item < 0 ? std::string("any") : g_zombies[size_t(o.item)].id) + L" (any weapon, anywhere), then come back";
+                r.price = o.reward; r.key = int32_t(i); r.off = taken;
+                r.button = taken ? L"taken" : L"Take  " + std::to_wstring(o.reward);
+                v.jobs.push_back(std::move(r));
+                continue;
+            }
             if (size_t(o.item) >= T.goods.size() || size_t(o.spot) >= g_places.size()) continue;
             const Candidate& g = T.goods[size_t(o.item)];
             const auto& at = g_places[size_t(o.spot)];
-            bool taken = std::find(T.world.taken.begin(), T.world.taken.end(), int(i)) != T.world.taken.end();
             Row r;
             r.name = L"Bring " + std::to_wstring(o.count) + L" x " + wide(g.name) + L" to a " + wide(logic::place_name(at.filter)) + L", " +
                      metres_text(std::hypot(at.at.x - T.world.trader.x, at.at.z - T.world.trader.z));
@@ -807,6 +931,11 @@ void job_rows(View& v, uint8_t* peer, int have) {
             r.button = taken ? L"taken" : L"Take  " + std::to_wstring(o.reward);
             v.jobs.push_back(std::move(r));
         }
+    } else if (T.world.job_state == 1 && T.world.job_kill) {
+        Row r;
+        r.name = L"Kill " + v.job_text + L" (" + std::to_wstring(T.world.job_progress) + L" so far)";
+        r.price = T.world.job_reward; r.key = kKeyAbandon; r.button = L"Abandon";
+        v.jobs.push_back(std::move(r));
     } else if (T.world.job_state == 1) {
         bool there = peer && near_spot(peer, T.world.job_at);
         Row r;
@@ -844,10 +973,10 @@ void publish_view(uint8_t* scene) {
         v.buy.push_back({name, c.price, std::max(0, T.shelf[i].quantity - T.world.sold[i]), int32_t(i), c.id});
     }
     uint8_t* peer = host_peer(scene);
-    uint8_t* inventory = (g_shop_open || T.world.job_state == 1) && T.cash_def ? peer_inventory(peer) : nullptr;
+    uint8_t* inventory = (g_shop_open || (T.world.job_state == 1 && !T.world.job_kill)) && T.cash_def ? peer_inventory(peer) : nullptr;
     int n = inventory ? carried(inventory) : 0;
     int have = 0;
-    if (T.world.job_state == 1 && inventory) have = job_items(n, find_definition(scene + off::server_inventory_defs, T.world.job_item.c_str()));
+    if (T.world.job_state == 1 && !T.world.job_kill && inventory) have = job_items(n, find_definition(scene + off::server_inventory_defs, T.world.job_item.c_str()));
     job_rows(v, peer, have);
     if (inventory && g_shop_open) {
         for (int i = 0; i < n; ++i) {
@@ -941,6 +1070,7 @@ void run_job(uint8_t* scene, const Work& w) {
         case Job::abandon: abandon(scene, w); break;
         case Job::deliver: deliver(scene, w); break;
         case Job::claim: claim(scene, w); break;
+        case Job::test_items: test_items(scene, w); break;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) { log(2, "ANYCAREER_JOB ok=0 job=%d reason=native_exception", int(w.job)); }
 }
@@ -1003,7 +1133,7 @@ bool close_to(const logic::Zone& at, const Local& l) {
     return l.ok && dx * dx + dz * dz <= kTradeRange * kTradeRange;
 }
 bool in_range(const View& v, const Local& l) { return v.placed && close_to(v.trader, l); }
-bool at_dropoff(const View& v, const Local& l) { return v.job_state && close_to(v.job_at, l); }
+bool at_dropoff(const View& v, const Local& l) { return v.job_state && !v.job_kill && close_to(v.job_at, l); }   // kill jobs end at the Mechanic
 const std::vector<Row>& tab_rows(const View& v) { return g_tab == 0 ? v.buy : g_tab == 1 ? v.sell : v.jobs; }
 
 // What a row's button posts.
@@ -1108,7 +1238,7 @@ bool g_drop_shown = false;
 logic::Zone g_drop_at;
 void update_drop_pin(const View* v) {
     if (!g_pins) return;
-    bool want = v && v->job_state == 1;
+    bool want = v && v->job_state == 1 && !v->job_kill;
     if (!want) {
         if (g_drop_shown) { g_pins->remove(kModId, "delivery"); g_drop_shown = false; }
         return;
@@ -1207,8 +1337,10 @@ void draw_shop(const AnyFrameV1* f, const View& v) {
     std::wstring restock = L"Restock in " + std::to_wstring(v.restock_in) + (v.restock_in == 1 ? L" day" : L" days") + L" (day " +
                            std::to_wstring(v.days) + L" of this world)";
     text(x + 20, y + h - 84, w - 40, 22, v.status, 15, 0xff9fd39a);
-    if (g_tab == 2 && v.job_state == 1)
-        restock = L"Bring " + v.job_text + L". The blue pin on the map marks the drop-off.";
+    if (g_tab == 2 && v.job_state == 1 && v.job_kill)
+        restock = L"Kills so far: " + std::to_wstring(v.job_have) + L" of " + std::to_wstring(v.job_count) + L". Only kills by you count.";
+    else if (g_tab == 2 && v.job_state == 1)
+        restock = L"Bring " + v.job_text + L". The blue pin on the map marks the drop-off. (Test: F5 drops the items.)";
     else if (g_tab == 2 && v.job_state == 2)
         restock = L"Pick one reward.";
     else if (g_tab == 2)
@@ -1261,12 +1393,15 @@ void draw(const AnyFrameV1* f, void*) {
         std::wstring hint = L"Mechanic: " + wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.trader.x, v.trader.z));
         text(x, 8, w, 22, hint, 14, 0xffd8dde3, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
-    if (v.job_state == 1 && !at_dropoff(v, g_local)) {
+    if (v.job_state == 1 && v.job_kill) {
+        std::wstring hint = L"Kill job: " + std::to_wstring(v.job_have) + L" of " + v.job_text + L". Then back to the Mechanic.";
+        text(x - 100, 30, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+    } else if (v.job_state == 1 && !at_dropoff(v, g_local)) {
         std::wstring hint = L"Delivery: " + v.job_text + L" (" + std::to_wstring(v.job_have) + L"/" + std::to_wstring(v.job_count) + L"), " +
                             wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.job_at.x, v.job_at.z));
         text(x - 100, 30, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     } else if (v.job_state == 2) {
-        text(x, 30, w, 22, L"Delivered: pick your reward in the Mechanic's Jobs tab", 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+        text(x, 30, w, 22, v.job_kill ? L"Kill job done: pick your reward in the Mechanic's Jobs tab" : L"Delivered: pick your reward in the Mechanic's Jobs tab", 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
 }
 
@@ -1331,7 +1466,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     if ((e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) || e->key >= 256) return 0;
     bool& was = held[e->key];
     if (e->kind == ANY_KEY_UP) { bool consume = was; was = false; return consume ? 1 : 0; }
-    if (e->key != VK_F3 && e->key != VK_F4 && e->key != trade) return 0;
+    if (e->key != VK_F3 && e->key != VK_F4 && e->key != VK_F5 && e->key != trade) return 0;
     if (!g_ready || !gameplay()) return 0;
     if (was) return 1;   // a held key repeats; one press, one action
     if (e->key == trade) {
@@ -1350,7 +1485,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     was = true;
     if (!hosting()) { log(1, "ANYCAREER_JOB ok=0 reason=not_hosting (the host runs these)"); return 1; }
     g_local = local_player();
-    post(e->key == VK_F3 ? Job::give_cash : Job::price_list, 0);
+    post(e->key == VK_F3 ? Job::give_cash : e->key == VK_F5 ? Job::test_items : Job::price_list, 0);
     return 1;
 }
 
@@ -1395,9 +1530,13 @@ void install() {
             log(2, "ANYCAREER_OFF reason=hook_cell_not_writable");
             return;
         }
+        // Kill jobs need the zombie damage hook; without it the board only has deliveries.
+        void** zombie_cell = route::cell(bind::zombie_damage);
+        bool kills = zombie_cell && h_zombie_damage.install(zombie_cell, (void*)&hk_zombie_damage);
+        log(kills ? 0 : 1, "ANYCAREER_KILLS hook=%d%s", kills ? 1 : 0, kills ? "" : " (no kill jobs this session)");
         g_ready = true;
         log(0, "ANYCAREER_READY after_s=%d cash_file=%s draw=%d: in Survival the Mechanic waits at a gas station (Buy, Sell, Jobs); "
-            "F3 gives 250 Cash (host), F4 writes the price list", attempt, g_cash_json.c_str(), gpu ? 1 : 0);
+            "F3 gives 250 Cash (host), F4 writes the price list, F5 drops a delivery job's items (test)", attempt, g_cash_json.c_str(), gpu ? 1 : 0);
         load_stations();
         return;
     }
@@ -1410,7 +1549,12 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyM
     if (!h || !out || h->struct_size != sizeof(*h) || h->abi != ANYAPI_MOD_ABI || out->struct_size != sizeof(*out)) return false;
     host = *h; out->id = kModId; out->input = on_input;
     if (host.plugin_directory) g_data_dir = std::filesystem::path(host.plugin_directory) / L"AnyCareer";
-    out->shutdown = [](void*) { g_stop = true; h_add_definitions.remove((void*)&hk_add_definitions); h_tick.remove((void*)&hk_tick); };
+    out->shutdown = [](void*) {
+        g_stop = true;
+        h_zombie_damage.remove((void*)&hk_zombie_damage);
+        h_add_definitions.remove((void*)&hk_add_definitions);
+        h_tick.remove((void*)&hk_tick);
+    };
     return true;
 }
 extern "C" __declspec(dllexport) void AnyAPI_ModReady() {

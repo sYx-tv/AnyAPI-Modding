@@ -171,5 +171,25 @@ int main() {
         WorldState none;
         assert(load_world(save_world(WorldState{}), none) && none.job_state == 0 && none.board == -1);
     }
+    // Kill jobs.
+    {
+        auto kinds = parse_zombies("{\"definitions\": [{\"id\": \"zombie_basic\", \"display_name\": \"Zombie\", \"spawn_tier\": 0, \"spawn_probability\": 1.0},"
+                                   " {\"id\": \"zombie_acid\", \"display_name\": \"Acid Zombie\", \"spawn_tier\": 2, \"spawn_probability\": 0.2},"
+                                   " {\"id\": \"zombie_ambush\", \"spawn_tier\": 1, \"spawn_probability\": 0.1, \"anim\": {\"id\": \"zombie_x\"}}]}");
+        assert(kinds.size() == 3 && kinds[0].id == "zombie_acid" && kinds[0].name == "Acid Zombie" && kinds[0].tier == 2 && kinds[2].id == "zombie_basic");
+        auto lvl1 = special_zombies(kinds, 1), lvl2 = special_zombies(kinds, 2);
+        assert(lvl1.size() == 1 && kinds[size_t(lvl1[0])].id == "zombie_ambush" && lvl2.size() == 2);
+        assert(parse_zombies("nope").empty());
+        auto k = make_kill_offers(lvl2, 9, 4), k2 = make_kill_offers(lvl2, 9, 4);
+        assert(k.size() == 2 && k[0].kill && k[1].kill && k[0].item == -1 && k[1].item >= 0 && k[0].count == k2[0].count && k[1].item == k2[1].item);
+        assert(k[0].count >= 6 && k[0].count <= 15 && k[1].count >= 2 && k[1].count <= 5 && k[1].reward == kill_reward(k[1].count, true));
+        auto plain = make_kill_offers({}, 9, 4);
+        assert(plain[1].item == -1 && plain[1].count >= 15);
+        assert(kill_reward(10, false) == 150);
+        WorldState w;
+        w.job_state = 1; w.job_kill = true; w.job_progress = 4; w.job_item = "any"; w.job_count = 10; w.job_reward = 150; w.job_place = "mechanic";
+        WorldState back;
+        assert(load_world(save_world(w), back) && back.job_kill && back.job_progress == 4 && back.job_item == "any");
+    }
     return 0;
 }
