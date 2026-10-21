@@ -9,7 +9,7 @@
 // stock running and power voices silenced. Rotary engines are left to AnyEngineParts.
 //
 // EXPERIMENTAL. This mod hooks game functions directly through the experimental SDK (see
-// enginesound_bindings.h). The hooks resolve only on Anymaker 0.1.25 / Steam build 25904830 and are not
+// enginesound_bindings.h). The hooks resolve only on Anymaker 0.1.27 / Steam build 26113663 and are not
 // reviewed as an AnyAPI service yet. The first in-game runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
@@ -127,12 +127,12 @@ int32_t extend_at(const uint8_t* base, ptrdiff_t offset) {
 
 // ------------------------------------------------------------------ generated sound (client, main thread)
 namespace audio {
-constexpr uint32_t play_voice_rva = 0x1409e0;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
-constexpr uint32_t append_rva = 0x141160;           // effect_3d.append_audio_data (takes the buffer's memory)
-constexpr uint32_t set_position_velocity_rva = 0x141140;
-constexpr uint32_t stop_rva = 0x141110;
-constexpr uint32_t reset_rva = 0x141050;            // effect_3d.reset (releases the handle)
-constexpr uint32_t buffer_reset_rva = 0x41c40;      // binary.buffer.reset (allocates with the game's allocator)
+constexpr uint32_t play_voice_rva = 0x13f240;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
+constexpr uint32_t append_rva = 0x13f9c0;           // effect_3d.append_audio_data (takes the buffer's memory)
+constexpr uint32_t set_position_velocity_rva = 0x13f9a0;
+constexpr uint32_t stop_rva = 0x13f970;
+constexpr uint32_t reset_rva = 0x13f8b0;            // effect_3d.reset (releases the handle)
+constexpr uint32_t buffer_reset_rva = 0x41a00;      // binary.buffer.reset (allocates with the game's allocator)
 constexpr int32_t kGroupVehicle = 4;                // e_audio_group.vehicle: follows the vehicle volume slider
 constexpr double kRange = 160.0;                    // metres
 constexpr double kLead = 0.08;                      // seconds of sound queued ahead

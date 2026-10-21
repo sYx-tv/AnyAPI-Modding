@@ -49,6 +49,7 @@ from capstone import Cs, CS_ARCH_X86, CS_MODE_64  # noqa: E402
 ARRAY = re.compile(r'((?:unsigned char|uint8_t)\s+(\w+)\s*\[\s*\]\s*=\s*\{)([^}]*)(\})')
 HEXSTR = re.compile(r'"((?:[0-9a-f]{2} ){7,}[0-9a-f]{2})"')
 RVA = re.compile(r'\b(\w+)_RVA\s*=\s*(0x[0-9a-fA-F]+)')
+NATIVE_RVA = re.compile(r'\b([a-z]\w*_rva)\s*=\s*(0x[0-9a-fA-F]+)')
 MD = Cs(CS_ARCH_X86, CS_MODE_64)
 
 
@@ -166,6 +167,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game-dir', type=Path, required=True)
     ap.add_argument('--previous-json', type=Path, required=True)
+    ap.add_argument('--current-json', type=Path, help="the new build's SDK json/ folder: resolves moved game.exe natives by name")
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--apply', action='store_true', help='rewrite refreshable, resized and shifted patterns in place')
     a = ap.parse_args()
@@ -305,6 +307,44 @@ def main():
             row['diff'] = 'diffs/' + fn
             row['candidate_bytes'] = encode(new_body, 'min')
         report.append(row)
+
+    # game.exe natives called through a plain constant (`play_voice_rva = 0x...`, no byte pattern): name the native
+    # at that address in the previous build and find where the same native is now. (0.1.27: the mods' audio
+    # natives all moved and nothing reported it.) Without --current-json, fall back to the thunk signature.
+    def natives_by_rva(folder):
+        out = {}
+        if folder and (folder / 'natives.json').is_file():
+            for n in json.loads((folder / 'natives.json').read_text(encoding='utf-8')):
+                if n.get('thunk_rva'):
+                    out.setdefault(int(n['thunk_rva'], 16), []).append(n)
+        return out
+    old_natives, cur_natives = natives_by_rva(a.previous_json), natives_by_rva(a.current_json)
+    cur_by_sig = {n['sig']: int(rva) for rva, ns in cur_natives.items() for n in ns}
+    for path, text in sources():
+        for m in NATIVE_RVA.finditer(text):
+            value = int(m[2], 16)
+            row = dict(file=path.name, name=m[1], kind='native_rva', rva=hex(value))
+            olds = old_natives.get(value, [])
+            if not olds and value in cur_natives:
+                row.update(status='unchanged', function=cur_natives[value][0]['sig'], note='already the current address')
+            elif not olds:
+                row.update(status='changed', note='not a game.exe native of the previous build; check this address by hand')
+            else:
+                row['function'] = olds[0]['sig']
+                if cur_by_sig:
+                    found = sorted({cur_by_sig[n['sig']] for n in olds if n['sig'] in cur_by_sig})
+                else:
+                    sig = olds[0].get('thunk_signature') or ''
+                    rx = re.compile(b''.join(b'.' if t == '??' else re.escape(bytes([int(t, 16)])) for t in sig.split()), re.S)
+                    found = [pe.get_rva_from_offset(x.start()) for x in rx.finditer(exe)][:2] if sig else []
+                if len(found) != 1:
+                    row.update(status='changed', note='found %d candidates for it in the new build; check by hand' % len(found))
+                elif found[0] == value:
+                    row['status'] = 'unchanged'
+                else:
+                    row.update(status='moved', new_rva=hex(found[0]))
+                    edits.setdefault(path.name, []).append(((m.start(2), m.end(2)), '0x%x' % found[0]))
+            report.append(row)
 
     # Our code addresses dependency cells as code_end + 8*k. When code_end moves, every literal
     # still pointing at an old cell offset is a likely stale offset (the 0.35.2 container crash).

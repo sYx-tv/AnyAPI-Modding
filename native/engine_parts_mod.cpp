@@ -7,7 +7,7 @@
 // under their own tags ("turbo", "rotary", "dyno"). Each hooks and unhooks on its own: one failing to hook leaves the
 // others working, and one still looking for its game functions does not hold the others up.
 //
-// EXPERIMENTAL. All three hook game functions through the experimental SDK: Anymaker 0.1.25 / Steam build 25904830 only.
+// EXPERIMENTAL. All three hook game functions through the experimental SDK: Anymaker 0.1.27 / Steam build 26113663 only.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"

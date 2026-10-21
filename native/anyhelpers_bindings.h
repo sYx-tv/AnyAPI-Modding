@@ -1,6 +1,6 @@
 #pragma once
-// AnyHelpers game bindings (Duplicate tool favorites and the host admin panel), generated for Anymaker 0.1.25 /
-// Steam build 25904830 with
+// AnyHelpers game bindings (Duplicate tool favorites and the host admin panel), generated for Anymaker 0.1.27 /
+// Steam build 26113663 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the SDK reference root (reference-0.1.25), one --signature per binding below.
 // Experimental: located by code signature or call-cell route, not reviewed as an AnyAPI service.

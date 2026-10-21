@@ -1,7 +1,7 @@
 #pragma once
 // Vehicles, zombies and creatures for AnyMap, read from the game's client scene.
 //
-// EXPERIMENTAL: uses the experimental SDK (raw game memory), Anymaker 0.1.25 / Steam build 25904830 only.
+// EXPERIMENTAL: uses the experimental SDK (raw game memory), Anymaker 0.1.27 / Steam build 26113663 only.
 // Offsets come from the 0.1.25 SDK reference layouts (metadata). Everything stays off unless anyapi.build
 // matches the SDK hashes, so a game update turns the blips off instead of reading the wrong memory.
 //

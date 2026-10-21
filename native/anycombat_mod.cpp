@@ -17,8 +17,8 @@
 //
 // Settings (AnyHelpers, optional): hit marker, damage numbers, number size.
 //
-// EXPERIMENTAL. Hooks two game functions through the experimental SDK (anycombat_bindings.h): Anymaker 0.1.25 /
-// Steam build 25904830 only. The first hits of each session are logged: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks two game functions through the experimental SDK (anycombat_bindings.h): Anymaker 0.1.27 /
+// Steam build 26113663 only. The first hits of each session are logged: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
