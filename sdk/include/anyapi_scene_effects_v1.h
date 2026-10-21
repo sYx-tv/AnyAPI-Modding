@@ -3,8 +3,10 @@
 // anyapi.scene_effects v1: HDR finishing in the scene, after volumetric
 // lighting and before the game's bloom, tone mapping and HUD.
 // tonemap: 0 Game (the game's own ACES curve), 1 Filmic (AgX-style, keeps
-//   colour in bright light), 2 Clean (neutral, bright and true to albedo).
-// look: 0 None, 1 Warm, 2 Cool, 3 Teal & orange, 4 Moody, 5 Vivid;
+//   colour in bright light), 2 Clean (neutral, bright and true to albedo),
+//   3 Soft film (AnyAPI 0.40.1+: long straight middle, slow highlight roll-off).
+// look: 0 None, 1 Warm, 2 Cool, 3 Teal & orange, 4 Moody, 5 Vivid,
+//   6 Soft & warm (AnyAPI 0.40.1+: golden highlights, cool shade);
 //   look_strength 0..1 blends it in.
 // exposure: manual stops, -3..3. eye_adaptation 0/1 briefly brightens or
 //   darkens after big brightness changes (caves, tunnels, looking at the sun)

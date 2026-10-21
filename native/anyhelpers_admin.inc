@@ -1,7 +1,7 @@
 // Host admin actions (heal, teleport, time of day, weather, clear zombies and creatures), through the experimental SDK.
 // Only the host runs server_scene, so every action is queued here and carried out at the start of the next server
 // tick, on the server thread. The panel only reads the copied player list and posts commands.
-// Not reviewed as AnyAPI services: offsets are from the 0.1.25 reference (types.json) and stay off on another build.
+// Not reviewed as AnyAPI services: offsets are from the 0.1.27 reference (types.json, unchanged since 0.1.25) and stay off on another build.
 #include "anymaker_sdk_runtime.hpp"
 #include "route_cell.h"
 #include "anyhelpers_bindings.h"

@@ -38,18 +38,28 @@ static void renderer_hook(void* self){++renderer_calls;auto policy=snapshot();au
 }
 // scene_renderer is transient frame data. Mutate its copied lighting before
 // _build_scene creates constants; subsequent native passes consume the same data.
-static bool scene_apply(void* object,const AnySceneParametersV1& p){if(!writable(object,0x2bf8))return false;auto b=(unsigned char*)object;double colors[7][3]{},fog{};memcpy(colors,b+0xa90,sizeof(colors));memcpy(&fog,b+0xb60,8);
+static bool scene_apply(void* object,const AnySceneParametersV1& p,const Look& look={}){if(!writable(object,0x2bf8))return false;auto b=(unsigned char*)object;double colors[7][3]{},fog{};memcpy(colors,b+0xa90,sizeof(colors));memcpy(&fog,b+0xb60,8);
  for(auto& c:colors)for(auto value:c)if(!std::isfinite(value)||value<0||value>10000)return false;
  if(!std::isfinite(fog)||fog<0||fog>10000)return false;
  double exposure=std::exp2(p.light_exposure);for(size_t i=0;i<7;++i){double scale=i==4?p.sun:i==5?p.sky:p.ambient;for(auto& value:colors[i])value=std::min(10000.,value*scale*exposure);}fog=std::min(10000.,fog*p.fog);
+ // v3 tints: view up, light up and the sun are the lit side (key); view down, light down, sky and back fill the shade.
+ // Each light keeps its luminance, so only its colour changes.
+ for(size_t i=0;i<7;++i){const float* tint=i==0||i==2||i==4?look.key:look.shade;if(tint[0]==1&&tint[1]==1&&tint[2]==1)continue;
+  double before=.2126*colors[i][0]+.7152*colors[i][1]+.0722*colors[i][2],after=.2126*colors[i][0]*tint[0]+.7152*colors[i][1]*tint[1]+.0722*colors[i][2]*tint[2];
+  double k=after>1e-12?before/after:1;for(int c=0;c<3;++c)colors[i][c]=std::min(10000.,colors[i][c]*tint[c]*k);}
  memcpy(b+0xa90,colors,sizeof(colors));memcpy(b+0xb60,&fog,8);return true;
 }
 using SceneFn=void(*)(void*,void*);
-static void scene_hook(void* renderer,void* scene){++scene_calls;auto p=copy();if(p.enabled&&!scene_apply(scene,p))++rejected_frames;
+// Wind for tree and grass sway: scene_renderer.m_wind_vector (vec2 of doubles), read by _build_scene for the
+// vegetation and grass constants. Scaled only around the original call and put back afterwards.
+static bool wind_scale(void* scene,float scale,double* saved){if(scale==1||!writable(scene,0x2bf8))return false;auto b=(unsigned char*)scene+0xb78;memcpy(saved,b,16);
+ if(!std::isfinite(saved[0])||!std::isfinite(saved[1])||std::abs(saved[0])>200||std::abs(saved[1])>200)return false;double scaled[2]{saved[0]*scale,saved[1]*scale};memcpy(b,scaled,16);return true;}
+static void scene_hook(void* renderer,void* scene){++scene_calls;auto policy=snapshot();auto p=policy.scene;if(p.enabled&&!scene_apply(scene,p,policy.look))++rejected_frames;
+ double wind[2]{};bool windy=p.enabled&&wind_scale(scene,policy.look.wind,wind);
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
  if(writable(scene,0x2bf8))scene_antialiasing::apply_jitter(renderer,scene);
 #endif
-((SceneFn)scene_cell.original())(renderer,scene);}
+((SceneFn)scene_cell.original())(renderer,scene);if(windy)memcpy((unsigned char*)scene+0xb78,wind,16);}
 // Native scene/UI boundary: the AA replacement records on the native command
 // list after scene composition, before either native UI renderer.
 static std::atomic<uint64_t> before_hud_calls{};

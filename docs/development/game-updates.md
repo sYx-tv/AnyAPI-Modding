@@ -49,7 +49,7 @@ Run it once without `--apply` to read the report, then again with `--apply` (add
    `--apply`, rewrites the ones that are safe to refresh;
 4. regenerates the legacy event-route offsets and dispatcher bytes
    ([`refresh_legacy_routes.py`](../../native/tools/refresh_legacy_routes.py));
-5. re-binds EngineSound, AnyMirror, AnyLights, GpsPart and ThirdPerson from the new SDK
+5. re-binds EngineSound, AnyMirror, AnyLights, GpsPart, ThirdPerson and CustomGame from the new SDK
    ([`rebind_mod_bindings.py`](../../native/tools/rebind_mod_bindings.py));
 6. copies the generated SDK headers and system docs into `sdk/experimental/`;
 7. writes the build identity: `runtime_build_identity.h`, `runtime_build_guard.inc`,
@@ -61,6 +61,11 @@ Run it once without `--apply` to read the report, then again with `--apply` (add
    the port rewrote) gets a patch version bump with `--apply`, and
    `<work>/release-plan.json` lists the tag, every package to ship, the `release.json`
    `Packages` overrides and the `add_game_build.py` command for the other mods.
+   Bundles count as one mod each, under their release name: a bundle is rebuilt when any
+   of its parts must be, ships from `build/bundles/<config>/`, and gets its own version block
+   if it had none. A standalone target with the same release name (AnyHelpers, AnyGraphics,
+   AnyEngineParts, AnyMap) is never released, because the bundle replaces it. Before 0.1.27
+   the plan ignored bundles and bumped the standalone versions instead.
 
 Re-running it is safe: a second `--apply` on an up-to-date tree changes nothing.
 
@@ -119,7 +124,12 @@ Then check these, which the audit cannot see:
   [scene antialiasing](scene-antialiasing.md). Natives called through a plain lower-case
   constant (`play_voice_rva = 0x...` in the engine-sound mods) are checked by the audit when it
   gets the new SDK's `--current-json` (the script passes it): `moved` rows, rewritten by `--apply`.
-  Before 0.1.27 nothing checked them, and every one of them moved.
+  Before 0.1.27 nothing checked them, and every one of them moved. The graphics context
+  literal is still a manual check.
+- **Hand-written signatures** outside the `*_bindings.h` headers (`map_actors.h`,
+  `route_cell.h`, `rotary_mod.cpp`) are audited as `hexsig` rows since 0.1.27, when AnyMap's
+  creature `code_sig` turned out to have matched nothing for two builds. A signature split
+  over several string literals is reported but never rewritten by `--apply`.
 - **Changed game.exe code** (`changed` rows naming a `*_RVA` constant): find the
   function again by name in `<work>/sdk/json/natives.json` or by its callers.
 

@@ -48,6 +48,7 @@ from capstone import Cs, CS_ARCH_X86, CS_MODE_64  # noqa: E402
 
 ARRAY = re.compile(r'((?:unsigned char|uint8_t)\s+(\w+)\s*\[\s*\]\s*=\s*\{)([^}]*)(\})')
 HEXSTR = re.compile(r'"((?:[0-9a-f]{2} ){7,}[0-9a-f]{2})"')
+HEXSEQ = re.compile(r'"(?:[0-9a-f]{2} )*[0-9a-f]{2} ?"(?:\s*"(?:[0-9a-f]{2} )*[0-9a-f]{2} ?")*')
 RVA = re.compile(r'\b(\w+)_RVA\s*=\s*(0x[0-9a-fA-F]+)')
 NATIVE_RVA = re.compile(r'\b([a-z]\w*_rva)\s*=\s*(0x[0-9a-fA-F]+)')
 MD = Cs(CS_ARCH_X86, CS_MODE_64)
@@ -75,6 +76,18 @@ def collect():
             for i, m in enumerate(HEXSTR.finditer(text)):
                 rows.append(dict(file=path.name, name='hex@%d' % m.start(1), body=bytes.fromhex(m[1]),
                                  span=(m.start(1), m.end(1)), style='hexstr', kind='binding'))
+        else:
+            # Hand-written descriptors and signatures outside the bindings (map_actors.h, route_cell.h,
+            # rotary_mod.cpp). 0.1.27: a map_actors.h code_sig had matched nothing for two builds unnoticed.
+            # A signature split over adjacent literals is reported but never rewritten.
+            for m in HEXSEQ.finditer(text):
+                pieces = re.findall(r'"([^"]*)"', m[0])
+                body = bytes.fromhex(' '.join(x.strip() for x in pieces))
+                if len(body) < 8:
+                    continue
+                single = len(pieces) == 1 and not pieces[0].endswith(' ')
+                rows.append(dict(file=path.name, name='hex@%d' % (m.start() + 1), body=body,
+                                 span=(m.start() + 1, m.end() - 1) if single else None, style='hexstr', kind='hexsig'))
     return rows, rvas
 
 
@@ -291,7 +304,8 @@ def main():
         if same_insn and same_relocs:
             row['status'] = 'refreshable' if old_end == new_end else 'resized'
             row['changed_bytes'] = sum(x != y for x, y in zip(body, new_body)) + abs(len(body) - len(new_body))
-            edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
+            if r['span']:
+                edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
             if len(twins) > 1:
                 row['note'] = twin_note(twins)
         else:
@@ -302,7 +316,8 @@ def main():
                 row['status'] = 'shifted'
                 row['number_changes'] = displacement_changes(old_code, new_code)
                 row['offset_hints'] = offset_hints(row['number_changes'])
-                edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
+                if r['span']:
+                    edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
                 if len(twins) > 1:
                     row['note'] = twin_note(twins)
             row['constants_changed'] = sum(x != y for x, y in zip(oh['const_windows'], nh['const_windows'])) + \

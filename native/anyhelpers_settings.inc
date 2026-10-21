@@ -6,6 +6,7 @@ namespace settingsmod {
 static helpersettings::State state;
 static std::mutex mutex;
 static const AnyMenuV3* widgets;
+static const AnyMenuV5* hover_api; // optional (anyapi.menu v5): which row the mouse is on, for its description
 static uint64_t register_setting(const AnyModSettingV1* definition){std::lock_guard<std::mutex> lock(mutex);auto token=state.add(definition);if(token){auto& s=state.settings.back();log("SETTING_REGISTER mod="+s.mod+" setting="+s.id+" kind="+std::to_string(s.kind));}else log("SETTING_REGISTER rejected=1",2);return token;}
 static bool get(uint64_t token,AnySettingValueV1* value){std::lock_guard<std::mutex> lock(mutex);return state.get(token,value);}
 static uint64_t revision(){std::lock_guard<std::mutex> lock(mutex);return state.revision;}
@@ -51,9 +52,13 @@ static void draw(const AnyMenuFrameV1*,void*){std::lock_guard<std::mutex> lock(m
   else {char text[257]{};memcpy(text,value.text.c_str(),value.text.size()+1);changed=widgets->text_row(id.c_str(),label.c_str(),text,s.text_limit+1);value.text=text;}
   if(changed){bool accepted=state.stage(i,std::move(value));log("SETTING_STAGE mod="+s.mod+" setting="+s.id+" accepted="+std::to_string(accepted));}
  }
- menu->label("help",state.status.empty()?"Changes take effect when you select Apply Changes.":state.status.c_str());
+ // The hovered setting's description, else the last change's status, else the general hint.
+ const char* hovered=hover_api?hover_api->hovered_row():"";const std::string* described=nullptr;
+ if(hovered&&!strncmp(hovered,"setting.",8)){auto n=strtoull(hovered+8,nullptr,10);if(n>=1&&n<=state.settings.size()&&!state.settings[n-1].description.empty())described=&state.settings[n-1].description;}
+ menu->label("help",described?described->c_str():state.status.empty()?"Changes take effect when you select Apply Changes. Hover a setting for what it does.":state.status.c_str());
 }
 static bool init(const AnyServicesV1* services){widgets=(const AnyMenuV3*)services->query("anyapi.menu",3);if(!widgets||widgets->version!=3||widgets->struct_size!=sizeof(*widgets))return false;
+ hover_api=(const AnyMenuV5*)services->query("anyapi.menu",5);if(hover_api&&(hover_api->version!=5||hover_api->struct_size!=sizeof(*hover_api)||!hover_api->hovered_row))hover_api=nullptr;
  state.file=std::filesystem::path(host.plugin_directory)/L"AnyHelpers"/L"settings.tsv";state.load();
  AnyMenuTabV2 tab;tab.id="mod_settings";tab.title="MOD SETTINGS";tab.order=110;tab.icon=ANY_MENU_ICON_SETTINGS;tab.draw=draw;tab.event=event;tab.dirty=dirty;tab.defaults=defaults;
  return menu->add_tab(&tab)&&services->publish("anyhelpers.settings",1,&api)&&services->publish("anyhelpers.settings",2,&api2);

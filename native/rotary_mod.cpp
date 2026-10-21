@@ -228,7 +228,8 @@ constexpr int32_t kGroupVehicle = 4;                // e_audio_group.vehicle: fo
 constexpr double kRange = 140.0;                    // metres
 constexpr double kLead = 0.08;                      // seconds of sound queued ahead
 // The voice object (what play_voice hands back) keeps the PCM still to play: a byte buffer whose size is at +0x78 and
-// a read cursor in samples at +0x80 (effect_3d.append_audio_data's handler and the mixer, game.exe 0xe85f0/0xe86e0).
+// a read cursor in samples at +0x80 (effect_3d.append_audio_data's handler and the mixer, game.exe 0xe65b0/0xe66a0;
+// 0.1.25: 0xe85f0/0xe86e0).
 constexpr int kVoiceBytes = 0x78, kVoiceCursor = 0x80;
 }  // namespace audio
 struct GameBuffer { void* data; int32_t size; uint32_t pad; };
