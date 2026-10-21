@@ -90,7 +90,8 @@ Launch Anymaker from Steam with EngineSound installed. The lines tagged `engines
    sound. The panel names the engine and its layout's sounds; the log names the size, cylinders and sound.
 3. Stretch an engine and confirm the cylinder count in the panel title changes and the sound with it.
 4. Start, idle, rev, hold full throttle at the top, then lift off. Expect starter, idle lope on Muscle,
-   limiter bounce, and pops on lift-off.
+   limiter bounce, and pops on lift-off. Then turn the key off at speed: the engine winds down with no
+   whine (`engine stopped firing at N rpm ...` in the log).
 5. Press **Customize this sound**, then drag each slider while the engine runs.
 6. Co-op: a second player joins with EngineSound. Both should hear the same sound.
 7. Save, reload and confirm the choice is kept and only one sound plays. Expect `engine N sound S saved as

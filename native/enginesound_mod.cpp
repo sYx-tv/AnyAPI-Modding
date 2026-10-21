@@ -176,6 +176,7 @@ struct ClientEngine {
     bool game_volume_seen = false;
     double quiet_since = -1;
     int32_t logged_value = INT32_MAX; int logged_cylinders = 0;
+    bool was_running = false;                        // last tick's firing state, for the start and stop log lines
 };
 std::unordered_map<const void*, ClientEngine> g_engines;   // keyed by client engine
 std::vector<int16_t> g_pcm;
@@ -215,6 +216,14 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     in.tune = tune_of(decode(value, kind.layout), kind);
     // Firing: the game's power voice is audible.
     in.running = v.game_volume_seen ? v.game_volume > 0.001 : in.rps >= synth::kIdleRps;
+    if (in.running != v.was_running) {
+        static std::atomic<int> logs{16};
+        if (logs.fetch_sub(1) > 0)
+            log(0, "engine %s at %.0f rpm (game %.0f rpm), load %.2f, stock power volume %s%.3f, gain %.2f, starter %.2f", in.running ? "firing" : "stopped firing",
+                in.rps * 60, synth::clamp01(rd<double>(self, off::engine_factor_speed)) * synth::kMaxRps * 60, in.load, v.game_volume_seen ? "" : "(not seen, by speed) ",
+                v.game_volume, in.tune.gain, v.synth.starter_env);
+        v.was_running = in.running;
+    }
     v.game_volume_seen = false;
     if (v.logged_value != value || v.logged_cylinders != in.cylinders) {
         static std::atomic<int> logs{24};
