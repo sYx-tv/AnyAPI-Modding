@@ -12,9 +12,10 @@
 //      world runs with AnyCareer (gas station spots are read from the player's own rom/data/tiles at start-up). The
 //      spot is kept in "AnyAPI and Modding/mods/AnyCareer/worlds/<world seed>.txt". Far away, a line at the top of
 //      the screen gives the distance and direction; within kTradeRange, J (rebindable in Mod Controls) opens the
-//      shop. Buy: up to 10 mechanical parts that can drop at the world's loot level, 1-3 of each, picked from the
-//      world seed and the restock number; the shelf restocks every kRestockDays in-game days (midnights are counted
-//      while the world runs). Sell: mechanical parts and items you carry, for 40% of the trader's price.
+//      shop. Mouse: click a row's Buy or Sell button, a tab or X; the wheel scrolls; right click closes. The keyboard
+//      works too. Buy: up to 10 mechanical parts that can drop at the world's loot level, 1-3 of each, picked from
+//      the world seed and the restock number; the shelf restocks every kRestockDays in-game days (midnights are
+//      counted while the world runs). Sell: mechanical parts and items you carry, for 40% of the trader's price.
 //      Everything happens on the host in one server-tick step: buying checks your Cash, takes it from your stacks
 //      (a stack's count is set through its own property setter; emptied stacks are removed with
 //      server_scene.inventory.destroy_item) and drops the part at your feet; selling removes the item first and
@@ -711,6 +712,12 @@ bool g_open = false;
 int g_tab = 0, g_cursor = 0;
 Local g_local;
 ULONGLONG g_local_at = 0;
+// Mouse: the pointer in frame pixels, and the clickable areas the last shop frame drew.
+enum class Hit { tab, row, action, close };
+struct Area { float x, y, w, h; Hit kind; int index; bool contains(float px, float py) const { return px >= x && py >= y && px < x + w && py < y + h; } };
+std::vector<Area> g_areas;
+float g_mouse_x = 0, g_mouse_y = 0, g_frame_w = 1920, g_frame_h = 1080;
+int g_first = 0;                                  // first list row on screen
 
 Local local_player() {
     static AnySessionPlayersV1 players;   // about 21 KB, so not on the stack; only called under g_ui_mutex
@@ -735,7 +742,33 @@ bool in_range(const View& v, const Local& l) {
     return v.placed && l.ok && dx * dx + dz * dz <= kTradeRange * kTradeRange;
 }
 
-void close_shop() { g_open = false; g_shop_open = false; host.capture_input(0); }
+void close_shop() { g_open = false; g_shop_open = false; g_areas.clear(); host.capture_input(0); }
+
+// Window-client pixels to renderer pixels (they differ at non-native resolutions), as AnyQuickWheel does.
+void mouse_to_frame(int32_t cx, int32_t cy) {
+    RECT r{};
+    HWND window = GetForegroundWindow();
+    DWORD pid = 0;
+    if (window) GetWindowThreadProcessId(window, &pid);
+    if (pid == GetCurrentProcessId() && GetClientRect(window, &r) && r.right > 0 && r.bottom > 0) {
+        g_mouse_x = float(cx) * g_frame_w / float(r.right);
+        g_mouse_y = float(cy) * g_frame_h / float(r.bottom);
+    } else { g_mouse_x = float(cx); g_mouse_y = float(cy); }
+}
+
+// Puts the Windows pointer in the middle of the game window, so the shop's pointer starts there.
+void centre_pointer() {
+    RECT r{};
+    POINT p{};
+    HWND window = GetForegroundWindow();
+    DWORD pid = 0;
+    if (window) GetWindowThreadProcessId(window, &pid);
+    if (pid == GetCurrentProcessId() && GetClientRect(window, &r)) {
+        p.x = r.right / 2; p.y = r.bottom / 2;
+        if (ClientToScreen(window, &p)) SetCursorPos(p.x, p.y);
+    }
+    g_mouse_x = g_frame_w / 2; g_mouse_y = g_frame_h / 2;
+}
 
 void box(uint32_t kind, float x, float y, float w, float h, uint32_t color, float radius = 0) {
     AnyGpuCommandV1 c;
@@ -759,43 +792,71 @@ std::wstring key_name() {
 void draw_shop(const AnyFrameV1* f, const View& v) {
     float w = std::min(600.f, float(f->width) - 32), h = std::min(500.f, float(f->height) - 32);
     float x = (float(f->width) - w) / 2, y = (float(f->height) - h) / 2;
+    g_areas.clear();
     box(ANY_GPU_ROUND_RECT, x, y, w, h, 0xf0181b20, 8);
+    {   // close button
+        float cx = x + w - 44, cy = y + 14;
+        bool hover = Area{cx, cy, 30, 30, Hit::close, 0}.contains(g_mouse_x, g_mouse_y);
+        box(ANY_GPU_ROUND_RECT, cx, cy, 30, 30, hover ? 0xffa54040 : 0xff2a2e35, 5);
+        text(cx, cy, 30, 30, L"X", 15, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER | ANY_GPU_BOLD);
+        g_areas.push_back({cx, cy, 30, 30, Hit::close, 0});
+    }
     text(x + 20, y + 14, w - 220, 30, L"Mechanic", 22, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_BOLD);
-    text(x + w - 200, y + 14, 180, 30, L"Cash: " + std::to_wstring(v.cash), 18, 0xffe8c66a);
+    text(x + w - 230, y + 14, 180, 30, L"Cash: " + std::to_wstring(v.cash), 18, 0xffe8c66a);
     const wchar_t* tabs[] = {L"Buy", L"Sell"};
     for (int i = 0; i < 2; ++i) {
         float tx = x + 20 + i * 110;
-        box(ANY_GPU_ROUND_RECT, tx, y + 56, 100, 30, g_tab == i ? 0xff3a6ea5 : 0xff2a2e35, 5);
+        bool hover = Area{tx, y + 56, 100, 30, Hit::tab, i}.contains(g_mouse_x, g_mouse_y);
+        box(ANY_GPU_ROUND_RECT, tx, y + 56, 100, 30, g_tab == i ? 0xff3a6ea5 : hover ? 0xff3a3f48 : 0xff2a2e35, 5);
+        g_areas.push_back({tx, y + 56, 100, 30, Hit::tab, i});
         text(tx, y + 56, 100, 30, tabs[i], 16, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
     const auto& rows = g_tab == 0 ? v.buy : v.sell;
     float list_y = y + 100, row_h = 30;
     int visible = std::max(1, int((h - 100 - 90) / row_h));
     g_cursor = rows.empty() ? 0 : std::clamp(g_cursor, 0, int(rows.size()) - 1);
-    int first = std::clamp(g_cursor - visible / 2, 0, std::max(0, int(rows.size()) - visible));
+    if (g_cursor < g_first) g_first = g_cursor;
+    if (g_cursor >= g_first + visible) g_first = g_cursor - visible + 1;
+    g_first = std::clamp(g_first, 0, std::max(0, int(rows.size()) - visible));
+    int first = g_first;
     if (rows.empty())
         text(x + 20, list_y, w - 40, row_h, g_tab == 0 ? L"Nothing on the shelf right now." : L"You carry nothing the Mechanic buys (mechanical parts and items).",
              15, 0xffaeb7c2);
     for (int i = first; i < int(rows.size()) && i < first + visible; ++i) {
         float ry = list_y + float(i - first) * row_h;
         if (i == g_cursor) box(ANY_GPU_ROUND_RECT, x + 14, ry, w - 28, row_h - 2, 0xff2f4f73, 4);
+        g_areas.push_back({x + 14, ry, w - 160, row_h - 2, Hit::row, i});
         const Row& r = rows[size_t(i)];
         bool out = g_tab == 0 && r.quantity <= 0;
-        text(x + 24, ry, w - 230, row_h, r.name, 15, out ? 0xff7d848c : 0xfff5f7fa);
-        if (g_tab == 0) text(x + w - 200, ry, 80, row_h, out ? L"sold out" : std::to_wstring(r.quantity) + L" left", 13, 0xffaeb7c2);
-        text(x + w - 110, ry, 90, row_h, std::to_wstring(r.price) + L" Cash", 15, 0xffe8c66a);
+        text(x + 24, ry, w - 260, row_h, r.name, 15, out ? 0xff7d848c : 0xfff5f7fa);
+        if (g_tab == 0) text(x + w - 220, ry, 80, row_h, out ? L"sold out" : std::to_wstring(r.quantity) + L" left", 13, 0xffaeb7c2);
+        // The button that buys or sells this row, with the price on it.
+        Area button{x + w - 140, ry + 2, 122, row_h - 6, Hit::action, i};
+        bool hover = !out && button.contains(g_mouse_x, g_mouse_y);
+        box(ANY_GPU_ROUND_RECT, button.x, button.y, button.w, button.h, out ? 0xff2a2e35 : hover ? 0xff4f8a3c : 0xff3b6b2e, 4);
+        text(button.x, button.y, button.w, button.h, (g_tab == 0 ? L"Buy  " : L"Sell  ") + std::to_wstring(r.price), 14,
+             out ? 0xff7d848c : 0xfffff3c4, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+        if (!out) g_areas.push_back(button);
     }
     std::wstring restock = L"Restock in " + std::to_wstring(v.restock_in) + (v.restock_in == 1 ? L" day" : L" days") + L" (day " +
                            std::to_wstring(v.days) + L" of this world)";
     text(x + 20, y + h - 84, w - 40, 22, v.status, 15, 0xff9fd39a);
     text(x + 20, y + h - 58, w - 40, 20, restock, 13, 0xffaeb7c2);
-    text(x + 20, y + h - 34, w - 40, 20, L"Up/Down choose   Left/Right Buy or Sell   Enter confirm   Esc close", 13, 0xffaeb7c2);
+    text(x + 20, y + h - 34, w - 40, 20, L"Click Buy or Sell (or Up/Down and Enter)   Wheel scrolls   Esc closes", 13, 0xffaeb7c2);
+    // The game hides the Windows pointer in play, so the shop draws its own.
+    AnyGpuPointV1 arrow[3] = {{g_mouse_x, g_mouse_y}, {g_mouse_x, g_mouse_y + 18}, {g_mouse_x + 12, g_mouse_y + 13}};
+    AnyGpuCommandV1 c;
+    c.kind = ANY_GPU_POLYGON; c.points = arrow; c.point_count = 3; c.color = 0xfff5f7fa;
+    gpu->emit(&c);
+    c.flags = ANY_GPU_STROKE; c.color = 0xff101214; c.stroke = 1.5f;
+    gpu->emit(&c);
 }
 
 void draw(const AnyFrameV1* f, void*) {
     if (!f || !gpu) return;
     if (session) { AnySessionStateV1 s; if (session->copy(&s)) g_mode = s.mode; }
     std::lock_guard lock(g_ui_mutex);
+    g_frame_w = float(f->width); g_frame_h = float(f->height);
     bool live = g_ready && f->focused && gameplay() && hosting() && career_mode();
     if (!live) { if (g_open) close_shop(); return; }
     ULONGLONG now = GetTickCount64();
@@ -803,7 +864,7 @@ void draw(const AnyFrameV1* f, void*) {
     View v;
     { std::lock_guard view_lock(g_view_mutex); v = g_view; }
     if (g_open && !in_range(v, g_local)) close_shop();
-    if (g_open) { draw_shop(f, v); return; }
+    if (g_open) { host.capture_input(1); draw_shop(f, v); return; }
     if (!v.placed || !g_local.ok) return;
     float w = 460, x = (float(f->width) - w) / 2;
     if (in_range(v, g_local)) {
@@ -833,6 +894,30 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     }
     uint32_t trade = controls && trade_action ? controls->key(trade_action) : uint32_t('J');
     if (g_open) {   // the shop has the keyboard and mouse
+        if (e->kind == ANY_MOUSE_MOVE) { mouse_to_frame(e->x, e->y); return 1; }
+        if (e->kind == ANY_MOUSE_WHEEL || e->kind == ANY_MOUSE_DOWN) {
+            View v;
+            { std::lock_guard view_lock(g_view_mutex); v = g_view; }
+            const auto& rows = g_tab == 0 ? v.buy : v.sell;
+            if (e->kind == ANY_MOUSE_WHEEL) {
+                int step = e->wheel > 0 ? -1 : 1;
+                g_first = std::max(0, g_first + step);
+                g_cursor = std::clamp(g_cursor + step, 0, std::max(0, int(rows.size()) - 1));
+                return 1;
+            }
+            if (e->button == 2) { close_shop(); return 1; }   // right click closes
+            if (e->button != 1) return 1;
+            mouse_to_frame(e->x, e->y);
+            for (const Area& a : g_areas) {
+                if (!a.contains(g_mouse_x, g_mouse_y)) continue;
+                if (a.kind == Hit::close) close_shop();
+                else if (a.kind == Hit::tab) { if (g_tab != a.index) { g_tab = a.index; g_cursor = 0; g_first = 0; } }
+                else if (a.kind == Hit::row) g_cursor = a.index;
+                else if (a.index < int(rows.size())) { g_cursor = a.index; post(g_tab == 0 ? Job::buy : Job::sell, rows[size_t(a.index)].key); }
+                break;
+            }
+            return 1;
+        }
         if (e->key < 256 && e->kind == ANY_KEY_UP) held[e->key] = false;
         if (e->kind != ANY_KEY_DOWN || e->key >= 256) return 1;
         uint32_t k = e->key;
@@ -844,7 +929,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
         if (k == VK_ESCAPE || (k == trade && !repeat)) close_shop();
         else if (k == VK_UP || k == 'W') g_cursor = std::max(0, g_cursor - 1);
         else if (k == VK_DOWN || k == 'S') g_cursor = std::min(std::max(0, int(rows.size()) - 1), g_cursor + 1);
-        else if ((k == VK_LEFT || k == VK_RIGHT || k == 'A' || k == 'D' || k == VK_TAB) && !repeat) { g_tab ^= 1; g_cursor = 0; }
+        else if ((k == VK_LEFT || k == VK_RIGHT || k == 'A' || k == 'D' || k == VK_TAB) && !repeat) { g_tab ^= 1; g_cursor = 0; g_first = 0; }
         else if ((k == VK_RETURN || k == VK_SPACE || k == 'E') && !repeat && g_cursor < int(rows.size()))
             post(g_tab == 0 ? Job::buy : Job::sell, rows[size_t(g_cursor)].key);
         return 1;
@@ -860,8 +945,9 @@ uint32_t on_input(const AnyInputV1* e, void*) {
         { std::lock_guard view_lock(g_view_mutex); v = g_view; }
         if (!hosting() || !career_mode() || !in_range(v, g_local)) return 0;
         was = true;
-        g_open = true; g_shop_open = true; g_tab = 0; g_cursor = 0;
+        g_open = true; g_shop_open = true; g_tab = 0; g_cursor = 0; g_first = 0;
         host.capture_input(1);
+        centre_pointer();
         log(0, "ANYCAREER_SHOP opened=1 buy_rows=%d", int(v.buy.size()));
         return 1;
     }
