@@ -5,11 +5,11 @@
 
 namespace anymaker::sym {
 
-inline constexpr const char* steam_build_id = "25904830";
-inline constexpr uint32_t game_exe_pe_timestamp = 1791886276u;
-inline constexpr uint64_t game_gcl_size = 82528301ull;
-inline constexpr const char* game_exe_sha256 = "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0";
-inline constexpr const char* game_gcl_sha256 = "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355";
+inline constexpr const char* steam_build_id = "26113663";
+inline constexpr uint32_t game_exe_pe_timestamp = 1792603919u;
+inline constexpr uint64_t game_gcl_size = 82572920ull;
+inline constexpr const char* game_exe_sha256 = "097e1167477587c51a3b93ab7e7843382d99d30010678c9bd89a2fee648fec23";
+inline constexpr const char* game_gcl_sha256 = "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22";
 
 // ---- functions (gcl, JIT-loaded). Resolve with anymaker::resolve(desc) / anymaker::cell_of(desc).
 // FN:() server.tick (server)  [direct, via_caller]
@@ -49,10 +49,10 @@ inline constexpr int vehicle_container_get_vehicle_by_id_vslot = 29;  // zero-ba
 inline constexpr func_desc entity_get_transform{"(mat34) server_scene.entity.get_transform (const server_scene.entity)", "", {"", {}, 0}, "48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 5d 00 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05 54 00 00 00 48 8b 4c 24 28 48 89 01 8b 05 36 00 00 00 89 41 40", 120u, 5};
 inline constexpr int entity_get_transform_vslot = 5;  // zero-based slot in server_scene.entity's method table, -1 if not virtual
 // FN:() server_scene.actor.damage (server_scene.actor, server_scene, const f64, const server_scene.actor_damage_src)  [direct, via_caller, via_typeinfo]
-inline constexpr func_desc actor_damage{"() server_scene.actor.damage (server_scene.actor, server_scene, const f64, const server_scene.actor_damage_src)", "53 55 56 48 81 ec 40 01 00 00 48 89 8c 24 b0 00 00 00 48 89 94 24 b8 00 00 00 4c 89 84 24 c0 00 00 00 4c", {"53 55 56 57 48 81 ec a8 00 00 00 48 89 4c 24 58 48 89 54 24 60 4c 89 44 24 68 4c 89 4c 24 70 48 8d 44 24 78 48 8d 19", {840u}, 1}, "53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 a4 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b", 448u, 99};
+inline constexpr func_desc actor_damage{"() server_scene.actor.damage (server_scene.actor, server_scene, const f64, const server_scene.actor_damage_src)", "53 55 56 48 81 ec 40 01 00 00 48 89 8c 24 b0 00 00 00 48 89 94 24 b8 00 00 00 4c 89 84 24 c0 00 00 00 4c", {"53 55 56 57 48 81 ec a8 00 00 00 48 89 4c 24 58 48 89 54 24 60 4c 89 44 24 68 4c 89 4c 24 70 48 8d 44 24 78 48 8d 19", {840u}, 1}, "53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 ac 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b", 456u, 99};
 inline constexpr int actor_damage_vslot = 99;  // zero-based slot in server_scene.actor's method table, -1 if not virtual
 // FN:(ptr<server_scene.inventory>) server_scene.actor.get_inventory (server_scene.actor)  [via_typeinfo]
-inline constexpr func_desc actor_get_inventory{"(ptr<server_scene.inventory>) server_scene.actor.get_inventory (server_scene.actor)", "", {"", {}, 0}, "53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 a4 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b", 448u, 97};
+inline constexpr func_desc actor_get_inventory{"(ptr<server_scene.inventory>) server_scene.actor.get_inventory (server_scene.actor)", "", {"", {}, 0}, "53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 ac 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b", 456u, 97};
 inline constexpr int actor_get_inventory_vslot = 97;  // zero-based slot in server_scene.actor's method table, -1 if not virtual
 // FN:() mm_ui.begin (mm_ui)  [direct, via_caller]
 inline constexpr func_desc mm_ui_begin{"() mm_ui.begin (mm_ui)", "53 55 56 48 81 ec 30 02 00 00 48 89 8c 24 b8 01 00 00 8b 05 e0 15 00 00 48 8d 94 24 c0 01 00 00", {"53 55 56 48 81 ec e0 01 00 00 48 8b 05 97 29 00 00 48 8d 08 48 8b 05 95 29 00 00 ff 10 48 8b 2d", {10672u}, 1}, "", 0u, -1};
@@ -66,8 +66,8 @@ inline constexpr int mm_ui_button_vslot = -1;  // zero-based slot in mm_ui's met
 // FN:() audio_manager.play (audio_manager, const e_audio_effect, const e_audio_group)  [direct, via_caller]
 inline constexpr func_desc audio_manager_play{"() audio_manager.play (audio_manager, const e_audio_effect, const e_audio_group)", "53 48 83 ec 70 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 8b 02 48 8d 54 24 40 48 8d 89 88 00", {"48 83 ec 38 48 89 4c 24 20 48 8d 05 58 00 00 00 48 8b 15 61 00 00 00 48 89 4c 24 28 48 89 c1 ff", {144u}, 1}, "", 0u, -1};
 inline constexpr int audio_manager_play_vslot = -1;  // zero-based slot in audio_manager's method table, -1 if not virtual
-// FN:() server.save_game (server, const string)  [cell_chain, direct]
-inline constexpr func_desc server_save_game{"() server.save_game (server, const string)", "53 55 48 83 ec 58 48 89 4c 24 20 48 89 54 24 28 48 8d 44 24 30 48 8d 1d 54 00 00 00 48 8b 2d 55", {"53 55 56 57 48 81 ec 08 05 00 00 48 89 8c 24 68 04 00 00 48 89 94 24 70 04 00 00 4c 89 84 24 78", {6152u, 216u}, 2}, "", 0u, -1};
+// FN:() server.save_game (server, const string)  [direct, via_caller]
+inline constexpr func_desc server_save_game{"() server.save_game (server, const string)", "53 55 48 83 ec 58 48 89 4c 24 20 48 89 54 24 28 48 8d 44 24 30 48 8d 1d 54 00 00 00 48 8b 2d 55", {"53 55 48 83 ec 68 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8d 82 18 05 00 00 49 8d 18 48 8b 2d 9a 00 00 00 48 89 4c 24 38 48 89 54 24 40 48 89 c1 48 89 da 4c 89 44 24 48 ff 55 00 8a 05 74 00 00 00 48 8b 54 24 40 88 82 34 05 00 00 48 8b 05 72 00 00 00 ff 10 48 8b 05 71 00 00 00 48 8b 40 08 48 8d 00 4c 8b 44 24 48 49 8d 10 48 8b 0d 63 00 00 00 48 89 44 24 50 48 89 4c 24 58 48 8b 44 24 58 48 8b 4c 24 50 ff 10 48 8b 05 4e 00 00 00 ff 10 48 8b 4c 24 38 48 8d 09 48 8d 15 19 00 00 00 48 8b 05 3e 00 00 00 ff 10 48 83 c4 68 5d 5b c3 00 00 00 00 00 01 00", {216u}, 1}, "", 0u, -1};
 inline constexpr int server_save_game_vslot = -1;  // zero-based slot in server's method table, -1 if not virtual
 // FN:() server_scene.save_data.create_scene_from_data (server_scene.save_data, server_scene)  [direct, via_caller]
 inline constexpr func_desc save_create_scene_from_data{"() server_scene.save_data.create_scene_from_data (server_scene.save_data, server_scene)", "53 55 56 48 83 ec 40 48 89 4c 24 20 48 89 54 24 28 48 8d 42 48 48 8d 19 48 8b 6a 48 48 8b ad 80 00 00 00 48 8b 35 8e", {"53 55 56 48 81 ec 90 06 00 00 48 89 8c 24 c8 04 00 00 48 89 94 24 d0 04 00 00 4c 89 84 24 d8 04", {5496u}, 1}, "", 0u, -1};
@@ -98,15 +98,15 @@ inline constexpr func_desc inventory_definitions_add_definitions{"() inventory_d
 inline constexpr int inventory_definitions_add_definitions_vslot = -1;  // zero-based slot in inventory_definition_container's method table, -1 if not virtual
 
 // ---- natives (game.exe RVAs). Evidence: metadata (static scan) and/or runtime (call cells).
-inline constexpr uint32_t string_ctor_cstr_rva = 0x4f050;  // N:() $string_ctor_cstr (string, const uptr) [metadata]
-inline constexpr uint32_t string_dtor_rva = 0x4f1d0;  // N:() $string_dtor (string) [metadata]
-inline constexpr uint32_t string_length_rva = 0x25e10;  // N:(s32) string.length (const string) [metadata]
-inline constexpr uint32_t file_write_string_rva = 0x3f0b0;  // N:(bool) file.write_string (const file.path, const string) [metadata]
-inline constexpr uint32_t file_read_string_rva = 0x3f080;  // N:(bool) file.read_string (const file.path, string) [metadata]
-inline constexpr uint32_t file_get_is_exists_rva = 0x3f140;  // N:(bool) file.get_is_exists (const file.path) [metadata]
+inline constexpr uint32_t string_ctor_cstr_rva = 0x4ee10;  // N:() $string_ctor_cstr (string, const uptr) [metadata]
+inline constexpr uint32_t string_dtor_rva = 0x4ef90;  // N:() $string_dtor (string) [metadata]
+inline constexpr uint32_t string_length_rva = 0x25bd0;  // N:(s32) string.length (const string) [metadata]
+inline constexpr uint32_t file_write_string_rva = 0x3ee70;  // N:(bool) file.write_string (const file.path, const string) [metadata]
+inline constexpr uint32_t file_read_string_rva = 0x3ee40;  // N:(bool) file.read_string (const file.path, string) [metadata]
+inline constexpr uint32_t file_get_is_exists_rva = 0x3ef00;  // N:(bool) file.get_is_exists (const file.path) [metadata]
 
 // ---- globals: address = slot at anchor+slot_offset (anchors.json; runtime-validated layout)
-inline constexpr global_desc g_server{"g_server", "48 83 ec 48 48 89 4c 24 20 48 89 54 24 28 48 8d 8a d0 43 00 00 48 8b 05 bc 00 00 00 48 89 54 24", 224u};  // G:g_server
+inline constexpr global_desc g_server{"g_server", "53 55 48 83 ec 68 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8d 82 18 05 00 00 49 8d 18 48 8b 2d 9a 00 00 00 48 89 4c 24 38 48 89 54 24 40 48 89 c1 48 89 da 4c 89 44 24 48 ff 55 00 8a 05 74 00 00 00 48 8b 54 24 40 88 82 34 05 00 00 48 8b 05 72 00 00 00 ff 10 48 8b 05 71 00 00 00 48 8b 40 08 48 8d 00 4c 8b 44 24 48 49 8d 10 48 8b 0d 63 00 00 00 48 89 44 24 50 48 89 4c 24 58 48 8b 44 24 58 48 8b 4c 24 50 ff 10 48 8b 05 4e 00 00 00 ff 10 48 8b 4c 24 38 48 8d 09 48 8d 15 19 00 00 00 48 8b 05 3e 00 00 00 ff 10 48 83 c4 68 5d 5b c3 00 00 00 00 00 01 00", 208u};  // G:g_server
 inline constexpr global_desc g_client{"g_client", "48 83 ec 38 48 89 4c 24 20 48 89 54 24 28 48 8b 05 4b 00 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f", 96u};  // G:g_client
 inline constexpr global_desc g_settings{"g_settings", "48 83 ec 08 48 89 0c 24 48 8b 05 11 00 00 00 8b 40 04 89 01 e9 00 00 00 00 48 83 c4 08 c3 00 00", 32u};  // G:g_settings
 inline constexpr global_desc g_state_manager{"g_state_manager", "53 55 48 81 ec 88 00 00 00 48 89 4c 24 30 48 89 54 24 38 4c 89 44 24 40 48 8b 05 c1 00 00 00 48", 248u};  // G:g_state_manager
