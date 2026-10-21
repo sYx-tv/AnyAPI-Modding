@@ -14,7 +14,7 @@ cbuffer Frame : register(b0) {
     float4 params;     // stars, moon brightness, moonlight, milky way
     float4 sun_light;  // game sun colour; w: sun disc strength
     float4 sky_light;  // game sky colour; w: cloud amount
-    float4 clouds;     // wind x, wind z, drift (km), daylight 0..1
+    float4 clouds;     // x, z: camera in the cloud field (cells); y: cloud base above the camera (m); w: daylight 0..1
 };
 Texture2D depth : register(t0);   // reversed: sky is 0
 Texture2D normals : register(t1); // gbuffer_1: world normal
@@ -79,29 +79,59 @@ float3 sun_disc(float3 d, float pixel) {
     float3 halo = sun_light.rgb * (exp(-angle * 60) * .5 + exp(-angle * 12) * .06);
     return min(disc + halo, 60) * smoothstep(-.03, .02, s.y);
 }
-float cloud_noise(float2 p) {
-    float n = 0, a = .5;
-    [unroll] for (int i = 0; i < 5; ++i) { n += a * value_noise(float3(p, i * 3.7)); p = p * 2.03 + float2(1.7, 9.2); a *= .5; }
-    return n / .96875;
+// Cloud field noise. The hash wraps every 256 cells and every octave doubles the
+// frequency with whole-cell offsets, so the whole field repeats every 256 cells and
+// the CPU can wrap the camera's position there without a visible jump.
+static const float cloud_period = 256, cloud_cell = 1400;
+float cloud_hash(float2 i) {
+    i = i - cloud_period * floor(i / cloud_period);
+    float3 q = frac(float3(i.xyx) * float3(.1031, .1030, .0973));
+    q += dot(q, q.yzx + 33.33);
+    return frac((q.x + q.y) * q.z);
 }
-// One cloud layer about 1.5 km up. Lit by the sun by day and the moon by night,
-// with the game's sky colour as ambient, so dawn and dusk tint it too.
-float4 cloud_layer(float3 d) {
-    if (sky_light.w <= 0 || d.y <= .02) return 0;
-    float2 wind = clouds.xy * clouds.z;
-    float2 p = d.xz / d.y * 1.5 * .55 + wind;
-    float threshold = .72 - .18 * sky_light.w;
-    float density = saturate((cloud_noise(p) - threshold) / .22);
+float cloud_value(float2 p) {
+    float2 i = floor(p), f = frac(p); f = f * f * (3 - 2 * f);
+    return lerp(lerp(cloud_hash(i), cloud_hash(i + float2(1, 0)), f.x), lerp(cloud_hash(i + float2(0, 1)), cloud_hash(i + float2(1, 1)), f.x), f.y);
+}
+// footprint: noise cells covered by one pixel. Octaves finer than a pixel fade
+// out instead of shimmering, so distant clouds stay soft rather than sparkling.
+float cloud_noise(float2 p, float footprint) {
+    // A gentle domain warp turns round blobs into streaky, wind-blown shapes.
+    p += float2(cloud_value(p + float2(17, 3)), cloud_value(p + float2(5, 29))) * .35;
+    float n = 0, a = .5, w = 0, cells = footprint;
+    [unroll] for (int i = 0; i < 6; ++i) {
+        float k = a * saturate(1.5 - cells * 2);
+        n += k * cloud_value(p); w += a;
+        p = p * 2 + float2(37, 11); a *= .5; cells *= 2;
+    }
+    return n / w;
+}
+// One cloud layer about 1.5 km up, fixed in the world: it scrolls past as the
+// player travels and drifts with the wind. Lit by the sun by day and the moon by
+// night, with the game's sky colour as ambient, so dawn and dusk tint it too.
+// Far clouds thin out so the game's own horizon haze shows through them.
+float4 cloud_layer(float3 d, float pixel) {
+    float height = clouds.y;
+    if (sky_light.w <= 0 || d.y <= .005 || height < 100) return 0;
+    float distance = height / d.y;
+    float fade = exp(-distance / 22000) * smoothstep(.005, .05, d.y) * saturate((height - 100) / 400);
+    if (fade < .01) return 0;
+    float2 p = clouds.xz + d.xz * distance / cloud_cell;
+    float footprint = pixel * distance / (cloud_cell * max(d.y, .05));
+    float threshold = .62 - .14 * sky_light.w;
+    float n = cloud_noise(p, footprint);
+    float density = smoothstep(0, 1, saturate((n - threshold) / .1));
     if (density <= 0) return 0;
     float daylight = clouds.w;
     float3 light = daylight > 0 ? normalize(sun.xyz) : normalize(moon.xyz);
     // Self-shadow: denser cloud toward the light means a darker base.
-    float toward = saturate((cloud_noise(p + light.xz * .12) - threshold) / .22);
-    float lit = lerp(1, .45, saturate(toward - density * .5));
-    float forward = pow(saturate(dot(d, light)), 6) * (1 - density) * 1.5;   // silver lining
+    float toward = saturate((cloud_noise(p + light.xz * .03, footprint) - threshold) / .1);
+    float lit = lerp(1, .5, saturate(toward - density * .4));
+    float edge = 1 - density;
+    float forward = pow(saturate(dot(d, light)), 8) * edge * 2;   // silver lining
     float3 key = sun_light.rgb * daylight + float3(.55, .65, .9) * .15 * params.z * moon.w * sun.w;
-    float3 colour = .9 * (key * (lit + forward) + sky_light.rgb * .8) * .4;
-    float alpha = density * .9 * smoothstep(.02, .12, d.y);
+    float3 colour = (key * (lit * .35 + forward * .3) + sky_light.rgb * (.3 + .15 * edge));
+    float alpha = density * .85 * fade;
     return float4(colour * alpha, alpha);
 }
 float4 Sky(Varying v) : SV_Target {
@@ -122,7 +152,7 @@ float4 Sky(Varying v) : SV_Target {
             behind = ((stars(c, pixel) * params.x + milky_way(c) * params.w) * horizon + moon_disc(d, pixel) * params.y * moon.w) * night;
         }
         if (sun_light.w > 0) behind += sun_disc(d, pixel) * sun_light.w;
-        float4 cloud = cloud_layer(d);
+        float4 cloud = cloud_layer(d, pixel);
         return float4(cloud.rgb + behind * (1 - cloud.a), cloud.a);
     } else if (scene_depth > 0 && night > 0) {
         // Moonlight: unshadowed (the game has no shadow map for it).
