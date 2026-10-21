@@ -1,8 +1,8 @@
-# AnyAPI 0.40.0 for Anymaker 0.1.27
+# AnyAPI 0.40.1 for Anymaker 0.1.27
 
 Anymaker 0.1.27 (Steam build 26113663) changed the game files, so AnyAPI 0.39.2 turns itself
-off on it. AnyAPI 0.40.0 is the API ported to the new build, with a few fixes the port audit
-found.
+off on it. AnyAPI 0.40.1 is the API ported to the new build, with a few fixes the port audit
+found and the graphics bug pass (0.40.0 was the port alone and was never published).
 
 Update AnyAPI and your mods in the manager, then restart the game. The manager installs the API
 that matches your game files.
@@ -12,7 +12,7 @@ only run on the exact build they were made for:
 
 - **AnyHelpers 1.0.2** (with AnyInventory, AnyMirror, AnyBalance and MCCode)
 - **AnyEngineParts 1.0.1** (with EngineSound 0.4.1 and GpsPart)
-- **AnyGraphics 1.0.3** (with ThirdPerson)
+- **AnyGraphics 1.0.3** (with AnyGraphics 0.32.0 and ThirdPerson)
 - **AnyMap 1.0.1**
 - **AnyCombat 0.1.1**
 
@@ -34,6 +34,22 @@ AnyStorage, AnyClock and AnyQuickWheel are unchanged and gain the new build in t
   bunker).
 - **AnyMap:** creature blips resolve through a code signature that exists in this build, not
   only the fallback.
+
+## Graphics (AnyAPI 0.40.1, AnyGraphics 0.32.0)
+
+- **Sub-menus:** the Graphics section keeps the main choices on top and puts the rest in groups
+  you open with Show and close with Hide. Changing anything in a group switches to Custom.
+- **New looks:** the Soft & warm preset (Soft film tone curve, golden highlights, cool shade),
+  Light colour (tints the game's own sun and shade lights, keeping their brightness) and Wind in
+  trees (how hard trees and grass sway; only the look changes).
+- **Sun shafts:** no more pumping as the camera moves, no glowing wall past the last shadow
+  cascade, no blocky distant ground, and filtered shadows so foliage stops speckling.
+- **Contact shadows:** no self-shadowing at grazing angles, no double darkening over the game's
+  shadows, nothing on the ocean, softer edges.
+- **Clouds:** the cloud layer is fixed in the world and drifts with the wind instead of
+  following the camera. TAA + jitter is now TAA extra smooth.
+- New for mod authors: scene controls version 3 (`anyapi_scene_controls_v3.h`) with light tints
+  and wind scale.
 
 ## Other fixes in this release
 
