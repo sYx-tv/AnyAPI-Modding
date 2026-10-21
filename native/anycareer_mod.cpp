@@ -27,7 +27,8 @@
 //      the Mod Shop (parts other mods add: any part the game's own rom/data/vehicle_component_definitions.json
 //      doesn't list; only when there are some). Each stands at the nearest spot of his kind of place to the Mechanic
 //      (town, industrial, farm, ...; logic::place_shop), at least 120 m from the others, placed once per world and
-//      saved with it, with his own AnyMap pin. Same shop screen, Buy and Sell only (the Jobs board is the
+//      saved with it, with his own AnyMap pin. Also the Outfitter (clothing) and the Gunsmith (guns and ammo, a bit
+//      dearer). The Mechanic is called Hayzeco Autoparts on screen (Nate). Same shop screen, Buy and Sell only (the Jobs board is the
 //      Mechanic's). Items are bought as themselves (create_item with their definition), parts as part items.
 //   Delivery jobs: the Mechanic's Jobs tab shows three jobs a day ("bring 3 x Bandage to a town, 1.2 km"), made from
 //      the world seed and the day number: findable items (medical, food, mechanical, electronics, survival,
@@ -621,7 +622,7 @@ void build_stock(uint8_t* scene) {
     auto add = [&](uint8_t* def, bool part) {
         logic::Entry e = entry_of(def, part);
         if (e.id.empty() || def == T.cash_def || def == T.part_item_def) return;
-        if (!part && (e.cls == "ammo_box" || e.id.rfind("vehicle_editor", 0) == 0 || e.cls.rfind("vehicle_editor", 0) == 0)) return;
+        if (!part && (e.id.rfind("vehicle_editor", 0) == 0 || e.cls.rfind("vehicle_editor", 0) == 0)) return;
         logic::Goods g = goods_of(e, def);
         bool can = g.modded ? std::max(e.tech_tier, 1) <= level : logic::findable(e, level);
         if (!can) return;
@@ -878,7 +879,7 @@ void take(uint8_t* scene, const Work& w) {
     uint8_t* peer = host_peer(scene);
     auto fail = [&](const char* why, const wchar_t* say) { T.status = say; log(1, "ANYCAREER_TAKE ok=0 reason=%s offer=%d", why, w.key); };
     if (!peer) return fail("no_host_player", L"You need to be alive to take a job.");
-    if (!near_trader(peer)) return fail("too_far", L"Walk back to the Mechanic to take a job.");
+    if (!near_trader(peer)) return fail("too_far", L"Walk back to Hayzeco Autoparts to take a job.");
     if (T.world.job_state) return fail("job_in_hand", L"Finish or abandon your job first.");
     if (w.key < 0 || w.key >= int(T.offers.size()) || T.offers_board != T.world.board) return fail("no_such_offer", L"The board changed. Pick again.");
     if (std::find(T.world.taken.begin(), T.world.taken.end(), w.key) != T.world.taken.end()) return fail("taken", L"That job is taken.");
@@ -1012,7 +1013,7 @@ void teleport(uint8_t* scene, const Work&) {
     TeleportEvent e{};
     e.position = {at.x + 3, at.y + 2, at.z + 3};   // beside the spot, a little up, so you land on the ground
     teleport_event(T.server, data, &e);
-    T.status = drop_off ? L"Teleported to the drop-off (test key)." : L"Teleported to the Mechanic (test key).";
+    T.status = drop_off ? L"Teleported to the drop-off (test key)." : L"Teleported to Hayzeco Autoparts (test key).";
     T.tp_check = GetTickCount64() + 1500; T.tp_to = {e.position.x, e.position.y, e.position.z};
     log(0, "ANYCAREER_TELEPORT ok=1 to=%s at=(%.0f, %.0f, %.0f)", drop_off ? "dropoff" : "mechanic", e.position.x, e.position.y, e.position.z);
 }
@@ -1342,7 +1343,7 @@ int g_shop = 0;                                   // the trader whose screen is 
 int g_tab = 0, g_cursor = 0;                      // tabs: 0 Buy, 1 Sell, 2 Jobs
 int64_t g_seen_board = -1;
 ULONGLONG g_toast_until = 0;
-std::wstring g_toast = L"New jobs on the Mechanic's board";
+std::wstring g_toast = L"New jobs on the Hayzeco Autoparts board";
 Local g_local;
 ULONGLONG g_local_at = 0;
 // Mouse: the pointer in frame pixels, and the clickable areas the last shop frame drew.
@@ -1394,8 +1395,10 @@ int shop_in_range(const View& v, const Local& l) {
     }
     return best;
 }
-const wchar_t* const kBuysText[logic::kShopCount] = {L"mechanical and electrical parts and items", L"building parts", L"anything, at scrap price",
-                                                     L"food, drink and survival supplies", L"medical supplies", L"boat and plane parts", L"parts other mods add"};
+constexpr const wchar_t* kBuysText[] = {L"mechanical and electrical parts and items", L"building parts", L"anything, at scrap price",
+                                                     L"food, drink and survival supplies", L"medical supplies", L"boat and plane parts", L"parts other mods add",
+                                                     L"clothing", L"guns and ammo"};
+static_assert(sizeof(kBuysText) / sizeof(kBuysText[0]) == logic::kShopCount, "one buys text per trader");
 int tab_count() { return g_shop == logic::kMechanic ? 3 : 2; }   // only the Mechanic has the Jobs tab
 bool at_dropoff(const View& v, const Local& l) { return v.job_state && !v.job_kill && close_to(v.job_at, l); }   // kill jobs end at the Mechanic
 // Buy and Sell rows are the trader's the host stands at; until the server has caught up with the screen, none.
@@ -1527,7 +1530,9 @@ void update_drop_pin(const View* v) {
 bool g_shop_pin_shown[logic::kShopCount] = {};
 logic::Zone g_shop_pin_at[logic::kShopCount];
 void update_shop_pins(const View* v) {
-    static constexpr uint32_t kColors[logic::kShopCount] = {0xffe8c66a, 0xffd99a4e, 0xff9a8f80, 0xff7fc96b, 0xffe86a6a, 0xff6a9de8, 0xffb98ae8};
+    static constexpr uint32_t kColors[] = {0xffe8c66a, 0xffd99a4e, 0xff9a8f80, 0xff7fc96b, 0xffe86a6a, 0xff6a9de8, 0xffb98ae8,
+                                                             0xffe89ac8, 0xff8a6a4a};
+    static_assert(sizeof(kColors) / sizeof(kColors[0]) == logic::kShopCount, "one pin colour per trader");
     for (int s = 1; s < logic::kShopCount; ++s) {
         const char* id = logic::kShops[s].id;
         if (!v || !v->shops[s].placed) {
@@ -1563,7 +1568,7 @@ void update_pin(const View* v) {
     if (g_pin_shown && g_pin_at.x == v->trader.x && g_pin_at.z == v->trader.z) return;
     AnyMapPinV1 pin;
     pin.x = v->trader.x; pin.z = v->trader.z; pin.color = 0xffe8c66a;
-    strcpy_s(pin.owner, kModId); strcpy_s(pin.id, "mechanic"); strcpy_s(pin.label, "Mechanic (trader)");
+    strcpy_s(pin.owner, kModId); strcpy_s(pin.id, "mechanic"); strcpy_s(pin.label, "Hayzeco Autoparts (trader)");
     g_pin_shown = g_pins->set(&pin);
     g_pin_at = v->trader;
     log(g_pin_shown ? 0 : 1, "ANYCAREER_MAP pin_set=%d at=(%.0f, %.0f)", g_pin_shown ? 1 : 0, pin.x, pin.z);
@@ -1602,7 +1607,7 @@ void draw_shop(const AnyFrameV1* f, const View& v) {
     int first = g_first;
     if (rows.empty())
         text(x + 20, list_y, w - 40, row_h, g_tab < 2 && v.shop != g_shop ? L"..." : g_tab == 0 ? L"Nothing on the shelf right now."
-             : g_tab == 1 ? L"You carry nothing the " + wide(logic::kShops[g_shop].name) + L" buys (" + kBuysText[g_shop] + L")."
+             : g_tab == 1 ? L"Nothing you carry sells here (this trader buys " + std::wstring(kBuysText[g_shop]) + L")."
              : L"No jobs on the board right now. New ones come every day.", 15, 0xffaeb7c2);
     for (int i = first; i < int(rows.size()) && i < first + visible; ++i) {
         float ry = list_y + float(i - first) * row_h;
@@ -1666,7 +1671,7 @@ void draw(const AnyFrameV1* f, void*) {
     if (g_open && !(g_dropoff ? at_dropoff(v, g_local) : shop_in_range(v, g_local) == g_shop)) close_shop();
     update_pin(&v);
     if (v.board >= 0 && v.board != g_seen_board) {   // a new job board (not the one already there when the world loaded)
-        if (g_seen_board >= 0 && v.job_state == 0) { g_toast = L"New jobs on the Mechanic's board"; g_toast_until = now + 8000; }
+        if (g_seen_board >= 0 && v.job_state == 0) { g_toast = L"New jobs on the Hayzeco Autoparts board"; g_toast_until = now + 8000; }
         g_seen_board = v.board;
     }
     if (g_open) { host.capture_input(1); draw_shop(f, v); return; }
@@ -1696,7 +1701,7 @@ void draw(const AnyFrameV1* f, void*) {
         text(x, y, w, 34, g_toast, 16, 0xffe8c66a, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
     std::wstring prompt;
-    if (here >= 0) prompt = L"Press " + key_name() + L" to trade with the " + wide(logic::kShops[here].name);
+    if (here >= 0) prompt = L"Press " + key_name() + L" to trade with " + (here == logic::kMechanic ? L"" : L"the ") + wide(logic::kShops[here].name);
     else if (at_dropoff(v, g_local)) prompt = L"Press " + key_name() + (v.job_state == 1 ? L" to deliver" : L" to pick your reward");
     if (!prompt.empty()) {
         float y = float(f->height) * 0.62f;
@@ -1704,18 +1709,18 @@ void draw(const AnyFrameV1* f, void*) {
         text(x, y, w, 34, prompt, 16, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
     if (here < 0) {
-        std::wstring hint = L"Mechanic: " + wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.trader.x, v.trader.z));
+        std::wstring hint = L"Hayzeco Autoparts: " + wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.trader.x, v.trader.z));
         text(x, 8, w, 22, hint, 14, 0xffd8dde3, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
     if (v.job_state == 1 && v.job_kill) {
-        std::wstring hint = L"Kill job: " + std::to_wstring(v.job_have) + L" of " + v.job_text + L". Then back to the Mechanic.";
+        std::wstring hint = L"Kill job: " + std::to_wstring(v.job_have) + L" of " + v.job_text + L". Then back to Hayzeco Autoparts.";
         text(x - 100, 30, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     } else if (v.job_state == 1 && !at_dropoff(v, g_local)) {
         std::wstring hint = L"Delivery: " + v.job_text + L" (" + std::to_wstring(v.job_have) + L"/" + std::to_wstring(v.job_count) + L"), " +
                             wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.job_at.x, v.job_at.z));
         text(x - 100, 30, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     } else if (v.job_state == 2) {
-        text(x, 30, w, 22, v.job_kill ? L"Kill job done: pick your reward in the Mechanic's Jobs tab" : L"Delivered: pick your reward in the Mechanic's Jobs tab", 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+        text(x, 30, w, 22, v.job_kill ? L"Kill job done: pick your reward in the Hayzeco Autoparts Jobs tab" : L"Delivered: pick your reward in the Hayzeco Autoparts Jobs tab", 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
 }
 
@@ -1828,7 +1833,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     if (e->key == VK_F5) {
         View v;
         { std::lock_guard view_lock(g_view_mutex); v = g_view; }
-        if (v.job_state != 1 || v.job_kill) { g_toast = L"F5 needs a delivery job: take one in the Mechanic's Jobs tab"; g_toast_until = GetTickCount64() + 5000; return 1; }
+        if (v.job_state != 1 || v.job_kill) { g_toast = L"F5 needs a delivery job: take one in the Hayzeco Autoparts Jobs tab"; g_toast_until = GetTickCount64() + 5000; return 1; }
     }
     post(e->key == VK_F6 ? Job::teleport : e->key == VK_F3 ? Job::give_cash : e->key == VK_F5 ? Job::test_items : Job::price_list, 0);
     return 1;

@@ -250,6 +250,11 @@ int main() {
         Goods chip; chip.part = true; chip.loot_group = 7;
         Goods canteen; canteen.loot_group = 8;
         assert(shop_sells(kMechanic, chip) && shop_sells(kGrocer, canteen) && !shop_sells(kMechanic, canteen));
+        Goods coat; coat.loot_group = 3;
+        Goods gun; gun.loot_group = 4;
+        Goods rounds; rounds.loot_group = 5;
+        assert(shop_sells(kOutfitter, coat) && shop_sells(kGunsmith, gun) && shop_sells(kGunsmith, rounds) && !shop_sells(kGunsmith, coat));
+        assert(std::string(kShops[kMechanic].name) == "Hayzeco Autoparts" && std::string(kShops[kMechanic].id) == "mechanic");
         assert(shop_buys(kJunkyard, food) && shop_buys(kJunkyard, wall) && !shop_buys(kGrocer, engine));
         assert(sell_price(100, 15) == 15);
         auto ids = definition_ids("{\"definitions\": [{\"id\": \"wheel\"}, {\"id\": \"axle\", \"x\": {\"id\": \"inner\"}}, {\"id\": \"wheel\"}, {\"name\": 1}]}");

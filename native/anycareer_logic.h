@@ -274,7 +274,8 @@ inline int sell_price(int price, int pct = 32) { return std::max(1, price * pct 
 // ------------------------------------------------------------------ the traders
 // The Mechanic is first (the jobs board is his). Each trader stands at a kind of place, tried in order: the nearest
 // such spot to the Mechanic, at least kShopGap from the other traders and at most kShopReach away.
-enum Shop : int { kMechanic, kBuilder, kJunkyard, kGrocer, kMedic, kMarineAir, kModShop, kShopCount };
+// kMechanic is shown as "Hayzeco Autoparts" (Nate, 2026-10-21); its id stays "mechanic" for saves and pins.
+enum Shop : int { kMechanic, kBuilder, kJunkyard, kGrocer, kMedic, kMarineAir, kModShop, kOutfitter, kGunsmith, kShopCount };
 struct ShopKind {
     const char* id;
     const char* name;
@@ -283,15 +284,18 @@ struct ShopKind {
     int sell_pct;      // of the normal price, paid for what he buys
     bool daily;        // restocks every day (else every kRestockDays)
 };
-inline constexpr ShopKind kShops[kShopCount] = {
-    {"mechanic", "Mechanic", {"gas_station", nullptr, nullptr}, 100, 32, false},
+inline constexpr ShopKind kShops[] = {
+    {"mechanic", "Hayzeco Autoparts", {"gas_station", nullptr, nullptr}, 100, 32, false},
     {"builder", "Builder", {"industrial", "sawmill", "town"}, 100, 32, false},
     {"junkyard", "Junkyard", {"farm", "roadside", "industrial"}, 60, 15, true},
     {"grocer", "Grocer", {"town", "house", nullptr}, 100, 32, false},
     {"medic", "Medic", {"town", "office", "house"}, 100, 32, false},
     {"marine_air", "Marine & Air", {"roadside", "industrial", "town"}, 100, 32, false},
     {"mod_shop", "Mod Shop", {"office", "town", "house"}, 100, 32, false},
+    {"outfitter", "Outfitter", {"town", "house", "office"}, 100, 32, false},
+    {"gunsmith", "Gunsmith", {"roadside", "industrial", "town"}, 115, 32, false},
 };
+static_assert(sizeof(kShops) / sizeof(kShops[0]) == kShopCount, "one entry per trader");
 inline constexpr double kShopGap = 120, kShopReach = 5000;
 inline int shop_by_id(const std::string& id) {
     for (int i = 0; i < kShopCount; ++i) if (id == kShops[i].id) return i;
@@ -341,8 +345,8 @@ inline bool marine_air(const std::string& category, const std::string& id) {
 }
 
 // What a trader stocks and buys. `part`: a vehicle part (else an item); `building`: a building part; `modded`: a part
-// the game's own files don't list. Loot groups: 1 medical, 2 food, 6 mechanical, 7 electronics, 8 survival,
-// 9 construction. (0.1.27: parts are mechanical, electronics, construction or furniture; the only boat/plane
+// the game's own files don't list. Loot groups: 1 medical, 2 food, 3 clothing, 4 weapons, 5 ammo, 6 mechanical,
+// 7 electronics, 8 survival, 9 construction. (0.1.27: parts are mechanical, electronics, construction or furniture; the only boat/plane
 // category is "aircraft"; no item is in the construction group.)
 struct Goods { bool part = false, building = false, modded = false, marine_air = false; int32_t loot_group = 0; };
 inline bool shop_sells(int shop, const Goods& g) {
@@ -354,6 +358,8 @@ inline bool shop_sells(int shop, const Goods& g) {
     case kMedic: return !g.part && g.loot_group == 1;
     case kMarineAir: return g.part && g.marine_air && !g.modded;
     case kModShop: return g.part && g.modded;
+    case kOutfitter: return !g.part && g.loot_group == 3;
+    case kGunsmith: return !g.part && (g.loot_group == 4 || g.loot_group == 5);   // guns cost a bit more (price_pct 115)
     }
     return false;
 }
