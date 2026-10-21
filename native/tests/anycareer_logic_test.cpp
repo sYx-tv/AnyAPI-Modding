@@ -14,8 +14,22 @@ int main() {
     assert(!cash.empty());
     assetjson::Value v = assetjson::Parser(cash).parse();
     assert(v.get("id").text == kCashId && v.get("name").text == "Cash" && v.get("class").text == "ammo_box");
-    assert(v.get("gun_magazine_capacity").number == kCashStack && v.get("spawn_probability").number == 0);
-    assert(v.get("loot_group").text == "none" && v.get("tech_tier").number == 99 && v.get("category").text == "miscellaneous");
+    assert(v.get("gun_magazine_capacity").number == kCashStack && v.get("spawn_probability").number == 0.12);
+    assert(v.get("loot_group").text == "clothing" && v.get("tech_tier").number == 1 && v.get("category").text == "miscellaneous");
+    {
+        auto nl = assetjson::Parser(make_cash_entry(box, {}, nullptr, nullptr, false)).parse();
+        assert(nl.get("loot_group").text == "none" && nl.get("spawn_probability").number == 0 && nl.get("tech_tier").number == 99);
+    }
+    // Loot Cash: small amounts, mostly under 25, never over 250.
+    {
+        int small = 0, big = 0, lo = 1000, hi = 0;
+        for (uint64_t i = 0; i < 20000; ++i) {
+            int n = loot_cash_amount(mix(i));
+            lo = std::min(lo, n); hi = std::max(hi, n);
+            small += n <= 25; big += n > 120;
+        }
+        assert(lo >= 3 && hi <= 250 && hi > 120 && small > 10000 && small < 12500 && big > 300 && big < 900);
+    }
     assert(v.get("floor").get("physics_min").array.size() == 3);   // untouched fields survive
     assert(make_cash_entry("not json").empty() && make_cash_entry("[1]").empty());
 
