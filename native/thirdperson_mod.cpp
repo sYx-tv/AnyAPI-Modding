@@ -18,8 +18,8 @@
 // Controls: F5 toggles (rebindable in Controls under ThirdPerson when AnyHelpers is installed); Alt + mouse wheel
 // changes the follow distance while in third person. Settings: start in third person, follow distance.
 //
-// EXPERIMENTAL. Hooks a game function through the experimental SDK (thirdperson_bindings.h): Anymaker 0.1.25 /
-// Steam build 25904830 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks a game function through the experimental SDK (thirdperson_bindings.h): Anymaker 0.1.27 /
+// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"

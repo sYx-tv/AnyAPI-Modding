@@ -15,8 +15,8 @@
 // altitude sensor's server tick (for Dyno parts only) sums its vehicle's engines and feeds the recorder. Rendering
 // uses anyapi.gpu_draw. Single player / host: the engines and the part tick on the server of this game.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (dyno_bindings.h): Anymaker 0.1.25 / Steam build
-// 25904830 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (dyno_bindings.h): Anymaker 0.1.27 / Steam build
+// 26113663 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"

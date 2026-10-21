@@ -1,8 +1,8 @@
 # Dyno
 
 > Part of [AnyEngineParts](engine-parts.md). It hooks game functions directly through the
-> [experimental SDK](../../sdk/experimental/README.md), so it only activates on Anymaker 0.1.25 / Steam build
-> 25904830. **Single player / host only** for now.
+> [experimental SDK](../../sdk/experimental/README.md), so it only activates on Anymaker 0.1.27 / Steam build
+> 26113663. **Single player / host only** for now.
 
 The **Dyno** is a small sensor part that records your engine's power and torque and draws the curves on screen. Put it
 anywhere on a vehicle; an orange bar chart on its top tells it apart from the Compass and GPS Sensors.

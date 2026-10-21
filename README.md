@@ -44,7 +44,7 @@ installation is needed to build and test game-dependent features.
 
 | Package | Stable download | Requires |
 | --- | --- | --- |
-| AnyAPI | **0.38.0** | Anymaker 0.1.25 (0.36.0 for 0.1.24, 0.34.1 for 0.1.23) |
+| AnyAPI | **0.40.0** | Anymaker 0.1.27 (0.39.2 for 0.1.25, 0.36.0 for 0.1.24, 0.34.1 for 0.1.23) |
 | AnyHelpers, AnyStorage | 0.27.0 | API 0.27.0 |
 | AnyInventory | 0.28.0 | API 0.27.0 (modded items need 0.38.0) |
 | AnyMap | 0.27.2 | API 0.27.0 |
@@ -79,7 +79,7 @@ AnyAPI 0.34.1 fixes the [quick wheel](docs/mods/quick-wheel.md) refusing to equi
 
 ## Compatibility
 
-The current native profile (API 0.37.0) targets **Anymaker 0.1.25**, Steam build **25904830**,
+The current native profile (API 0.37.0) targets **Anymaker 0.1.27**, Steam build **26113663**,
 on **Windows x64**. API 0.36.0 remains for Anymaker 0.1.24 / Steam build 25826614 and API 0.34.1 for Anymaker 0.1.23 / Steam build 25755694. Exact executable and game-data fingerprints are recorded in
 [the build manifest](native/BUILD_MANIFEST.json). API ABI/service version numbers
 are compatibility contracts and remain part of SDK names.

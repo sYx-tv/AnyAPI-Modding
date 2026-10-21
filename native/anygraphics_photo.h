@@ -10,7 +10,7 @@
 // Photo controls change the scene effects only while photo mode is on and are not saved. Depth of field focuses on
 // the middle of the screen, so aim at the subject.
 //
-// EXPERIMENTAL (camera only): Anymaker 0.1.25 / Steam build 25904830. On any other build the camera is unavailable
+// EXPERIMENTAL (camera only): Anymaker 0.1.27 / Steam build 26113663. On any other build the camera is unavailable
 // and photo mode still hides the HUD and applies the photo controls.
 #include "anyapi_gpu_draw_v1.h"
 #include "anyapi_experimental.hpp"
