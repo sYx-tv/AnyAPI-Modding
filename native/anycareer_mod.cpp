@@ -42,7 +42,7 @@
 //
 // Everything is logged to anymaker_modding.log with an ANYCAREER prefix.
 //
-// EXPERIMENTAL. Experimental SDK bindings (anycareer_bindings.h): Anymaker 0.1.25 / Steam build 25904830 only.
+// EXPERIMENTAL. Experimental SDK bindings (anycareer_bindings.h): Anymaker 0.1.27 / Steam build 26113663 only.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -82,7 +82,7 @@ namespace {
 constexpr const char* kModId = "anycareer";
 using vehicle_reads::rd;
 
-// Layouts from the 0.1.25 reference (metadata).
+// Layouts from the 0.1.25 reference (metadata), unchanged in 0.1.27.
 namespace off {
 // server_scene
 constexpr ptrdiff_t server_world_seed = 72 + 24;    // m_world_seed (property_s32), its value
@@ -130,7 +130,7 @@ constexpr ptrdiff_t damage_src_actor = 0;           // m_actor_id_src (s32)
 constexpr int kPropertySetSlot = 5;                 // property_type_simple<T>.set in the property's method table
                                                     // (the slot AnyHelpers' property_type_simple<bool>.set binding uses)
 constexpr int32_t kStoreSystem = 1;                 // file.e_store.system (static inference; GpsPart uses it)
-constexpr uint32_t kRefDtorRva = 0x4ed40;           // N:() $ref_dtor (uptr) [metadata]
+constexpr uint32_t kRefDtorRva = 0x4eb00;           // N:() $ref_dtor (uptr) [metadata]
 constexpr int32_t kGiveAmount = 250;
 constexpr int32_t kMechanical = 6;                  // e_loot_group mechanical
 constexpr double kTradeRange = 30;                  // metres from the gas station spot (the building stands on it)
