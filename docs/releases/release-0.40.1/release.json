@@ -9,7 +9,7 @@
           "GclSha256": "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22"
         }
       ],
-      "Description": "Native mod framework for Anymaker 0.1.27; loads mod bundles (several mods in one DLL, each switchable in Mod Settings), adds menu v4 and scene controls v3 (light colour and wind for graphics mods), and draws lamp beams on AMD graphics cards too."
+      "Description": "Native mod framework for Anymaker 0.1.27; loads mod bundles (several mods in one DLL, each switchable in Mod Settings), adds menu v4 and v5 (hover explanations in Mod Settings) and scene controls v3 (light colour and wind for graphics mods), and draws lamp beams on AMD graphics cards too."
     },
     "AnyHelpers": {
       "MinimumApi": 46,

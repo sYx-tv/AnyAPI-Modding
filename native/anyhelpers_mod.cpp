@@ -1,7 +1,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
-#include "anyapi_menu_v4.h"
+#include "anyapi_menu_v5.h"
 #include "mod_controls_state.h"
 #include "anyhelpers_settings_state.h"
 #include <mutex>

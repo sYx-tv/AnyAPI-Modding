@@ -25,3 +25,10 @@ Include anyapi_menu_v4.h and query anyapi.menu version 4. The table points at th
 `button_row(id, label, buttons, count)`: a label plus 1-4 native buttons sharing the value column, for one-shot actions
 such as AnyHelpers' ADMIN tab. It returns the 1-based index of the button selected this frame, or 0. Like the v3 rows it
 works only inside a registered native section or tab draw callback, and button text is limited to 63 bytes.
+
+## Hovered row — anyapi.menu v5
+
+Include anyapi_menu_v5.h and query anyapi.menu version 5. The table points at the unchanged v4 table (`buttons`) and adds
+`hovered_row()`: the id, as passed to a row function, of the row whose value widget has the mouse or controller focus,
+or "" when none. Rows report it while drawing, so read it after drawing the row (AnyHelpers reads it at the end of its
+draw to show the hovered setting's description). The label column does not report hover; the value column does.
