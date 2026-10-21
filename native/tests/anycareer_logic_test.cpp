@@ -247,6 +247,9 @@ int main() {
         assert(shop_sells(kMechanic, engine) && !shop_sells(kMechanic, prop) && !shop_sells(kMechanic, mod) && !shop_sells(kMechanic, wall));
         assert(shop_sells(kBuilder, wall) && shop_sells(kGrocer, food) && !shop_sells(kMedic, food) && shop_sells(kMarineAir, prop));
         assert(shop_sells(kModShop, mod) && !shop_sells(kModShop, engine) && shop_sells(kJunkyard, engine) && !shop_sells(kJunkyard, wall));
+        Goods chip; chip.part = true; chip.loot_group = 7;
+        Goods canteen; canteen.loot_group = 8;
+        assert(shop_sells(kMechanic, chip) && shop_sells(kGrocer, canteen) && !shop_sells(kMechanic, canteen));
         assert(shop_buys(kJunkyard, food) && shop_buys(kJunkyard, wall) && !shop_buys(kGrocer, engine));
         assert(sell_price(100, 15) == 15);
         auto ids = definition_ids("{\"definitions\": [{\"id\": \"wheel\"}, {\"id\": \"axle\", \"x\": {\"id\": \"inner\"}}, {\"id\": \"wheel\"}, {\"name\": 1}]}");

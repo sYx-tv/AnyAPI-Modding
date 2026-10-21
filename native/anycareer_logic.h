@@ -341,14 +341,16 @@ inline bool marine_air(const std::string& category, const std::string& id) {
 }
 
 // What a trader stocks and buys. `part`: a vehicle part (else an item); `building`: a building part; `modded`: a part
-// the game's own files don't list. Loot groups: 1 medical, 2 food, 6 mechanical, 9 construction.
+// the game's own files don't list. Loot groups: 1 medical, 2 food, 6 mechanical, 7 electronics, 8 survival,
+// 9 construction. (0.1.27: parts are mechanical, electronics, construction or furniture; the only boat/plane
+// category is "aircraft"; no item is in the construction group.)
 struct Goods { bool part = false, building = false, modded = false, marine_air = false; int32_t loot_group = 0; };
 inline bool shop_sells(int shop, const Goods& g) {
     switch (shop) {
-    case kMechanic: return g.part && !g.building && g.loot_group == 6 && !g.marine_air && !g.modded;
+    case kMechanic: return g.part && !g.building && (g.loot_group == 6 || g.loot_group == 7) && !g.marine_air && !g.modded;
     case kBuilder: return (g.part && g.building && !g.modded) || (!g.part && g.loot_group == 9);
     case kJunkyard: return g.part && !g.building && g.loot_group > 0 && !g.modded;
-    case kGrocer: return !g.part && g.loot_group == 2;
+    case kGrocer: return !g.part && (g.loot_group == 2 || g.loot_group == 8);   // food, drink and survival supplies
     case kMedic: return !g.part && g.loot_group == 1;
     case kMarineAir: return g.part && g.marine_air && !g.modded;
     case kModShop: return g.part && g.modded;
@@ -357,7 +359,7 @@ inline bool shop_sells(int shop, const Goods& g) {
 }
 inline bool shop_buys(int shop, const Goods& g) {
     if (shop == kJunkyard) return g.loot_group > 0 || g.part;
-    if (shop == kMechanic) return g.loot_group == 6 && !g.marine_air && !g.modded && !g.building;   // parts and mechanical items
+    if (shop == kMechanic) return (g.loot_group == 6 || g.loot_group == 7) && !g.marine_air && !g.modded && !g.building;   // parts and items
     return shop_sells(shop, g);
 }
 

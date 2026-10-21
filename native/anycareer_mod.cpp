@@ -14,16 +14,16 @@
 //      the screen gives the distance and direction; within kTradeRange, J (rebindable in Mod Controls) opens the
 //      shop, and AnyMap (when installed) shows him as a pin through its anymap.pins service. Shop rows show the
 //      part's picture (AnyAPI item images). Mouse: click a row's Buy or Sell button, a tab or X; the wheel
-//      scrolls; right click closes. The keyboard works too. Buy: up to 16 mechanical parts that can drop at the world's loot level, 1-3 of each, picked from
+//      scrolls; right click closes. The keyboard works too. Buy: up to 16 mechanical and electrical parts that can drop at the world's loot level, 1-3 of each, picked from
 //      the world seed and the restock number; the shelf restocks every kRestockDays in-game days (midnights are
-//      counted while the world runs). Sell: mechanical parts and items you carry, for 40% of the trader's price.
+//      counted while the world runs). Sell: mechanical and electrical parts and items you carry, for 32% of the price.
 //      Everything happens on the host in one server-tick step: buying checks your Cash, takes it from your stacks
 //      (a stack's count is set through its own property setter; emptied stacks are removed with
 //      server_scene.inventory.destroy_item) and drops the part at your feet; selling removes the item first and
 //      then drops the Cash. The shop's stock only exists in the mod, so there is no box to break, steal from or
 //      duplicate. Host and solo only in this build.
-//   The other traders (logic::kShops): Builder (building parts and supplies), Junkyard (cheap used parts, new every
-//      day; buys anything at scrap price), Grocer (food), Medic (medical), Marine & Air (boat and plane parts) and
+//   The other traders (logic::kShops): Builder (building parts), Junkyard (cheap used parts, new every
+//      day; buys anything at scrap price), Grocer (food, drink, survival supplies), Medic (medical), Marine & Air (boat and plane parts) and
 //      the Mod Shop (parts other mods add: any part the game's own rom/data/vehicle_component_definitions.json
 //      doesn't list; only when there are some). Each stands at the nearest spot of his kind of place to the Mechanic
 //      (town, industrial, farm, ...; logic::place_shop), at least 120 m from the others, placed once per world and
@@ -1394,8 +1394,8 @@ int shop_in_range(const View& v, const Local& l) {
     }
     return best;
 }
-const wchar_t* const kBuysText[logic::kShopCount] = {L"mechanical parts and items", L"building parts and building supplies", L"anything, at scrap price",
-                                                     L"food", L"medical supplies", L"boat and plane parts", L"parts other mods add"};
+const wchar_t* const kBuysText[logic::kShopCount] = {L"mechanical and electrical parts and items", L"building parts", L"anything, at scrap price",
+                                                     L"food, drink and survival supplies", L"medical supplies", L"boat and plane parts", L"parts other mods add"};
 int tab_count() { return g_shop == logic::kMechanic ? 3 : 2; }   // only the Mechanic has the Jobs tab
 bool at_dropoff(const View& v, const Local& l) { return v.job_state && !v.job_kill && close_to(v.job_at, l); }   // kill jobs end at the Mechanic
 // Buy and Sell rows are the trader's the host stands at; until the server has caught up with the screen, none.
