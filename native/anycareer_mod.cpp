@@ -32,7 +32,9 @@
 //      spawns them (kinds from the player's own rom/data/zombie_definitions.json). A kill counts when one of the host's
 //      hits takes a zombie's blood to zero (server_scene.actor_zombie.damage is hooked; its damage source names the
 //      attacking actor). Then back to the Mechanic for the reward. Without the hook the board only has deliveries.
-//   F2 (host, test key): teleports you to the delivery's drop-off, or to the Mechanic (the game's own peer teleport).
+//   F2 (host, test key): toggles the game's own free move (the developers' debug-menu fly mode, client_scene.
+//      m_is_free_move): you fly where you look, through anything, and sprint flies faster. For crossing the map quickly.
+//   F6 (host, test key): teleports you to the delivery's drop-off, or to the Mechanic (the game's own peer teleport).
 //   F5 (host, test key): drops the items the delivery in hand asks for, so a delivery can be tested quickly.
 //   F3 (host): gives the host a stack of 250 Cash, dropped at your feet (test money).
 //   F4 (host): writes the price list to "AnyAPI and Modding/mods/AnyCareer/prices.tsv" (stays on this PC: it is
@@ -92,6 +94,9 @@ constexpr ptrdiff_t server_component_defs = 0x1028 + 8;  // m_component_definiti
 constexpr ptrdiff_t server_loot_level = 5336;       // m_loot_level (s32)
 // server_scene.peer
 constexpr ptrdiff_t peer_position = 0x19f8;         // position (vec3), as AnyHelpers' admin uses it
+// client (render side)
+constexpr ptrdiff_t client_scene = 0xf50;           // client.m_scene (embedded), as AnyMap reads it
+constexpr ptrdiff_t scene_free_move = 0x276;        // client_scene.m_is_free_move (bool): the game's debug-menu fly mode
 constexpr ptrdiff_t peer_data = 0x19d0;            // server_peer.data (as AnyHelpers' admin teleport uses it)
 constexpr ptrdiff_t peer_actor = 6616;              // m_authority_actor (ptr<server_scene.actor>)
 // server_scene.actor_character
@@ -180,7 +185,8 @@ get_items_t get_items;
 destroy_item_t destroy_item;
 component_set_t component_set;
 ref_dtor_t ref_dtor;
-teleport_t teleport_event;                          // optional (F2 test key)
+teleport_t teleport_event;                          // optional (F6 test key)
+std::atomic<uint8_t**> g_client_ref{};              // address of g_client (ref<client>); optional (F2 test key)
 
 std::string g_cash_json;                            // absolute path of our definition file (UTF-8); fixed before g_ready
 std::filesystem::path g_data_dir;                   // mods/AnyCareer
@@ -866,7 +872,7 @@ void test_items(uint8_t* scene, const Work& w) {
         T.world.job_item.c_str(), T.world.job_count, dropped);
 }
 
-// F2 (host, test key): jumps to the delivery's drop-off, or to the Mechanic (no job, a kill job, or a reward waiting).
+// F6 (host, test key): jumps to the delivery's drop-off, or to the Mechanic (no job, a kill job, or a reward waiting).
 void teleport(uint8_t* scene, const Work&) {
     uint8_t* peer = host_peer(scene);
     void* data = peer && anymaker::readable(peer + off::peer_data, 8) ? rd<void*>(peer, off::peer_data) : nullptr;
@@ -1152,6 +1158,14 @@ Local local_player() {
 
 bool hosting() { return GetTickCount64() - g_last_tick < 2000; }
 
+// The local client scene (F2 free move), as AnyMap reaches it.
+uint8_t* local_scene() {
+    uint8_t** ref = g_client_ref.load();
+    uint8_t* client = ref && anymaker::readable(ref, 16) ? ref[1] : nullptr;
+    return client && anymaker::readable(client + off::client_scene, off::scene_free_move + 1) ? client + off::client_scene : nullptr;
+}
+bool g_free_move = false;
+
 void post(Job job, int32_t key);
 
 bool close_to(const logic::Zone& at, const Local& l) {
@@ -1402,6 +1416,11 @@ void draw(const AnyFrameV1* f, void*) {
         g_seen_board = v.board;
     }
     if (g_open) { host.capture_input(1); draw_shop(f, v); return; }
+    if (g_free_move) {
+        uint8_t* scene = local_scene();
+        g_free_move = scene && rd<bool>(scene, off::scene_free_move);
+        if (g_free_move) text(16, float(f->height) - 40, 400, 24, L"Free move ON (F2 to land)", 15, 0xffe8c66a);
+    }
     if (!v.placed || !g_local.ok) return;
     float w = 520, x = (float(f->width) - w) / 2;
     if (now < g_toast_until) {
@@ -1434,6 +1453,16 @@ void draw(const AnyFrameV1* f, void*) {
 }
 
 // ------------------------------------------------------------------ input
+// F2: the game's own free move, flipped on the local client scene (the flag the debug menu's checkbox sets).
+void toggle_free_move() {
+    uint8_t* scene = hosting() ? local_scene() : nullptr;
+    if (!scene) { log(1, "ANYCAREER_FREE_MOVE ok=0 reason=%s", hosting() ? "no_client_scene" : "not_hosting"); return; }
+    bool on = !rd<bool>(scene, off::scene_free_move);
+    *reinterpret_cast<bool*>(scene + off::scene_free_move) = on;
+    g_free_move = on;
+    log(0, "ANYCAREER_FREE_MOVE on=%d", on ? 1 : 0);
+}
+
 void post(Job job, int32_t key) {
     std::lock_guard lock(g_mutex);
     if (g_queue.size() < 4) g_queue.push_back({job, g_local.yaw, GetTickCount64(), key});
@@ -1494,7 +1523,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     if ((e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) || e->key >= 256) return 0;
     bool& was = held[e->key];
     if (e->kind == ANY_KEY_UP) { bool consume = was; was = false; return consume ? 1 : 0; }
-    if (e->key != VK_F2 && e->key != VK_F3 && e->key != VK_F4 && e->key != VK_F5 && e->key != trade) return 0;
+    if (e->key != VK_F2 && e->key != VK_F3 && e->key != VK_F4 && e->key != VK_F5 && e->key != VK_F6 && e->key != trade) return 0;
     if (!g_ready || !gameplay()) return 0;
     if (was) return 1;   // a held key repeats; one press, one action
     if (e->key == trade) {
@@ -1511,9 +1540,10 @@ uint32_t on_input(const AnyInputV1* e, void*) {
         return 1;
     }
     was = true;
+    if (e->key == VK_F2) { toggle_free_move(); return 1; }
     if (!hosting()) { log(1, "ANYCAREER_JOB ok=0 reason=not_hosting (the host runs these)"); return 1; }
     g_local = local_player();
-    post(e->key == VK_F2 ? Job::teleport : e->key == VK_F3 ? Job::give_cash : e->key == VK_F5 ? Job::test_items : Job::price_list, 0);
+    post(e->key == VK_F6 ? Job::teleport : e->key == VK_F3 ? Job::give_cash : e->key == VK_F5 ? Job::test_items : Job::price_list, 0);
     return 1;
 }
 
@@ -1559,13 +1589,15 @@ void install() {
             return;
         }
         teleport_event = reinterpret_cast<teleport_t>(route::function(bind::server_on_teleport));
+        g_client_ref = static_cast<uint8_t**>(global(bind::g_client));
         // Kill jobs need the zombie damage hook; without it the board only has deliveries.
         void** zombie_cell = route::cell(bind::zombie_damage);
         bool kills = zombie_cell && h_zombie_damage.install(zombie_cell, (void*)&hk_zombie_damage);
-        log(kills ? 0 : 1, "ANYCAREER_KILLS hook=%d%s teleport=%d", kills ? 1 : 0, kills ? "" : " (no kill jobs this session)", teleport_event ? 1 : 0);
+        log(kills ? 0 : 1, "ANYCAREER_KILLS hook=%d%s teleport=%d free_move=%d", kills ? 1 : 0, kills ? "" : " (no kill jobs this session)",
+            teleport_event ? 1 : 0, g_client_ref.load() ? 1 : 0);
         g_ready = true;
         log(0, "ANYCAREER_READY after_s=%d cash_file=%s draw=%d: in Survival the Mechanic waits at a gas station (Buy, Sell, Jobs); "
-            "F3 gives 250 Cash (host), F4 writes the price list, F5 drops a delivery job's items (test)", attempt, g_cash_json.c_str(), gpu ? 1 : 0);
+            "F3 gives 250 Cash (host), F4 writes the price list, F5 drops a delivery job's items, F2 free move, F6 teleport (tests)", attempt, g_cash_json.c_str(), gpu ? 1 : 0);
         load_stations();
         return;
     }

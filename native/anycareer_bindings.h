@@ -70,7 +70,9 @@ inline constexpr func_desc add_building_component_set{"() server_scene.item_worl
 // counts a kill when the hit takes the zombie's blood to zero.
 // () server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const server_scene.actor_damage_src) | side: server
 inline constexpr func_desc zombie_damage{"() server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const server_scene.actor_damage_src)","",{"53 55 56 57 48 81 ec e8 00 00 00 48 89 4c 24 70 48 89 54 24 78 4c 89 84 24 80 00 00 00 4c 89 8c 24 88 00 00 00 48", {760u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 a5 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",448u,99};
-// The game's own debug teleport for a peer (as AnyHelpers' admin tab uses it): F2 test key.
+// The game's own debug teleport for a peer (as AnyHelpers' admin tab uses it): F6 test key.
 // () server.on_event (server, server_peer.data, client_peer.data.event.peer_teleport) | side: server
 inline constexpr func_desc server_on_teleport{"() server.on_event (server, server_peer.data, client_peer.data.event.peer_teleport)","53 55 48 81 ec 98 00 00 00 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8b 82 98 06 00 00 48",{"53 55 48 81 ec 68 17 00 00 48 89 8c 24 48 16 00 00 48 89 94 24 50 16 00 00 4c 89 84 24 58 16 00", {51392u}, 1},"",0u,-1};
+// ref<client> g_client (as AnyMap's map_actors.h finds it): F2 test key reaches client_scene through it.
+inline constexpr anymaker::global_desc g_client{"g_client","48 83 ec 38 48 89 4c 24 20 48 89 54 24 28 48 8b 05 4b 00 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f",96u};
 } // namespace anycareer::bind
