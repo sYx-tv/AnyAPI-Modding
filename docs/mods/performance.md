@@ -43,8 +43,10 @@ step's nested steps count inside it too), for example `| server steps: bunker st
 world 2100 ms, bunker save file parse 280 ms`. The steps are the pieces of `server_scene.dungeon_manager.tick_loading`:
 entrance load/create/physics, the bunker's static load (save file parse, objects into the world), physics shape,
 navmesh, objects load, layers (load and populate with loot, creatures and vehicles), and the saves and unloads when a
-player leaves. Terrain streaming steps are the tile's objects and loot zones going into the world, wreck loot,
-navmesh tiles, and the save and unload of tiles left behind.
+player leaves. Terrain streaming steps are the tile's objects and loot zones going into the world, the tile's terrain, path and
+tree bodies going into physics (with `physics bodies added` counting every body the server adds), creature spawn zones,
+sleeping creatures, keycards and dead-drop loot in wrecks, wreck loot, navmesh tiles, and the save and unload of tiles
+left behind.
 
 ## Frame hitches
 

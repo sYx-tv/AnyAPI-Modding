@@ -142,4 +142,25 @@ inline constexpr func_desc tile_task_integrate_server{"(bool) server_scene.envir
 inline constexpr func_desc tile_loaded_event{"() server_scene.push_event_tile_loaded (server_scene, const vec3_s32)","53 55 48 83 ec 78 48 89 4c 24 20 48 89 54 24 28 48 8b 05 a9 00 00 00 4c 8b 00 48 8d 44 24 30 48 8b 1d a2 00 00 00 bd 20",{"53 55 56 57 41 54 41 55 41 56 48 81 ec 70 04 00 00 48 89 8c 24 c8 03 00 00 48 89 94 24 d0 03 00", {8176u}, 1},"",0u,-1};
 // () server_scene.vehicle.generate_loot (server_scene.vehicle, server_scene, const s32)
 inline constexpr func_desc vehicle_generate_loot{"() server_scene.vehicle.generate_loot (server_scene.vehicle, server_scene, const s32)","53 55 56 57 48 81 ec c8 00 00 00 48 89 4c 24 68 48 89 54 24 70 4c 89 44 24 78 48 8d 84 24 80 00",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,86};
+// Adds a loaded tile's terrain, path and tree bodies to the server physics scene (inside the tile integrate).
+// () server_scene.environment_tile.integrate (server_scene.environment_tile, physics.scene)
+inline constexpr func_desc tile_integrate_physics{"() server_scene.environment_tile.integrate (server_scene.environment_tile, physics.scene)","53 55 48 81 ec e8 00 00 00 48 89 8c 24 98 00 00 00 48 89 94 24 a0 00 00 00 48 8d 84 24 a8 00 00 00 48 8d 99",{"53 55 56 57 41 54 41 55 41 56 48 81 ec 70 04 00 00 48 89 8c 24 c8 03 00 00 48 89 94 24 d0 03 00", {8088u}, 1},"",0u,-1};
+// Adds one body to a physics scene (timed on the server thread only; tiles add one per tree).
+// () physics.scene.add_object (physics.scene, physics.object)
+inline constexpr func_desc physics_add_object{"() physics.scene.add_object (physics.scene, physics.object)","",{"53 55 56 48 83 ec 60 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8d 41 50 49 8d 18 48 8b 69", {200u}, 1},"",0u,-1};
+// Creature spawn zones for a new tile (survival).
+// () server_scene.environment_tile.populate_actor_spawn_zones (server_scene.environment_tile, server_scene)
+inline constexpr func_desc tile_actor_spawn_zones{"() server_scene.environment_tile.populate_actor_spawn_zones (server_scene.environment_tile, server_scene)","53 55 56 48 81 ec 50 04 00 00 48 89 8c 24 f8 02 00 00 48 89 94 24 00 03 00 00 48 8d 84 24 08 03",{"53 55 56 57 41 54 41 55 41 56 48 81 ec 70 04 00 00 48 89 8c 24 c8 03 00 00 48 89 94 24 d0 03 00", {8344u}, 1},"",0u,-1};
+// Sleeping creatures inside wrecks on a new tile.
+// () server_scene.vehicle.spawn_sleeping_actors (server_scene.vehicle, server_scene)
+inline constexpr func_desc vehicle_sleeping_actors{"() server_scene.vehicle.spawn_sleeping_actors (server_scene.vehicle, server_scene)","53 55 56 57 48 81 ec 18 07 00 00 48 89 8c 24 28 05 00 00 48 89 94 24 30 05 00 00 48 8d 84 24 38",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,85};
+// Adds a built navmesh tile to the server navmesh.
+// () navigation.navmesh.add_tile (navigation.navmesh, navigation.navmesh_tile)
+inline constexpr func_desc navmesh_add_tile{"() navigation.navmesh.add_tile (navigation.navmesh, navigation.navmesh_tile)","",{"53 55 56 57 41 54 41 55 41 56 48 81 ec 70 04 00 00 48 89 8c 24 c8 03 00 00 48 89 94 24 d0 03 00", {8424u}, 1},"",0u,-1};
+// Bunker keycard in a wreck on a new tile.
+// () server_scene.vehicle.generate_bunker_keycard (server_scene.vehicle, server_scene, const s32)
+inline constexpr func_desc vehicle_bunker_keycard{"() server_scene.vehicle.generate_bunker_keycard (server_scene.vehicle, server_scene, const s32)","53 55 56 48 81 ec e0 01 00 00 48 89 d5 48 89 8c 24 d0 00 00 00 48 89 ac 24 d8 00 00 00 4c 89 84",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,91};
+// Dead-drop loot in a wreck on a new tile.
+// () server_scene.vehicle.generate_loot_deaddrop (server_scene.vehicle, server_scene)
+inline constexpr func_desc vehicle_loot_deaddrop{"() server_scene.vehicle.generate_loot_deaddrop (server_scene.vehicle, server_scene)","53 55 56 57 41 54 48 81 ec b0 00 00 00 48 89 4c 24 40 48 89 54 24 48 48 8d 44 24 50 48 8d 9a 88",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,87};
 } // namespace anyperformance::bind
