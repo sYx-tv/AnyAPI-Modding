@@ -18,6 +18,9 @@ only run on the exact build they were made for:
 
 AnyStorage, AnyClock and AnyQuickWheel are unchanged and gain the new build in the catalog.
 
+New standalone mod: **AnyPerformance 0.1.1** (not in a bundle). It fixes the world slowing down and
+then rushing to catch up, and writes what caused each stutter to the log. [Guide](../mods/performance.md)
+
 ## Fixed by the port
 
 - **AnyBalance:** the game's Properties tool changed, so the centre-of-mass overlay's checks
@@ -55,6 +58,10 @@ AnyStorage, AnyClock and AnyQuickWheel are unchanged and gain the new build in t
   and wind scale.
 
 ## Other fixes in this release
+
+- **Mod Settings explanations:** hover a setting in Esc > Settings > Mod Settings and the line under
+  the list explains what it does. For mod authors: menu version 5 (`anyapi_menu_v5.h`) reports the
+  hovered row.
 
 - **HUD control hints** (used by AnyQuickWheel) could never install: two of their byte checks
   compared the wrong bytes. Both are fixed; the hint has not been seen in game yet.
