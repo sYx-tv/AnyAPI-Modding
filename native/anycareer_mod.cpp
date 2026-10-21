@@ -98,6 +98,7 @@ constexpr ptrdiff_t peer_position = 0x19f8;         // position (vec3), as AnyHe
 constexpr ptrdiff_t client_scene = 0xf50;           // client.m_scene (embedded), as AnyMap reads it
 constexpr ptrdiff_t scene_free_move = 0x276;        // client_scene.m_is_free_move (bool): the game's debug-menu fly mode
 constexpr ptrdiff_t peer_data = 0x19d0;            // server_peer.data (as AnyHelpers' admin teleport uses it)
+constexpr ptrdiff_t peer_actor_id = 6480 + 24;      // m_authority_actor_id (property_s32), its value: the id damage sources carry
 constexpr ptrdiff_t peer_actor = 6616;              // m_authority_actor (ptr<server_scene.actor>)
 // server_scene.actor_character
 constexpr ptrdiff_t actor_inventory = 1920;         // m_inventory (server_scene.inventory, 248 bytes, embedded)
@@ -895,7 +896,10 @@ void on_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double b
     int32_t by = src && anymaker::readable(src, 4) ? rd<int32_t>(src, off::damage_src_actor) : -1;
     uint8_t* peer = host_peer(scene);
     uint8_t* actor = peer && anymaker::readable(peer + off::peer_actor, 8) ? rd<uint8_t*>(peer, off::peer_actor) : nullptr;
-    int32_t host_id = actor && anymaker::readable(actor + off::actor_id, 4) ? rd<int32_t>(actor, off::actor_id) : -2;
+    // Player hits arrive as client events whose damage source is the peer's authority actor id (server.on_event
+    // actor_take_damage); test 7 showed the actor's own m_id field doesn't match it, so the peer's id is used.
+    int32_t host_id = peer && anymaker::readable(peer + off::peer_actor_id, 4) ? rd<int32_t>(peer, off::peer_actor_id) : -2;
+    int32_t actor_field = actor && anymaker::readable(actor + off::actor_id, 4) ? rd<int32_t>(actor, off::actor_id) : -2;
     const uint8_t* def = rd<const uint8_t*>(zombie, off::zombie_definition);
     std::string kind = def ? read_string(def) : std::string();
     bool mine = by == host_id;
@@ -911,8 +915,9 @@ void on_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double b
     }
     static int logs = 0;
     if (logs++ < 40 || counts)
-        log(0, "ANYCAREER_KILL zombie=%s by_actor=%d host_actor=%d counted=%d progress=%d/%d", kind.c_str(), by, host_id, counts ? 1 : 0,
-            T.world.job_progress, T.world.job_count);
+        log(0, "ANYCAREER_KILL zombie=%s by_actor=%d host_actor=%d actor_field=%d counted=%d job=%s progress=%d/%d", kind.c_str(), by, host_id,
+            actor_field, counts ? 1 : 0, T.world.job_kill && T.world.job_state == 1 ? T.world.job_item.c_str() : "none", T.world.job_progress,
+            T.world.job_count);
 }
 void run_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double blood_before) {
     __try { on_zombie_hit(zombie, scene, src, blood_before); } __except (EXCEPTION_EXECUTE_HANDLER) { log(2, "ANYCAREER_KILL ok=0 reason=native_exception"); }
@@ -1131,6 +1136,7 @@ bool g_dropoff = false;                           // opened at the delivery's dr
 int g_tab = 0, g_cursor = 0;                      // tabs: 0 Buy, 1 Sell, 2 Jobs
 int64_t g_seen_board = -1;
 ULONGLONG g_toast_until = 0;
+std::wstring g_toast = L"New jobs on the Mechanic's board";
 Local g_local;
 ULONGLONG g_local_at = 0;
 // Mouse: the pointer in frame pixels, and the clickable areas the last shop frame drew.
@@ -1412,7 +1418,7 @@ void draw(const AnyFrameV1* f, void*) {
     if (g_open && !(g_dropoff ? at_dropoff(v, g_local) : in_range(v, g_local))) close_shop();
     update_pin(&v);
     if (v.board >= 0 && v.board != g_seen_board) {   // a new job board (not the one already there when the world loaded)
-        if (g_seen_board >= 0 && v.job_state == 0) g_toast_until = now + 8000;
+        if (g_seen_board >= 0 && v.job_state == 0) { g_toast = L"New jobs on the Mechanic's board"; g_toast_until = now + 8000; }
         g_seen_board = v.board;
     }
     if (g_open) { host.capture_input(1); draw_shop(f, v); return; }
@@ -1426,7 +1432,7 @@ void draw(const AnyFrameV1* f, void*) {
     if (now < g_toast_until) {
         float y = float(f->height) * 0.2f;
         box(ANY_GPU_ROUND_RECT, x, y, w, 34, 0xd0181b20, 6);
-        text(x, y, w, 34, L"New jobs on the Mechanic's board", 16, 0xffe8c66a, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+        text(x, y, w, 34, g_toast, 16, 0xffe8c66a, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
     std::wstring prompt;
     if (in_range(v, g_local)) prompt = L"Press " + key_name() + L" to trade with the Mechanic";
@@ -1543,6 +1549,11 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     if (e->key == VK_F2) { toggle_free_move(); return 1; }
     if (!hosting()) { log(1, "ANYCAREER_JOB ok=0 reason=not_hosting (the host runs these)"); return 1; }
     g_local = local_player();
+    if (e->key == VK_F5) {
+        View v;
+        { std::lock_guard view_lock(g_view_mutex); v = g_view; }
+        if (v.job_state != 1 || v.job_kill) { g_toast = L"F5 needs a delivery job: take one in the Mechanic's Jobs tab"; g_toast_until = GetTickCount64() + 5000; return 1; }
+    }
     post(e->key == VK_F6 ? Job::teleport : e->key == VK_F3 ? Job::give_cash : e->key == VK_F5 ? Job::test_items : Job::price_list, 0);
     return 1;
 }
