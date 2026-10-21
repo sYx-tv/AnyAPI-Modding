@@ -6,11 +6,11 @@
 //      renamed, so it stacks like ammo (class ammo_box: the stack size is the definition's gun_magazine_capacity,
 //      9999 here) and fits no gun. No game data ships with the mod. It never spawns as loot (spawn probability 0,
 //      loot group none). Every player needs the mod, as for any mod-added item.
-//   F10 (host): gives the host a stack of 250 Cash, dropped at your feet. Uses the creative dome's recipe:
+//   F3 (host): gives the host a stack of 250 Cash, dropped at your feet. Uses the creative dome's recipe:
 //      server_scene.item_world.create_item, then server_scene.item_floor_container.create_item. Runs at the start of
 //      the next server tick, on the server thread. The stack starts full (ammo boxes fill to capacity when made) and
 //      is then set to 250 through the count property's own setter, which is checked by reading it back.
-//   F9 (host): writes the price list. Every item and part definition the server holds, with its loot group,
+//   F4 (host): writes the price list. Every item and part definition the server holds, with its loot group,
 //      tech tier, spawn probability, a first-pass price and whether it can drop at the world's current loot level,
 //      goes to "AnyAPI and Modding/mods/AnyCareer/prices.tsv" (stays on this PC: it is game data). The log gets
 //      a summary line.
@@ -315,9 +315,9 @@ void hk_tick(uint8_t* scene, uint8_t* server) {
 
 // ------------------------------------------------------------------ input
 uint32_t on_input(const AnyInputV1* e, void*) {
-    static bool held[2];   // F9, F10: a consumed press also consumes its release
-    if (!e || (e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) || (e->key != VK_F9 && e->key != VK_F10)) return 0;
-    bool& was = held[e->key == VK_F10];
+    static bool held[2];   // F4, F3: a consumed press also consumes its release
+    if (!e || (e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) || (e->key != VK_F4 && e->key != VK_F3)) return 0;
+    bool& was = held[e->key == VK_F3];
     if (e->kind == ANY_KEY_UP) { bool consume = was; was = false; return consume ? 1 : 0; }
     if (!g_ready || !gameplay()) return 0;
     was = true;
@@ -331,7 +331,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
             if ((players.players[i].valid_fields & PLAYER_LOCAL) && (players.players[i].valid_fields & PLAYER_FACING))
                 yaw = players.players[i].yaw_radians;
     std::lock_guard lock(g_mutex);
-    if (g_queue.size() < 4) g_queue.push_back({e->key == VK_F10 ? Job::give_cash : Job::price_list, yaw, GetTickCount64()});
+    if (g_queue.size() < 4) g_queue.push_back({e->key == VK_F3 ? Job::give_cash : Job::price_list, yaw, GetTickCount64()});
     return 1;
 }
 
@@ -371,7 +371,7 @@ void install() {
             return;
         }
         g_ready = true;
-        log(0, "ANYCAREER_READY after_s=%d cash_file=%s: load or start a world, then F10 gives 250 Cash (host), F9 writes the price list",
+        log(0, "ANYCAREER_READY after_s=%d cash_file=%s: load or start a world, then F3 gives 250 Cash (host), F4 writes the price list",
             attempt, g_cash_json.c_str());
         return;
     }
