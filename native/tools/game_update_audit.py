@@ -227,18 +227,26 @@ def main():
             row.update(status='unchanged', matches=len(hits), function=hits[0].sig if len(hits) == 1 else None)
             # Same bytes, different function: the intended function changed and an old twin now matches.
             was = {f['sig'] for f in old_by_prefix.get(body[:16], []) if prefix_of(f)} if len(body) >= 16 else set()
+            # previous-build functions whose whole code these bytes were (not just a shared signature prefix)
+            was_whole = {f['sig'] for f in old_by_prefix.get(body[:16], []) if prefix_of(f) and len(body) >= f['gcl']['code_size']
+                         and hashlib.sha1(body[:f['gcl']['code_size']]).hexdigest() == f['code_hash']['raw']} if len(body) >= 16 else set()
             if was and not was & {f.sig for f in hits}:
                 row.update(status='changed', note='now matches %s; it used to match %s' % (
                     row['function'] or '%d functions' % len(hits), ', '.join(sorted(was))))
             elif len(was) == 1 and len(hits) > 1:
                 # A unique pattern gained a byte-identical twin: code that requires one match stops.
                 row.update(status='changed', note=twin_note(hits))
-            elif r['kind'] == 'array' and len(was) <= 3 and was - {f.sig for f in hits}:
+            elif r['kind'] == 'array' and len(body) > min(f.code_end for f in hits):
+                # The bytes after code_end are relocation cells the loader fills in at run time, so an exact
+                # comparison of live memory never matches (HUD_END, found in the 0.1.27 audit).
+                row.update(status='changed', note='runs %d bytes past code_end into run-time relocation cells; trim it to %d' % (
+                    len(body) - min(f.code_end for f in hits), min(f.code_end for f in hits)))
+            elif r['kind'] == 'array' and 1 < len(was_whole) <= 3 and was_whole - {f.sig for f in hits}:
                 # Twins that diverged: the bytes still match one of them, maybe not the one we meant
                 # (0.1.27: AnyBalance's Properties overlay changed and only the microcontroller twin matched).
                 # Binding routes are checked again at runtime, and wide patterns lose members harmlessly.
                 row.update(status='changed', note='now matches only %s; it also used to match %s' % (
-                    ', '.join(sorted(f.sig for f in hits)), ', '.join(sorted(was - {f.sig for f in hits}))))
+                    ', '.join(sorted(f.sig for f in hits)), ', '.join(sorted(was_whole - {f.sig for f in hits}))))
             report.append(row)
             continue
         cands = [f for f in old_by_prefix.get(body[:16], []) if prefix_of(f)] or \
