@@ -334,6 +334,29 @@ inline std::vector<std::string> definition_ids(const std::string& json) {
     return out;
 }
 
+// Spread over the map (layout 2, Nate: "one of each, spread out over the map"): the spot of the trader's kinds
+// farthest from every trader already standing, outside the `avoid` boxes (the top island). -1 if none.
+struct Box { double x0, z0, x1, z1; bool contains(const Zone& p) const { return p.x >= x0 && p.x <= x1 && p.z >= z0 && p.z <= z1; } };
+// The island at the top of the map (Nate: "dont use the top island"), in world metres; measured from the final
+// test's trader pins on the map (about 10.35 m a pixel, z grows up the map). The west island's north coast is ~600 m south.
+inline constexpr Box kTopIsland{77500, 54700, 82500, 58500};
+inline int place_spread(int shop, const std::vector<Spot>& spots, const std::vector<Zone>& placed, const std::vector<Box>& avoid) {
+    int best = -1;
+    double best_d = -1;
+    for (size_t i = 0; i < spots.size(); ++i) {
+        bool kind = false;
+        for (const char* k : kShops[shop].places) if (k && spots[i].filter == k) kind = true;
+        if (!kind) continue;
+        bool out = false;
+        for (const auto& b : avoid) out = out || b.contains(spots[i].at);
+        if (out) continue;
+        double d = 1e18;
+        for (const auto& p : placed) d = std::min(d, std::hypot(spots[i].at.x - p.x, spots[i].at.z - p.z));
+        if (d > best_d) { best = int(i); best_d = d; }
+    }
+    return best;
+}
+
 // A boat or plane part, by its category or id (the Marine & Air trader's goods; the Mechanic leaves them to him).
 inline bool marine_air(const std::string& category, const std::string& id) {
     static constexpr const char* kWords[] = {"boat", "marine", "ship", "hull", "propeller", "plane", "aero", "aircraft", "wing", "rudder",
@@ -368,6 +391,14 @@ inline bool shop_buys(int shop, const Goods& g) {
     if (shop == kMechanic) return (g.loot_group == 6 || g.loot_group == 7) && !g.marine_air && !g.modded && !g.building;   // parts and items
     return shop_sells(shop, g);
 }
+// What a trader's delivery jobs ask for (Nate: "jobs pertaining to their class of items"): what he buys, the
+// Junkyard only scrap parts, never another mod's parts, and the Mod Shop has no jobs.
+inline bool job_goods(int shop, const Goods& g) {
+    if (shop == kModShop || g.modded) return false;
+    return shop == kJunkyard ? shop_sells(shop, g) : shop_buys(shop, g);
+}
+// Kill jobs are the Gunsmith's (they were the Mechanic's before every trader had a board).
+inline constexpr int kKillShop = kGunsmith;
 
 // ------------------------------------------------------------------ paying with Cash stacks
 struct Stack { int32_t item_id = 0; int32_t count = 0; };
@@ -588,7 +619,7 @@ inline std::vector<int> reward_parts(const std::vector<int>& part_prices, int re
 // ------------------------------------------------------------------ per-world saved state
 // One small text file per world (mods/AnyCareer/worlds/<seed>.txt), "key value" lines; unknown keys are kept out.
 // A trader other than the Mechanic: where he stands, and his shelf's restock number and sales.
-struct ShopSave { bool placed = false; Zone at; int64_t restock = -1; std::vector<int> sold; };
+struct ShopSave { bool placed = false; Zone at; int64_t restock = -1; std::vector<int> sold, taken; };
 
 struct WorldState {
     ShopSave shops[kShopCount];   // [kMechanic] unused: the Mechanic's are the fields below (older saves)
@@ -609,6 +640,9 @@ struct WorldState {
     bool job_kill = false;    // a kill job: job_item is the zombie kind ("any" for any zombie), no place
     int job_progress = 0;     // kills so far
     bool job_hard = false;    // taken from a hard offer
+    int job_shop = kMechanic; // whose board the job came from (kill jobs end there; the reward choices are his goods)
+    bool job_part = false;    // job_item is a vehicle part (delivered as part items), else an item
+    int layout = 0;           // 2: the traders are spread over the map (older worlds had them around the Mechanic)
     int jobs_done = 0;        // jobs finished (reward claimed) in this world; hard jobs open at kHardUnlock
 };
 
@@ -627,6 +661,8 @@ inline std::string save_world(const WorldState& w) {
           << w.job_at.z << " " << w.job_item << "\n";
     if (w.job_state && w.job_kill) o << "job_kill " << w.job_progress << "\n";
     if (w.job_state && w.job_hard) o << "job_hard\n";
+    if (w.job_state) o << "job_shop " << kShops[w.job_shop >= 0 && w.job_shop < kShopCount ? w.job_shop : 0].id << (w.job_part ? " part" : " item") << "\n";
+    o << "layout " << w.layout << "\n";
     o << "done " << w.jobs_done << "\n";
     for (int i = 1; i < kShopCount; ++i) {
         const ShopSave& s = w.shops[i];
@@ -634,6 +670,11 @@ inline std::string save_world(const WorldState& w) {
         if (s.restock >= 0 || !s.sold.empty()) {
             o << "shop_sold " << kShops[i].id << " " << s.restock;
             for (int n : s.sold) o << " " << n;
+            o << "\n";
+        }
+        if (!s.taken.empty()) {
+            o << "shop_taken " << kShops[i].id;
+            for (int n : s.taken) o << " " << n;
             o << "\n";
         }
     }
@@ -684,6 +725,21 @@ inline bool load_world(const std::string& text, WorldState& w) {
             int n = 0;
             r.job_kill = true;
             if (row >> n && n >= 0) r.job_progress = n;
+        } else if (key == "job_shop") {
+            std::string id, kind;
+            row >> id >> kind;
+            int i = shop_by_id(id);
+            r.job_shop = i >= 0 ? i : kMechanic;
+            r.job_part = kind == "part";
+        } else if (key == "layout") {
+            int n = 0;
+            if (row >> n && n >= 0) r.layout = n;
+        } else if (key == "shop_taken") {
+            std::string id;
+            row >> id;
+            int i = shop_by_id(id), n;
+            if (i <= 0) continue;
+            while (row >> n && r.shops[i].taken.size() < 16) r.shops[i].taken.push_back(n);
         } else if (key == "shop" || key == "shop_sold") {
             std::string id;
             row >> id;

@@ -237,6 +237,15 @@ int main() {
         assert(place_shop(kBuilder, spots, {0, 0, 0}, {}) == 3);
         assert(place_shop(kJunkyard, spots, {0, 0, 0}, placed) == 5);   // the farm is too far: next kind, roadside
         assert(place_shop(kMechanic, spots, {0, 0, 0}, {}) == -1);
+        {
+            std::vector<Spot> map = {{{0, 0, 0}, "gas_station"}, {{1000, 0, 0}, "town"}, {{5000, 0, 0}, "town"}, {{3000, 0, 3000}, "house"},
+                                     {{9000, 0, -9000}, "town"}};
+            std::vector<Box> avoid = {{8000, -10000, 10000, -8000}};
+            assert(place_spread(kGrocer, map, {{0, 0, 0}}, avoid) == 2);   // farthest town outside the box
+            assert(place_spread(kGrocer, map, {{0, 0, 0}}, {}) == 4);
+            assert(place_spread(kMedic, map, {{0, 0, 0}, {5000, 0, 0}}, avoid) == 3);   // the house is farther from both than the 1 km town
+            assert(place_spread(kMechanic, map, {}, {}) == 0);
+        }
         assert(shop_by_id("medic") == kMedic && shop_by_id("nope") == -1);
         assert(marine_air("boat_parts", "x") && marine_air("engine", "propeller_small") && !marine_air("engine", "air_filter"));
         Goods engine; engine.part = true; engine.loot_group = 6;
@@ -254,6 +263,11 @@ int main() {
         Goods gun; gun.loot_group = 4;
         Goods rounds; rounds.loot_group = 5;
         assert(shop_sells(kOutfitter, coat) && shop_sells(kGunsmith, gun) && shop_sells(kGunsmith, rounds) && !shop_sells(kGunsmith, coat));
+        Goods item_part; item_part.loot_group = 6;   // a mechanical item (not a part)
+        assert(job_goods(kMechanic, engine) && job_goods(kMechanic, item_part) && !job_goods(kMechanic, food) && !job_goods(kMechanic, mod));
+        assert(job_goods(kGunsmith, gun) && job_goods(kOutfitter, coat) && job_goods(kGrocer, canteen) && job_goods(kBuilder, wall));
+        assert(job_goods(kJunkyard, engine) && !job_goods(kJunkyard, food) && !job_goods(kModShop, mod) && !job_goods(kModShop, engine));
+        assert(kTopIsland.contains({80000, 0, 56000}) && !kTopIsland.contains({80000, 0, 54300}) && !kTopIsland.contains({85966, 0, 49998}));
         assert(std::string(kShops[kMechanic].name) == "Hayzeco Autoparts" && std::string(kShops[kMechanic].id) == "mechanic");
         assert(shop_buys(kJunkyard, food) && shop_buys(kJunkyard, wall) && !shop_buys(kGrocer, engine));
         assert(sell_price(100, 15) == 15);
