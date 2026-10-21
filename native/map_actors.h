@@ -2,7 +2,7 @@
 // Vehicles, zombies and creatures for AnyMap, read from the game's client scene.
 //
 // EXPERIMENTAL: uses the experimental SDK (raw game memory), Anymaker 0.1.27 / Steam build 26113663 only.
-// Offsets come from the 0.1.25 SDK reference layouts (metadata). Everything stays off unless anyapi.build
+// Offsets come from the 0.1.27 SDK layouts (metadata, unchanged since 0.1.25). Everything stays off unless anyapi.build
 // matches the SDK hashes, so a game update turns the blips off instead of reading the wrong memory.
 //
 // How: g_client (ref<client>) -> client.m_scene (embedded client_scene) -> m_actors and m_vehicles, both
@@ -29,7 +29,7 @@ using anymaker::global_desc;
 inline constexpr global_desc g_client{"g_client","48 83 ec 38 48 89 4c 24 20 48 89 54 24 28 48 8b 05 4b 00 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f",96u};
 // Typeinfo anchors only; these functions are never called or hooked.
 inline constexpr func_desc zombie_tick{"() client_scene.actor_zombie.tick (client_scene.actor_zombie, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 08 10 00 00 4c 8b a4 24 70 10 00 00 48 8b 9c 24 78",{"53 55 56 57 48 81 ec 38 01 00 00 48 8b 84 24 80 01 00 00 48 8b ac 24 88 01 00 00 48 89 4c 24 70", {536u}, 1},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 24 03 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",832u,4};
-inline constexpr func_desc creature_tick{"() client_scene.actor_creature.tick (client_scene.actor_creature, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 48 81 ec b8 01 00 00 48 8b 84 24 00 02 00 00 48 8b 9c 24 08 02 00 00 48 89 8c 24 d8",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 18 06 00 00 4c 8b 9c 24 80 06 00 00 48 8b 84 24 88", {5288u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 fd 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",536u,4};
+inline constexpr func_desc creature_tick{"() client_scene.actor_creature.tick (client_scene.actor_creature, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 48 81 ec c8 01 00 00 48 8b 84 24 10 02 00 00 48 8b 9c 24 18 02 00 00 48 89 8c 24 e0",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 28 07 00 00 4c 8b a4 24 90 07 00 00 48 8b 84 24 98", {6848u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 fd 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",536u,4};
 }  // namespace bind
 
 namespace off {

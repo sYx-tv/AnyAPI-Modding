@@ -1,6 +1,6 @@
 # AnyGraphics
 
-AnyGraphics is a native graphics mod for Anymaker 0.1.25. The current release is
+AnyGraphics is a native graphics mod for Anymaker 0.1.27. The current release is
 **0.31.0**, which needs **AnyAPI 0.36.0** for TAA, sharpening, beam shaping,
 tone mapping and colour looks, and the GPU cost readout (older APIs keep the 0.29 feature set; TAA choices
 fall back to SMAA). Its controls live inside
@@ -137,7 +137,7 @@ point, because the world is only loaded around you. While it flies, your
 character stays where it is and mouse clicks do nothing, so you cannot shoot
 or build from the camera. Photo controls last until the game closes and are
 never saved into your preset. The free camera hooks the game directly and
-works on Anymaker 0.1.25 only; on another game build photo mode still hides
+works on Anymaker 0.1.27 only; on another game build photo mode still hides
 the HUD and the photo controls still work.
 
 **Local light beams** (headlights, torches, lamps) light the air in clear,
