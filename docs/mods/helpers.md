@@ -9,6 +9,8 @@ API exposes the menu mechanisms; these tabs exist only when AnyHelpers is instal
 Change a setting or keybind, then select **Apply Changes**. Cancel discards pending
 edits. Reset stages defaults for review before Apply. Escape cancels key capture;
 focus loss or leaving the menu ends capture. Saved options remain when a mod is removed.
+In Mod Settings, point at a setting's value to see what it does in the line under the list (needs AnyAPI
+with `anyapi.menu` v5; older AnyAPI shows it after you change the setting).
 
 ## Duplicate tool favorites
 
