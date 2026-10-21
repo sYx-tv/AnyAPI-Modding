@@ -126,7 +126,7 @@ int main() {
         spawn_spots("{\"props\": [1, 2], \"spawn_zones\": [{\"pos\": [0, 0, 500], \"filter\": \"town\"}, {\"pos\": [0, 0, 900], \"filter\": \"house\", "
                     "\"x\": [1, {\"y\": \"]\"}]}, {\"pos\": [9, 9], \"filter\": \"house\"}], \"after\": {\"filter\": \"gas_station\"}}", spots);
         assert(spots.size() == 2 && spots[0].filter == "town" && spots[1].at.z == 900);
-        assert(delivery_place("town") && delivery_place("gas_station") && delivery_place("big_farm") && !delivery_place("zombie_horde"));
+        assert(delivery_place("town") && delivery_place("gas_station") && !delivery_place("big_farm") && !delivery_place("ndustrial") && delivery_place("sawmill") && !delivery_place("zombie_horde"));
         assert(place_name("gas_station") == "gas station");
         std::vector<Spot> places;
         for (int i = 0; i < 40; ++i) places.push_back({{double(i * 200), 0, 0}, "house"});

@@ -652,7 +652,10 @@ void build_goods(uint8_t* scene) {
         if (def == T.cash_def || def == T.part_item_def || !anymaker::readable(def, off::item_category + 16)) return true;
         logic::Entry e = entry_of(def, false);
         bool group = e.loot_group == 1 || e.loot_group == 2 || e.loot_group == 6 || e.loot_group == 7 || e.loot_group == 8 || e.loot_group == 9;
-        if (e.id.empty() || !group || e.cls == "ammo_box" || !logic::findable(e, std::max(T.level, 1))) return true;
+        // Not the vehicle editor's tools (belt, paint, ...): they are items too, but nobody asks for them.
+        if (e.id.empty() || !group || e.cls == "ammo_box" || e.id.rfind("vehicle_editor", 0) == 0 || e.cls.rfind("vehicle_editor", 0) == 0 ||
+            !logic::findable(e, std::max(T.level, 1)))
+            return true;
         T.goods.push_back({def, e.id, e.name.empty() ? e.id : e.name, e.price, 1});
         return true;
     });
@@ -1215,6 +1218,8 @@ uint64_t picture(const std::string& id, int* budget) {
     }
     uint64_t texture = 0;
     auto index = g_catalog_index.find(id);
+    if (index == g_catalog_index.end()) index = g_catalog_index.find("component:" + id);   // parts are listed as component:<id>
+    if (index == g_catalog_index.end()) index = g_catalog_index.find("item:" + id);
     if (index != g_catalog_index.end()) {
         static std::vector<uint8_t> bgra(65536);
         uint32_t required = 0;

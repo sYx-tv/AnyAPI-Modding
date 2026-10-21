@@ -127,11 +127,11 @@ struct Zone { double x{}, y{}, z{}; };
 // Spots in the world tiles (spawn_zones: pos in world metres, and a filter such as gas_station, town, house).
 struct Spot { Zone at; std::string filter; };
 
-// Places a delivery can go: towns, houses, gas stations and other buildings, not open-country spawn areas.
+// Places a delivery can go: the building kinds of the stock tiles (test 6 listed them), not open-country spawn
+// areas or one-off tutorial and starter spots.
+inline constexpr const char* kPlaceKinds[] = {"town", "house", "gas_station", "farm", "industrial", "roadside", "office", "research", "sawmill"};
 inline bool delivery_place(const std::string& filter) {
-    for (const char* f : {"town", "house", "gas_station"}) if (filter == f) return true;
-    for (const char* f : {"farm", "shop", "store", "village", "industrial", "office", "garage", "barn", "station"})
-        if (filter.find(f) != std::string::npos) return true;
+    for (const char* f : kPlaceKinds) if (filter == f) return true;
     return false;
 }
 // "gas_station" -> "gas station"
@@ -315,11 +315,20 @@ inline std::vector<Offer> make_offers(const std::vector<int>& item_prices, const
         if (int(in_reach.size()) >= n) break;
     }
     if (in_reach.empty()) return out;
+    // Pick the kind of place first (so the many industrial spots don't crowd out farms and towns), then a spot of it.
+    std::vector<std::string> kinds;
+    for (int i : in_reach)
+        if (std::find(kinds.begin(), kinds.end(), spots[size_t(i)].filter) == kinds.end()) kinds.push_back(spots[size_t(i)].filter);
+    std::sort(kinds.begin(), kinds.end());
     uint64_t state = mix(seed ^ mix(uint64_t(board) + 0xde11));
     for (int k = 0; k < n; ++k) {
         Offer o;
         state = mix(state); o.item = int(state % item_prices.size());
-        state = mix(state); o.spot = in_reach[size_t(state % in_reach.size())];
+        state = mix(state);
+        const std::string& kind = kinds[size_t(state % kinds.size())];
+        std::vector<int> of_kind;
+        for (int i : in_reach) if (spots[size_t(i)].filter == kind) of_kind.push_back(i);
+        state = mix(state); o.spot = of_kind[size_t(state % of_kind.size())];
         state = mix(state); o.count = delivery_count(item_prices[size_t(o.item)], state);
         o.reward = delivery_reward(item_prices[size_t(o.item)], o.count, dist(spots[size_t(o.spot)]));
         out.push_back(o);
