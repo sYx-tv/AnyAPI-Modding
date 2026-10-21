@@ -42,12 +42,15 @@ AnyStorage, AnyClock and AnyQuickWheel are unchanged and gain the new build in t
 - **New looks:** the Soft & warm preset (Soft film tone curve, golden highlights, cool shade),
   Light colour (tints the game's own sun and shade lights, keeping their brightness) and Wind in
   trees (how hard trees and grass sway; only the look changes).
+- **Anti-aliasing:** TAA now actually smooths edges: both TAA choices jitter the camera and edges keep
+  their history instead of falling back to raw SMAA. The game's FXAA no longer flickers on for a frame.
 - **Sun shafts:** no more pumping as the camera moves, no glowing wall past the last shadow
   cascade, no blocky distant ground, and filtered shadows so foliage stops speckling.
 - **Contact shadows:** no self-shadowing at grazing angles, no double darkening over the game's
   shadows, nothing on the ocean, softer edges.
 - **Clouds:** the cloud layer is fixed in the world and drifts with the wind instead of
-  following the camera. TAA + jitter is now TAA extra smooth.
+  following the camera.
+- **Renamed:** TAA + jitter is now TAA extra smooth.
 - New for mod authors: scene controls version 3 (`anyapi_scene_controls_v3.h`) with light tints
   and wind scale.
 
