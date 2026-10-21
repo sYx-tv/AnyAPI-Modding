@@ -63,7 +63,7 @@ static void auto_pick(bool gameplay){if(!picking)return;LARGE_INTEGER now,rate;Q
  else{snprintf(text,sizeof(text),"Auto-pick chose %s (%.0f fps). Natural, Clear Day, Vibrant and Moody cost about the same as High or Ultra.",tier_name(pick_tier),fps);picking=false;}
  pick_result=text;log(std::string("AUTO_PICK ")+text);pick_seconds=0;pick_frames=0;}
 static const AnyMenuV4* buttons;
-// Soft film and Soft & warm need AnyAPI 0.39.3; older APIs reject them, so they fall back to Clean and Vivid there.
+// Soft film and Soft & warm need AnyAPI 0.40.1; older APIs reject them, so they fall back to Clean and Vivid there.
 static bool soft_grades=true;
 static bool api_at_least(const char* version,int major,int minor,int patch){int a=0,b=0,c=0;if(sscanf_s(version,"%d.%d.%d",&a,&b,&c)<2)return false;return a!=major?a>major:b!=minor?b>minor:c>=patch;}
 // Fine-tuning groups: each opens and closes from its header row. Open state lasts for the session.
@@ -221,7 +221,7 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics
  ui=(const AnyUiStateV1*)services->query("anyapi.ui_state",1);if(ui&&(ui->version!=1||ui->struct_size!=sizeof(*ui)||!ui->copy))ui=nullptr;
  controls=(const ModControlsV1*)services->query("anyhelpers.controls",1);if(controls&&controls->struct_size==sizeof(*controls)&&controls->version==1&&controls->register_action&&controls->key&&controls->key_name){ModControlActionV1 d;d.mod_id="anygraphics";d.mod_name="AnyGraphics";d.action_id="photo_mode";d.label="Photo mode (free camera, hide HUD)";d.default_key=VK_F1;photo_action=controls->register_action(&d);}else controls=nullptr;
  menu=(const AnyMenuV1*)services->query("anyapi.menu",1);widgets=(const AnyMenuV3*)services->query("anyapi.menu",3);
- if(auto build=(const AnyBuildV1*)services->query("anyapi.build",1);build&&build->struct_size==sizeof(*build)&&build->version==1&&build->copy){AnyBuildInfoV1 info;if(build->copy(&info))soft_grades=api_at_least(info.api_version,0,39,3);}
+ if(auto build=(const AnyBuildV1*)services->query("anyapi.build",1);build&&build->struct_size==sizeof(*build)&&build->version==1&&build->copy){AnyBuildInfoV1 info;if(build->copy(&info))soft_grades=api_at_least(info.api_version,0,40,1);}
  buttons=(const AnyMenuV4*)services->query("anyapi.menu",4);if(buttons&&(buttons->version!=4||buttons->struct_size!=sizeof(*buttons)||!buttons->button_row))buttons=nullptr;
  if(!menu||menu->version!=1||menu->struct_size!=sizeof(*menu)||!menu->add_section||!widgets||widgets->version!=3||widgets->struct_size!=sizeof(*widgets)){log("GRAPHICS_MENU unavailable=1");return;}
  auto own_file=std::filesystem::path(host.plugin_directory)/L"AnyGraphics"/L"settings.tsv";

@@ -141,6 +141,6 @@ lamps cast no shadow maps. That fixed the RX 6800. Other GPUs keep the original 
 
 
 Temporal smoothing covers the volumetric pass only. There is no new point-light shadow generation, cascade
-cross-fading, volumetric cloud replacement or material/water overhaul. Since AnyAPI 0.39.3
+cross-fading, volumetric cloud replacement or material/water overhaul. Since AnyAPI 0.40.1
 beams fade out over the edge of the last sun cascade, so air beyond it adds no beam light. More lights and march samples increase
 GPU cost. This candidate is a lighting extension, not a complete shader pack.

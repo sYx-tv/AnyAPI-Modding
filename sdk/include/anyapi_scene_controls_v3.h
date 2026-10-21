@@ -1,6 +1,6 @@
 #pragma once
 #include "anyapi_scene_controls_v2.h"
-// v3 (AnyAPI 0.39.3) adds light colour tints and a wind scale on top of v2.
+// v3 (AnyAPI 0.40.1) adds light colour tints and a wind scale on top of v2.
 // key_tint multiplies the sun and the lit-side sky light (main, up, view up);
 // shade_tint multiplies the light that fills shadows (sky, back, down sides).
 // Each tint is 0.5..1.5 per channel; AnyAPI keeps each light's brightness

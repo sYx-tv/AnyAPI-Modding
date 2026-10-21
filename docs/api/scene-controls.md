@@ -14,7 +14,7 @@ version 1 clears the three additional overrides. Version 2 uses the same status
 structure and readiness checks. These switches change rendering, not collision
 or saved world objects, and restore the original flags even on exceptional exits.
 
-Version 3 (AnyAPI 0.39.3) uses [anyapi_scene_controls_v3.h](../../sdk/include/anyapi_scene_controls_v3.h).
+Version 3 (AnyAPI 0.40.1) uses [anyapi_scene_controls_v3.h](../../sdk/include/anyapi_scene_controls_v3.h).
 It embeds a version 2 policy in `detailed` and adds:
 
 | Parameter | Meaning |

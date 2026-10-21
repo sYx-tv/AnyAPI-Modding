@@ -17,7 +17,7 @@ when photo mode starts in ThirdPerson's third-person view. 0.31.2 hides the lamp
 settings on AMD graphics cards, where AnyAPI 0.39.1 switches lamp beams off; with AnyAPI 0.39.2
 they are back. 0.31.3 fixes your own head showing in first person after leaving photo mode (when F5 switched
 ThirdPerson to first person while the camera was flying), and the free camera staying at the last world's
-spot after loading another world with photo mode still on. 0.32.0 (with AnyAPI 0.39.3) splits the
+spot after loading another world with photo mode still on. 0.32.0 (with AnyAPI 0.40.1) splits the
 section into sub-menus and fixes the AA, sun shaft, contact shadow and cloud bugs below. See the
 [release records](../releases/README.md).
 
@@ -31,7 +31,7 @@ finish, and Performance. Groups start closed with a preset and open with Custom.
 Changing anything inside a group switches the preset to Custom, starting from
 the preset you had. Without AnyAPI menu v4 the Show/Hide buttons are toggles.
 
-Fixes in AnyAPI 0.39.3:
+Fixes in AnyAPI 0.40.1:
 
 - **Sun shafts**: a partly shadowed ray is no longer up to about 4.7x brighter
   than a lit one, so beams stop pumping as the camera moves; air past the last
@@ -43,7 +43,7 @@ Fixes in AnyAPI 0.39.3:
   edges and no offset shadows from thin objects.
 - **Clouds**: fixed in the world and crisper (see Sky below).
 
-New looks in 0.32.0 (AnyAPI 0.39.3):
+New looks in 0.32.0 (AnyAPI 0.40.1):
 
 - **Soft & warm** preset: a Complementary-style look built from the High tier.
   It uses the **Soft film** tone curve (a long straight middle and a slow
