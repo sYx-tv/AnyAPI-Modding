@@ -1,0 +1,17 @@
+{
+  "Packages": {
+    "CustomGame": {
+      "Id": "customgame",
+      "MinimumApi": 46,
+      "GameBuilds": [
+        {
+          "Version": "0.1.27",
+          "SteamBuild": 26113663,
+          "ExeSha256": "097e1167477587c51a3b93ab7e7843382d99d30010678c9bd89a2fee648fec23",
+          "GclSha256": "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22"
+        }
+      ],
+      "Description": "A Custom Game page on the New Game screen: pick Career, Creative or Sandbox, then day speed, start time and tier, up to 20 players, survival drains, enemies, loot, weather and joint strength. Settings are saved with each world. Anymaker 0.1.27 only."
+    }
+  }
+}
