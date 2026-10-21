@@ -1,11 +1,13 @@
 #pragma once
-// AnyCareer logic with no game calls: the Cash definition rewrite and the first-pass price list. Unit-tested by
-// tests/anycareer_logic_test.cpp.
+// AnyCareer logic with no game calls: the Cash definition rewrite, the first-pass price list, and the trader's
+// placement, day count, stock, payments and saved state. Unit-tested by tests/anycareer_logic_test.cpp.
 #include "anyapi_asset_json.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,8 +24,10 @@ inline constexpr int kLootGroupCount = int(sizeof(kLootGroups) / sizeof(kLootGro
 inline const char* loot_group_name(int32_t g) { return g >= 0 && g < kLootGroupCount ? kLootGroups[g] : "?"; }
 
 // Rewrites one stock ammo_box entry (its JSON text, every field kept) into the Cash definition. Fields it sets are
-// replaced where they exist and added where they don't. Returns "" when the text isn't one JSON object.
-inline std::string make_cash_entry(const std::string& entry) {
+// replaced where they exist and added where they don't. With a mesh path, Cash gets that look (and no extra ammo
+// meshes), and its floor physics box becomes `floor_min`..`floor_max`. Returns "" when the text isn't one JSON object.
+inline std::string make_cash_entry(const std::string& entry, const std::string& mesh = {}, const double* floor_min = nullptr,
+                                   const double* floor_max = nullptr) {
     assetjson::Value v;
     try { v = assetjson::Parser(entry).parse(); } catch (const std::exception&) { return {}; }
     if (v.kind != 'o' || entry.empty() || entry.back() != '}') return {};
@@ -40,10 +44,28 @@ inline std::string make_cash_entry(const std::string& entry) {
     struct Edit { size_t begin, end; std::string text; };
     std::vector<Edit> edits;
     std::string added;
-    for (const auto& [key, value] : fields) {
+    auto set = [&](const char* key, const std::string& value) {
         auto it = v.object.find(key);
         if (it != v.object.end()) edits.push_back({it->second.begin, it->second.end, value});
         else added += std::string(", \"") + key + "\": " + value;
+    };
+    for (const auto& [key, value] : fields) set(key, value);
+    if (!mesh.empty()) {
+        std::string quoted = "\"";
+        for (char c : mesh) quoted += c == '\\' ? '/' : c;
+        set("mesh_file", quoted + "\"");
+        set("meshes_dynamic", "[]");
+        const assetjson::Value& floor = v.get("floor");
+        auto vec = [](const double* p) {
+            char b[96];
+            std::snprintf(b, sizeof b, "[%.4f, %.4f, %.4f]", p[0], p[1], p[2]);
+            return std::string(b);
+        };
+        if (floor_min && floor_max && floor.kind == 'o')
+            for (const auto& [key, p] : {std::pair<const char*, const double*>{"physics_min", floor_min}, {"physics_max", floor_max}}) {
+                auto it = floor.object.find(key);
+                if (it != floor.object.end()) edits.push_back({it->second.begin, it->second.end, vec(p)});
+            }
     }
     std::sort(edits.begin(), edits.end(), [](const Edit& a, const Edit& b) { return a.begin > b.begin; });
     std::string out = entry;
@@ -96,6 +118,186 @@ inline std::string tsv_row(const Entry& e) {
     return std::string(e.part ? "part" : "item") + "\t" + clean(e.id) + "\t" + clean(e.name) + "\t" + clean(e.cls) + "\t" + clean(e.category) +
            "\t" + loot_group_name(e.loot_group) + "\t" + std::to_string(e.tech_tier) + "\t" + prob + "\t" + std::to_string(e.price) + "\t" +
            (e.findable ? "1" : "0");
+}
+
+
+// ------------------------------------------------------------------ trader placement
+struct Zone { double x{}, y{}, z{}; };
+
+// Building spots a tile file marks "gas_station" (spawn_zones: pos in world metres, filter). Tolerates other keys.
+inline void gas_stations(const std::string& tile_json, std::vector<Zone>& out) {
+    if (tile_json.find("gas_station") == std::string::npos) return;
+    assetjson::Value v;
+    try { v = assetjson::Parser(tile_json).parse(); } catch (const std::exception&) { return; }
+    for (const auto& zone : v.get("spawn_zones").array) {
+        if (zone.kind != 'o' || zone.get("filter").text != "gas_station") continue;
+        const auto& pos = zone.get("pos").array;
+        if (pos.size() != 3) continue;
+        out.push_back({pos[0].number, pos[1].number, pos[2].number});
+    }
+}
+
+// The spot nearest to (x, z) on the ground plane; -1 when there are none.
+inline int nearest(const std::vector<Zone>& zones, double x, double z) {
+    int best = -1;
+    double best_d = 0;
+    for (size_t i = 0; i < zones.size(); ++i) {
+        double dx = zones[i].x - x, dz = zones[i].z - z, d = dx * dx + dz * dz;
+        if (best < 0 || d < best_d) { best = int(i); best_d = d; }
+    }
+    return best;
+}
+
+// "1.2 km, ahead left": distance and where the point is relative to the way you face (yaw 0 faces +Z, +pi/2 faces +X).
+inline std::string direction_text(double px, double pz, double yaw, double tx, double tz) {
+    double dx = tx - px, dz = tz - pz, d = std::sqrt(dx * dx + dz * dz);
+    char dist[32];
+    if (d >= 1000) std::snprintf(dist, sizeof dist, "%.1f km", d / 1000);
+    else std::snprintf(dist, sizeof dist, "%d m", int(std::lround(d)));
+    if (d < 1) return dist;
+    const double pi = 3.14159265358979323846;
+    double rel = std::atan2(dx, dz) - yaw;
+    while (rel > pi) rel -= 2 * pi;
+    while (rel < -pi) rel += 2 * pi;
+    double deg = rel * 180 / pi;   // + is to your right (towards +X when facing +Z)
+    const char* where = deg > -22.5 && deg <= 22.5    ? "ahead"
+                        : deg > 22.5 && deg <= 67.5   ? "ahead right"
+                        : deg > 67.5 && deg <= 112.5  ? "right"
+                        : deg > 112.5 && deg <= 157.5 ? "behind right"
+                        : deg > -67.5 && deg <= -22.5 ? "ahead left"
+                        : deg > -112.5 && deg <= -67.5 ? "left"
+                        : deg > -157.5 && deg <= -112.5 ? "behind left"
+                                                         : "behind";
+    return std::string(dist) + ", " + where;
+}
+
+// ------------------------------------------------------------------ in-game days
+// Counts midnights from the day/night cycle factor (0 = midnight, 0.5 = noon). A drop from late evening to early
+// morning is a new day; a big jump (time set, world loaded) is not counted twice.
+struct DayClock {
+    double last = -1;
+    int64_t days = 0;
+    bool update(double factor) {
+        if (!(factor >= 0 && factor < 1)) return false;
+        bool wrapped = last >= 0.75 && factor < 0.25;
+        last = factor;
+        if (wrapped) ++days;
+        return wrapped;
+    }
+};
+
+// ------------------------------------------------------------------ stock
+inline uint64_t mix(uint64_t x) {
+    x += 0x9e3779b97f4a7c15ull;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
+    return x ^ (x >> 31);
+}
+
+struct StockRow { int candidate = 0; int quantity = 0; };
+
+// Up to `count` different candidates (indices into a list sorted the same way on every PC), each with 1-3 in
+// stock. The same seed and restock number always give the same shelf.
+inline std::vector<StockRow> pick_stock(size_t candidates, uint64_t seed, int64_t restock, int count) {
+    std::vector<int> order(candidates);
+    for (size_t i = 0; i < candidates; ++i) order[i] = int(i);
+    uint64_t state = mix(seed ^ mix(uint64_t(restock) + 0x5157));
+    for (size_t i = candidates; i > 1; --i) {
+        state = mix(state);
+        std::swap(order[i - 1], order[size_t(state % i)]);
+    }
+    std::vector<StockRow> out;
+    for (size_t i = 0; i < candidates && int(i) < count; ++i) {
+        state = mix(state);
+        out.push_back({order[i], 1 + int(state % 3)});
+    }
+    std::sort(out.begin(), out.end(), [](const StockRow& a, const StockRow& b) { return a.candidate < b.candidate; });
+    return out;
+}
+
+// What the trader pays for something he sells for `price`: 40%, at least 1.
+inline int sell_price(int price) { return std::max(1, price * 40 / 100); }
+
+// ------------------------------------------------------------------ paying with Cash stacks
+struct Stack { int32_t item_id = 0; int32_t count = 0; };
+struct Payment { int32_t item_id = 0; int32_t new_count = 0; };   // new_count 0: remove the stack
+
+// Takes `cost` from the stacks, smallest first so you keep fewer, fuller stacks. False (and no plan) when the
+// stacks don't cover it.
+inline bool plan_payment(std::vector<Stack> stacks, int64_t cost, std::vector<Payment>& out) {
+    out.clear();
+    if (cost <= 0) return cost == 0;
+    int64_t total = 0;
+    for (const auto& s : stacks) total += std::max(0, s.count);
+    if (total < cost) return false;
+    std::stable_sort(stacks.begin(), stacks.end(), [](const Stack& a, const Stack& b) { return a.count < b.count; });
+    for (const auto& s : stacks) {
+        if (cost <= 0) break;
+        if (s.count <= 0) continue;
+        int64_t take = std::min<int64_t>(s.count, cost);
+        out.push_back({s.item_id, int32_t(s.count - take)});
+        cost -= take;
+    }
+    return true;
+}
+
+// Stacks of at most kCashStack that add up to `amount`.
+inline std::vector<int32_t> cash_stacks(int64_t amount) {
+    std::vector<int32_t> out;
+    while (amount > 0) {
+        int32_t n = int32_t(std::min<int64_t>(amount, kCashStack));
+        out.push_back(n);
+        amount -= n;
+    }
+    return out;
+}
+
+// ------------------------------------------------------------------ per-world saved state
+// One small text file per world (mods/AnyCareer/worlds/<seed>.txt), "key value" lines; unknown keys are kept out.
+struct WorldState {
+    bool placed = false;
+    Zone trader;
+    int64_t days = 0;
+    int64_t restock = -1;
+    std::vector<int> sold;    // per shelf row, how many have been bought since the last restock
+};
+
+inline std::string save_world(const WorldState& w) {
+    std::ostringstream o;
+    o.precision(17);
+    o << "anycareer_world 1\n";
+    if (w.placed) o << "mechanic " << w.trader.x << " " << w.trader.y << " " << w.trader.z << "\n";
+    o << "days " << w.days << "\nrestock " << w.restock << "\nsold";
+    for (int n : w.sold) o << " " << n;
+    o << "\n";
+    return o.str();
+}
+
+inline bool load_world(const std::string& text, WorldState& w) {
+    std::istringstream in(text);
+    std::string line;
+    if (!std::getline(in, line) || line != "anycareer_world 1") return false;
+    WorldState r;
+    while (std::getline(in, line)) {
+        std::istringstream row(line);
+        std::string key;
+        row >> key;
+        if (key == "mechanic") {
+            Zone z;
+            if (row >> z.x >> z.y >> z.z && std::isfinite(z.x) && std::isfinite(z.y) && std::isfinite(z.z)) { r.trader = z; r.placed = true; }
+        } else if (key == "days") {
+            int64_t d;
+            if (row >> d && d >= 0) r.days = d;
+        } else if (key == "restock") {
+            int64_t d;
+            if (row >> d && d >= -1) r.restock = d;
+        } else if (key == "sold") {
+            int n;
+            while (row >> n && r.sold.size() < 64) r.sold.push_back(std::max(0, n));
+        }
+    }
+    w = r;
+    return true;
 }
 
 }  // namespace anycareer::logic

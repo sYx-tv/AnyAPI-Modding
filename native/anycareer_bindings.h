@@ -43,4 +43,27 @@ inline constexpr func_desc item_world_create_item{"(ref<server_scene.item_world>
 // (ptr<server_scene.item_floor>) server_scene.item_floor_container.create_item (server_scene.item_floor_container, physics.scene, const mat34, const vec3, const ref<server_scene.item_world>) | side: server
 inline constexpr func_desc floor_create_item{"(ptr<server_scene.item_floor>) server_scene.item_floor_container.create_item (server_scene.item_floor_container, physics.scene, const mat34, const vec3, const ref<server_scene.item_world>)","53 55 56 57 48 81 ec 88 00 00 00 48 8b ac 24 d0 00 00 00 48 8b 9c 24 d8 00 00 00 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 4c 89 4c 24 38 48 89 6c 24 40 48 89 5c 24 48 48",{"", {}, 0},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 3d 00 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05 34 00 00 00 48 8b 4c 24 28 48 89 01 8b 05 16 00 00 00 89 41 70",88u,16};
 
+// Constructs an empty vector<ptr<server_scene.item_world>> (for inventory get_items).
+// () ctor (vector<ptr<server_scene.item_world>>) | side: shared
+inline constexpr func_desc item_vector_ctor{"() ctor (vector<ptr<server_scene.item_world>>)","",{"53 55 56 48 81 ec 70 01 00 00 48 89 8c 24 90 00 00 00 48 89 94 24 98 00 00 00 4c 89 84 24 a0 00", {1456u}, 1},"",0u,-1};
+
+// Destroys that vector.
+// () dtor (vector<ptr<server_scene.item_world>>) | side: shared
+inline constexpr func_desc item_vector_dtor{"() dtor (vector<ptr<server_scene.item_world>>)","",{"53 55 56 48 81 ec 70 01 00 00 48 89 8c 24 90 00 00 00 48 89 94 24 98 00 00 00 4c 89 84 24 a0 00", {1536u}, 1},"",0u,-1};
+
+// Every item a player carries: hands, worn slots and one level inside them (backpacks, pockets).
+// () server_scene.inventory.get_items (server_scene.inventory, vector<ptr<server_scene.item_world>>) | side: server
+inline constexpr func_desc inventory_get_items{"() server_scene.inventory.get_items (server_scene.inventory, vector<ptr<server_scene.item_world>>)","",{"", {}, 0},"53 48 83 ec 40 48 89 4c 24 20 48 8d 01 48 8b 15 d4 00 00 00 48 89 4c 24 30 48 89 c1 ff 12 48 8b",240u,28};
+
+// Removes one carried item by id and hands back the last reference (the caller releases it, as the game does).
+// (ref<server_scene.item_world>) server_scene.inventory.destroy_item (server_scene.inventory, const s32) | side: server
+inline constexpr func_desc inventory_destroy_item{"(ref<server_scene.item_world>) server_scene.inventory.destroy_item (server_scene.inventory, const s32)","53 55 56 57 48 83 ec 78 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 c7 44 24 38 00 00 00 00",{"", {}, 0},"53 48 83 ec 40 48 89 4c 24 20 48 8d 01 48 8b 15 d4 00 00 00 48 89 4c 24 30 48 89 c1 ff 12 48 8b",240u,20};
+
+// Turns a fresh vehicle_editor_add_component item into a stack of one part (dungeon loot does the same).
+// () server_scene.item_world.vehicle_editor_add_component.set (server_scene.item_world.vehicle_editor_add_component, const vehicle_component_definition, const s32) | side: server
+inline constexpr func_desc add_component_set{"() server_scene.item_world.vehicle_editor_add_component.set (server_scene.item_world.vehicle_editor_add_component, const vehicle_component_definition, const s32)","53 55 48 83 ec 58 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8d 02 48 89 81 d0 00 00 00 48",{"", {}, 0},"53 55 56 57 41 54 41 55 48 81 ec 98 05 00 00 48 89 8c 24 60 04 00 00 48 89 94 24 68 04 00 00 4c",6280u,31};
+
+// The same for building parts (vehicle_editor_add_building_component).
+// () server_scene.item_world.vehicle_editor_add_building_component.set (server_scene.item_world.vehicle_editor_add_building_component, const vehicle_component_definition, const s32) | side: server
+inline constexpr func_desc add_building_component_set{"() server_scene.item_world.vehicle_editor_add_building_component.set (server_scene.item_world.vehicle_editor_add_building_component, const vehicle_component_definition, const s32)","53 55 48 83 ec 68 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 83 ba b0 02 00 00 00 0f 95 c0",{"", {}, 0},"53 55 56 57 41 54 41 55 48 81 ec 98 05 00 00 48 89 8c 24 60 04 00 00 48 89 94 24 68 04 00 00 4c",6232u,31};
 } // namespace anycareer::bind
