@@ -231,6 +231,12 @@ def main():
             elif len(was) == 1 and len(hits) > 1:
                 # A unique pattern gained a byte-identical twin: code that requires one match stops.
                 row.update(status='changed', note=twin_note(hits))
+            elif r['kind'] == 'array' and len(was) <= 3 and was - {f.sig for f in hits}:
+                # Twins that diverged: the bytes still match one of them, maybe not the one we meant
+                # (0.1.27: AnyBalance's Properties overlay changed and only the microcontroller twin matched).
+                # Binding routes are checked again at runtime, and wide patterns lose members harmlessly.
+                row.update(status='changed', note='now matches only %s; it also used to match %s' % (
+                    ', '.join(sorted(f.sig for f in hits)), ', '.join(sorted(was - {f.sig for f in hits}))))
             report.append(row)
             continue
         cands = [f for f in old_by_prefix.get(body[:16], []) if prefix_of(f)] or \

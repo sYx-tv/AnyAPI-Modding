@@ -1,7 +1,7 @@
 # Scene lighting
 
 AnyAPI and AnyGraphics (0.29.0, overhauled in 0.30.0) add HDR fog, sun shafts and local-light scattering
-for Anymaker 0.1.25 / Steam build 25904830.
+for Anymaker 0.1.27 / Steam build 26113663.
 
 ## Render integration
 
