@@ -200,6 +200,8 @@ std::vector<logic::ZombieKind> g_zombies;           // from rom/data/zombie_defi
 thread_local bool t_adding = false;
 std::atomic<uint64_t> g_last_tick{0};
 std::atomic<bool> g_shop_open{false};
+std::atomic<bool> g_free_move{false};             // F2 test key (render side sets it)
+ULONGLONG g_free_move_logs_until = 0;
 std::atomic<uint32_t> g_mode{ANY_MODE_UNKNOWN};
 
 enum class Job { give_cash, price_list, buy, sell, take, abandon, deliver, claim, test_items, teleport };
@@ -511,6 +513,8 @@ struct Trader {
     std::vector<logic::Offer> offers;             // today's board
     int64_t offers_board = -2;
     std::string job_name;                         // display name of the job's item (looked up once)
+    ULONGLONG tp_check = 0;                       // when to log where the host ended up after F6
+    logic::Zone tp_to;
     const uint8_t* cash_def = nullptr;
     const uint8_t* part_item_def = nullptr;       // "vehicle_editor_add_component"
     uint32_t ticks = 0;
@@ -880,6 +884,7 @@ void test_items(uint8_t* scene, const Work& w) {
 void teleport(uint8_t* scene, const Work&) {
     uint8_t* peer = host_peer(scene);
     void* data = peer && anymaker::readable(peer + off::peer_data, 8) ? rd<void*>(peer, off::peer_data) : nullptr;
+    if (g_free_move) { T.status = L"Turn free move off (F2) before teleporting."; log(1, "ANYCAREER_TELEPORT ok=0 reason=free_move_on"); return; }
     if (!teleport_event || !T.server || !data || !T.world.placed) { log(1, "ANYCAREER_TELEPORT ok=0 reason=%s", !teleport_event ? "no_teleport_function" : "not_ready"); return; }
     bool drop_off = T.world.job_state == 1 && !T.world.job_kill;
     logic::Zone at = drop_off ? T.world.job_at : T.world.trader;
@@ -887,6 +892,7 @@ void teleport(uint8_t* scene, const Work&) {
     e.position = {at.x + 3, at.y + 2, at.z + 3};   // beside the spot, a little up, so you land on the ground
     teleport_event(T.server, data, &e);
     T.status = drop_off ? L"Teleported to the drop-off (test key)." : L"Teleported to the Mechanic (test key).";
+    T.tp_check = GetTickCount64() + 1500; T.tp_to = {e.position.x, e.position.y, e.position.z};
     log(0, "ANYCAREER_TELEPORT ok=1 to=%s at=(%.0f, %.0f, %.0f)", drop_off ? "dropoff" : "mechanic", e.position.x, e.position.y, e.position.z);
 }
 
@@ -1125,6 +1131,13 @@ void hk_tick(uint8_t* scene, uint8_t* server) {
             if (GetTickCount64() - w.posted > 3000) { log(1, "ANYCAREER_JOB ok=0 reason=expired"); continue; }
             run_job(scene, w);
         }
+        if (T.tp_check && GetTickCount64() > T.tp_check) {
+            T.tp_check = 0;
+            uint8_t* peer = host_peer(scene);
+            Vec3 p = peer ? rd<Vec3>(peer, off::peer_position) : Vec3{0, 0, 0};
+            log(0, "ANYCAREER_TELEPORT_CHECK now=(%.0f, %.0f, %.0f) target=(%.0f, %.0f, %.0f) off_by_m=%.0f", p.x, p.y, p.z, T.tp_to.x, T.tp_to.y, T.tp_to.z,
+                std::hypot(p.x - T.tp_to.x, p.z - T.tp_to.z));
+        }
         // The shop screen refreshes a few times a second while open (and right after a trade), rarely otherwise.
         if (!work.empty() || ++T.ticks % (g_shop_open ? 10u : 120u) == 0) run_publish(scene);
     }
@@ -1173,7 +1186,6 @@ uint8_t* local_scene() {
     uint8_t* client = ref && anymaker::readable(ref, 16) ? ref[1] : nullptr;
     return client && anymaker::readable(client + off::client_scene, off::scene_free_move + 1) ? client + off::client_scene : nullptr;
 }
-bool g_free_move = false;
 
 void post(Job job, int32_t key);
 
@@ -1425,6 +1437,18 @@ void draw(const AnyFrameV1* f, void*) {
         g_seen_board = v.board;
     }
     if (g_open) { host.capture_input(1); draw_shop(f, v); return; }
+    if (now < g_free_move_logs_until) {   // what the game does with the flag, once a second for 5 s after F2
+        static ULONGLONG last = 0;
+        uint8_t* scene = local_scene();
+        uint8_t* actor = scene ? rd<uint8_t*>(scene, off::scene_authority_actor) : nullptr;
+        if (scene && now - last >= 1000) {
+            last = now;
+            Mat34 a = actor && anymaker::readable(actor + off::client_actor_transform, sizeof(Mat34)) ? rd<Mat34>(actor, off::client_actor_transform) : Mat34{};
+            Mat34 m = rd<Mat34>(scene, off::scene_free_move_transform);
+            log(0, "ANYCAREER_FREE_MOVE_CHECK flag=%d character=(%.0f, %.0f, %.0f) free_move_at=(%.0f, %.0f, %.0f) speed=%.2f", rd<bool>(scene, off::scene_free_move) ? 1 : 0,
+                a.t[0], a.t[1], a.t[2], m.t[0], m.t[1], m.t[2], rd<double>(scene, off::scene_free_move + 2));
+        }
+    }
     if (g_free_move) {
         uint8_t* scene = local_scene();
         g_free_move = scene && rd<bool>(scene, off::scene_free_move);
@@ -1481,6 +1505,7 @@ void toggle_free_move() {
     }
     *reinterpret_cast<bool*>(scene + off::scene_free_move) = on;
     g_free_move = on;
+    g_free_move_logs_until = GetTickCount64() + 5000;
     log(0, "ANYCAREER_FREE_MOVE on=%d", on ? 1 : 0);
 }
 
