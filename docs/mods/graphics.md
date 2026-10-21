@@ -43,6 +43,24 @@ Fixes in AnyAPI 0.39.3:
   edges and no offset shadows from thin objects.
 - **Clouds**: fixed in the world and crisper (see Sky below).
 
+New looks in 0.32.0 (AnyAPI 0.39.3):
+
+- **Soft & warm** preset: a Complementary-style look built from the High tier.
+  It uses the **Soft film** tone curve (a long straight middle and a slow
+  roll-off, so bright skies stay soft), the **Soft & warm** colour look (golden
+  highlights, cool blue shade, rich but not neon colour) and Light colour
+  Normal. Detailed shading (GTAO) stays off.
+- **Light colour** (Lighting group: Game, Subtle, Normal, Strong) tints the
+  game's own lights: the sun side goes golden and the shade goes cool blue.
+  Each light keeps its brightness, and shadows pick the tint up naturally
+  because it is in the lighting, not a filter over the screen. Moody uses Subtle.
+- **Wind in trees** (Sky group: Calm, Game, Breezy, Stormy) sets how hard trees
+  and grass sway. Only the look changes; vehicles, physics and other players
+  are not affected.
+
+With an older AnyAPI, Soft film falls back to Clean, Soft & warm to Vivid, and
+the Light colour and Wind rows are hidden.
+
 ## Tone mapping and colour (0.30.0)
 
 The **Finish** rows grade the HDR scene before the game's tone mapping, using

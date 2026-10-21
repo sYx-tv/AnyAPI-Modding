@@ -8,6 +8,7 @@
 #include "anyapi_menu_v2.h"
 #include "anyapi_scene_controls_v1.h"
 #include "anyapi_scene_controls_v2.h"
+#include "anyapi_scene_controls_v3.h"
 #include "anyapi_scene_lighting_v1.h"
 #include "anyapi_scene_lighting_v2.h"
 #include "anyapi_scene_lighting_v3.h"
@@ -52,11 +53,14 @@ static bool status(AnySceneStatusV1* s){s->ready=ready;return true;}
 static uint64_t forbidden(const AnyPostPassV1*){++post_calls;assert(false&&"AnyGraphics must never register post FX");return 0;}
 static const AnySceneControlsV1 scene{sizeof(AnySceneControlsV1),1,set,status};
 static const AnySceneControlsV2 scene_v2{sizeof(AnySceneControlsV2),2,set_v2,status};
+static AnySceneParametersV3 look_policy;static unsigned look_sets{};
+static bool set_v3(const AnySceneParametersV3* p){look_policy=*p;++look_sets;return set_v2(&p->detailed);}
+static const AnySceneControlsV3 scene_v3{sizeof(AnySceneControlsV3),3,set_v3,status};
 static const AnyPostProcessV1 post{sizeof(AnyPostProcessV1),1,forbidden,nullptr,nullptr};
 static void log(uint32_t,const char*,const char* text){std::cout<<text<<'\n';}
 int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitbuf;using namespace graphics_options;assert(argc==4||argc==5);bool local=argc==5&&std::wstring(argv[4])==L"--local-lights",absent=argc==5&&!local;
  auto fixture=LoadLibraryW(argv[1]);assert(fixture);auto service=AnyAPI_Services();assert(service);assert(service->publish("anyapi.post_process",1,&post));if(!absent){assert(service->publish("anyapi.scene_controls",1,&scene));assert(service->publish("anyapi.scene_controls",2,&scene_v2));assert(service->publish("anyapi.scene_antialiasing",1,&aa_api));assert(service->publish("anyapi.scene_lighting",1,&lighting_api));}auto graphics=LoadLibraryW(argv[3]);assert(graphics);
- if(local){assert(service->publish("anyapi.scene_lighting",2,&local_api));assert(service->publish("anyapi.scene_lighting",3,&shaped_api));assert(service->publish("anyapi.scene_antialiasing",2,&aa2_api));assert(service->publish("anyapi.scene_timing",1,&timing_api));assert(service->publish("anyapi.scene_effects",1,&effects_api));}
+ if(local){assert(service->publish("anyapi.scene_lighting",2,&local_api));assert(service->publish("anyapi.scene_lighting",3,&shaped_api));assert(service->publish("anyapi.scene_antialiasing",2,&aa2_api));assert(service->publish("anyapi.scene_timing",1,&timing_api));assert(service->publish("anyapi.scene_effects",1,&effects_api));assert(service->publish("anyapi.scene_controls",3,&scene_v3));}
  auto root=std::filesystem::temp_directory_path()/(L"AnyGraphicsNative-"+std::to_wstring(GetCurrentProcessId()));std::filesystem::create_directories(root/L"AnyHelpers");
  // Migration retains native keys, ignores removed post FX and does not load AnyHelpers.
  {std::ofstream old(root/L"AnyHelpers"/L"settings.tsv");old<<"anygraphics.scene\tsun_light\t3\t312e35\nanygraphics.general\tcomparison\t4\t31\nanygraphics.sharpness\tsharpen\t1\t31\n";}
@@ -101,6 +105,7 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  // Presets show the top rows and closed groups; Custom keeps the current values and opens every group.
  event(ANY_MENU_OPEN);stage(0,0);auto preset_rows=rows();event(ANY_MENU_CANCEL);
  apply(Preset,ClearDayProfile);assert(effects_policy.tonemap==2&&effects_policy.look==0&&lighting_policy.fog_strength==0&&std::abs(aa2_policy.sharpening-.55f)<.001f);
+ apply(Preset,SoftWarmProfile);assert(effects_policy.tonemap==3&&effects_policy.look==6&&!effects_policy.ambient_occlusion);if(local){assert(look_sets&&look_policy.key_tint[0]==1.08f&&look_policy.shade_tint[2]==1.1f&&look_policy.wind_scale==1);apply(Preset,CustomProfile);apply(WindStrength,3);assert(look_policy.wind_scale==2.5f);apply(LightColour,0);assert(look_policy.key_tint[0]==1);}
  apply(Preset,MoodyProfile);apply(Preset,CustomProfile);assert(effects_policy.look==1&&effects_policy.vignette==.5f);event(ANY_MENU_OPEN);stage(0,0);std::cout<<"ROWS preset="<<preset_rows<<" custom="<<rows()<<std::endl;assert(rows()>preset_rows+15);event(ANY_MENU_CANCEL);
  // Shaping rows submit their own values; the GPU cost readout polls timing while the menu draws.
  apply(Preset,3);apply(Preset,CustomProfile);apply(ShaftClarity,3);apply(BeamReach,3);apply(SunResponse,0);apply(TemporalLighting,0);assert(shaped_policy.clarity==0&&shaped_policy.beam_reach==0&&!shaped_policy.sun_response&&!shaped_policy.temporal);
@@ -142,5 +147,5 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
 
  }
  {std::ifstream saved(root/L"AnyGraphics"/L"settings.tsv");std::string text((std::istreambuf_iterator<char>(saved)),{});assert(text.find("comparison")==std::string::npos&&text.find("sharpen")==std::string::npos);}
- FreeLibrary(graphics);FreeLibrary(fixture);std::filesystem::remove_all(root);std::cout<<"PASS: native-only Graphics section, no AnyHelpers dependency or post-FX registrations, migration, draft/apply/cancel/reset, quality levels, twelve profiles, TAA, sharpening, beam shaping, GPU cost readout, gameplay bypass and unavailable service\n";
+ FreeLibrary(graphics);FreeLibrary(fixture);std::filesystem::remove_all(root);std::cout<<"PASS: native-only Graphics section, no AnyHelpers dependency or post-FX registrations, migration, draft/apply/cancel/reset, quality levels, thirteen profiles, light colour and wind, TAA, sharpening, beam shaping, GPU cost readout, gameplay bypass and unavailable service\n";
 }

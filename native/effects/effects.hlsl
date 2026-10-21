@@ -10,7 +10,7 @@ cbuffer Frame : register(b0) {
     float4 metrics;    // 1/width, 1/height, width, height of the full target
     float4 sun_screen; // sun uv.xy, glare on (1/0), sun height above horizon
     float4 sun_colour; // rgb light colour, glare strength
-    float4 grading;    // tonemap, look, look strength, manual stops
+    float4 grading;    // tonemap (0 game, 1 filmic, 2 clean, 3 soft film), look 0..6, look strength, manual stops
     float4 exposure;   // eye adaptation (1/0), fast blend, slow blend, max stops
     float4 extras;     // bloom mix, vignette, pass texel size x, y
 };
@@ -122,6 +122,21 @@ float3 neutral(float3 c) {
     float d = 1 - start, fresh = 1 - d * d / (peak + d - start); c *= fresh / peak;
     float g = 1 - 1 / (desaturation * (peak - fresh) + 1); return lerp(c, fresh.xxx, g);
 }
+// "Soft film": Uchimura's GT curve (max 1, contrast 1, linear section from
+// .22 to .62, black tightness 1.5): a long straight middle and a slow shoulder,
+// so bright skies roll off gently. Half per channel, half luminance-preserving,
+// which keeps sunsets saturated without hue shifts.
+float3 uchimura(float3 x) {
+    const float P = 1, a = 1, m = .22, l = .4, c = 1.5, b = 0;
+    float l0 = (P - m) * l / a, S0 = m + l0, S1 = m + a * l0, C2 = a * P / (P - S1), CP = -C2 / P;
+    float3 w0 = 1 - smoothstep(0, m, x), w2 = step(m + l0, x), w1 = 1 - w0 - w2;
+    float3 T = m * pow(max(x / m, 0), c) + b, L = m + a * (x - m), S = P - (P - S1) * exp(CP * (x - S0));
+    return T * w0 + L * w1 + S * w2;
+}
+float3 soft_film(float3 x) {
+    float y = dot(x, luma709), t = dot(uchimura(y.xxx), luma709) / max(y, 1e-5);
+    return pow(saturate(lerp(uchimura(x), x * t, .5)), 1 / 2.2);
+}
 // The game's post-ACES display steps (luma weights assumed Rec.709).
 float3 game_display(float3 l) {
     float3 g = pow(saturate(l), 1 / 2.2); g = (g - .45) * 1.12 + .45;
@@ -133,14 +148,16 @@ float3 game_display_inverse(float3 d) {
 }
 
 // --- Looks ---------------------------------------------------------------------
-// None, Warm, Cool, Teal & orange, Moody, Vivid.
-static const float3 white_balance[6] = {float3(1, 1, 1), float3(1.06, 1, .91), float3(.94, .99, 1.07), float3(1.02, 1, .97), float3(.97, .99, 1.02), float3(1.02, 1, .97)};
-static const float saturation[6] = {1, 1.05, .98, 1.08, .82, 1.2};
-static const float vibrance[6] = {0, .1, 0, .15, 0, .3};
-static const float contrast[6] = {1, 1.02, 1.02, 1.06, 1.12, 1.06};
-static const float3 shadow_tint[6] = {float3(0, 0, 0), float3(.012, .004, -.008), float3(-.01, 0, .016), float3(-.025, .01, .03), float3(-.012, .002, .016), float3(0, 0, 0)};
-static const float3 highlight_tint[6] = {float3(0, 0, 0), float3(.02, .008, -.015), float3(-.012, 0, .015), float3(.04, .012, -.03), float3(.01, 0, -.01), float3(.01, .005, -.005)};
-static const float lift[6] = {0, 0, 0, 0, -.012, 0};
+// None, Warm, Cool, Teal & orange, Moody, Vivid, Soft & warm. Soft & warm is
+// a Complementary-style grade: golden highlights, cool blue shade, rich but
+// not neon colour, shadows lifted a touch so they stay readable.
+static const float3 white_balance[7] = {float3(1, 1, 1), float3(1.06, 1, .91), float3(.94, .99, 1.07), float3(1.02, 1, .97), float3(.97, .99, 1.02), float3(1.02, 1, .97), float3(1.03, 1, .955)};
+static const float saturation[7] = {1, 1.05, .98, 1.08, .82, 1.2, 1.1};
+static const float vibrance[7] = {0, .1, 0, .15, 0, .3, .25};
+static const float contrast[7] = {1, 1.02, 1.02, 1.06, 1.12, 1.06, 1.04};
+static const float3 shadow_tint[7] = {float3(0, 0, 0), float3(.012, .004, -.008), float3(-.01, 0, .016), float3(-.025, .01, .03), float3(-.012, .002, .016), float3(0, 0, 0), float3(-.014, .002, .022)};
+static const float3 highlight_tint[7] = {float3(0, 0, 0), float3(.02, .008, -.015), float3(-.012, 0, .015), float3(.04, .012, -.03), float3(.01, 0, -.01), float3(.01, .005, -.005), float3(.024, .012, -.018)};
+static const float lift[7] = {0, 0, 0, 0, -.012, 0, .01};
 
 float4 Composite(Varying v) : SV_Target {
     float4 source = image.Load(int3(v.position.xy, 0));
@@ -160,11 +177,12 @@ float4 Composite(Varying v) : SV_Target {
     float stops = grading.w;
     if (exposure.x > .5 && a.w > .5) stops += clamp((a.y - a.x) * .75, -exposure.w, exposure.w);
     x *= exp2(stops);
-    uint look = (uint)clamp(grading.y, 0, 5); float strength = grading.z;
+    uint look = (uint)clamp(grading.y, 0, 6); float strength = grading.z;
     x *= lerp(1, white_balance[look], strength);
     float3 d;
     if (grading.x < .5) d = game_display(aces(.85 * x));
-    else d = grading.x < 1.5 ? agx(x * 1.1) : pow(saturate(neutral(x * 1.2)), 1 / 2.2);
+    else if (grading.x < 1.5) d = agx(x * 1.1);
+    else d = grading.x < 2.5 ? pow(saturate(neutral(x * 1.2)), 1 / 2.2) : soft_film(x * 1.25);
     // Display-domain grading.
     float y = dot(d, luma709);
     float sat = lerp(1, saturation[look], strength), vib = vibrance[look] * strength;
