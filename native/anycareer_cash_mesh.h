@@ -33,8 +33,9 @@ inline std::vector<Box> bundle() {
     return boxes;
 }
 
-// Every face is two-sided (both windings), as GpsPart's arrows are, so the result never depends on the game's
-// winding convention.
+// Every face is drawn with both windings, so the result never depends on the game's winding convention, and both
+// copies keep the outward normal. (Test 2: with flipped normals on the back copy the inventory icon came out black,
+// because the icon render draws the other winding than the world does.)
 inline void add_box(const Box& b, std::vector<gpspart::MeshVertex>& verts, std::vector<uint32_t>& idx) {
     for (int axis = 0; axis < 3; ++axis)
         for (int sign = 0; sign < 2; ++sign) {
@@ -52,8 +53,7 @@ inline void add_box(const Box& b, std::vector<gpspart::MeshVertex>& verts, std::
                     gpspart::MeshVertex mv{};
                     for (int j = 0; j < 3; ++j) mv.pos[j] = c[k][j];
                     for (int j = 0; j < 4; ++j) mv.rgba[j] = b.rgba[j];
-                    float out = (sign ? 1.f : -1.f) * (side ? -1.f : 1.f);
-                    mv.normal[axis] = out;
+                    mv.normal[axis] = sign ? 1.f : -1.f;   // outward on both copies (see above)
                     verts.push_back(mv);
                 }
                 const uint32_t a[6] = {0, 1, 2, 0, 2, 3}, r[6] = {0, 2, 1, 0, 3, 2};
