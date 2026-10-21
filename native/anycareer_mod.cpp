@@ -12,8 +12,9 @@
 //      world runs with AnyCareer (gas station spots are read from the player's own rom/data/tiles at start-up). The
 //      spot is kept in "AnyAPI and Modding/mods/AnyCareer/worlds/<world seed>.txt". Far away, a line at the top of
 //      the screen gives the distance and direction; within kTradeRange, J (rebindable in Mod Controls) opens the
-//      shop. Mouse: click a row's Buy or Sell button, a tab or X; the wheel scrolls; right click closes. The keyboard
-//      works too. Buy: up to 10 mechanical parts that can drop at the world's loot level, 1-3 of each, picked from
+//      shop, and AnyMap (when installed) shows him as a pin through its anymap.pins service. Shop rows show the
+//      part's picture (AnyAPI item images). Mouse: click a row's Buy or Sell button, a tab or X; the wheel
+//      scrolls; right click closes. The keyboard works too. Buy: up to 16 mechanical parts that can drop at the world's loot level, 1-3 of each, picked from
 //      the world seed and the restock number; the shelf restocks every kRestockDays in-game days (midnights are
 //      counted while the world runs). Sell: mechanical parts and items you carry, for 40% of the trader's price.
 //      Everything happens on the host in one server-tick step: buying checks your Cash, takes it from your stacks
@@ -36,6 +37,9 @@
 #include "anyapi_ui_state_v1.h"
 #include "anyapi_world_time_v1.h"
 #include "mod_controls_v1.h"
+#include "anyapi_item_catalog_v1.h"
+#include "anyapi_item_images_v1.h"
+#include "anymap_pins_v1.h"
 #include "anyapi_experimental.hpp"
 #include "anycareer_bindings.h"
 #include "anycareer_logic.h"
@@ -56,6 +60,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace anycareer {
@@ -103,7 +108,7 @@ constexpr int32_t kGiveAmount = 250;
 constexpr int32_t kMechanical = 6;                  // e_loot_group mechanical
 constexpr double kTradeRange = 30;                  // metres from the gas station spot (the building stands on it)
 constexpr int64_t kRestockDays = 2;
-constexpr int kShelfSize = 10;
+constexpr int kShelfSize = 16;                // Nate (2026-10-21): "a wee bit larger" than 10
 
 struct Vec3 { double x, y, z; };
 struct Mat34 { double v0[3], v1[3], v2[3], t[3]; };   // three basis vectors, then the translation
@@ -134,6 +139,9 @@ const AnyGpuDrawV1* gpu;
 const AnyWorldTimeV1* world_time;
 const AnySessionV1* session;
 const ModControlsV1* controls;
+const AnyItemCatalogV1* catalog;
+const AnyItemImagesV1* images;
+const AnyServicesV1* services_api;
 uint64_t trade_action;
 std::atomic<bool> g_stop{false}, g_ready{false}, g_stations_ready{false};
 
@@ -165,7 +173,7 @@ std::mutex g_mutex;
 std::deque<Work> g_queue;   // key presses waiting for the next server tick
 
 // What the shop screen shows, written by the server tick and read by the renderer.
-struct Row { std::wstring name; int price = 0, quantity = 0; int32_t key = 0; };
+struct Row { std::wstring name; int price = 0, quantity = 0; int32_t key = 0; std::string id; };   // id: part or item definition, for its picture
 struct View {
     bool placed = false;
     logic::Zone trader;
@@ -489,7 +497,7 @@ void build_candidates(uint8_t* scene) {
 }
 
 // What one carried item is worth to the Mechanic (0: he doesn't buy it). Parts in a stack are priced per part.
-int sell_value(const Carried& c, std::string* name, int32_t* count) {
+int sell_value(const Carried& c, std::string* name, int32_t* count, std::string* id = nullptr) {
     if (!c.def || c.def == T.cash_def) return 0;
     if (c.def == T.part_item_def) {
         const uint8_t* part = rd<const uint8_t*>(c.item, off::part_definition);
@@ -500,12 +508,14 @@ int sell_value(const Carried& c, std::string* name, int32_t* count) {
         int32_t per_stack = std::max(1, rd<int32_t>(part, off::part_default_stack));
         if (name) *name = e.name.empty() ? e.id : e.name;
         if (count) *count = n;
+        if (id) *id = e.id;
         return std::max(1, int(int64_t(logic::sell_price(e.price)) * n / per_stack));
     }
     logic::Entry e = entry_of(c.def, false);
     if (e.loot_group != kMechanical) return 0;
     if (name) *name = e.name.empty() ? e.id : e.name;
     if (count) *count = 1;
+    if (id) *id = e.id;
     return logic::sell_price(e.price);
 }
 
@@ -598,17 +608,17 @@ void publish_view(uint8_t* scene) {
         const Candidate& c = T.candidates[size_t(T.shelf[i].candidate)];
         std::wstring name = wide(c.name);
         if (c.stack > 1) name += L" x" + std::to_wstring(c.stack);
-        v.buy.push_back({name, c.price, std::max(0, T.shelf[i].quantity - T.world.sold[i]), int32_t(i)});
+        v.buy.push_back({name, c.price, std::max(0, T.shelf[i].quantity - T.world.sold[i]), int32_t(i), c.id});
     }
     uint8_t* inventory = g_shop_open && T.cash_def ? peer_inventory(host_peer(scene)) : nullptr;
     if (inventory) {
         int n = carried(inventory);
         for (int i = 0; i < n; ++i) {
             if (g_carried[i].def == T.cash_def) { v.cash += rd<int32_t>(g_carried[i].item, off::ammo_count + off::property_value); continue; }
-            std::string name;
+            std::string name, id;
             int32_t count = 1;
-            int value = sell_value(g_carried[i], &name, &count);
-            if (value) v.sell.push_back({wide(name) + (count > 1 ? L" x" + std::to_wstring(count) : L""), value, count, g_carried[i].id});
+            int value = sell_value(g_carried[i], &name, &count, &id);
+            if (value) v.sell.push_back({wide(name) + (count > 1 ? L" x" + std::to_wstring(count) : L""), value, count, g_carried[i].id, id});
         }
     }
     std::lock_guard lock(g_view_mutex);
@@ -789,8 +799,68 @@ std::wstring key_name() {
     return L"J";
 }
 
+// Part and item pictures from AnyAPI's item images (128 x 128, rendered from the game's own meshes), uploaded as
+// GPU textures once each. Ids are looked up in the item catalog, which grows when mods add definitions.
+std::unordered_map<std::string, uint32_t> g_catalog_index;
+uint32_t g_catalog_seen = 0;
+std::unordered_map<std::string, uint64_t> g_pictures;   // definition id -> texture id (0: none)
+constexpr uint64_t kTextureBase = 0x4361720000000000ull; // "Car" + index: keeps clear of other mods' texture ids
+
+uint64_t picture(const std::string& id, int* budget) {
+    if (!catalog || !images || !gpu->texture || id.empty()) return 0;
+    auto known = g_pictures.find(id);
+    if (known != g_pictures.end()) return known->second;
+    if (*budget <= 0) return 0;   // a few new pictures per frame, so opening the shop never stalls
+    --*budget;
+    uint32_t count = catalog->count();
+    if (count != g_catalog_seen) {
+        static AnyItemDefinitionV1 d;   // about 2.6 KB; render thread only
+        for (uint32_t i = g_catalog_seen; i < count && i < 20000; ++i) { d = AnyItemDefinitionV1{}; if (catalog->copy(i, &d)) g_catalog_index.emplace(d.id, i); }
+        g_catalog_seen = count;
+    }
+    uint64_t texture = 0;
+    auto index = g_catalog_index.find(id);
+    if (index != g_catalog_index.end()) {
+        static std::vector<uint8_t> bgra(65536);
+        uint32_t required = 0;
+        if (images->copy(index->second, bgra.data(), uint32_t(bgra.size()), &required) && required == bgra.size() &&
+            gpu->texture(kTextureBase + index->second, 128, 128, 512, bgra.data(), 1))
+            texture = kTextureBase + index->second;
+    }
+    g_pictures[id] = texture;
+    static int logs = 0;
+    if (logs++ < 6) log(texture ? 0 : 1, "ANYCAREER_PICTURE id=%s in_catalog=%d picture=%d catalog=%u", id.c_str(), index != g_catalog_index.end() ? 1 : 0, texture ? 1 : 0, count);
+    return texture;
+}
+
+// The Mechanic's pin on AnyMap (when AnyMap is installed; its service may appear after ours, so it is looked up late).
+const AnyMapPinsV1* g_pins;
+bool g_pin_shown = false;
+logic::Zone g_pin_at;
+ULONGLONG g_pins_looked = 0;
+void update_pin(const View* v) {
+    ULONGLONG now = GetTickCount64();
+    if (!g_pins && services_api && now - g_pins_looked > 3000) {
+        g_pins_looked = now;
+        auto p = static_cast<const AnyMapPinsV1*>(services_api->query("anymap.pins", 1));
+        if (p && p->struct_size == sizeof(*p) && p->version == 1 && p->set && p->remove) { g_pins = p; log(0, "ANYCAREER_MAP pins=1"); }
+    }
+    if (!g_pins) return;
+    if (!v || !v->placed) {
+        if (g_pin_shown) { g_pins->remove(kModId, "mechanic"); g_pin_shown = false; }
+        return;
+    }
+    if (g_pin_shown && g_pin_at.x == v->trader.x && g_pin_at.z == v->trader.z) return;
+    AnyMapPinV1 pin;
+    pin.x = v->trader.x; pin.z = v->trader.z; pin.color = 0xffe8c66a;
+    strcpy_s(pin.owner, kModId); strcpy_s(pin.id, "mechanic"); strcpy_s(pin.label, "Mechanic (trader)");
+    g_pin_shown = g_pins->set(&pin);
+    g_pin_at = v->trader;
+    log(g_pin_shown ? 0 : 1, "ANYCAREER_MAP pin_set=%d at=(%.0f, %.0f)", g_pin_shown ? 1 : 0, pin.x, pin.z);
+}
+
 void draw_shop(const AnyFrameV1* f, const View& v) {
-    float w = std::min(600.f, float(f->width) - 32), h = std::min(500.f, float(f->height) - 32);
+    float w = std::min(640.f, float(f->width) - 32), h = std::min(600.f, float(f->height) - 32);
     float x = (float(f->width) - w) / 2, y = (float(f->height) - h) / 2;
     g_areas.clear();
     box(ANY_GPU_ROUND_RECT, x, y, w, h, 0xf0181b20, 8);
@@ -812,7 +882,8 @@ void draw_shop(const AnyFrameV1* f, const View& v) {
         text(tx, y + 56, 100, 30, tabs[i], 16, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
     const auto& rows = g_tab == 0 ? v.buy : v.sell;
-    float list_y = y + 100, row_h = 30;
+    float list_y = y + 100, row_h = 44;
+    int budget = 3;
     int visible = std::max(1, int((h - 100 - 90) / row_h));
     g_cursor = rows.empty() ? 0 : std::clamp(g_cursor, 0, int(rows.size()) - 1);
     if (g_cursor < g_first) g_first = g_cursor;
@@ -828,7 +899,13 @@ void draw_shop(const AnyFrameV1* f, const View& v) {
         g_areas.push_back({x + 14, ry, w - 160, row_h - 2, Hit::row, i});
         const Row& r = rows[size_t(i)];
         bool out = g_tab == 0 && r.quantity <= 0;
-        text(x + 24, ry, w - 260, row_h, r.name, 15, out ? 0xff7d848c : 0xfff5f7fa);
+        if (uint64_t texture = picture(r.id, &budget)) {
+            AnyGpuCommandV1 c;
+            c.kind = ANY_GPU_IMAGE; c.texture = texture; c.rect[0] = x + 20; c.rect[1] = ry + 2; c.rect[2] = c.rect[3] = row_h - 6;
+            c.source[2] = c.source[3] = 128; c.opacity = out ? 0.4f : 1;
+            gpu->emit(&c);
+        }
+        text(x + 24 + row_h, ry, w - 260 - row_h, row_h, r.name, 15, out ? 0xff7d848c : 0xfff5f7fa);
         if (g_tab == 0) text(x + w - 220, ry, 80, row_h, out ? L"sold out" : std::to_wstring(r.quantity) + L" left", 13, 0xffaeb7c2);
         // The button that buys or sells this row, with the price on it.
         Area button{x + w - 140, ry + 2, 122, row_h - 6, Hit::action, i};
@@ -858,12 +935,13 @@ void draw(const AnyFrameV1* f, void*) {
     std::lock_guard lock(g_ui_mutex);
     g_frame_w = float(f->width); g_frame_h = float(f->height);
     bool live = g_ready && f->focused && gameplay() && hosting() && career_mode();
-    if (!live) { if (g_open) close_shop(); return; }
+    if (!live) { if (g_open) close_shop(); if (!hosting()) update_pin(nullptr); return; }
     ULONGLONG now = GetTickCount64();
     if (now - g_local_at > 100) { g_local = local_player(); g_local_at = now; }
     View v;
     { std::lock_guard view_lock(g_view_mutex); v = g_view; }
     if (g_open && !in_range(v, g_local)) close_shop();
+    update_pin(&v);
     if (g_open) { host.capture_input(1); draw_shop(f, v); return; }
     if (!v.placed || !g_local.ok) return;
     float w = 460, x = (float(f->width) - w) / 2;
@@ -1027,6 +1105,11 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
     if (world_time && (world_time->struct_size != sizeof(*world_time) || world_time->version != 1 || !world_time->copy)) world_time = nullptr;
     session = static_cast<const AnySessionV1*>(services->query("anyapi.session", 1));
     if (session && (session->struct_size != sizeof(*session) || session->version != 1 || !session->copy)) session = nullptr;
+    services_api = services;
+    catalog = static_cast<const AnyItemCatalogV1*>(services->query("anyapi.item_catalog", 1));
+    if (catalog && (catalog->struct_size != sizeof(*catalog) || catalog->version != 1 || !catalog->count || !catalog->copy)) catalog = nullptr;
+    images = static_cast<const AnyItemImagesV1*>(services->query("anyapi.item_images", 1));
+    if (images && (images->struct_size != sizeof(*images) || images->version != 1 || !images->copy)) images = nullptr;
     controls = static_cast<const ModControlsV1*>(services->query("anyhelpers.controls", 1));
     if (controls && controls->struct_size == sizeof(*controls) && controls->version == 1 && controls->register_action && controls->key) {
         ModControlActionV1 d; d.mod_id = kModId; d.mod_name = "AnyCareer"; d.action_id = "trade"; d.label = "Trade with a trader"; d.default_key = 'J';
