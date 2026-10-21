@@ -1,6 +1,6 @@
 // ThirdPerson: switches the player camera between first and third person, with an adjustable follow distance.
 //
-// How: Anymaker 0.1.25 already carries a third-person camera that only its developer tools switch on. client_scene
+// How: Anymaker (0.1.25 and 0.1.27) already carries a third-person camera that only its developer tools switch on. client_scene
 // has m_is_camera_first_person, m_is_render_player_third_person and m_debug_third_person_camera_dist, and
 // client_scene.get_camera_transform (what rendering, the crosshair and interaction rays all use) offsets the view by
 // that distance when the camera is not first person. This mod hooks get_camera_transform, sets those three fields on
@@ -45,7 +45,7 @@ constexpr const char* kModId = "thirdperson";
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kMinDistance = 1.0, kMaxDistance = 20.0, kWheelStep = 0.5, kDefaultDistance = 4.0;
 
-// client_scene fields (0.1.25 reference layout, unchanged since 0.1.24, metadata).
+// client_scene fields (0.1.27 SDK layout, unchanged since 0.1.24, metadata).
 namespace off {
 constexpr ptrdiff_t third_person_dist = 944;        // f64 m_debug_third_person_camera_dist
 constexpr ptrdiff_t render_player_third = 954;      // bool m_is_render_player_third_person

@@ -41,7 +41,7 @@ namespace anycombat {
 namespace {
 constexpr const char* kModId = "anycombat";
 
-// Layouts from the 0.1.25 reference (metadata).
+// Layouts from the 0.1.27 SDK (metadata, unchanged since 0.1.25).
 namespace off {
 constexpr ptrdiff_t cam_transform = 8;           // application.graphics.camera.m_transform (mat34: v0 right, v1 up, v2 forward, t)
 constexpr ptrdiff_t cam_transform_t = 8 + 72;    // its translation
