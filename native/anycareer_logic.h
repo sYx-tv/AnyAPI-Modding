@@ -268,7 +268,98 @@ inline std::vector<StockRow> pick_stock(size_t candidates, uint64_t seed, int64_
 }
 
 // What the trader pays for something he sells for `price`: 32% (40% of the price before the markup), at least 1.
-inline int sell_price(int price) { return std::max(1, price * 32 / 100); }
+// The Junkyard pays scrap: 15%.
+inline int sell_price(int price, int pct = 32) { return std::max(1, price * pct / 100); }
+
+// ------------------------------------------------------------------ the traders
+// The Mechanic is first (the jobs board is his). Each trader stands at a kind of place, tried in order: the nearest
+// such spot to the Mechanic, at least kShopGap from the other traders and at most kShopReach away.
+enum Shop : int { kMechanic, kBuilder, kJunkyard, kGrocer, kMedic, kMarineAir, kModShop, kShopCount };
+struct ShopKind {
+    const char* id;
+    const char* name;
+    const char* places[3];
+    int price_pct;     // of the normal price
+    int sell_pct;      // of the normal price, paid for what he buys
+    bool daily;        // restocks every day (else every kRestockDays)
+};
+inline constexpr ShopKind kShops[kShopCount] = {
+    {"mechanic", "Mechanic", {"gas_station", nullptr, nullptr}, 100, 32, false},
+    {"builder", "Builder", {"industrial", "sawmill", "town"}, 100, 32, false},
+    {"junkyard", "Junkyard", {"farm", "roadside", "industrial"}, 60, 15, true},
+    {"grocer", "Grocer", {"town", "house", nullptr}, 100, 32, false},
+    {"medic", "Medic", {"town", "office", "house"}, 100, 32, false},
+    {"marine_air", "Marine & Air", {"roadside", "industrial", "town"}, 100, 32, false},
+    {"mod_shop", "Mod Shop", {"office", "town", "house"}, 100, 32, false},
+};
+inline constexpr double kShopGap = 120, kShopReach = 5000;
+inline int shop_by_id(const std::string& id) {
+    for (int i = 0; i < kShopCount; ++i) if (id == kShops[i].id) return i;
+    return -1;
+}
+
+// Where trader `shop` stands: index into `spots`, or -1. `placed` holds the traders already standing.
+inline int place_shop(int shop, const std::vector<Spot>& spots, Zone anchor, const std::vector<Zone>& placed) {
+    for (const char* kind : kShops[shop].places) {
+        if (!kind) break;
+        int best = -1;
+        double best_d = 0;
+        for (size_t i = 0; i < spots.size(); ++i) {
+            if (spots[i].filter != kind) continue;
+            double d = std::hypot(spots[i].at.x - anchor.x, spots[i].at.z - anchor.z);
+            if (d > kShopReach) continue;
+            bool clear = true;
+            for (const auto& p : placed) clear = clear && std::hypot(spots[i].at.x - p.x, spots[i].at.z - p.z) >= kShopGap;
+            if (clear && (best < 0 || d < best_d)) { best = int(i); best_d = d; }
+        }
+        if (best >= 0) return best;
+    }
+    return -1;
+}
+
+// The ids of a definitions file ({"definitions": [{"id": ...}, ...]}), sorted; empty if it can't be read.
+inline std::vector<std::string> definition_ids(const std::string& json) {
+    std::vector<std::string> out;
+    try {
+        assetjson::Value root = assetjson::Parser(json).parse();
+        for (const auto& d : root.get("definitions").array)
+            if (d.kind == 'o' && d.get("id").kind == 's' && !d.get("id").text.empty()) out.push_back(d.get("id").text);
+    } catch (const std::exception&) { out.clear(); }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
+// A boat or plane part, by its category or id (the Marine & Air trader's goods; the Mechanic leaves them to him).
+inline bool marine_air(const std::string& category, const std::string& id) {
+    static constexpr const char* kWords[] = {"boat", "marine", "ship", "hull", "propeller", "plane", "aero", "aircraft", "wing", "rudder",
+                                             "aileron", "rotor", "heli", "jet_", "sail", "pontoon", "float"};
+    for (const std::string* s : {&category, &id})
+        for (const char* w : kWords)
+            if (s->find(w) != std::string::npos) return true;
+    return false;
+}
+
+// What a trader stocks and buys. `part`: a vehicle part (else an item); `building`: a building part; `modded`: a part
+// the game's own files don't list. Loot groups: 1 medical, 2 food, 6 mechanical, 9 construction.
+struct Goods { bool part = false, building = false, modded = false, marine_air = false; int32_t loot_group = 0; };
+inline bool shop_sells(int shop, const Goods& g) {
+    switch (shop) {
+    case kMechanic: return g.part && !g.building && g.loot_group == 6 && !g.marine_air && !g.modded;
+    case kBuilder: return (g.part && g.building && !g.modded) || (!g.part && g.loot_group == 9);
+    case kJunkyard: return g.part && !g.building && g.loot_group > 0 && !g.modded;
+    case kGrocer: return !g.part && g.loot_group == 2;
+    case kMedic: return !g.part && g.loot_group == 1;
+    case kMarineAir: return g.part && g.marine_air && !g.modded;
+    case kModShop: return g.part && g.modded;
+    }
+    return false;
+}
+inline bool shop_buys(int shop, const Goods& g) {
+    if (shop == kJunkyard) return g.loot_group > 0 || g.part;
+    if (shop == kMechanic) return g.loot_group == 6 && !g.marine_air && !g.modded && !g.building;   // parts and mechanical items
+    return shop_sells(shop, g);
+}
 
 // ------------------------------------------------------------------ paying with Cash stacks
 struct Stack { int32_t item_id = 0; int32_t count = 0; };
@@ -488,7 +579,11 @@ inline std::vector<int> reward_parts(const std::vector<int>& part_prices, int re
 
 // ------------------------------------------------------------------ per-world saved state
 // One small text file per world (mods/AnyCareer/worlds/<seed>.txt), "key value" lines; unknown keys are kept out.
+// A trader other than the Mechanic: where he stands, and his shelf's restock number and sales.
+struct ShopSave { bool placed = false; Zone at; int64_t restock = -1; std::vector<int> sold; };
+
 struct WorldState {
+    ShopSave shops[kShopCount];   // [kMechanic] unused: the Mechanic's are the fields below (older saves)
     bool placed = false;
     Zone trader;
     int64_t days = 0;
@@ -525,6 +620,15 @@ inline std::string save_world(const WorldState& w) {
     if (w.job_state && w.job_kill) o << "job_kill " << w.job_progress << "\n";
     if (w.job_state && w.job_hard) o << "job_hard\n";
     o << "done " << w.jobs_done << "\n";
+    for (int i = 1; i < kShopCount; ++i) {
+        const ShopSave& s = w.shops[i];
+        if (s.placed) o << "shop " << kShops[i].id << " " << s.at.x << " " << s.at.y << " " << s.at.z << "\n";
+        if (s.restock >= 0 || !s.sold.empty()) {
+            o << "shop_sold " << kShops[i].id << " " << s.restock;
+            for (int n : s.sold) o << " " << n;
+            o << "\n";
+        }
+    }
     if (!w.job_parts.empty()) {
         o << "job_parts";
         for (const auto& id : w.job_parts) o << " " << id;
@@ -572,6 +676,22 @@ inline bool load_world(const std::string& text, WorldState& w) {
             int n = 0;
             r.job_kill = true;
             if (row >> n && n >= 0) r.job_progress = n;
+        } else if (key == "shop" || key == "shop_sold") {
+            std::string id;
+            row >> id;
+            int i = shop_by_id(id);
+            if (i <= 0) continue;
+            ShopSave& s = r.shops[i];
+            if (key == "shop") {
+                Zone z;
+                if (row >> z.x >> z.y >> z.z && std::isfinite(z.x) && std::isfinite(z.y) && std::isfinite(z.z)) { s.at = z; s.placed = true; }
+            } else {
+                int64_t d;
+                int n;
+                if (row >> d && d >= -1) s.restock = d;
+                s.sold.clear();
+                while (row >> n && s.sold.size() < 64) s.sold.push_back(std::max(0, n));
+            }
         } else if (key == "job_hard") {
             r.job_hard = true;
         } else if (key == "done") {

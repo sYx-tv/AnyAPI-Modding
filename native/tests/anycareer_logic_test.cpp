@@ -224,5 +224,40 @@ int main() {
         WorldState back;
         assert(load_world(save_world(w), back) && back.job_kill && back.job_progress == 4 && back.job_item == "any");
     }
+    // Traders: placement near the Mechanic, apart from each other; what each sells and buys; saved.
+    {
+        std::vector<Spot> spots = {{{100, 0, 0}, "town"}, {{150, 0, 0}, "town"}, {{400, 0, 0}, "town"}, {{90, 0, 0}, "industrial"},
+                                   {{9000, 0, 0}, "farm"}, {{300, 0, 0}, "roadside"}};
+        std::vector<Zone> placed = {{0, 0, 0}};
+        int grocer = place_shop(kGrocer, spots, {0, 0, 0}, placed);
+        assert(grocer == 1);   // the town at 100 m is too close to the Mechanic
+        placed.push_back(spots[1].at);
+        int medic = place_shop(kMedic, spots, {0, 0, 0}, placed);
+        assert(medic == 2);   // 100 m is too close to the Grocer at 150 m
+        assert(place_shop(kBuilder, spots, {0, 0, 0}, {}) == 3);
+        assert(place_shop(kJunkyard, spots, {0, 0, 0}, placed) == 5);   // the farm is too far: next kind, roadside
+        assert(place_shop(kMechanic, spots, {0, 0, 0}, {}) == -1);
+        assert(shop_by_id("medic") == kMedic && shop_by_id("nope") == -1);
+        assert(marine_air("boat_parts", "x") && marine_air("engine", "propeller_small") && !marine_air("engine", "air_filter"));
+        Goods engine; engine.part = true; engine.loot_group = 6;
+        Goods wall; wall.part = true; wall.building = true; wall.loot_group = 9;
+        Goods food; food.loot_group = 2;
+        Goods prop = engine; prop.marine_air = true;
+        Goods mod = engine; mod.modded = true;
+        assert(shop_sells(kMechanic, engine) && !shop_sells(kMechanic, prop) && !shop_sells(kMechanic, mod) && !shop_sells(kMechanic, wall));
+        assert(shop_sells(kBuilder, wall) && shop_sells(kGrocer, food) && !shop_sells(kMedic, food) && shop_sells(kMarineAir, prop));
+        assert(shop_sells(kModShop, mod) && !shop_sells(kModShop, engine) && shop_sells(kJunkyard, engine) && !shop_sells(kJunkyard, wall));
+        assert(shop_buys(kJunkyard, food) && shop_buys(kJunkyard, wall) && !shop_buys(kGrocer, engine));
+        assert(sell_price(100, 15) == 15);
+        auto ids = definition_ids("{\"definitions\": [{\"id\": \"wheel\"}, {\"id\": \"axle\", \"x\": {\"id\": \"inner\"}}, {\"id\": \"wheel\"}, {\"name\": 1}]}");
+        assert(ids.size() == 2 && ids[0] == "axle" && ids[1] == "wheel" && definition_ids("bad").empty());
+        WorldState w;
+        w.shops[kMedic].placed = true; w.shops[kMedic].at = {5, 1, -7}; w.shops[kMedic].restock = 3; w.shops[kMedic].sold = {1, 0, 2};
+        w.shops[kJunkyard].restock = 9;
+        WorldState back;
+        assert(load_world(save_world(w), back));
+        assert(back.shops[kMedic].placed && back.shops[kMedic].at.z == -7 && back.shops[kMedic].restock == 3 && back.shops[kMedic].sold.size() == 3 &&
+               back.shops[kMedic].sold[2] == 2 && !back.shops[kJunkyard].placed && back.shops[kJunkyard].restock == 9 && !back.shops[kGrocer].placed);
+    }
     return 0;
 }
