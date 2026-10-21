@@ -1,6 +1,6 @@
 # Native control hints
 
-**Experimental:** the wheel’s hint did not appear in the author’s live test. AnyAPI 0.40.0 fixes the two byte checks (`HUD_TEXT`, `HUD_END`) that kept the service from installing; it has not been seen in game yet. Automated widget/provider checks pass, but this feature should not be relied on for essential instructions.
+**Experimental:** the wheel’s hint did not appear in the author’s live test. AnyAPI 0.40.1 fixes the two byte checks (`HUD_TEXT`, `HUD_END`) that kept the service from installing; it has not been seen in game yet. Automated widget/provider checks pass, but this feature should not be relied on for essential instructions.
 
 AnyAPI 0.31.0 includes experimental support for optional hint providers published as `hud.hints.<mod_id>`, version **1**. The ABI is declared in [anyapi_hud_hint_provider_v1.h](../../sdk/include/anyapi_hud_hint_provider_v1.h).
 
