@@ -114,6 +114,7 @@ constexpr ptrdiff_t scene_free_move = 0x276;        // client_scene.m_is_free_mo
 constexpr ptrdiff_t scene_free_move_transform = 0x280;  // m_free_move_transform (mat34): where free move flies from
 constexpr ptrdiff_t scene_authority_actor = 0x188;  // m_actors.m_authority_actor (ptr<client_scene.actor>)
 constexpr ptrdiff_t client_actor_transform = 392;   // client_scene.actor.m_transform (mat34)
+constexpr ptrdiff_t client_actor_id = 8;            // client_scene.actor.m_id (s32)
 constexpr ptrdiff_t peer_data = 0x19d0;            // server_peer.data (as AnyHelpers' admin teleport uses it)
 constexpr ptrdiff_t peer_actor_id = 6480 + 24;      // m_authority_actor_id (property_s32), its value: the id damage sources carry
 constexpr ptrdiff_t peer_actor = 6616;              // m_authority_actor (ptr<server_scene.actor>)
@@ -221,6 +222,10 @@ thread_local bool t_adding = false;
 std::atomic<uint64_t> g_last_tick{0};
 std::atomic<bool> g_shop_open{false};
 std::atomic<bool> g_free_move{false};             // F2 test key (render side sets it)
+// The host's character id as its own client sees it (client_scene.actor m_id): guns send this id as the shot's
+// source (client_scene.item_world.gun pushes projectiles_actor_add with actor.m_id), and it is not the server
+// actor's m_id (the bulk test: shots by 23, server id 1). Set by the render thread.
+std::atomic<int32_t> g_client_actor_id{-3};
 ULONGLONG g_free_move_logs_until = 0;
 std::atomic<uint32_t> g_mode{ANY_MODE_UNKNOWN};
 
@@ -1033,7 +1038,8 @@ void on_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double b
     int32_t actor_field = actor && anymaker::readable(actor + off::actor_id, 4) ? rd<int32_t>(actor, off::actor_id) : -2;
     const uint8_t* def = rd<const uint8_t*>(zombie, off::zombie_definition);
     std::string kind = def ? read_string(def) : std::string();
-    bool mine = by == host_id;
+    int32_t client_id = g_client_actor_id.load();
+    bool mine = by >= 0 && (by == host_id || by == client_id);
     bool counts = mine && T.world.job_state == 1 && T.world.job_kill && (T.world.job_item == "any" || T.world.job_item == kind);
     if (counts) {
         ++T.world.job_progress;
@@ -1046,8 +1052,8 @@ void on_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double b
     }
     static int logs = 0;
     if (logs++ < 40 || counts)
-        log(0, "ANYCAREER_KILL zombie=%s by_actor=%d host_actor=%d actor_field=%d counted=%d job=%s progress=%d/%d", kind.c_str(), by, host_id,
-            actor_field, counts ? 1 : 0, T.world.job_kill && T.world.job_state == 1 ? T.world.job_item.c_str() : "none", T.world.job_progress,
+        log(0, "ANYCAREER_KILL zombie=%s by_actor=%d host_actor=%d actor_field=%d client_actor=%d mine=%d counted=%d job=%s progress=%d/%d", kind.c_str(), by,
+            host_id, actor_field, client_id, mine ? 1 : 0, counts ? 1 : 0, T.world.job_kill && T.world.job_state == 1 ? T.world.job_item.c_str() : "none", T.world.job_progress,
             T.world.job_count);
 }
 void run_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double blood_before) {
@@ -1479,16 +1485,20 @@ uint64_t picture(const std::string& id, int* budget) {
     if (known != g_pictures.end()) return known->second;
     if (*budget <= 0) return 0;   // a few new pictures per frame, so opening the shop never stalls
     --*budget;
-    uint32_t count = catalog->count();
+    uint32_t count = std::min<uint32_t>(catalog->count(), 20000);
     if (count != g_catalog_seen) {
+        // A few hundred catalog entries a frame: reading all of them at once stalled the frame the shop opened
+        // (AnyPerformance logged 150-180 ms UI updates in the bulk test).
         static AnyItemDefinitionV1 d;   // about 2.6 KB; render thread only
-        for (uint32_t i = g_catalog_seen; i < count && i < 20000; ++i) { d = AnyItemDefinitionV1{}; if (catalog->copy(i, &d)) g_catalog_index.emplace(d.id, i); }
-        g_catalog_seen = count;
+        uint32_t i = g_catalog_seen;
+        for (uint32_t end = std::min(count, g_catalog_seen + 300); i < end; ++i) { d = AnyItemDefinitionV1{}; if (catalog->copy(i, &d)) g_catalog_index.emplace(d.id, i); }
+        g_catalog_seen = i;
     }
     uint64_t texture = 0;
     auto index = g_catalog_index.find(id);
     if (index == g_catalog_index.end()) index = g_catalog_index.find("component:" + id);   // parts are listed as component:<id>
     if (index == g_catalog_index.end()) index = g_catalog_index.find("item:" + id);
+    if (index == g_catalog_index.end() && g_catalog_seen < count) return 0;   // not read that far yet: try next frame
     if (index != g_catalog_index.end()) {
         static std::vector<uint8_t> bgra(65536);
         uint32_t required = 0;
@@ -1665,7 +1675,13 @@ void draw(const AnyFrameV1* f, void*) {
     bool live = g_ready && f->focused && gameplay() && hosting() && career_mode();
     if (!live) { if (g_open) close_shop(); if (!hosting()) update_pin(nullptr); return; }
     ULONGLONG now = GetTickCount64();
-    if (now - g_local_at > 100) { g_local = local_player(); g_local_at = now; }
+    if (now - g_local_at > 100) {
+        g_local = local_player();
+        g_local_at = now;
+        uint8_t* scene = local_scene();
+        uint8_t* actor = scene && anymaker::readable(scene + off::scene_authority_actor, 8) ? rd<uint8_t*>(scene, off::scene_authority_actor) : nullptr;
+        g_client_actor_id = actor && anymaker::readable(actor + off::client_actor_id, 4) ? rd<int32_t>(actor, off::client_actor_id) : -3;
+    }
     View v;
     { std::lock_guard view_lock(g_view_mutex); v = g_view; }
     if (g_open && !(g_dropoff ? at_dropoff(v, g_local) : shop_in_range(v, g_local) == g_shop)) close_shop();
