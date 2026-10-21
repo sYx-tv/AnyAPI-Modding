@@ -168,7 +168,10 @@ struct Synth {
     double limit_phase = 0, catch_boost = 0;
     // intake, valvetrain, knock
     double intake_env = 0, tick_phase = 0, tick_age = 1, knock_age = 1, knock_amp = 0, whine_phase = 0;
-    double starter_phase = 0;
+    // The starter: heard only while it turns a stopped engine over, never while the engine spins down after
+    // combustion stops (key off), which used to sweep its whine down the whole rev range.
+    double starter_phase = 0, starter_env = 0;
+    bool coasting = false;            // combustion stopped with the crank still turning
     Resonator rasp, rasp_hi, intake, tick, knock, knock_hi, pop_body;
     double tuned_pipe = -1, tuned_body = -1;
     Layout tuned_layout = kLayoutCount;
@@ -235,6 +238,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
     else if (diesel) target_rps *= 0.87;
     const double target_load = std::isfinite(in.load) ? clamp01(in.load) : 0;
     const double k_rps = 1.0 - std::exp(-dt / 0.05), k_load = 1.0 - std::exp(-dt / 0.035), k_run = 1.0 - std::exp(-dt / 0.03);
+    const double k_starter = 1.0 - std::exp(-dt / 0.04);
     // Loudness per pulse: more cylinders fire more often, so each is a little quieter.
     const double per_pulse = std::pow(4.0 / n, 0.25);
     const double muffle = 0.35 + 0.65 * (1.0 - t.muffler);
@@ -247,6 +251,11 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
         s.run_env += ((in.running ? 1.0 : 0.0) - s.run_env) * k_run;
         const bool running = s.run_env > 0.5;
         if (running && !was_running) s.catch_boost = 1.0;
+        if (was_running && !running) s.coasting = true;
+        if (running || s.rps < 0.5 || target_rps > s.rps + 0.25) s.coasting = false;   // stopped, or a starter turning it
+        // A starter turns the crank at cranking speed, never faster.
+        const bool cranking = !running && !s.coasting && s.rps > 0.5 && s.rps < kIdleRps * 1.2;
+        s.starter_env += ((cranking ? 1.0 : 0.0) - s.starter_env) * k_starter;
         s.catch_boost *= std::exp(-dt / 0.4);
         const double rpm01 = clamp01(s.rps / top);
         // How much idle character is left: all of it near the start speed, gone by ~2,000 rpm or under load.
@@ -306,8 +315,10 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
                 }
             } else if (running) {
                 b.amp = 0.12 * per_pulse; b.noise = 0.3;     // fuel cut: just air
-            } else {
+            } else if (cranking) {
                 b.amp = 0.28 * clamp01(s.rps / kIdleRps) * per_pulse; b.noise = 0.35;   // cranking: compression puffs
+            } else {
+                b.amp = 0.12 * clamp01(s.rps / kIdleRps) * per_pulse; b.noise = 0.3;   // spinning down: just air, as on a fuel cut
             }
             // Each pulse lasts a fraction of the gap to the next; a muffler stretches it out.
             const double rate = s.rps * n / 2.0;
@@ -400,11 +411,11 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
             s.pop_body.run(0);
         }
 
-        // Starter motor while it turns over.
-        if (!running && s.rps > 0.5) {
+        // Starter motor while it turns the engine over.
+        if (s.starter_env > 1e-4) {
             s.starter_phase += two_pi * (95.0 + 12.0 * s.rps) * dt;
             if (s.starter_phase > two_pi) s.starter_phase -= two_pi;
-            v += 0.06 * clamp01(s.rps / 2.0) * (std::sin(s.starter_phase) + 0.4 * std::sin(3.0 * s.starter_phase)) * (1.0 - s.run_env);
+            v += 0.06 * clamp01(s.rps / 2.0) * (std::sin(s.starter_phase) + 0.4 * std::sin(3.0 * s.starter_phase)) * (1.0 - s.run_env) * s.starter_env;
         }
 
         // Muffler: rounds off the top end; a straight pipe keeps it all.

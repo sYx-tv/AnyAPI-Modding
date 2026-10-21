@@ -10,7 +10,7 @@
 // Photo controls change the scene effects only while photo mode is on and are not saved. Depth of field focuses on
 // the middle of the screen, so aim at the subject.
 //
-// EXPERIMENTAL (camera only): Anymaker 0.1.25 / Steam build 25904830. On any other build the camera is unavailable
+// EXPERIMENTAL (camera only): Anymaker 0.1.27 / Steam build 26113663. On any other build the camera is unavailable
 // and photo mode still hides the HUD and applies the photo controls.
 #include "anyapi_gpu_draw_v1.h"
 #include "anyapi_experimental.hpp"
@@ -259,7 +259,7 @@ inline void draw(const AnyFrameV1* f, void*) {
     float s = std::max(1.f, float(f->height) / 1080.f), line = 22 * s, w = 430 * s, x = 24 * s;
     wchar_t rows[10][96]; int n = 0;
     swprintf(rows[n++], 96, L"PHOTO MODE");
-    if (!camera) swprintf(rows[n++], 96, L"Free camera needs Anymaker 0.1.25 (this game build is different)");
+    if (!camera) swprintf(rows[n++], 96, L"Free camera is not available on this game build");
     else if (free) swprintf(rows[n++], 96, L"WASD move · Space / C up, down · Shift fast · Wheel speed %.1f m/s", speed.load());
     if (camera) swprintf(rows[n++], 96, L"V  free camera: %ls", free ? L"on" : L"off (the camera follows you)");
     if (t.dof < 0) swprintf(rows[n++], 96, L"1 / 2  depth of field: preset (focuses on the middle)"); else swprintf(rows[n++], 96, L"1 / 2  depth of field: %.1f (focuses on the middle)", t.dof * .5);
