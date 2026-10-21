@@ -18,7 +18,7 @@ int main(){
  // The definition clones the compass and lists every channel once, after north_angle.
  std::string json=definition_json();
  assert(json.find("\"class\": \"compass_sensor\"")!=std::string::npos&&json.find("compass_sensor_a.mesh")!=std::string::npos);
- assert(json.find("\"tech_tier\": 4")!=std::string::npos&&json.find("\"category\": \"sensor\"")!=std::string::npos);
+ assert(json.find("\"tech_tier\": 3")!=std::string::npos&&json.find("\"category\": \"sensor\"")!=std::string::npos);
  assert(json.find("north_angle")<json.find("\"name\": \"x\"")&&json.find("\"type_f64_input\", \"name\": \"waypoint_z\"")!=std::string::npos);
  // Composition: vehicle * component.
  Mat34 c=compose(at({10,2,3},90),at({1,0,0}));Vec3 p=column(c,3);assert(near(p.x,10)&&near(p.y,2)&&near(p.z,2));

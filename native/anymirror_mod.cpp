@@ -8,7 +8,7 @@
 // validates and replicates it like any other. Only the player building needs the mod.
 //
 // EXPERIMENTAL. Hooks game functions directly through the experimental SDK (anymirror_bindings.h). They
-// resolve only on Anymaker 0.1.25 / Steam build 25904830. First runs are diagnostic: read anymaker_modding.log.
+// resolve only on Anymaker 0.1.27 / Steam build 26113663. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"

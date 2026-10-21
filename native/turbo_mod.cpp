@@ -19,8 +19,8 @@
 // now: the definitions are added on this game's server and client scene, and every player would need the mod.
 // The hot-side gas is not saved; it refills from the pipes after loading.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (turbo_bindings.h): Anymaker 0.1.25 /
-// Steam build 25904830 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (turbo_bindings.h): Anymaker 0.1.27 /
+// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -1584,17 +1584,18 @@ void hk_add_definitions(void* container, const void* file) {
 // Each turbo and blow-off valve streams its own synthesized sound (turbo_sound.h) into a positional voice effect,
 // the way the game plays voice chat, in place of the stock impeller hum. Main thread only.
 namespace audio {
-constexpr uint32_t play_voice_rva = 0x1409e0;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
-constexpr uint32_t append_rva = 0x141160;           // effect_3d.append_audio_data (takes the buffer's memory)
-constexpr uint32_t set_position_velocity_rva = 0x141140;
-constexpr uint32_t stop_rva = 0x141110;
-constexpr uint32_t reset_rva = 0x141050;            // effect_3d.reset (releases the handle)
-constexpr uint32_t buffer_reset_rva = 0x41c40;      // binary.buffer.reset (allocates with the game's allocator)
+constexpr uint32_t play_voice_rva = 0x13f240;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
+constexpr uint32_t append_rva = 0x13f9c0;           // effect_3d.append_audio_data (takes the buffer's memory)
+constexpr uint32_t set_position_velocity_rva = 0x13f9a0;
+constexpr uint32_t stop_rva = 0x13f970;
+constexpr uint32_t reset_rva = 0x13f8b0;            // effect_3d.reset (releases the handle)
+constexpr uint32_t buffer_reset_rva = 0x41a00;      // binary.buffer.reset (allocates with the game's allocator)
 constexpr int32_t kGroupVehicle = 4;                // e_audio_group.vehicle: follows the vehicle volume slider
 constexpr double kRange = 80.0;                     // metres
 constexpr double kLead = 0.08;                      // seconds of sound queued ahead
 // The voice object (what play_voice hands back) keeps the PCM still to play: a byte buffer whose size is at +0x78 and
-// a read cursor in samples at +0x80 (effect_3d.append_audio_data's handler and the mixer, game.exe 0xe85f0/0xe86e0).
+// a read cursor in samples at +0x80 (effect_3d.append_audio_data's handler and the mixer, game.exe 0xe65b0/0xe66a0;
+// 0.1.25: 0xe85f0/0xe86e0).
 constexpr int kVoiceBytes = 0x78, kVoiceCursor = 0x80;
 }  // namespace audio
 struct GameBuffer { void* data; int32_t size; uint32_t pad; };
