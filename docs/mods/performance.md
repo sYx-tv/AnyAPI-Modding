@@ -38,12 +38,13 @@ The server parts are `server_scene.tick_loading` (terrain tiles and dungeon laye
 (bunkers and elevators), loose items, vehicles and entities (each with their post-physics step),
 `replication.master.replicate_peer` (packing the world for each player) and `server.autosave_game`.
 
-When the worst tick spent time loading or saving a bunker, the line ends with its biggest steps (inclusive times, so a
-step's nested steps count inside it too), for example `| bunker steps: bunker static load 2412 ms, objects into the
+When the worst tick spent time loading a bunker or streaming terrain, the line ends with its biggest steps (inclusive times, so a
+step's nested steps count inside it too), for example `| server steps: bunker static load 2412 ms, objects into the
 world 2100 ms, bunker save file parse 280 ms`. The steps are the pieces of `server_scene.dungeon_manager.tick_loading`:
 entrance load/create/physics, the bunker's static load (save file parse, objects into the world), physics shape,
 navmesh, objects load, layers (load and populate with loot, creatures and vehicles), and the saves and unloads when a
-player leaves.
+player leaves. Terrain streaming steps are the tile's objects and loot zones going into the world, wreck loot,
+navmesh tiles, and the save and unload of tiles left behind.
 
 ## Frame hitches
 

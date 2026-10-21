@@ -117,7 +117,7 @@ ServerParts take_worst_tick() {
 }
 bool on_server_thread() { return GetCurrentThreadId() == g_server_thread.load(std::memory_order_relaxed); }
 
-// Steps timed one by one inside a server tick (bunker loading) or a frame (client.tick outside the simulation and
+// Steps timed one by one inside a server tick (bunker loading and terrain streaming) or a frame (client.tick outside the simulation and
 // streaming). Every gc-x64 argument is a pointer (a result too, through rcx), so one six-pointer hook fits them all:
 // it passes on what it got, and slots the callee does not take are never read.
 struct StepSpec { const anymaker::func_desc* desc; const char* name; bool server; };
@@ -144,6 +144,17 @@ constexpr StepSpec kSteps[] = {
     {&bind::load_objects_integrate, "objects into the world", true},
     {&bind::read_json_dungeon, "bunker save file parse", true},
     {&bind::read_json_entrance, "entrance save file parse", true},
+    {&bind::tile_task_integrate_server, "terrain tile into the world", true},
+    {&bind::tile_populate_loot_zones, "terrain loot zones", true},
+    {&bind::vehicle_generate_loot, "wreck loot", true},
+    {&bind::tile_loaded_event, "tile loaded event", true},
+    {&bind::tile_save_level_1, "terrain tile save (near)", true},
+    {&bind::tile_save_level_2, "terrain tile save (mid)", true},
+    {&bind::tile_save_level_3, "terrain tile save (far)", true},
+    {&bind::tile_destroy, "terrain tile unload", true},
+    {&bind::nav_tile_create, "navmesh tile start", true},
+    {&bind::nav_tile_destroy, "navmesh tile unload", true},
+    {&bind::tiles_in_range, "tiles in range", true},
     {&bind::apply_update, "network update", false},
     {&bind::client_network_state, "network state", false},
     {&bind::client_update_ui, "UI update", false},
@@ -293,7 +304,7 @@ void sim_rate(double now, double frame_ms, double dt, double play_before, double
             char steps[256] = "";
             if (w.total > 0) format_steps(steps, sizeof steps, w.steps, step_names(), kStepCount, 5, 1.0);
             log(0, "Slow motion: %.2fx for %.1f s, catch-up %.2fx for %.1f s, buffer up to %.1f ticks%s%s%s", g_episode.min_rate,
-                g_episode.slow_s, g_episode.max_rate, g_episode.fast_s, g_episode_buffer_max, tick, steps[0] ? " | bunker steps: " : "", steps);
+                g_episode.slow_s, g_episode.max_rate, g_episode.fast_s, g_episode_buffer_max, tick, steps[0] ? " | server steps: " : "", steps);
         }
         g_episode.reset();
     } else if (g_episode.active && !was) {
