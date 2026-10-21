@@ -158,8 +158,14 @@ static void tick_inner(void* scene,void* actor){uintptr_t local{};
 }
 static void tick(void* scene,void* actor){__try{tick_inner(scene,actor);}__except(EXCEPTION_EXECUTE_HANDLER){if(!faulted.exchange(true))log_line(ANY_LOG_WARN,"framework","BALANCE faulted=1 in=tick");allowed_item=0;store.clear();}}
 static bool prepare(){auto hits=scan_exact(HOVER_OVERLAY,sizeof(HOVER_OVERLAY)),mass=scan_exact(MASS_OWNER,sizeof(MASS_OWNER));
- if(hits.size()!=1||!safe_read_memory(hits[0]+HOVER_OVERLAY_END,&vehicle_slot,8)||vehicle_slot%8||vehicle_slot>0x10000||
- !safe_read_memory(hits[0]+HOVER_OVERLAY_END+9*8,&transform_slot,8)||transform_slot%8||transform_slot>0x10000)return false;
+ // Only the dependency slots are read here. In 0.1.25 the microcontroller tool's overlay was a byte-identical
+ // twin; 0.1.27 changed the Properties tool so HOVER_OVERLAY is unique again, but several hits that agree on both
+ // slots stay accepted in case a later build brings the twin back.
+ if(hits.empty())return false;uintptr_t slots[2]{};
+ for(size_t i=0;i<hits.size();++i){uintptr_t v{},t{};
+  if(!safe_read_memory(hits[i]+HOVER_OVERLAY_END,&v,8)||v%8||v>0x10000||!safe_read_memory(hits[i]+HOVER_OVERLAY_END+9*8,&t,8)||t%8||t>0x10000)return false;
+  if(!i){slots[0]=v;slots[1]=t;}else if(v!=slots[0]||t!=slots[1])return false;}
+ vehicle_slot=slots[0];transform_slot=slots[1];
  project_fn=uintptr_t(GetModuleHandleW(nullptr))+PROJECT_RVA;if(!p34_body(project_fn,PROJECT))return false;
  if(mass.size()==1)p34_cell(mass[0],MASS_OWNER_END+7*8,mass_fn);
  attach_assembly();ready=true;log_line(ANY_LOG_INFO,"framework","BALANCE ready=1 awaiting_properties_tool=1 copied_snapshots=1 physics_writes=0");return true;

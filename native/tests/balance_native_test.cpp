@@ -16,7 +16,7 @@ static bool safe_read_memory(uintptr_t p,void* out,size_t n){++memory_reads;if(!
 static bool safe_read_native(uintptr_t p,void* out,size_t n){return safe_read_memory(p,out,n);}
 static void tank_tick(){}static void tank_in_scene(bool* out,void* physics);
 static bool p34_cell(uintptr_t owner,size_t offset,uintptr_t& target){if(owner==uintptr_t(tank_tick)&&offset==balance_fluid_contract::LIQUID_TANK_ADDED_CELL){target=uintptr_t(tank_in_scene);return true;}return false;}
-static std::vector<uintptr_t> scan_exact(const unsigned char*,size_t){return {};}
+static std::vector<uintptr_t> g_overlay_hits;static std::vector<uintptr_t> scan_exact(const unsigned char* p,size_t){return p==balance_contract::HOVER_OVERLAY?g_overlay_hits:std::vector<uintptr_t>{};}
 static bool valid_state=true,valid_target=true,valid_transform=true;static unsigned original_calls,lookup_calls,bounds_calls,mass_calls;
 static unsigned char scene[13440]{},vehicle[2448]{},vehicle_b[2448]{},tool[80]{},state[16]{};
 static void lookup_vehicle(uintptr_t* out,void* container,const int32_t* id){assert(container==scene+0xa0&&(*id==7||*id==8));++lookup_calls;*out=valid_target?uintptr_t(*id==7?vehicle:vehicle_b):0;}
@@ -51,6 +51,13 @@ static unsigned char camera[720]{};
 static unsigned char actor[2048]{},klass[256]{};static uintptr_t table[20]{};
 static void selected_lookup(uintptr_t* out,void* inventory,const int32_t* id){assert(inventory==actor+0x5c8&&*id==1);*out=uintptr_t(tool);}
 int main(){using namespace balance_runtime;
+ // 0.1.25: the Properties and microcontroller overlays are byte-identical twins.
+ // prepare() accepts several hits only when they agree on both dependency slots.
+ {static unsigned char twin[2][HOVER_OVERLAY_END+10*8]{};uintptr_t v=16,t=104;
+  for(auto& b:twin){memcpy(b+HOVER_OVERLAY_END,&v,8);memcpy(b+HOVER_OVERLAY_END+9*8,&t,8);}
+  g_overlay_hits={uintptr_t(twin[0]),uintptr_t(twin[1])};prepare();assert(vehicle_slot==16&&transform_slot==104);
+  vehicle_slot=transform_slot=0;uintptr_t other=24;memcpy(twin[1]+HOVER_OVERLAY_END,&other,8);
+  assert(!prepare()&&vehicle_slot==0&&transform_slot==0);g_overlay_hits.clear();}
  platform::game_window=CreateWindowExW(0,L"STATIC",L"Balance fixture",WS_POPUP,0,0,1920,1080,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);assert(platform::game_window);
  double camera_transform[12]={1,0,0,0,1,0,0,0,1,0,0,0},projection[16]={2,0,0,0,0,3,0,0,0,0,0,1,0,0,1,0};memcpy(camera+8,camera_transform,sizeof(camera_transform));memcpy(camera+416,projection,sizeof(projection));
  uintptr_t state_ptr=uintptr_t(state);memcpy(tool+0x40,&state_ptr,8);int32_t id=7;memcpy(state+8,&id,4);memcpy(vehicle+8,&id,4);AnyBalancePointV1 centre{1,2,-1};memcpy(vehicle+0x408,&centre,sizeof(centre));

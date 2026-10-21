@@ -1,6 +1,7 @@
 // Generic DLL loading, Windows input and DXGI/D3D12 frame composition.
 // This service contains no map filenames, keybinds, road paths or atlas policy.
 #include "anyapi_mod_v1.h"
+#include "anyapi_bundle_v1.h"
 #include "anyapi_services.inc"
 #include "anyapi_text_input.h"
 #include "anyapi_item_catalog.inc"
@@ -16,7 +17,7 @@
 #include <atomic>
 namespace platform {
 using Microsoft::WRL::ComPtr;
-struct Plugin {HMODULE module{};std::filesystem::path path;std::wstring game_path,plugin_path;AnyModHostV1 host{};AnyModCallbacksV1 callbacks{};ComPtr<ID2D1Bitmap1> bitmap;uint64_t revision{};uint32_t width{},height{};std::atomic<bool> faulted{};};
+struct Plugin {HMODULE module{};std::filesystem::path path;void(*ready)(){};bool part{};std::wstring game_path,plugin_path;AnyModHostV1 host{};AnyModCallbacksV1 callbacks{};ComPtr<ID2D1Bitmap1> bitmap;uint64_t revision{};uint32_t width{},height{};std::atomic<bool> faulted{};};
 static std::array<Plugin,32> plugins;static std::atomic<uint32_t> plugin_count{};
 static std::atomic<int> capture_owner{-1};
 static HWND game_window{};static WNDPROC window_original{};
@@ -257,21 +258,71 @@ static bool start(){capture_imports();ComPtr<IDXGIFactory4> f;ComPtr<ID3D12Devic
  if(ok)ok=hook_chain(sc.Get())&&hook_slot(q.Get(),10,(void*)execute)&&hook_slot(f.Get(),10,(void*)create)&&hook_slot(f.Get(),15,(void*)create_hwnd);
  sc.Reset();DestroyWindow(h);enabled.store(ok);if(ok)log_line(ANY_LOG_INFO,"framework","PLUGIN_PLATFORM graphics_hooks=READY mechanism=COM_TABLE_ATOMIC");return ok;
 }
-// Discover ordinary mod DLLs. Reject unsupported exports/ABI; retain accepted modules for process lifetime.
-static void load(){catalog_runtime::initialize();auto directory=g_game_dir/L"AnyAPI and Modding"/L"mods";if(!std::filesystem::exists(directory))return;
- std::vector<std::filesystem::path> paths;for(auto& entry:std::filesystem::directory_iterator(directory))if(entry.is_regular_file()&&entry.path().extension()==L".dll")paths.push_back(entry.path());std::sort(paths.begin(),paths.end());
- for(auto& path:paths){auto index=plugin_count.load();if(index==plugins.size())break;HMODULE module=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);if(!module){log_line(ANY_LOG_ERROR,"framework",("Plugin DLL load failed: "+utf8(path.filename())).c_str());continue;}
+// Initialize one mod (a DLL, or one part of a bundle) in the next plugin slot. label names it in the log.
+static bool start_mod(HMODULE module,const std::filesystem::path& path,AnyModInitV1 init,void(*ready)(),bool part,const std::string& label){
+ auto index=plugin_count.load();if(index==plugins.size()){log_line(ANY_LOG_ERROR,"framework",("Plugin limit reached; not loaded: "+label).c_str());return false;}
+ auto& p=plugins[index];p.module=module;p.path=path;p.ready=ready;p.part=part;p.callbacks={};p.faulted=false;p.game_path=g_game_dir.wstring();p.plugin_path=path.parent_path().wstring();p.host.game_directory=p.game_path.c_str();p.host.plugin_directory=p.plugin_path.c_str();p.host.log=[](uint32_t level,const char* id,const char* msg){log_line(AnymakerLogLevel(level),id,msg);};p.host.copy_players=p34_copy_snapshot;p.host.capture_input=capture;
+ current_plugin=int(index);bool ok=false;try{ok=call_init(init,&p.host,&p.callbacks);}catch(...){ok=false;}current_plugin=-1;
+ if(!ok||p.callbacks.struct_size!=sizeof(p.callbacks)||p.callbacks.abi!=ANYAPI_MOD_ABI||!p.callbacks.id||!services::identifier(p.callbacks.id)){log_line(ANY_LOG_ERROR,"framework",("Plugin initialization rejected: "+label).c_str());p.faulted=true;plugin_count.store(index+1);return false;}
+ plugin_count.store(index+1);log_line(ANY_LOG_INFO,p.callbacks.id,part?("Bundle part initialized; bundle="+label+" lifecycle=PROCESS_LIFETIME").c_str():"DLL plugin initialized; lifecycle=PROCESS_LIFETIME");return true;
+}
+// Bundles (anyapi_bundle_v1.h): one DLL carrying several mods, each started in its own plugin slot so it keeps its
+// own callbacks, renderer, input, services and fault isolation. Players switch parts off for the next launch.
+namespace bundles {
+struct Part {std::string id,name,bundle;uint32_t state{},flags{};bool enabled_next{true};};
+static std::mutex mutex;static std::vector<Part> parts;static std::vector<std::string> off;static std::filesystem::path file;
+static bool is_off(const std::string& id){return std::find(off.begin(),off.end(),id)!=off.end();}
+// One "<id>\t0" line per switched-off part. Unknown ids are kept, so a bundle that is removed for a while keeps them.
+static void read(){file=g_game_dir/L"AnyAPI and Modding"/L"bundle-parts.tsv";std::ifstream in(file);std::string line;
+ while(std::getline(in,line)&&off.size()<256){if(!line.empty()&&line.back()=='\r')line.pop_back();auto tab=line.find('\t');if(tab==std::string::npos)continue;auto id=line.substr(0,tab);if(line.substr(tab+1)=="0"&&services::identifier(id.c_str())&&!is_off(id))off.push_back(id);}}
+static bool save(){std::string data;for(auto& id:off)data+=id+"\t0\n";auto temporary=file;temporary+=L".tmp";
+ {std::ofstream out(temporary,std::ios::binary|std::ios::trunc);if(!out)return false;out<<data;out.flush();if(!out.good())return false;}
+ return MoveFileExW(temporary.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;}
+static void text(char* out,size_t capacity,const std::string& value){auto n=std::min(value.size(),capacity-1);memcpy(out,value.data(),n);out[n]=0;}
+static uint32_t count(){std::lock_guard<std::mutex> lock(mutex);return uint32_t(parts.size());}
+static bool copy(uint32_t index,AnyBundlePartInfoV1* out){if(!out||out->struct_size!=sizeof(*out))return false;std::lock_guard<std::mutex> lock(mutex);if(index>=parts.size())return false;auto& p=parts[index];
+ *out={};out->state=p.state;out->flags=p.flags;out->enabled_next=p.enabled_next;text(out->id,sizeof(out->id),p.id);text(out->name,sizeof(out->name),p.name);text(out->bundle,sizeof(out->bundle),p.bundle);return true;}
+static bool set_enabled(const char* id,uint32_t enabled){if(!id||!services::identifier(id))return false;std::lock_guard<std::mutex> lock(mutex);
+ bool known=false;for(auto& p:parts)if(p.id==id){if(p.flags&ANY_BUNDLE_PART_REQUIRED)return false;known=true;}if(!known)return false;
+ auto previous=off;off.erase(std::remove(off.begin(),off.end(),std::string(id)),off.end());if(!enabled)off.push_back(id);
+ if(off!=previous&&!save()){off=previous;log_line(ANY_LOG_ERROR,"framework","BUNDLE_PART_SWITCH saved=0");return false;}
+ for(auto& p:parts)if(p.id==id)p.enabled_next=enabled!=0;if(off!=previous)log_line(ANY_LOG_INFO,"framework",("BUNDLE_PART_SWITCH id="+std::string(id)+" enabled_next="+std::to_string(enabled!=0)).c_str());return true;}
+static const AnyBundlePartsV1 api{sizeof(AnyBundlePartsV1),1,count,copy,set_enabled};
+static uint32_t call_list(AnyBundlePartsExportV1 list,const AnyBundlePartV1** table){__try{return list(table);}__except(EXCEPTION_EXECUTE_HANDLER){*table=nullptr;return 0;}}
+static bool running(const char* id){for(uint32_t i=0;i<plugin_count.load();++i)if(!plugins[i].faulted&&plugins[i].callbacks.id&&!strcmp(plugins[i].callbacks.id,id))return true;return false;}
+static void load(HMODULE module,const std::filesystem::path& path,AnyBundlePartsExportV1 list){
+ const AnyBundlePartV1* table=nullptr;uint32_t n=call_list(list,&table);auto bundle=utf8(path.stem());
+ if(!table||!n||n>16){log_line(ANY_LOG_ERROR,"framework",("Bundle rejected (no parts): "+utf8(path.filename())).c_str());return;}
+ for(uint32_t k=0;k<n;++k){auto& d=table[k];
+  if(d.struct_size!=sizeof(AnyBundlePartV1)||d.abi!=ANYAPI_MOD_ABI||!d.id||!services::identifier(d.id)||!d.init){log_line(ANY_LOG_ERROR,"framework",("Bundle part rejected: "+bundle+" #"+std::to_string(k)).c_str());continue;}
+  Part part{d.id,d.name&&*d.name?std::string(d.name).substr(0,63):std::string(d.id),bundle,0,d.flags,true};
+  {std::lock_guard<std::mutex> lock(mutex);part.enabled_next=(d.flags&ANY_BUNDLE_PART_REQUIRED)||!is_off(part.id);}
+  auto legacy=d.legacy_file&&*d.legacy_file?path.parent_path()/d.legacy_file:std::filesystem::path();std::error_code error;
+  // The old standalone DLL wins while it is still installed (it may sort after the bundle), so nothing runs twice.
+  if(running(d.id)||(!legacy.empty()&&std::filesystem::is_regular_file(legacy,error))){part.state=ANY_PART_LEGACY;log_line(ANY_LOG_WARN,d.id,("BUNDLE_PART_SKIPPED bundle="+bundle+" reason=standalone_dll_installed").c_str());}
+  else if(!part.enabled_next){part.state=ANY_PART_OFF;log_line(ANY_LOG_INFO,d.id,("BUNDLE_PART_SKIPPED bundle="+bundle+" reason=switched_off").c_str());}
+  // A part keeps its old DLL's name as its path, so menus keep their order.
+  else part.state=start_mod(module,legacy.empty()?path:legacy,d.init,d.ready,true,bundle)?ANY_PART_LOADED:ANY_PART_FAILED;
+  std::lock_guard<std::mutex> lock(mutex);parts.push_back(std::move(part));
+ }
+}
+} // namespace bundles
+// Discover mod DLLs. Reject unsupported exports/ABI; retain accepted modules for process lifetime.
+static void load(){catalog_runtime::initialize();bundles::read();auto directory=g_game_dir/L"AnyAPI and Modding"/L"mods";std::error_code error;if(!std::filesystem::exists(directory,error))return;
+ // error_code overloads: an unreadable mods folder or entry skips mods instead of throwing on the loader thread.
+ std::vector<std::filesystem::path> paths;for(std::filesystem::directory_iterator it(directory,error),end;!error&&it!=end;it.increment(error)){std::error_code entry;if(it->is_regular_file(entry)&&it->path().extension()==L".dll")paths.push_back(it->path());}
+ if(error)log_line(ANY_LOG_WARN,"framework",("MODS_FOLDER unreadable=1 error="+std::to_string(error.value())).c_str());std::sort(paths.begin(),paths.end());
+ for(auto& path:paths){if(plugin_count.load()==plugins.size())break;HMODULE module=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);if(!module){log_line(ANY_LOG_ERROR,"framework",("Plugin DLL load failed: "+utf8(path.filename())).c_str());continue;}
+  if(auto list=(AnyBundlePartsExportV1)GetProcAddress(module,"AnyAPI_BundleParts")){bundles::load(module,path,list);continue;}
   auto init=(AnyModInitV1)GetProcAddress(module,"AnyAPI_ModInit");if(!init){FreeLibrary(module);log_line(ANY_LOG_WARN,"framework",("Unsupported plugin export: "+utf8(path.filename())).c_str());continue;}
-  auto& p=plugins[index];p.module=module;p.path=path;p.callbacks={};p.faulted=false;p.game_path=g_game_dir.wstring();p.plugin_path=path.parent_path().wstring();p.host.game_directory=p.game_path.c_str();p.host.plugin_directory=p.plugin_path.c_str();p.host.log=[](uint32_t level,const char* id,const char* msg){log_line(AnymakerLogLevel(level),id,msg);};p.host.copy_players=p34_copy_snapshot;p.host.capture_input=capture;
-  current_plugin=int(index);bool ok=false;try{ok=call_init(init,&p.host,&p.callbacks);}catch(...){ok=false;}current_plugin=-1;
-  if(!ok||p.callbacks.struct_size!=sizeof(p.callbacks)||p.callbacks.abi!=ANYAPI_MOD_ABI||!p.callbacks.id||!services::identifier(p.callbacks.id)){log_line(ANY_LOG_ERROR,"framework",("Plugin initialization rejected: "+utf8(path.filename())).c_str());p.faulted=true;plugin_count.store(index+1);continue;}
-  plugin_count.store(index+1);log_line(ANY_LOG_INFO,p.callbacks.id,"DLL plugin initialized; lifecycle=PROCESS_LIFETIME");
+  start_mod(module,path,init,nullptr,false,utf8(path.filename()));
  }
 }
 // Resolve optional dependencies after every provider has initialized, independent of filename order.
-static void safe_ready(Plugin* p){__try{auto ready=(void(*)())GetProcAddress(p->module,"AnyAPI_ModReady");if(ready)ready();}__except(EXCEPTION_EXECUTE_HANDLER){p->faulted=true;log_line(ANY_LOG_ERROR,p->callbacks.id,"MOD_READY disabled_after_exception=1");}}
+static void safe_ready(Plugin* p){__try{auto ready=p->part?p->ready:(void(*)())GetProcAddress(p->module,"AnyAPI_ModReady");if(ready)ready();}__except(EXCEPTION_EXECUTE_HANDLER){p->faulted=true;log_line(ANY_LOG_ERROR,p->callbacks.id,"MOD_READY disabled_after_exception=1");}}
 static void ready(){for(uint32_t i=0;i<plugin_count.load();++i){auto& p=plugins[i];if(p.faulted)continue;current_plugin=int(i);safe_ready(&p);current_plugin=-1;}}
 } // namespace platform
 
 static bool anyapi_owner_active(int owner){return owner>=0&&owner<int(platform::plugin_count.load())&&!platform::plugins[owner].faulted;}
 static void anyapi_owner_fault(int owner){if(owner<0||owner>=int(platform::plugin_count.load()))return;platform::plugins[owner].faulted=true;int expected=owner;platform::capture_owner.compare_exchange_strong(expected,-1);}
+static const void* anyapi_bundle_parts_service(){return &platform::bundles::api;}

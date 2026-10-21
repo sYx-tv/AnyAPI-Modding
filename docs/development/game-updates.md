@@ -61,6 +61,11 @@ Run it once without `--apply` to read the report, then again with `--apply` (add
    the port rewrote) gets a patch version bump with `--apply`, and
    `<work>/release-plan.json` lists the tag, every package to ship, the `release.json`
    `Packages` overrides and the `add_game_build.py` command for the other mods.
+   Bundles count as one mod each, under their release name: a bundle is rebuilt when any
+   of its parts must be, ships from `build/bundles/<config>/`, and gets its own version block
+   if it had none. A standalone target with the same release name (AnyHelpers, AnyGraphics,
+   AnyEngineParts, AnyMap) is never released, because the bundle replaces it. Before 0.1.27
+   the plan ignored bundles and bumped the standalone versions instead.
 
 Re-running it is safe: a second `--apply` on an up-to-date tree changes nothing.
 
@@ -106,13 +111,25 @@ Then check these, which the audit cannot see:
 - **Twin functions.** Identical editor-tool functions can diverge by a byte between builds. In
   0.1.24 AnyBalance's `HOVER_OVERLAY` bytes went on matching the microcontroller tool instead
   of the Properties tool, so the API hooked the wrong tool; the audit now reports that as `changed`.
+  In 0.1.25 the two became byte-identical, so AnyBalance's unique-match check failed; the audit
+  now also reports a pattern that gains an identical twin as `changed` with a `TWINS` note.
+  In 0.1.27 the Properties overlay changed again and the old bytes matched only the microcontroller
+  twin; the audit now reports a pattern that loses one of its former twins as `changed` too.
 - **Enum values** the mods hard-code (`e_localization_string`, `e_audio_effect`): check
   them in the new `json/types.json`.
 - **`game.exe` addresses** that are not byte patterns, such as the graphics context
   and command-list offset in `anyapi_scene_antialiasing.inc`. In 0.1.24 the context
-  moved from RVA 0x5e3340 to 0x5e5340 and the command list from +0x1d48 to +0x2648.
-  Find them again through their accessor and a caller, then update
-  [scene antialiasing](scene-antialiasing.md).
+  moved from RVA 0x5e3340 to 0x5e5340 and the command list from +0x1d48 to +0x2648; in
+  0.1.27 to 0x5e23d0 and +0x2650. Find them again through their accessor and a caller, then update
+  [scene antialiasing](scene-antialiasing.md). Natives called through a plain lower-case
+  constant (`play_voice_rva = 0x...` in the engine-sound mods) are checked by the audit when it
+  gets the new SDK's `--current-json` (the script passes it): `moved` rows, rewritten by `--apply`.
+  Before 0.1.27 nothing checked them, and every one of them moved. The graphics context
+  literal is still a manual check.
+- **Hand-written signatures** outside the `*_bindings.h` headers (`map_actors.h`,
+  `route_cell.h`, `rotary_mod.cpp`) are audited as `hexsig` rows since 0.1.27, when AnyMap's
+  creature `code_sig` turned out to have matched nothing for two builds. A signature split
+  over several string literals is reported but never rewritten by `--apply`.
 - **Changed game.exe code** (`changed` rows naming a `*_RVA` constant): find the
   function again by name in `<work>/sdk/json/natives.json` or by its callers.
 

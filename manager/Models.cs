@@ -12,6 +12,8 @@ namespace AnyApiManager {
   public int Revision,MinimumApi;
   public bool Local;
   public Dictionary<string,string> FileHashes=new Dictionary<string,string>();
+  // Bundles: mod Id -> the DLL path it used to ship as alone. Installing the bundle removes those DLLs.
+  public Dictionary<string,string> Replaces=new Dictionary<string,string>();
   public List<GameBuild> GameBuilds=new List<GameBuild>();
  }
  public sealed class Catalog { public int Schema=1;public string Repository="";public List<Package> Api=new List<Package>();public List<Package> Mods=new List<Package>(); }
@@ -40,6 +42,9 @@ namespace AnyApiManager {
     if(!allowed||!Digest(f.Value))throw new InvalidDataException("Package contains an unsupported installation path.");
    }
    foreach(var key in new List<string>(p.FileHashes.Keys))p.FileHashes[key]=p.FileHashes[key].ToLowerInvariant();
+   if(p.Replaces==null)p.Replaces=new Dictionary<string,string>();
+   if(p.Replaces.Count>16||(api&&p.Replaces.Count>0))throw new InvalidDataException("Invalid replaced mods.");
+   foreach(var old in p.Replaces)if(old.Key==null||old.Key==p.Id||!Regex.IsMatch(old.Key,"^[a-z][a-z0-9-]{0,47}$")||old.Value==null||p.FileHashes.ContainsKey(old.Value)||!Regex.IsMatch(old.Value,@"^AnyAPI and Modding/mods/[A-Za-z][A-Za-z0-9_-]{0,63}\.dll$"))throw new InvalidDataException("Invalid replaced mod.");
    foreach(var b in p.GameBuilds){if(b==null||!Digest(b.ExeSha256)||!Digest(b.GclSha256)||string.IsNullOrEmpty(b.Version))throw new InvalidDataException("Missing verified game fingerprint.");b.ExeSha256=b.ExeSha256.ToLowerInvariant();b.GclSha256=b.GclSha256.ToLowerInvariant();}
   }
   public static void Validate(Catalog c){

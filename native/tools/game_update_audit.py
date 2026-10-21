@@ -48,7 +48,9 @@ from capstone import Cs, CS_ARCH_X86, CS_MODE_64  # noqa: E402
 
 ARRAY = re.compile(r'((?:unsigned char|uint8_t)\s+(\w+)\s*\[\s*\]\s*=\s*\{)([^}]*)(\})')
 HEXSTR = re.compile(r'"((?:[0-9a-f]{2} ){7,}[0-9a-f]{2})"')
+HEXSEQ = re.compile(r'"(?:[0-9a-f]{2} )*[0-9a-f]{2} ?"(?:\s*"(?:[0-9a-f]{2} )*[0-9a-f]{2} ?")*')
 RVA = re.compile(r'\b(\w+)_RVA\s*=\s*(0x[0-9a-fA-F]+)')
+NATIVE_RVA = re.compile(r'\b([a-z]\w*_rva)\s*=\s*(0x[0-9a-fA-F]+)')
 MD = Cs(CS_ARCH_X86, CS_MODE_64)
 
 
@@ -74,10 +76,27 @@ def collect():
             for i, m in enumerate(HEXSTR.finditer(text)):
                 rows.append(dict(file=path.name, name='hex@%d' % m.start(1), body=bytes.fromhex(m[1]),
                                  span=(m.start(1), m.end(1)), style='hexstr', kind='binding'))
+        else:
+            # Hand-written descriptors and signatures outside the bindings (map_actors.h, route_cell.h,
+            # rotary_mod.cpp). 0.1.27: a map_actors.h code_sig had matched nothing for two builds unnoticed.
+            # A signature split over adjacent literals is reported but never rewritten.
+            for m in HEXSEQ.finditer(text):
+                pieces = re.findall(r'"([^"]*)"', m[0])
+                body = bytes.fromhex(' '.join(x.strip() for x in pieces))
+                if len(body) < 8:
+                    continue
+                single = len(pieces) == 1 and not pieces[0].endswith(' ')
+                rows.append(dict(file=path.name, name='hex@%d' % (m.start() + 1), body=body,
+                                 span=(m.start() + 1, m.end() - 1) if single else None, style='hexstr', kind='hexsig'))
     return rows, rvas
 
 
 LITERAL = re.compile(r'\b(0x[0-9a-fA-F]{3,5}|[1-9]\d{2,4})\b')
+
+
+def twin_note(functions):
+    return 'TWINS: the bytes match %d functions (%s); check every use that requires a unique match' % (
+        len(functions), ', '.join(sorted(f.sig for f in functions))[:400])
 
 
 def stale_offset_literals(report):
@@ -161,6 +180,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game-dir', type=Path, required=True)
     ap.add_argument('--previous-json', type=Path, required=True)
+    ap.add_argument('--current-json', type=Path, help="the new build's SDK json/ folder: resolves moved game.exe natives by name")
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--apply', action='store_true', help='rewrite refreshable, resized and shifted patterns in place')
     a = ap.parse_args()
@@ -220,9 +240,26 @@ def main():
             row.update(status='unchanged', matches=len(hits), function=hits[0].sig if len(hits) == 1 else None)
             # Same bytes, different function: the intended function changed and an old twin now matches.
             was = {f['sig'] for f in old_by_prefix.get(body[:16], []) if prefix_of(f)} if len(body) >= 16 else set()
+            # previous-build functions whose whole code these bytes were (not just a shared signature prefix)
+            was_whole = {f['sig'] for f in old_by_prefix.get(body[:16], []) if prefix_of(f) and len(body) >= f['gcl']['code_size']
+                         and hashlib.sha1(body[:f['gcl']['code_size']]).hexdigest() == f['code_hash']['raw']} if len(body) >= 16 else set()
             if was and not was & {f.sig for f in hits}:
                 row.update(status='changed', note='now matches %s; it used to match %s' % (
                     row['function'] or '%d functions' % len(hits), ', '.join(sorted(was))))
+            elif len(was) == 1 and len(hits) > 1:
+                # A unique pattern gained a byte-identical twin: code that requires one match stops.
+                row.update(status='changed', note=twin_note(hits))
+            elif r['kind'] == 'array' and len(body) > min(f.code_end for f in hits):
+                # The bytes after code_end are relocation cells the loader fills in at run time, so an exact
+                # comparison of live memory never matches (HUD_END, found in the 0.1.27 audit).
+                row.update(status='changed', note='runs %d bytes past code_end into run-time relocation cells; trim it to %d' % (
+                    len(body) - min(f.code_end for f in hits), min(f.code_end for f in hits)))
+            elif r['kind'] == 'array' and 1 < len(was_whole) <= 3 and was_whole - {f.sig for f in hits}:
+                # Twins that diverged: the bytes still match one of them, maybe not the one we meant
+                # (0.1.27: AnyBalance's Properties overlay changed and only the microcontroller twin matched).
+                # Binding routes are checked again at runtime, and wide patterns lose members harmlessly.
+                row.update(status='changed', note='now matches only %s; it also used to match %s' % (
+                    ', '.join(sorted(f.sig for f in hits)), ', '.join(sorted(was_whole - {f.sig for f in hits}))))
             report.append(row)
             continue
         cands = [f for f in old_by_prefix.get(body[:16], []) if prefix_of(f)] or \
@@ -263,10 +300,14 @@ def main():
         else:
             new_len = len(body) - old_end + new_end
         new_body = cur.blob[:new_len]
+        twins = [f for f in new_by_prefix.get(new_body[:16], []) if f.blob.startswith(new_body)] if len(new_body) >= 16 else []
         if same_insn and same_relocs:
             row['status'] = 'refreshable' if old_end == new_end else 'resized'
             row['changed_bytes'] = sum(x != y for x, y in zip(body, new_body)) + abs(len(body) - len(new_body))
-            edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
+            if r['span']:
+                edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
+            if len(twins) > 1:
+                row['note'] = twin_note(twins)
         else:
             row['status'] = 'changed'
             old_code, new_code = body[:min(len(body), oh['insn_size'])], cur.blob[:nh['insn_size']]
@@ -275,7 +316,10 @@ def main():
                 row['status'] = 'shifted'
                 row['number_changes'] = displacement_changes(old_code, new_code)
                 row['offset_hints'] = offset_hints(row['number_changes'])
-                edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
+                if r['span']:
+                    edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
+                if len(twins) > 1:
+                    row['note'] = twin_note(twins)
             row['constants_changed'] = sum(x != y for x, y in zip(oh['const_windows'], nh['const_windows'])) + \
                 abs(len(oh['const_windows']) - len(nh['const_windows']))
             d = list(difflib.unified_diff(normalize(old_code), normalize(new_code), 'previous', 'current', lineterm='', n=2))
@@ -286,6 +330,44 @@ def main():
             row['diff'] = 'diffs/' + fn
             row['candidate_bytes'] = encode(new_body, 'min')
         report.append(row)
+
+    # game.exe natives called through a plain constant (`play_voice_rva = 0x...`, no byte pattern): name the native
+    # at that address in the previous build and find where the same native is now. (0.1.27: the mods' audio
+    # natives all moved and nothing reported it.) Without --current-json, fall back to the thunk signature.
+    def natives_by_rva(folder):
+        out = {}
+        if folder and (folder / 'natives.json').is_file():
+            for n in json.loads((folder / 'natives.json').read_text(encoding='utf-8')):
+                if n.get('thunk_rva'):
+                    out.setdefault(int(n['thunk_rva'], 16), []).append(n)
+        return out
+    old_natives, cur_natives = natives_by_rva(a.previous_json), natives_by_rva(a.current_json)
+    cur_by_sig = {n['sig']: int(rva) for rva, ns in cur_natives.items() for n in ns}
+    for path, text in sources():
+        for m in NATIVE_RVA.finditer(text):
+            value = int(m[2], 16)
+            row = dict(file=path.name, name=m[1], kind='native_rva', rva=hex(value))
+            olds = old_natives.get(value, [])
+            if not olds and value in cur_natives:
+                row.update(status='unchanged', function=cur_natives[value][0]['sig'], note='already the current address')
+            elif not olds:
+                row.update(status='changed', note='not a game.exe native of the previous build; check this address by hand')
+            else:
+                row['function'] = olds[0]['sig']
+                if cur_by_sig:
+                    found = sorted({cur_by_sig[n['sig']] for n in olds if n['sig'] in cur_by_sig})
+                else:
+                    sig = olds[0].get('thunk_signature') or ''
+                    rx = re.compile(b''.join(b'.' if t == '??' else re.escape(bytes([int(t, 16)])) for t in sig.split()), re.S)
+                    found = [pe.get_rva_from_offset(x.start()) for x in rx.finditer(exe)][:2] if sig else []
+                if len(found) != 1:
+                    row.update(status='changed', note='found %d candidates for it in the new build; check by hand' % len(found))
+                elif found[0] == value:
+                    row['status'] = 'unchanged'
+                else:
+                    row.update(status='moved', new_rva=hex(found[0]))
+                    edits.setdefault(path.name, []).append(((m.start(2), m.end(2)), '0x%x' % found[0]))
+            report.append(row)
 
     # Our code addresses dependency cells as code_end + 8*k. When code_end moves, every literal
     # still pointing at an old cell offset is a likely stale offset (the 0.35.2 container crash).

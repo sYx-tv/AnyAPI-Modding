@@ -11,6 +11,7 @@ uses several services together, see the [mod tutorial](../development/mod-tutori
 | --- | --- | --- |
 | DLL lifecycle, input, player copies and canvas | [SDK overview](../../sdk/README.md) | `anyapi_mod_v1.h` |
 | Named services and input filters | [Examples](../../native/examples/) | `anyapi_services_v1.h` |
+| Several mods in one DLL, and switching them on or off (0.39.0) | [Bundles](bundles.md) | `anyapi_bundle_v1.h` |
 | Settings tabs and menu extensions | [Menu integration](menu-extensions.md) | `anyapi_menu_v1.h`, `anyapi_menu_v2.h` |
 | Native settings rows | [Settings widgets](settings-widgets.md) | `anyapi_menu_v3.h` |
 | Current game UI state | [UI state](ui-state.md) | `anyapi_ui_state_v1.h` |
@@ -29,6 +30,7 @@ uses several services together, see the [mod tutorial](../development/mod-tutori
 | Scene SMAA before HUD (0.28.0), TAA and sharpening (0.36.0) | [Scene antialiasing](scene-antialiasing.md) | `anyapi_scene_antialiasing_v1.h`, `anyapi_scene_antialiasing_v2.h` |
 | HDR fog, sun shafts and local beams (0.29.0), beam shaping and temporal smoothing (0.36.0) | [Scene lighting](../scene-lighting.md) | `anyapi_scene_lighting_v1.h` through `anyapi_scene_lighting_v3.h` |
 | GPU cost of scene passes (0.36.0) | [Scene timing](scene-timing.md) | `anyapi_scene_timing_v1.h` |
+| The game's graphics card, and whether lamp beams run on it (0.39.1) | [GPU info](gpu-info.md) | `anyapi_gpu_info_v1.h` |
 | Tone mapping, colour looks, eye adaptation, bloom and sun glare (0.36.0) | [Scene effects](scene-effects.md) | `anyapi_scene_effects_v1.h` |
 | Optional editable settings | [Helper settings](helper-settings.md) | `anyhelpers_settings_v1.h`, `anyhelpers_settings_v2.h` |
 | Optional keybind registry | [AnyHelpers](../mods/helpers.md) | `mod_controls_v1.h` |

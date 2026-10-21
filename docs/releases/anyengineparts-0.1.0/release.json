@@ -1,0 +1,9 @@
+{
+  "Packages": {
+    "AnyEngineParts": {
+      "Id": "anyengineparts",
+      "MinimumApi": 37,
+      "Description": "Turbochargers with blow-off valves, a wastegate with antilag, oil ports, air filters and a stretchable intercooler, plus a 1-4 rotor rotary engine. Anymaker 0.1.25 only."
+    }
+  }
+}

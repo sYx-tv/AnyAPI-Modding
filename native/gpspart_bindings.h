@@ -1,5 +1,5 @@
 #pragma once
-// GpsPart game bindings, generated for Anymaker 0.1.25 / Steam build 25904830 with
+// GpsPart game bindings, generated for Anymaker 0.1.27 / Steam build 26113663 with
 //   python tools/bind.py --reference reference --signature "<signature>" --out <file>.hpp
 // run from the extracted AnyAPI-Experimental-SDK sdk/experimental folder, one --signature per binding below.
 // Experimental: located by code signature, call-cell route or typeinfo slot, not reviewed as an AnyAPI service.
@@ -25,4 +25,6 @@ inline constexpr func_desc definitions_add_definitions{"() vehicle_component_def
 inline constexpr func_desc definition_file_load{"(bool) vehicle_component_definition_file.load (vehicle_component_definition_file, const file.path)","",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec d8 03 00 00 48 89 8c 24 50 03 00 00 48 8d 81 a0 29", {5184u,240u}, 2},"",0u,-1};
 // () frontend_ui_microcontroller.update_ui (...) | side: client; runs every frame while the microcontroller editor is open
 inline constexpr func_desc client_microcontroller_update_ui{"() frontend_ui_microcontroller.update_ui (frontend_ui_microcontroller, frontend_ui, client, client.ui_data, const client_peer.inspection_request, client_scene.peer.inspection_data.microcontroller, client_scene, vector<client.ui_data.control_hint>)","53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 88 01 00 00 4c 8b a4 24 f0 01 00 00 4c 8b 94 24 f8",{"53 55 56 57 41 54 41 55 48 81 ec 98 04 00 00 4c 8b a4 24 f0 04 00 00 4c 8b 94 24 f8 04 00 00 4c", {6816u}, 1},"",0u,-1};
+// (ptr<const vehicle_component_definition>) vehicle_component_definition_container.get_definition_by_id_const (const vehicle_component_definition_container, const string) | side: shared
+inline constexpr func_desc definitions_get_by_id{"(ptr<const vehicle_component_definition>) vehicle_component_definition_container.get_definition_by_id_const (const vehicle_component_definition_container, const string)","",{"53 48 81 ec a0 00 00 00 48 89 4c 24 50 48 89 54 24 58 48 8d 41 28 48 8b 1d 2b 01 00 00 48 89 4c", {368u}, 1},"",0u,-1};
 } // namespace gpspart::bind

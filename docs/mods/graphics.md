@@ -1,7 +1,7 @@
 # AnyGraphics
 
-AnyGraphics is a native graphics mod for Anymaker 0.1.25. The current release is
-**0.30.0**, which needs **AnyAPI 0.36.0** for TAA, sharpening, beam shaping,
+AnyGraphics is a native graphics mod for Anymaker 0.1.27. The current release is
+**0.31.0**, which needs **AnyAPI 0.36.0** for TAA, sharpening, beam shaping,
 tone mapping and colour looks, and the GPU cost readout (older APIs keep the 0.29 feature set; TAA choices
 fall back to SMAA). Its controls live inside
 Settings → Graphics, in the scrolling **AnyGraphics · Modded** section. It does
@@ -11,7 +11,13 @@ The menu and native controls arrived in 0.28.0, volumetric lighting in 0.29.0,
 fog-independent light beams in 0.29.1 (with API 0.32.0), and bounded retries for
 rejected settings in 0.29.3. 0.30.0 fixes foggy sun shafts and adds TAA,
 sharpening, tone mapping and colour looks, a Cinematic preset and a GPU cost
-readout. See the
+readout. 0.31.0 adds a free camera and photo controls (depth of field,
+exposure, look, vignette, bloom) to photo mode. 0.31.1 fixes the free camera spinning
+when photo mode starts in ThirdPerson's third-person view. 0.31.2 hides the lamp beam
+settings on AMD graphics cards, where AnyAPI 0.39.1 switches lamp beams off; with AnyAPI 0.39.2
+they are back. 0.31.3 fixes your own head showing in first person after leaving photo mode (when F5 switched
+ThirdPerson to first person while the camera was flying), and the free camera staying at the last world's
+spot after loading another world with photo mode still on. See the
 [release records](../releases/README.md).
 
 ## Tone mapping and colour (0.30.0)
@@ -104,9 +110,35 @@ were on, so a look can be fine-tuned from the closest preset.
 preset and steps between Performance and Ultra until the game holds about
 60 fps, then says which preset it chose. Close the menu and play while it runs.
 
-**Photo mode** hides the game's HUD, crosshair and menus. Press **F1** in
-gameplay to turn it on or off (rebindable in AnyHelpers controls), or use the
-Photo mode switch under Preset. Opening any menu shows the UI again.
+**Photo mode** hides the game's HUD, crosshair and menus and frees the camera.
+Press **F1** in gameplay to turn it on or off (rebindable in AnyHelpers
+controls), or use the Photo mode switch under Preset. Opening any menu shows
+the UI again. A help panel in the bottom-left corner lists the keys; it hides
+after a few seconds so it stays out of screenshots, and comes back whenever a
+photo key is pressed.
+
+| Key | In photo mode |
+| --- | --- |
+| W A S D | Fly the camera where you look; the mouse still turns the view |
+| Space / C | Up / down |
+| Shift | Fly four times faster |
+| Mouse wheel | Flying speed (0.25 to 40 m/s, starts at 4) |
+| V | Free camera on or off (off: the camera follows you, movement keys work) |
+| 1 / 2 | Less / more depth of field; it focuses on the middle of the screen |
+| 3 / 4 | Exposure down / up in quarter stops |
+| 5 | Colour look: preset, None, Warm, Cool, Teal & orange, Moody, Vivid |
+| 6 | Vignette: preset, Off, Light, Medium, Strong |
+| 7 | Bloom: preset, Off, Subtle, Normal, Strong |
+| R | Reset the photo controls and speed |
+| H | Keep the help panel open, or hide it |
+
+The camera starts exactly where your view was and stays within 200 m of that
+point, because the world is only loaded around you. While it flies, your
+character stays where it is and mouse clicks do nothing, so you cannot shoot
+or build from the camera. Photo controls last until the game closes and are
+never saved into your preset. The free camera hooks the game directly and
+works on Anymaker 0.1.27 only; on another game build photo mode still hides
+the HUD and the photo controls still work.
 
 **Local light beams** (headlights, torches, lamps) light the air in clear,
 thin beams that reach a little past each light's own range. Looking straight

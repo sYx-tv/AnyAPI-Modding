@@ -6,25 +6,26 @@
 // height difference to a waypoint. Inputs waypoint_x, waypoint_y and waypoint_z set the waypoint (world
 // coordinates). north_angle still works as on the compass.
 //
-// Getting it: the part is a vehicle component with tech_tier 4 in the
+// Getting it: the part is a vehicle component with tech_tier 3 (like the stock sensors since 0.1.27) in the
 // "sensor" category (the sandbox and creative sensor container). World loot spawns items whose tech_tier equals
 // the loot level being generated; a new world starts at loot level 1 and each bunker's end sequence
-// (dungeon_<n>_end_sequence -> dungeon_manager.complete_dungeon) raises it by one, so tier 4 loot starts
-// generating the moment the 3rd bunker is triggered to explode (game code, Anymaker 0.1.25). Single player only for now: the definition
+// (dungeon_<n>_end_sequence -> dungeon_manager.complete_dungeon) raises it by one, so tier 3 loot starts
+// generating the moment the 2nd bunker is triggered to explode (game code, Anymaker 0.1.25 and 0.1.27). Single player only for now: the definition
 // is added on both the server and the client scene of this game, and every player would need the mod.
 //
 // How: the part definition is embedded below (gpspart_logic.h), written to "AnyAPI and Modding/GpsPart" and added
 // to the game's vehicle component definitions right after the game adds its own. The compass sensor's server
 // tick and get_data_f64 are hooked; they only change anything for parts whose definition id is gps_sensor.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (gpspart_bindings.h): Anymaker 0.1.25 /
-// Steam build 25904830 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (gpspart_bindings.h): Anymaker 0.1.27 /
+// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
 #include "anyapi_gpu_draw_v1.h"
 #include "anyapi_experimental.hpp"
 #include "gpspart_bindings.h"
+#include "route_cell.h"
 #include "gpspart_logic.h"
 #include "gpspart_help.h"
 #include "gpspart_mesh.h"
@@ -70,6 +71,8 @@ constexpr int32_t kStoreSystem = 1;                 // file.e_store.system (stat
 
 using string_ctor_t = void (*)(anymaker::gc_string_view*, const char*);
 string_ctor_t g_string_ctor;
+using get_definition_t = void (*)(const void** ret, const void* container, const anymaker::gc_string_view* id);
+get_definition_t g_get_definition;
 
 // file.path { e_store m_store; string m_path; } (24 bytes)
 struct GamePath { int32_t store; uint32_t pad; anymaker::gc_string_view path; };
@@ -162,9 +165,22 @@ bool add_ours(void* container, int32_t store, const std::string& text) {
     return ok;
 }
 
+// True when the GPS Sensor is already in this container. Another mod hooking the same cell (Turbo does) calls
+// down through this hook when it adds its own parts; without this check the GPS Sensor would be added twice.
+bool already_added(void* container) {
+    if (!g_get_definition || !g_string_ctor) return false;
+    anymaker::gc_string_view id{};
+    g_string_ctor(&id, kDefinitionId);
+    const void* found = nullptr;
+    g_get_definition(&found, container, &id);
+    return found != nullptr;
+}
+
+void forget_definitions();
 void hk_add_definitions(void* container, const void* file) {
     reinterpret_cast<add_definitions_t>(h_add_definitions.original)(container, file);
-    if (!g_ready.load() || g_adding == std::this_thread::get_id() || !container) return;
+    if (g_adding != std::this_thread::get_id()) forget_definitions();
+    if (!g_ready.load() || g_adding == std::this_thread::get_id() || !container || already_added(container)) return;
     std::string forward = g_json_path;
     for (char& c : forward) if (c == '\\') c = '/';
     bool ok = add_ours(container, kStoreSystem, g_json_path) || add_ours(container, kStoreSystem, forward);
@@ -180,8 +196,15 @@ anymaker::cell_hook h_tick, h_get_f64;
 transform_t g_vehicle_transform, g_component_transform;
 
 std::unordered_map<const uint8_t*, Sensor> g_sensors;   // keyed by server component; nodes keep their address
-std::unordered_map<const void*, bool> g_is_gps;         // definition pointer -> gps_sensor?
+std::unordered_map<const void*, bool> g_is_gps;         // definition pointer -> gps_sensor? (cleared on each add)
 std::mutex g_mutex;                                     // tick and data lookups may run on different threads
+
+// Every world loads its part definitions anew, and one can land where the last world's compass or GPS Sensor
+// definition was, so the cache starts afresh whenever definitions are added (as Turbo, Rotary and the Dyno do).
+void forget_definitions() {
+    std::lock_guard lock(g_mutex);
+    g_is_gps.clear();
+}
 
 bool is_gps(const uint8_t* sensor) {
     if (!sensor || !anymaker::readable(sensor + off::component_definition, 8)) return false;
@@ -316,35 +339,51 @@ uint32_t help_input(const AnyInputV1* e, void*) {
 }
 
 // ================================================================== install (background thread)
+void remove_hooks();
 void install_hooks() {
     using namespace anymaker::experimental;
     for (int attempt = 0; attempt < 180 && !g_stop; ++attempt) {
         if (attempt) Sleep(1000);
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; GpsPart stays off"); return; }
-        void** add = hook_cell(bind::definitions_add_definitions);
-        void** tick_cell = hook_cell(bind::server_compass_tick);
-        void** get_cell = hook_cell(bind::server_compass_get_data_f64);
-        auto ctor = reinterpret_cast<file_ctor_t>(function(bind::definition_file_ctor));
-        auto dtor = reinterpret_cast<file_ctor_t>(function(bind::definition_file_dtor));
-        auto load = reinterpret_cast<file_load_t>(function(bind::definition_file_load));
-        auto vt = reinterpret_cast<transform_t>(function(bind::server_vehicle_get_transform));
-        auto ct = reinterpret_cast<transform_t>(function(bind::server_component_get_transform));
+        int roots = -1;                               // matches of the definition functions' route root (route_cell.h)
+        void** add = route::cell(bind::definitions_add_definitions, &roots);
+        void** tick_cell = route::cell(bind::server_compass_tick);
+        void** get_cell = route::cell(bind::server_compass_get_data_f64);
+        auto ctor = reinterpret_cast<file_ctor_t>(route::function(bind::definition_file_ctor));
+        auto dtor = reinterpret_cast<file_ctor_t>(route::function(bind::definition_file_dtor));
+        auto load = reinterpret_cast<file_load_t>(route::function(bind::definition_file_load));
+        auto vt = reinterpret_cast<transform_t>(route::function(bind::server_vehicle_get_transform));
+        auto ct = reinterpret_cast<transform_t>(route::function(bind::server_component_get_transform));
         auto sc = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
+        if (add && !route::add_cell_ok(add)) {        // a wrong route: look again (route_cell.h)
+            static int logs = 3;
+            if (logs-- > 0) log(1, "the definitions route led to %s, not _add_definitions; looking again", route::what_is(anymaker::readable(add, 8) ? *add : nullptr));
+            add = nullptr;
+        }
+        if (load && !route::file_load_ok((void*)load)) {
+            static int logs = 3;
+            if (logs-- > 0) log(1, "the file load route led to %s, not vehicle_component_definition_file.load; looking again", route::what_is((void*)load));
+            load = nullptr;
+        }
         if (!add || !tick_cell || !get_cell || !ctor || !dtor || !load || !vt || !ct || !sc) {
-            if (attempt == 179)
-                log(2, "could not locate the game functions (add=%d tick=%d get=%d file ctor=%d dtor=%d load=%d transforms=%d/%d string=%d)",
-                    !!add, !!tick_cell, !!get_cell, !!ctor, !!dtor, !!load, !!vt, !!ct, !!sc);
+            if (attempt == 20 || attempt == 179)   // once early, so a stuck start shows in the log
+                log(attempt == 179 ? 2 : 1, "%s the game functions (route root matches %d, add=%d tick=%d get=%d file ctor=%d dtor=%d load=%d transforms=%d/%d string=%d)",
+                    attempt == 179 ? "could not locate" : "still looking for", roots, !!add, !!tick_cell, !!get_cell, !!ctor, !!dtor, !!load, !!vt, !!ct, !!sc);
             continue;
         }
         if (!write_definition_file()) { log(2, "could not write the GPS Sensor definition file; GpsPart is off"); return; }
         g_file_ctor = ctor; g_file_dtor = dtor; g_file_load = load; g_vehicle_transform = vt; g_component_transform = ct; g_string_ctor = sc;
+        g_get_definition = reinterpret_cast<get_definition_t>(route::function(bind::definitions_get_by_id));
+        if (!g_get_definition) log(1, "definition lookup not found; another mod re-adding definitions may add the GPS Sensor twice");
+        if (!route::add_cell_ok(add)) { log(2, "the definitions hook cell changed to %s before hooking; GpsPart is off", route::what_is(*add)); return; }
         bool ok = h_tick.install(tick_cell, (void*)&hk_tick) && h_get_f64.install(get_cell, (void*)&hk_get_f64) &&
                   h_add_definitions.install(add, (void*)&hk_add_definitions);
-        if (!ok) { log(2, "a hook cell was already taken or not writable; GpsPart is off"); return; }
-        void** ui_cell = hook_cell(bind::client_microcontroller_update_ui);
+        if (!ok) { log(2, "a hook cell was already taken or not writable; GpsPart is off"); remove_hooks(); return; }   // none left half-installed
+        void** ui_cell = route::cell(bind::client_microcontroller_update_ui);
         if (!ui_cell || !h_update_ui.install(ui_cell, (void*)&hk_update_ui)) log(1, "microcontroller help button unavailable (editor hook not found)");
         else if (!gpu) log(1, "microcontroller help button unavailable (anyapi.gpu_draw missing)");
         g_ready = true;
+        if (roots > 1) log(0, "the definition functions' route root matched %d times; all matches agreed", roots);
         log(0, "Ready after %d s. Load or start a world to add the GPS Sensor part (definition file %s).", attempt, g_json_path.c_str());
         return;
     }

@@ -5,21 +5,21 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.36.0",
-      "Revision": 39,
+      "Version": "0.39.2",
+      "Revision": 45,
       "MinimumApi": 0,
-      "Description": "Native mod framework for Anymaker 0.1.24, with creation balance snapshots including tank fluid mass.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.36.0/AnyAPI-0.36.0.zip",
-      "Sha256": "1ba3fa9c836f0d25ee748ea3bbe8de420f162a7ac55b310f7aff90028cbe8d84",
+      "Description": "Native mod framework for Anymaker 0.1.25; loads mod bundles (several mods in one DLL, each switchable in Mod Settings), adds menu v4, and draws lamp beams on AMD graphics cards too.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.2/AnyAPI-0.39.2.zip",
+      "Sha256": "fdc19a9ed072d840a036d7fbe3849531500dab122331acd4afb14abc94c5bb5f",
       "FileHashes": {
-        "dinput8.dll": "f57cd9b4a899811b3f4110bc9b566b2e4fe44c93b8fc611d5aaaa4709f936435"
+        "dinput8.dll": "71d341269487b68062462c3f2d8a1dc91a5933a8263300423f5a41b1da0fa3f9"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.24",
-          "SteamBuild": 25826614,
-          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
-          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
         }
       ]
     }
@@ -28,14 +28,14 @@
     {
       "Id": "anyhelpers",
       "Name": "AnyHelpers",
-      "Version": "0.27.0",
-      "Revision": 27,
-      "MinimumApi": 27,
-      "Description": "Native Mod Controls and Mod Settings.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyHelpers-0.27.0.zip",
-      "Sha256": "153247649bbd208f055c081fec23b161e0c64c58416e8a507c9149f128f7da76",
+      "Version": "1.0.1",
+      "Revision": 29,
+      "MinimumApi": 43,
+      "Description": "Building and editing helpers in one mod: Mod Controls and Mod Settings, Duplicate tool favorites and a host ADMIN tab, AnyInventory's item search, AnyMirror's mirrored building, AnyBalance's centre of mass, and MCCode's Code view for microcontrollers. Each piece can be switched off in Mod Settings. Anymaker 0.1.25 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.20/AnyHelpers-1.0.1.zip",
+      "Sha256": "3b3fab7191a62670a731c5989472e2ba70d156fa7a5ed7bdfb4e7e765e7361fd",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyHelpers.dll": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c"
+        "AnyAPI and Modding/mods/AnyHelpers.dll": "8ac48e26d0284b94b5c622cf08937d79b90adada981561f888a69e2250f2413d"
       },
       "GameBuilds": [
         {
@@ -49,35 +49,20 @@
           "SteamBuild": 25826614,
           "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
           "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
-        }
-      ]
-    },
-    {
-      "Id": "anyinventory",
-      "Name": "AnyInventory",
-      "Version": "0.27.0",
-      "Revision": 27,
-      "MinimumApi": 27,
-      "Description": "Item search, previews, favorites and mode-limited Add.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.27.0/AnyInventory-0.27.0.zip",
-      "Sha256": "2732620a2af2ce5012d98199fdadbd324e4deacb4fe7615b9e57fa9b44714703",
-      "FileHashes": {
-        "AnyAPI and Modding/mods/AnyInventory.dll": "1159c43e98158b7071308a3a63199ea00ff15971f0b5029926bb39f0622ff04e"
-      },
-      "GameBuilds": [
-        {
-          "Version": "0.1.23",
-          "SteamBuild": 25755694,
-          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
-          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
         },
         {
-          "Version": "0.1.24",
-          "SteamBuild": 25826614,
-          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
-          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
         }
-      ]
+      ],
+      "Replaces": {
+        "anyinventory": "AnyAPI and Modding/mods/AnyInventory.dll",
+        "anymirror": "AnyAPI and Modding/mods/AnyMirror.dll",
+        "anybalance": "AnyAPI and Modding/mods/AnyBalance.dll",
+        "mccode": "AnyAPI and Modding/mods/MCCode.dll"
+      }
     },
     {
       "Id": "anystorage",
@@ -103,47 +88,47 @@
           "SteamBuild": 25826614,
           "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
           "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+        },
+        {
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
         }
       ]
     },
     {
       "Id": "anymap",
       "Name": "AnyMap",
-      "Version": "0.27.2",
-      "Revision": 29,
-      "MinimumApi": 27,
-      "Description": "World map and minimap with consistent orientation, route placement and zoom.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.08.1/AnyMap-0.27.2.zip",
-      "Sha256": "8c867e260429bcecbc89904b6aac300aeaafe9c0df2f7c1a39dc62ae986aea0a",
+      "Version": "1.0.0",
+      "Revision": 31,
+      "MinimumApi": 43,
+      "Description": "World map and minimap with route placement and zoom; shows vehicles, zombies and creatures with a map key. Ready to carry more map pieces as one mod. Anymaker 0.1.25 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.0/AnyMap-1.0.0.zip",
+      "Sha256": "c10325b343cfba1af1769a9e22465817c59d56be957562b4b64e3cfa90b70303",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyMap.dll": "a22b13d34da56bfa23bd47e2e76654cd2e33b107ba9929a3fcd8dcd61dddd710"
+        "AnyAPI and Modding/mods/AnyMap.dll": "50e9424950cc9eadecdcd1a630735e29494065e9b02af60ea7947e1b569b3eb2"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.23",
-          "SteamBuild": 25755694,
-          "ExeSha256": "97ea559fb630c9beff217824fb91eab31497af20394d12276a533846efb9f610",
-          "GclSha256": "17cc55267fc865c76de33723f876cf5c64d9bedda443fead65a7d23c417c0aa1"
-        },
-        {
-          "Version": "0.1.24",
-          "SteamBuild": 25826614,
-          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
-          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
         }
       ]
     },
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "0.30.0",
-      "Revision": 33,
-      "MinimumApi": 39,
-      "Description": "Graphics overhaul: presets from Off to Cinematic plus Custom, TAA, filmic tone mapping and colour looks, detailed shading, contact shadows, bounce light, sun, clouds, stars and moon, depth of field, motion blur, draw distance, clear sun shafts and photo mode. Needs AnyAPI 0.36.0.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.36.0/AnyGraphics-0.30.0.zip",
-      "Sha256": "2ee8fd5506721ade2720f5ddae0c19ecedcabe4315c7cbb3f203928e9ed01387",
+      "Version": "1.0.2",
+      "Revision": 36,
+      "MinimumApi": 43,
+      "Description": "Graphics overhaul with presets from Off to Cinematic plus Custom, TAA, tone mapping and colour looks, shading, shadows, sky, depth of field, motion blur and photo mode, plus ThirdPerson's F5 third-person camera. Each piece can be switched off in Mod Settings. Anymaker 0.1.25 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.1/AnyGraphics-1.0.2.zip",
+      "Sha256": "bb7ef5579140384e36d87c7258662a307a96dfcb215eefe824ba1cec0a5ed5c3",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "fbf2d888d938f5138ffd7f8de56035c157d072afd67c6de42b181971f1b64456"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "0ebea90acc2c99548a41bef1f9e6173daa6bdb14d5d6b77924f6455248e5af81"
       },
       "GameBuilds": [
         {
@@ -151,8 +136,17 @@
           "SteamBuild": 25826614,
           "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
           "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+        },
+        {
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
         }
-      ]
+      ],
+      "Replaces": {
+        "thirdperson": "AnyAPI and Modding/mods/ThirdPerson.dll"
+      }
     },
     {
       "Id": "anyclock",
@@ -176,6 +170,12 @@
           "SteamBuild": 25826614,
           "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
           "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+        },
+        {
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
         }
       ],
       "Sha256": "8cc9f8d2642ded76e71ce704700673219ba3efd798b384e4024164d20c5e3fa8",
@@ -203,113 +203,60 @@
           "SteamBuild": 25826614,
           "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
           "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+        },
+        {
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
         }
       ],
       "Sha256": "e10ec56dcbc9158a1318cdbed2ce8856cdc593287088344ce3cda2ed462fff3b",
       "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.31.0/AnyQuickWheel-1.1.0.zip"
     },
     {
-      "Id": "anybalance",
-      "Name": "AnyBalance",
-      "Version": "1.2.0",
-      "Revision": 3,
-      "MinimumApi": 37,
-      "Description": "Native centre of mass, including tank fluid, plus creation mass and size, with local balance offsets and bounds while the Properties Tool is equipped.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.1/AnyBalance-1.2.0.zip",
-      "Sha256": "82363de728d9cefff7cfd0a3ff66b779b8348c0ae4e7acb01594222f4e47ccb8",
-      "FileHashes": {
-        "AnyAPI and Modding/mods/AnyBalance.dll": "7531aa92dc440851dc43a1a45a06ff3a3efb443c65ddc17351d9a5d5597b6f7d"
-      },
-      "GameBuilds": [
-        {
-          "Version": "0.1.24",
-          "SteamBuild": 25826614,
-          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
-          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
-        }
-      ]
-    },
-    {
-      "Id": "enginesound",
-      "Name": "EngineSound",
-      "Version": "0.2.1",
-      "Revision": 2,
-      "MinimumApi": 34,
-      "Description": "Engine sound presets (Muscle V8, Built 2JZ, Powerstroke, Hemi and more) and a Custom sound tuner in the Properties Tool engine window, synced for every player in co-op. Uses the experimental SDK; Anymaker 0.1.24 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.35.0/EngineSound-0.2.1.zip",
-      "Sha256": "552a8f9cc0e70431b0738bf08e90a997b6f272325eba0f3b8d9d758c69565f14",
-      "FileHashes": {
-        "AnyAPI and Modding/mods/EngineSound.dll": "775bb45b51b8db591863a4a4d085c2d15b643d888bc41ed955182180a8aa81ff"
-      },
-      "GameBuilds": [
-        {
-          "Version": "0.1.24",
-          "SteamBuild": 25826614,
-          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
-          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
-        }
-      ]
-    },
-    {
-      "Id": "anymirror",
-      "Name": "AnyMirror",
-      "Version": "1.1.0",
-      "Revision": 2,
-      "MinimumApi": 34,
-      "Description": "Mirrored building across a toggleable mirror wall: edges with either edge tool, plates with the add plate tool, and removals with the remove tool. Keybinds and a wall strength slider. Uses the experimental SDK; Anymaker 0.1.24 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.12.1/AnyMirror-1.1.0.zip",
-      "Sha256": "d62fac8679e3f5d9e1067d28a7294c1c4c1d83c5c9c8d5582ee167f4363eaf5b",
-      "FileHashes": {
-        "AnyAPI and Modding/mods/AnyMirror.dll": "4eb4f9c5269b50abeb965ed326c82e25b6a7d2b447633318a68b08075fe93403"
-      },
-      "GameBuilds": [
-        {
-          "Version": "0.1.24",
-          "SteamBuild": 25826614,
-          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
-          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
-        }
-      ]
-    },
-    {
-      "Id": "gpspart",
-      "Name": "GpsPart",
+      "Id": "anyengineparts",
+      "Name": "AnyEngineParts",
       "Version": "1.0.0",
-      "Revision": 1,
-      "MinimumApi": 36,
-      "Description": "Adds a GPS Sensor part with position, altitude, heading, pitch, roll, speed, acceleration and waypoint distance/bearing data channels. Single player only. Uses the experimental SDK; Anymaker 0.1.24 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.11/GpsPart-1.0.0.zip",
-      "Sha256": "0e81d16729be7ff7302ad8aa6aa1b46b4852ecded9303e139227633189efc2df",
+      "Revision": 4,
+      "MinimumApi": 43,
+      "Description": "Engine parts and sound in one mod: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine; EngineSound's generated engine sounds; and the GPS Sensor part. Each piece can be switched off in Mod Settings. Anymaker 0.1.25 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.39.0/AnyEngineParts-1.0.0.zip",
+      "Sha256": "387bf8be6ad144c2af8d18e6e6cec4a2e3c213a139ca278a219cb9417bd8343b",
       "FileHashes": {
-        "AnyAPI and Modding/mods/GpsPart.dll": "9a8d26f2e2c4f84b4e63109d01f3a5d6697b7bce523fb9cea6c8964af81a5db5"
+        "AnyAPI and Modding/mods/AnyEngineParts.dll": "ebf58e8f82023666789336cc201848a62dbac08757e92f89c3a8192d6d6d03ee"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.24",
-          "SteamBuild": 25826614,
-          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
-          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
         }
-      ]
+      ],
+      "Replaces": {
+        "enginesound": "AnyAPI and Modding/mods/EngineSound.dll",
+        "gpspart": "AnyAPI and Modding/mods/GpsPart.dll"
+      }
     },
     {
-      "Id": "thirdperson",
-      "Name": "ThirdPerson",
+      "Id": "anycombat",
+      "Name": "AnyCombat",
       "Version": "0.1.0",
       "Revision": 1,
-      "MinimumApi": 36,
-      "Description": "Third-person camera: F5 switches between first and third person, Alt + mouse wheel sets the follow distance (1-20 m), with a follow-distance setting. Uses the experimental SDK; Anymaker 0.1.24 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.12/ThirdPerson-0.1.0.zip",
-      "Sha256": "61bd1b5561a8857d463e4727ef9e4db6da3b500fd9ea044722e2eeddd869c854",
+      "MinimumApi": 41,
+      "Description": "Hit markers and floating damage numbers for the hits you deal, red on a kill. Anymaker 0.1.25 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.17/AnyCombat-0.1.0.zip",
+      "Sha256": "2743e7c7276be0711ba71c323e645a59101dc218618604ff59a9327affa4f3c7",
       "FileHashes": {
-        "AnyAPI and Modding/mods/ThirdPerson.dll": "92001770800706f86f772aad2f97d6e55ae02d1dd0ab2ff2b18074a0af981c8b"
+        "AnyAPI and Modding/mods/AnyCombat.dll": "5b47afd0c4ba98433d8b9e1b58f7a031fc4f1020216a89d2977bfb82cb69dc56"
       },
       "GameBuilds": [
         {
-          "Version": "0.1.24",
-          "SteamBuild": 25826614,
-          "ExeSha256": "2bfa5396ba49cb902941afe65294403c0222e9266e35ce3e7131cb8185d336f7",
-          "GclSha256": "da170da347d494cf78b8ca43592e1981c5950528d27d0564b81ce8144f30622d"
+          "Version": "0.1.25",
+          "SteamBuild": 25904830,
+          "ExeSha256": "5c46cd34a3b00889ff36154976428ba43f6475430e92a2d113a360a78161a7d0",
+          "GclSha256": "626a994be960b7218409d9ca416d2664450231d1fc3295036fc77c81b8449355"
         }
       ]
     }

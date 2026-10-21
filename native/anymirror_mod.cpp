@@ -8,7 +8,7 @@
 // validates and replicates it like any other. Only the player building needs the mod.
 //
 // EXPERIMENTAL. Hooks game functions directly through the experimental SDK (anymirror_bindings.h). They
-// resolve only on Anymaker 0.1.25 / Steam build 25904830. First runs are diagnostic: read anymaker_modding.log.
+// resolve only on Anymaker 0.1.27 / Steam build 26113663. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -277,7 +277,8 @@ void after_overlay(uint8_t* state, uint8_t* scene, uint8_t* overlay) {
     int32_t hovered = rd<int32_t>(state, kStateVehicleId);
     std::lock_guard lock(g_mutex);
     refresh_settings();
-    g_scene = scene;
+    // Vehicle ids are only unique within one world, so a new client scene drops the planes kept for the last one.
+    if (scene != g_scene) { g_vehicles.clear(); g_vehicle_id = -1; g_scene = scene; }
     if (g_grid_size_ptr && anymaker::readable(g_grid_size_ptr, 8) && std::isfinite(*g_grid_size_ptr) && *g_grid_size_ptr > 0.001 && *g_grid_size_ptr < 10)
         g_grid_size = *g_grid_size_ptr;
     g_tool_seen = now;

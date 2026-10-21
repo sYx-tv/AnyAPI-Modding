@@ -1,0 +1,9 @@
+{
+  "Packages": {
+    "MCCode": {
+      "Id": "mccode",
+      "MinimumApi": 41,
+      "Description": "A Code view in the microcontroller editor: type the program instead of placing blocks, with a command list, live values and the game's debugger. Anymaker 0.1.25 only."
+    }
+  }
+}

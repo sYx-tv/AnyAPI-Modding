@@ -1,5 +1,7 @@
 // Mod-owned registry and menu. The framework supplies only native widget primitives.
 #include "anyhelpers_settings_v2.h"
+#include "anyapi_bundle_v1.h"
+#include <climits>
 namespace settingsmod {
 static helpersettings::State state;
 static std::mutex mutex;
@@ -19,11 +21,22 @@ static bool visibility(uint64_t row,uint64_t first,double a,uint64_t second,doub
 }
 static bool visible(uint64_t token){auto it=visibility_rules.find(token);if(it==visibility_rules.end())return true;auto& r=it->second;return (!r.first||state.settings[r.first-1].draft.number==r.first_value)&&(!r.second||state.settings[r.second-1].draft.number==r.second_value);}
 static const AnyHelpersSettingsV2 api2{sizeof(AnyHelpersSettingsV2),2,register_setting,get,revision,visibility};
+// Bundled mods (anyapi.bundle_parts): an "Enabled" row at the top of each switchable part's group. The saved row is the
+// truth; Apply hands it to AnyAPI, which loads or skips that part on the next launch. Call sync_parts with the mutex held.
+static const AnyBundlePartsV1* bundle_parts;static std::vector<std::pair<uint64_t,std::string>> part_rows;
+static void sync_parts(){if(!bundle_parts)return;for(auto& [token,id]:part_rows){AnySettingValueV1 value;if(state.get(token,&value)&&!bundle_parts->set_enabled(id.c_str(),value.number!=0))log("BUNDLE_PART_SWITCH id="+id+" saved=0",2);}}
+static void add_part_rows(const AnyServicesV1* services){auto parts=services?(const AnyBundlePartsV1*)services->query("anyapi.bundle_parts",1):nullptr;
+ if(!parts||parts->struct_size!=sizeof(*parts)||!parts->count||!parts->copy||!parts->set_enabled)return;std::lock_guard<std::mutex> lock(mutex);bundle_parts=parts;
+ for(uint32_t i=0,n=parts->count();i<n;++i){AnyBundlePartInfoV1 info;if(!parts->copy(i,&info)||(info.flags&ANY_BUNDLE_PART_REQUIRED)||info.state==ANY_PART_LEGACY)continue;
+  auto description=std::string("Part of the ")+info.bundle+" bundle. Turning it on or off applies the next time you start the game.";
+  AnyModSettingV1 row;row.mod_id=info.id;row.mod_name=info.name;row.setting_id="bundle.enabled";row.label="Enabled";row.description=description.c_str();row.order=INT32_MIN;row.default_number=1;
+  if(auto token=state.add(&row))part_rows.push_back({token,info.id});else log(std::string("BUNDLE_PART_ROW rejected id=")+info.id,2);}
+ sync_parts();log("BUNDLE_PARTS rows="+std::to_string(part_rows.size()));}
 static uint32_t dirty(void*){std::lock_guard<std::mutex> lock(mutex);return state.dirty();}
 static uint32_t defaults(void*){std::lock_guard<std::mutex> lock(mutex);return state.defaults();}
 static void event(uint32_t type,void*){std::lock_guard<std::mutex> lock(mutex);
  if(type==ANY_MENU_OPEN)state.begin();else if(type==ANY_MENU_RESET){state.reset();log("SETTINGS_RESET staged=1");}
- else if(type==ANY_MENU_APPLY){bool changed=state.dirty(),ok=state.apply();if(changed)log(ok?"SETTINGS_APPLY saved=1":"SETTINGS_APPLY saved=0 pending_retained=1",ok?0:2);}
+ else if(type==ANY_MENU_APPLY){bool changed=state.dirty(),ok=state.apply();if(changed)log(ok?"SETTINGS_APPLY saved=1":"SETTINGS_APPLY saved=0 pending_retained=1",ok?0:2);if(changed&&ok)sync_parts();}
  else if(type==ANY_MENU_CANCEL){bool pending=state.dirty();state.cancel();log("SETTINGS_CLOSED pending_discarded="+std::to_string(pending));}
 }
 static void draw(const AnyMenuFrameV1*,void*){std::lock_guard<std::mutex> lock(mutex);

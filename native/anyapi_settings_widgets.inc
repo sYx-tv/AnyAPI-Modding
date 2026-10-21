@@ -34,3 +34,9 @@ static uint32_t text_row(const char* id,const char* text,char* utf8,uint32_t cap
  if(value.length<capacity&&(!value.length||value.data)){std::string after;if(value.length)after.assign((const char*)value.data,value.length);if(after.find('\0')==std::string::npos&&MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,after.c_str(),-1,nullptr,0))memcpy(utf8,after.c_str(),after.size()+1);}
  native_string_dtor(&value);edit_focus(results[1]);native_end(native_ui);return before!=utf8;}
 static const AnyMenuV3 api_v3{sizeof(AnyMenuV3),3,&api_v2,toggle_row,number_row,choice_row,text_row};
+// One-shot actions: the value column is split evenly between the buttons, the last one taking the remainder.
+static uint32_t button_row(const char* id,const char* text,const char* const* buttons,uint32_t count){if(!buttons||count<1||count>4)return 0;for(uint32_t i=0;i<count;++i)if(!buttons[i]||!*buttons[i]||strlen(buttons[i])>63)return 0;if(!row_begin(id,text))return 0;
+ auto base=std::string(id);layout((base+".field").c_str(),{column_width,compact_height},0,0,0,0);int32_t width=std::max(1,column_width/int32_t(count));uint32_t chosen=0;
+ for(uint32_t i=0;i<count;++i){int32_t w=i+1==count?std::max(1,column_width-width*int32_t(count-1)):width;if(sized_button((base+".button."+std::to_string(i+1)).c_str(),buttons[i],{w,compact_height},0,false)&&!chosen)chosen=i+1;}
+ native_end(native_ui);native_end(native_ui);return chosen;}
+static const AnyMenuV4 api_v4{sizeof(AnyMenuV4),4,&api_v3,button_row};

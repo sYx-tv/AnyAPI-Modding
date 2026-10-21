@@ -1,6 +1,6 @@
 # Scene antialiasing integration
 
-Target: Anymaker 0.1.25 / Steam build 25904830. Version 0.28.0 includes SMAA 1x and Enhanced SMAA. Live logs confirm
+Target: Anymaker 0.1.27 / Steam build 26113663. Version 0.28.0 includes SMAA 1x and Enhanced SMAA. Live logs confirm
 Enhanced SMAA Ultra at 2560 × 1440; residual aliasing remains.
 
 ## Placement
@@ -12,8 +12,10 @@ then records SMAA on the game's current D3D12 command list. Native
 `frontend_ui.render` and `mm_ui.render` follow this boundary. No AA runs in the
 Present hook. The observed native scene target is 2560 × 1440 in a loaded world.
 
-The reviewed executable's graphics context is at RVA 0x5e5340; its current
-command list is at offset 0x2648 (0.1.23: 0x5e3340 and 0x1d48). Exact executable/GCL hashes gate these offsets.
+The reviewed executable's graphics context is at RVA 0x5e23d0; its current
+command list is at offset 0x2650 (0.1.25: 0x5e5340 and 0x2648; 0.1.23: 0x5e3340 and 0x1d48). The context getter
+ends in `lea rax, <context>` (0.1.27: RVA 0x70050); the field is the one the frame code loads before calling the
+list's ResourceBarrier (vtable +0xd0). Exact executable/GCL hashes gate these offsets.
 The current presentation buffer is acquired for the call and released before
 return; it is not held across swapchain resizing.
 

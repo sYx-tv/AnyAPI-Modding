@@ -1,6 +1,6 @@
 // ThirdPerson: switches the player camera between first and third person, with an adjustable follow distance.
 //
-// How: Anymaker 0.1.25 already carries a third-person camera that only its developer tools switch on. client_scene
+// How: Anymaker (0.1.25 and 0.1.27) already carries a third-person camera that only its developer tools switch on. client_scene
 // has m_is_camera_first_person, m_is_render_player_third_person and m_debug_third_person_camera_dist, and
 // client_scene.get_camera_transform (what rendering, the crosshair and interaction rays all use) offsets the view by
 // that distance when the camera is not first person. This mod hooks get_camera_transform, sets those three fields on
@@ -12,11 +12,14 @@
 // offset points forward the distance is negated; if the game does not move the camera at all, the mod moves it
 // back along the view axis itself. Both cases are logged.
 //
+// A steady chase camera (level horizon, smoothed heading and pitch) is used on foot and replaces the seat-locked
+// view in vehicles.
+//
 // Controls: F5 toggles (rebindable in Controls under ThirdPerson when AnyHelpers is installed); Alt + mouse wheel
 // changes the follow distance while in third person. Settings: start in third person, follow distance.
 //
-// EXPERIMENTAL. Hooks a game function through the experimental SDK (thirdperson_bindings.h): Anymaker 0.1.25 /
-// Steam build 25904830 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks a game function through the experimental SDK (thirdperson_bindings.h): Anymaker 0.1.27 /
+// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -39,14 +42,17 @@
 namespace thirdperson {
 namespace {
 constexpr const char* kModId = "thirdperson";
+constexpr double kPi = 3.14159265358979323846;
 constexpr double kMinDistance = 1.0, kMaxDistance = 20.0, kWheelStep = 0.5, kDefaultDistance = 4.0;
 
-// client_scene fields (0.1.25 reference layout, unchanged since 0.1.24, metadata).
+// client_scene fields (0.1.27 SDK layout, unchanged since 0.1.24, metadata).
 namespace off {
 constexpr ptrdiff_t third_person_dist = 944;        // f64 m_debug_third_person_camera_dist
 constexpr ptrdiff_t render_player_third = 954;      // bool m_is_render_player_third_person
 constexpr ptrdiff_t camera_first_person = 955;      // bool m_is_camera_first_person
 constexpr ptrdiff_t mat_t = 72;                     // mat34.t (after mat33 m = v0, v1, v2)
+constexpr ptrdiff_t scene_actors = 344;             // client_scene.m_actors (client_scene.actor.container)
+constexpr ptrdiff_t seated_factor = 720 + 216;      // actor_character.m_seat_data._m_seated_factor (f64, 0 standing .. 1 seated)
 }  // namespace off
 
 AnyModHostV1 host;
@@ -54,10 +60,11 @@ const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
 const ModControlsV1* controls;
-uint64_t g_tokens[2], g_action, g_settings_revision = ~0ull;
+uint64_t g_tokens[3], g_action, g_settings_revision = ~0ull;
 std::atomic<bool> g_ready{false}, g_stop{false};
 std::atomic<bool> g_want{false};                    // third person requested
 std::atomic<double> g_target{kDefaultDistance};     // follow distance in metres
+std::atomic<bool> g_steady{true};                   // level, smoothed chase camera
 std::atomic<ULONGLONG> g_toast_until{0};
 std::mutex g_input_mutex;
 bool g_key_held;
@@ -79,6 +86,8 @@ bool gameplay() { AnyUiSnapshotV1 s; return ui && ui->copy(&s) && s.kind == ANY_
 
 // ------------------------------------------------------------------ camera hook (main and worker threads)
 using transform_t = void (*)(double* ret, uint8_t* scene);
+using peer_actor_t = void (*)(uint8_t** ret, uint8_t* container);
+peer_actor_t g_peer_actor;
 anymaker::cell_hook h_transform;
 
 enum class Mode { Unknown, Game, Own };
@@ -130,6 +139,86 @@ void restore_first_person(uint8_t* scene) {
 
 const double* basis(const double* m, int i) { return m + i * 3; }
 const double* translation(const double* m) { return m + off::mat_t / 8; }
+double dot(const double* a, const double* b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+void cross(const double* a, const double* b, double* o) { o[0] = a[1] * b[2] - a[2] * b[1]; o[1] = a[2] * b[0] - a[0] * b[2]; o[2] = a[0] * b[1] - a[1] * b[0]; }
+bool normalize(double* v) { double l = std::sqrt(dot(v, v)); if (!(l > 1e-9)) return false; for (int i = 0; i < 3; ++i) v[i] /= l; return true; }
+double det(const double* m) { double c[3]; cross(basis(m, 1), basis(m, 2), c); return dot(basis(m, 0), c); }
+
+// ------------------------------------------------------------------ steady camera
+// Seated, the game's view turns with the vehicle, so bumps, hills and crashes throw the camera around. The steady
+// camera keeps the horizon level, follows the view's heading and pitch through a smoothing filter that gets much
+// slower when the vehicle tilts or tumbles, and sits a little higher than the head when seated. On foot the same
+// filter gives the chase camera the same feel.
+constexpr double kWorldUp[3] = {0, 1, 0};
+double g_up_world[3] = {0, 1, 0};   // the camera's "up" last frame, followed continuously through rolls
+int g_up_axis_logged = -1, g_up_logs;
+bool g_steady_active;           // smoothing state below is valid
+double g_cam_yaw, g_cam_pitch;
+LARGE_INTEGER g_steady_qpc;
+int g_seat_logs;
+
+double seated_factor(uint8_t* scene) {
+    if (!g_peer_actor) return 0;
+    uint8_t* actor = nullptr;
+    g_peer_actor(&actor, scene + off::scene_actors);
+    if (!actor || !anymaker::readable(actor + off::seated_factor, 8)) return 0;
+    double f = rd<double>(actor, off::seated_factor);
+    return std::isfinite(f) ? std::clamp(f, 0.0, 1.0) : 0;
+}
+
+double angle_diff(double a, double b) { double d = std::fmod(a - b + 3 * kPi, 2 * kPi) - kPi; return d; }
+
+// head: the view at the head (third-person flags set, distance 0). back: unit vector from the head towards the
+// camera, as the game's own offset points. Writes the steady camera into ret.
+void steady_camera(double* ret, const double* head, const double* back, double dist, double seated) {
+    LARGE_INTEGER now, freq; QueryPerformanceCounter(&now); QueryPerformanceFrequency(&freq);
+    double dt = g_steady_active ? std::clamp(double(now.QuadPart - g_steady_qpc.QuadPart) / double(freq.QuadPart), 0.0, 0.1) : 0;
+    g_steady_qpc = now;
+    if (!g_steady_active) std::memcpy(g_up_world, kWorldUp, sizeof g_up_world);
+    // Which basis vector carries "back", and with which sign (the game's offset runs along one of them).
+    int bi = 0; double bd = 0;
+    for (int i = 0; i < 3; ++i) { double d = dot(basis(head, i), back); if (std::fabs(d) > std::fabs(bd)) { bd = d; bi = i; } }
+    if (std::fabs(bd) < 0.98) {
+        static bool logged; if (!logged) { logged = true; log(1, "steady camera skipped: back (%.2f, %.2f, %.2f) matches basis %d only by %.2f", back[0], back[1], back[2], bi, bd); }
+        return;
+    }
+    // The camera's up is whichever other basis vector (and sign) is closest to last frame's up, so it follows the
+    // vehicle continuously through rolls instead of guessing from a fixed axis.
+    int ui = -1; double us = 1, ubest = -2;
+    for (int i = 0; i < 3; ++i) {
+        if (i == bi) continue;
+        double d = dot(basis(head, i), g_up_world);
+        if (std::fabs(d) > ubest) { ubest = std::fabs(d); ui = i; us = d >= 0 ? 1 : -1; }
+    }
+    double up_now[3] = {basis(head, ui)[0] * us, basis(head, ui)[1] * us, basis(head, ui)[2] * us};
+    std::memcpy(g_up_world, up_now, sizeof g_up_world);
+    if (ui != g_up_axis_logged && g_up_logs < 8) {
+        ++g_up_logs; g_up_axis_logged = ui;
+        log(0, "steady camera: back = basis %d (%+.0f), up = basis %d (%+.0f); head basis v0 (%.2f %.2f %.2f) v1 (%.2f %.2f %.2f) v2 (%.2f %.2f %.2f)",
+            bi, bd > 0 ? 1.0 : -1.0, ui, us, head[0], head[1], head[2], head[3], head[4], head[5], head[6], head[7], head[8]);
+    }
+    double tumble = 1.0 - std::max(0.0, up_now[1]);   // 0 level, 1 on its side, 2 upside down
+    double f[3] = {-back[0], -back[1], -back[2]};
+    double yaw = std::atan2(f[0], f[2]), pitch = std::asin(std::clamp(f[1], -1.0, 1.0));
+    if (!g_steady_active) { g_cam_yaw = yaw; g_cam_pitch = std::clamp(pitch, -1.2, 1.2); g_steady_active = true; }
+    double ky = 1.0 - std::exp(-dt / (0.10 + 1.28 * tumble)), kp = 1.0 - std::exp(-dt / (0.21 + 1.28 * tumble));
+    g_cam_yaw += angle_diff(yaw, g_cam_yaw) * ky;
+    g_cam_pitch += (std::clamp(pitch, -1.2, 1.2) - g_cam_pitch) * kp;
+    double nb[3] = {-std::cos(g_cam_pitch) * std::sin(g_cam_yaw), -std::sin(g_cam_pitch), -std::cos(g_cam_pitch) * std::cos(g_cam_yaw)};
+    double nu[3] = {kWorldUp[0] - dot(kWorldUp, nb) * nb[0], kWorldUp[1] - dot(kWorldUp, nb) * nb[1], kWorldUp[2] - dot(kWorldUp, nb) * nb[2]};
+    if (!normalize(nu)) return;
+    int ri = 3 - bi - ui;
+    double out[12];
+    std::memcpy(out, head, sizeof out);
+    double bs = bd > 0 ? 1 : -1;
+    for (int i = 0; i < 3; ++i) { out[bi * 3 + i] = nb[i] * bs; out[ui * 3 + i] = nu[i] * us; }
+    double r[3]; cross(basis(out, ui), basis(out, bi), r);
+    for (int i = 0; i < 3; ++i) out[ri * 3 + i] = r[i];
+    if ((det(out) > 0) != (det(head) > 0)) for (int i = 0; i < 3; ++i) out[ri * 3 + i] = -r[i];
+    double raise = 0.35 * seated;
+    for (int i = 0; i < 3; ++i) out[9 + i] = head[9 + i] + nb[i] * dist + kWorldUp[i] * raise;
+    std::memcpy(ret, out, sizeof out);
+}
 
 // Works out how the game's offset behaves, against the local player's facing. Returns true once decided.
 bool calibrate(double* ret, uint8_t* scene, double dist, transform_t original) {
@@ -176,6 +265,7 @@ void hk_transform(double* ret, uint8_t* scene) {
     std::lock_guard lock(g_cam_mutex);
     see_scene(scene);
     if (!g_want.load()) {
+        g_steady_active = false;
         if (g_touched) restore_first_person(scene);
         original(ret, scene);
         return;
@@ -194,6 +284,22 @@ void hk_transform(double* ret, uint8_t* scene) {
         double* t = ret + off::mat_t / 8;
         for (int i = 0; i < 3; ++i) t[i] += v[i] * g_own_sign * dist;
     }
+    if (g_mode == Mode::Unknown || !g_steady) { g_steady_active = false; return; }
+    double seated = seated_factor(scene);
+    if (g_seat_logs < 6 && ((seated > 0.5) != (g_seat_logs % 2 == 1))) { ++g_seat_logs; log(0, "seated factor %.2f: %s", seated, seated > 0.5 ? "in a vehicle" : "on foot"); }
+    // The head view (distance 0) and the game's own back direction, for learning the up axis and the steady camera.
+    double head[12], probe[12], back[3];
+    write_third_person(scene, 0.0);
+    original(head, scene);
+    if (g_mode == Mode::Own) { for (int i = 0; i < 3; ++i) back[i] = basis(head, g_own_axis)[i] * g_own_sign; }
+    else {
+        write_third_person(scene, g_sign);
+        original(probe, scene);
+        for (int i = 0; i < 3; ++i) back[i] = translation(probe)[i] - translation(head)[i];
+    }
+    write_third_person(scene, g_mode == Mode::Own ? 0.0 : g_sign * dist);
+    if (!normalize(back)) return;
+    steady_camera(ret, head, back, dist, seated);
 }
 
 // ------------------------------------------------------------------ settings, input, toast
@@ -206,6 +312,7 @@ void read_settings() {
     AnySettingValueV1 v;
     if (g_tokens[1] && settings->get(g_tokens[1], &v) && std::isfinite(v.number)) g_target = std::clamp(v.number, kMinDistance, kMaxDistance);
     if (first && g_tokens[0] && settings->get(g_tokens[0], &v)) g_want = v.number != 0;
+    if (g_tokens[2] && settings->get(g_tokens[2], &v)) g_steady = v.number != 0;
 }
 
 uint32_t toggle_key() {
@@ -281,6 +388,8 @@ void install_hooks() {
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; ThirdPerson stays off"); return; }
         void** cell = hook_cell(bind::client_scene_get_camera_transform);
         if (!cell) { if (attempt == 179) log(2, "could not locate client_scene.get_camera_transform; ThirdPerson is off"); continue; }
+        if (!(g_peer_actor = reinterpret_cast<peer_actor_t>(function(bind::actor_container_get_peer_actor))))
+            log(1, "local player lookup not located: the steady camera treats vehicles like walking");
         if (!h_transform.install(cell, (void*)&hk_transform)) { log(2, "the camera hook cell was already taken or not writable; ThirdPerson is off"); return; }
         if (auto head = static_cast<bool*>(global(bind::g_render_first_person_head))) {
             std::lock_guard lock(g_cam_mutex);
@@ -321,6 +430,11 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
         d.setting_id = "follow_distance"; d.label = "Follow distance (m)"; d.kind = ANY_SETTING_NUMBER; d.order = 1;
         d.default_number = kDefaultDistance; d.minimum = kMinDistance; d.maximum = kMaxDistance; d.step = kWheelStep;
         g_tokens[1] = settings->register_setting(&d);
+        d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "ThirdPerson";
+        d.setting_id = "steady_vehicle_camera"; d.label = "Steady camera"; d.kind = ANY_SETTING_BOOL; d.order = 2;
+        d.default_number = 1;
+        d.description = "Keeps the horizon level and smooths bumps, hills and crashes while seated. Off follows the seat exactly.";
+        g_tokens[2] = settings->register_setting(&d);
         read_settings();
     } else settings = nullptr;
     gpu = static_cast<const AnyGpuDrawV1*>(services->query("anyapi.gpu_draw", 1));
