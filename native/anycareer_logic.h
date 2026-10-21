@@ -23,11 +23,21 @@ inline constexpr const char* kLootGroups[] = {"none",     "medical",     "food",
 inline constexpr int kLootGroupCount = int(sizeof(kLootGroups) / sizeof(kLootGroups[0]));
 inline const char* loot_group_name(int32_t g) { return g >= 0 && g < kLootGroupCount ? kLootGroups[g] : "?"; }
 
+// Loot Cash: the definition's spawn chance (0.2 is a normal item), and what one find holds. Mostly a little, now and
+// then more (Nate: "maybe 20 here and 100 there"): 55% 3-25, 30% 25-60, 12% 60-120, 3% 120-250.
+inline constexpr const char* kCashLootChance = "0.12";
+inline int loot_cash_amount(uint64_t r) {
+    int roll = int(r % 100), span = int((r >> 16) % 1000);
+    auto in = [&](int lo, int hi) { return lo + span % (hi - lo + 1); };
+    return roll < 55 ? in(3, 25) : roll < 85 ? in(25, 60) : roll < 97 ? in(60, 120) : in(120, 250);
+}
+
 // Rewrites one stock ammo_box entry (its JSON text, every field kept) into the Cash definition. Fields it sets are
 // replaced where they exist and added where they don't. With a mesh path, Cash gets that look (and no extra ammo
 // meshes), and its floor physics box becomes `floor_min`..`floor_max`. Returns "" when the text isn't one JSON object.
+// `loot` false keeps Cash out of loot (when the mod can't set found amounts, a find would hold a full 9999 stack).
 inline std::string make_cash_entry(const std::string& entry, const std::string& mesh = {}, const double* floor_min = nullptr,
-                                   const double* floor_max = nullptr) {
+                                   const double* floor_max = nullptr, bool loot = true) {
     assetjson::Value v;
     try { v = assetjson::Parser(entry).parse(); } catch (const std::exception&) { return {}; }
     if (v.kind != 'o' || entry.empty() || entry.back() != '}') return {};
@@ -37,9 +47,11 @@ inline std::string make_cash_entry(const std::string& entry, const std::string& 
         {"description", "\"Trader money. Stacks to 9999. Spend it at AnyCareer traders.\""},
         {"category", "\"miscellaneous\""},
         {"gun_magazine_capacity", std::to_string(kCashStack)},
-        {"tech_tier", "99"},
-        {"spawn_probability", "0.0"},
-        {"loot_group", "\"none\""},
+        // Found as loot in houses, offices and shops (the clothing group is only in the residential and office
+        // furniture masks), in small amounts (loot_cash_amount, set by the mod's ammo_box init hook).
+        {"tech_tier", loot ? "1" : "99"},
+        {"spawn_probability", loot ? kCashLootChance : "0.0"},
+        {"loot_group", loot ? "\"clothing\"" : "\"none\""},
     };
     struct Edit { size_t begin, end; std::string text; };
     std::vector<Edit> edits;

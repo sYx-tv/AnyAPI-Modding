@@ -34,6 +34,8 @@
 //      attacking actor). Then back to the Mechanic for the reward. Without the hook the board only has deliveries.
 //   Hard jobs: two more rows on the board (a pricier delivery, more of it, 3-6 km out, double pay; and a big kill job,
 //      special zombies when the world has them, half again the pay). They unlock after 3 finished jobs in the world.
+//   Loot Cash: Cash turns up in house, office and shop furniture (the clothing loot group), a little at a time
+//      (mostly 3-25, now and then up to 250). The ammo_box init hook sets the amount; without it Cash stays out of loot.
 //   Prices are a quarter higher than the first pass; what the Mechanic pays for things and what jobs pay are not.
 //   The test keys below (F2-F6) are only in test builds (ANYCAREER_DEV_KEYS, default 1; the release sets it to 0).
 //   F2 (host, test key): toggles the game's own free move (the developers' debug-menu fly mode, client_scene.
@@ -173,6 +175,7 @@ struct TeleportEvent { uint8_t header[0x10]; Vec3 position; };   // client_peer.
 static_assert(sizeof(TeleportEvent) == 40, "peer_teleport");
 using teleport_t = void (*)(uint8_t* server, void* peer_data, const TeleportEvent* e);
 using zombie_damage_t = void (*)(uint8_t* zombie, uint8_t* scene, const double* amount, const uint8_t* src);
+using ammo_box_init_t = void (*)(uint8_t* item);
 
 AnyModHostV1 host;
 const AnyUiStateV1* ui;
@@ -186,7 +189,7 @@ const AnyServicesV1* services_api;
 uint64_t trade_action;
 std::atomic<bool> g_stop{false}, g_ready{false}, g_stations_ready{false};
 
-anymaker::cell_hook h_tick, h_add_definitions, h_zombie_damage;
+anymaker::cell_hook h_tick, h_add_definitions, h_zombie_damage, h_ammo_init;
 get_by_id_t peer_by_id;
 file_ctor_t file_ctor, file_dtor;
 file_load_t file_load;
@@ -289,7 +292,7 @@ std::string write_cash_mesh(const std::string& entry) {
 }
 
 // Copies the first ammo_box entry of the game's own item file and rewrites the fields that make it Cash.
-bool write_cash_definition() {
+bool write_cash_definition(bool loot) {
     if (!host.game_directory || !host.plugin_directory) return false;
     std::filesystem::path stock = std::filesystem::path(host.game_directory) / L"rom" / L"data" / L"inventory_definitions.json";
     std::ifstream in(stock, std::ios::binary);
@@ -307,7 +310,7 @@ bool write_cash_definition() {
     if (entry.empty()) { log(2, "ANYCAREER_CASH ok=0 reason=no_ammo_box_in_stock_items"); return false; }
     std::string mesh = write_cash_mesh(entry);
     const double lo[3] = {-cashmesh::kLength / 2, 0, -cashmesh::kWidth / 2}, hi[3] = {cashmesh::kLength / 2, cashmesh::kHeight, cashmesh::kWidth / 2};
-    std::string cash = logic::make_cash_entry(entry, mesh, lo, hi);
+    std::string cash = logic::make_cash_entry(entry, mesh, lo, hi, loot);
     if (cash.empty()) { log(2, "ANYCAREER_CASH ok=0 reason=could_not_rewrite_entry"); return false; }
     std::error_code ec;
     std::filesystem::create_directories(g_data_dir, ec);
@@ -388,13 +391,28 @@ bool add_ours(void* container, const void* outfit, const std::string& text) {
     return ok;
 }
 
+// The Cash definitions added so far (one per definition container): the ammo_box init hook knows Cash by these.
+std::atomic<const uint8_t*> g_cash_defs[4]{};
+void remember_cash(const uint8_t* def) {
+    for (auto& d : g_cash_defs) {
+        const uint8_t* empty = nullptr;
+        if (d.load() == def || d.compare_exchange_strong(empty, def)) return;
+    }
+}
+bool is_cash(const uint8_t* def) {
+    for (const auto& d : g_cash_defs) if (def && d.load() == def) return true;
+    return false;
+}
+
 void hk_add_definitions(void* container, const void* file, const void* outfit) {
     reinterpret_cast<add_definitions_t>(h_add_definitions.original)(container, file, outfit);
-    if (!g_ready || g_stop || t_adding || !container || find_definition(container, logic::kCashId)) return;
+    if (!g_ready || g_stop || t_adding || !container) return;
+    if (const uint8_t* had = find_definition(container, logic::kCashId)) { remember_cash(had); return; }
     std::string forward = g_cash_json;
     for (char& c : forward) if (c == '\\') c = '/';
     bool ok = add_ours(container, outfit, g_cash_json) || add_ours(container, outfit, forward);
-    bool found = ok && find_definition(container, logic::kCashId);
+    const uint8_t* found = ok ? find_definition(container, logic::kCashId) : nullptr;
+    if (found) remember_cash(found);
     static std::atomic<int> logs{6};
     if (logs.fetch_sub(1) > 0)
         log(found ? 0 : 2, "ANYCAREER_CASH added=%d found_after=%d container=%p file=%s", ok ? 1 : 0, found ? 1 : 0, container, g_cash_json.c_str());
@@ -954,6 +972,24 @@ double blood_of(uint8_t* actor) {
     __try { return anymaker::readable(actor + off::actor_blood, 8) ? rd<double>(actor, off::actor_blood) : 0; }
     __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
 }
+// Cash found as loot: the game's ammo_box init fills a new box to its capacity (9999 for Cash). For Cash the mod
+// then sets a small found amount. Every other way Cash is made (the mod's drops, a save loading) sets its count after
+// init, so only loot keeps this amount.
+std::atomic<uint64_t> g_loot_rolls{0};
+void set_loot_cash(uint8_t* item) {
+    __try {
+        if (!anymaker::readable(item + off::item_world_definition, 8) || !is_cash(rd<const uint8_t*>(item, off::item_world_definition))) return;
+        uint64_t n = g_loot_rolls.fetch_add(1);
+        int amount = logic::loot_cash_amount(logic::mix(n ^ (uint64_t(uintptr_t(item)) << 7) ^ GetTickCount64()));
+        bool ok = set_count(item, off::ammo_count, amount);
+        if (n < 30) log(ok ? 0 : 2, "ANYCAREER_LOOT_CASH ok=%d amount=%d", ok ? 1 : 0, amount);
+    } __except (EXCEPTION_EXECUTE_HANDLER) { log(2, "ANYCAREER_LOOT_CASH ok=0 reason=native_exception"); }
+}
+void hk_ammo_init(uint8_t* item) {
+    reinterpret_cast<ammo_box_init_t>(h_ammo_init.original)(item);
+    if (item && !g_stop) set_loot_cash(item);
+}
+
 void hk_zombie_damage(uint8_t* zombie, uint8_t* scene, const double* amount, const uint8_t* src) {
     bool watch = zombie && scene && !g_stop && g_ready;
     double before = watch ? blood_of(zombie) : 0;
@@ -1666,7 +1702,11 @@ void install() {
         vector_ctor = (vector_life_t)fns[7]; vector_dtor = (vector_life_t)fns[8]; get_items = (get_items_t)fns[9];
         destroy_item = (destroy_item_t)fns[10]; component_set = (component_set_t)fns[11];
         string_ctor = sc; ref_dtor = release;
-        if (!write_cash_definition()) { log(2, "ANYCAREER_OFF reason=no_cash_definition"); return; }
+        // Cash goes into the loot pool only when the mod can set how much a find holds.
+        void** init_cell = route::cell(bind::ammo_box_init);
+        bool loot = init_cell && h_ammo_init.install(init_cell, (void*)&hk_ammo_init);
+        log(loot ? 0 : 1, "ANYCAREER_LOOT hook=%d%s", loot ? 1 : 0, loot ? " (Cash is found in houses, offices and shops)" : " (no Cash in loot this session)");
+        if (!write_cash_definition(loot)) { h_ammo_init.remove((void*)&hk_ammo_init); log(2, "ANYCAREER_OFF reason=no_cash_definition"); return; }
         if (!h_tick.install(tick, (void*)&hk_tick) || !h_add_definitions.install(add, (void*)&hk_add_definitions)) {
             h_tick.remove((void*)&hk_tick);
             log(2, "ANYCAREER_OFF reason=hook_cell_not_writable");
@@ -1698,6 +1738,7 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyM
     out->shutdown = [](void*) {
         g_stop = true;
         h_zombie_damage.remove((void*)&hk_zombie_damage);
+        h_ammo_init.remove((void*)&hk_ammo_init);
         h_add_definitions.remove((void*)&hk_add_definitions);
         h_tick.remove((void*)&hk_tick);
     };
