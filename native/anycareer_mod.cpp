@@ -1,4 +1,4 @@
-// AnyCareer TEST BUILD (step 5): Cash, nine traders with buying, selling and job boards, delivery and kill jobs.
+// AnyCareer 0.0.5: a survival career. Cash, nine traders with buying, selling and job boards, delivery and kill jobs.
 //
 //   Cash item: a new inventory item, "Cash", added to the game's item definitions right after the game adds its
 //      own (inventory_definition_container._add_definitions, on the server and the client scene). Its definition is
@@ -48,7 +48,7 @@
 //   Loot Cash: Cash turns up in house, office and shop furniture (the clothing loot group), a little at a time
 //      (mostly 3-25, now and then up to 250). The ammo_box init hook sets the amount; without it Cash stays out of loot.
 //   Prices are a quarter higher than the first pass; what the Mechanic pays for things and what jobs pay are not.
-//   The test keys below (F2-F6) are only in test builds (ANYCAREER_DEV_KEYS, default 1; the release sets it to 0).
+//   The test keys below (F2-F6) are only in test builds (-DANYCAREER_DEV_KEYS=1; off by default, so releases have none).
 //   F2 (host, test key): toggles the game's own free move (the developers' debug-menu fly mode, client_scene.
 //      m_is_free_move): you fly where you look, through anything, and sprint flies faster. For crossing the map quickly.
 //   F6 (host, test key): teleports you to the delivery's drop-off, or to the job's trader (the Mechanic without a job;
@@ -151,10 +151,9 @@ constexpr int kPropertySetSlot = 5;                 // property_type_simple<T>.s
 constexpr int32_t kStoreSystem = 1;                 // file.e_store.system (static inference; GpsPart uses it)
 constexpr uint32_t kRefDtorRva = 0x4eb00;           // N:() $ref_dtor (uptr) [metadata]
 constexpr int32_t kGiveAmount = 250;
-// The test keys F2-F6. On in test builds; the release build sets ANYCAREER_DEV_KEYS=0 (Nate: remove the dev stuff
-// when it's done).
+// The test keys F2-F6: off (Nate: remove the dev stuff when it's done); test builds pass -DANYCAREER_DEV_KEYS=1.
 #ifndef ANYCAREER_DEV_KEYS
-#define ANYCAREER_DEV_KEYS 1
+#define ANYCAREER_DEV_KEYS 0
 #endif
 constexpr bool kDevKeys = ANYCAREER_DEV_KEYS != 0;
 constexpr double kTradeRange = 30;                  // metres from the gas station spot (the building stands on it)
