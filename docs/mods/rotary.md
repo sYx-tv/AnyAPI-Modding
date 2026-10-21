@@ -49,7 +49,8 @@ the engine's position. It works next to EngineSound: EngineSound tunes the other
 
 ## Getting it
 
-- **Survival:** world loot after the 3rd bunker (tech tier 4, mechanical loot, 0.15 spawn probability).
+- **Survival:** world loot after the 3rd bunker (tech tier 4, mechanical loot), about a quarter less often than the
+  game's own tier 4 parts, like the other AnyEngineParts parts.
 - **Sandbox and Creative:** with the other engines.
 
 ## How it works

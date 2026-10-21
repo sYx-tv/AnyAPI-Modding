@@ -130,7 +130,15 @@ inline std::string definition_id(int n) { return std::string(kIdPrefix) + char('
 // after the 2nd bunker and the rest after the 3rd (Nate, 2026-10-17).
 constexpr int kStarterTier = 3;   // Turbo 3x3 and the small supercharger, wastegate, blow-off valve and air filter
 constexpr int kLateTier = 4;      // every other AnyEngineParts part (Rotary and Dyno too)
+// spawn_probability is the part's share of a world loot roll next to the other parts and items of its tier, so it sets
+// how often the part turns up. AnyEngineParts sits about a quarter below the typical stock part of the same tier (Nate,
+// 2026-10-21: engine parts "a bit more rare than other stuff"; Anymaker 0.1.27 loot code and part data).
+constexpr const char* kStarterSpawn = "0.15";
+constexpr const char* kLateSpawn = "0.075";
 inline std::string tech_tier_line(int tier) { return "      \"tech_tier\": " + std::to_string(tier) + ",\n"; }
+inline std::string loot_lines(int tier) {
+    return tech_tier_line(tier) + "      \"spawn_probability\": " + (tier == kStarterTier ? kStarterSpawn : kLateSpawn) + ",\n";
+}
 // Returns 3 or 6 for a turbo definition id, else 0.
 inline int size_from_id(const char* id, size_t length) {
     size_t p = std::char_traits<char>::length(kIdPrefix);
@@ -275,8 +283,7 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [\n        " + descriptors + "\n      ],\n" +
-        tech_tier_line(n == 3 ? kStarterTier : kLateTier) +
-        "      \"spawn_probability\": 0.1,\n" +
+        loot_lines(n == 3 ? kStarterTier : kLateTier) +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
@@ -606,8 +613,7 @@ inline std::string blower_entry(bool large, const std::string& mesh_path) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [\n        " + descriptors + "\n      ],\n" +
-        tech_tier_line(large ? kLateTier : kStarterTier) +
-        "      \"spawn_probability\": 0.1,\n" +
+        loot_lines(large ? kLateTier : kStarterTier) +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
@@ -723,8 +729,7 @@ inline std::string blow_off_entry(bool large, const std::string& mesh) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [{\"type\": \"type_f64_output\", \"name\": \"open\"}, {\"type\": \"type_f64_output\", \"name\": \"flow\"}, {\"type\": \"type_f64_output\", \"name\": \"pressure\"}],\n" +
-        tech_tier_line(large ? kLateTier : kStarterTier) +
-        "      \"spawn_probability\": 0.1,\n" +
+        loot_lines(large ? kLateTier : kStarterTier) +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
@@ -772,8 +777,7 @@ inline std::string wastegate_entry(bool large, const std::string& mesh) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 2,\n" +
         "      \"data_descriptors\": [" + descriptors + "],\n" +
-        tech_tier_line(large ? kLateTier : kStarterTier) +
-        "      \"spawn_probability\": 0.1,\n" +
+        loot_lines(large ? kLateTier : kStarterTier) +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
@@ -807,8 +811,7 @@ inline std::string air_filter_entry(bool large, const std::string& mesh) {
         "      \"category\": \"gas\",\n" +
         "      \"inspection_geometry\": [{\"p1\": [" + last + ".0, " + last + ".0, " + last + ".0]}],\n" +
         "      \"data_descriptors\": [],\n" +
-        tech_tier_line(large ? kLateTier : kStarterTier) +
-        "      \"spawn_probability\": 0.1,\n" +
+        loot_lines(large ? kLateTier : kStarterTier) +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
@@ -862,8 +865,7 @@ inline std::string intercooler_entry(bool built, bool round = false) {
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 10,\n" +
         "      \"data_descriptors\": [],\n" +
-        tech_tier_line(kLateTier) +
-        "      \"spawn_probability\": 0.1,\n" +
+        loot_lines(kLateTier) +
         "      \"loot_group\": \"mechanical\",\n" +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]]\n" +
         "    }";

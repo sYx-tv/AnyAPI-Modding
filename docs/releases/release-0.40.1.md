@@ -73,6 +73,9 @@ then rushing to catch up, and writes what caused each stutter to the log. [Guide
 - **EngineSound 0.4.1:** saves only hold one of the game's three engine sounds, so worlds and saved
   vehicles still play with mods off (the generated sound comes back with EngineSound on), and turning
   the key off no longer leaves a whine sweeping down with the revs. [Notes](enginesound-0.4.1.md)
+- **Engine part loot:** every AnyEngineParts part now turns up about a quarter less often than the
+  game's own parts of the same tier. The tier 3 parts were half as common as stock before and the
+  tier 4 ones (Rotary and Dyno included) as common or more. The GPS Sensor keeps the stock sensors' rate.
 
 ## How the port was checked
 
