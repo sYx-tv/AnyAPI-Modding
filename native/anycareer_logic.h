@@ -397,9 +397,6 @@ inline bool job_goods(int shop, const Goods& g) {
     if (shop == kModShop || g.modded) return false;
     return shop == kJunkyard ? shop_sells(shop, g) : shop_buys(shop, g);
 }
-// A specialist whose goods all start at a later loot tier sells that first tier early, at half again his price.
-inline constexpr int kEarlyPct = 150;
-inline int early_price(int price) { return std::max(1, int(int64_t(price) * kEarlyPct / 100)); }
 // Kill jobs are the Gunsmith's (they were the Mechanic's before every trader had a board).
 inline constexpr int kKillShop = kGunsmith;
 

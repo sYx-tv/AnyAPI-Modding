@@ -267,7 +267,6 @@ int main() {
         assert(job_goods(kMechanic, engine) && job_goods(kMechanic, item_part) && !job_goods(kMechanic, food) && !job_goods(kMechanic, mod));
         assert(job_goods(kGunsmith, gun) && job_goods(kOutfitter, coat) && job_goods(kGrocer, canteen) && job_goods(kBuilder, wall));
         assert(job_goods(kJunkyard, engine) && !job_goods(kJunkyard, food) && !job_goods(kModShop, mod) && !job_goods(kModShop, engine));
-        assert(early_price(100) == 150 && early_price(1) == 1);
         assert(kTopIsland.contains({80000, 0, 56000}) && !kTopIsland.contains({80000, 0, 54300}) && !kTopIsland.contains({85966, 0, 49998}));
         assert(std::string(kShops[kMechanic].name) == "Hayzeco Autoparts" && std::string(kShops[kMechanic].id) == "mechanic");
         assert(shop_buys(kJunkyard, food) && shop_buys(kJunkyard, wall) && !shop_buys(kGrocer, engine));

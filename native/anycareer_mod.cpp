@@ -29,7 +29,8 @@
 //      spread over the map (Nate): each at the spot of his kind of place (town, industrial, farm, ...) farthest from
 //      the traders already standing, never on the top island (logic::place_spread, logic::kTopIsland), placed once
 //      per world and saved with it, with his own AnyMap pin. A trader whose goods all start at a later loot tier (Marine &
-//      Air and the Mod Shop at tier 1) sells the first tier of them early, at half again his price (logic::early_price).
+//      Air and the Mod Shop at tier 1) stands there with an empty shelf that says which tier
+//      unlocks them (Nate: no speeding ahead).
 //      The Mechanic is called Hayzeco Autoparts on screen (Nate). Items are bought as themselves (create_item with their definition), parts
 //      as part items.
 //   Delivery jobs: every trader but the Mod Shop has a Jobs tab with three jobs a day ("bring 3 x Bandage to a town,
@@ -575,7 +576,6 @@ struct Trader {
     std::vector<Candidate> goods[logic::kShopCount];   // what each trader's deliveries can ask for (findable now), sorted by id
     std::vector<logic::Offer> offers[logic::kShopCount];   // today's boards
     int next_tier[logic::kShopCount] = {};        // a trader with nothing to sell yet: the loot tier his goods start at
-    bool stock_early[logic::kShopCount] = {};     // his shelf is that tier, sold early
     int64_t offers_board = -2;
     std::string job_name;                         // display name of the job's item (looked up once)
     ULONGLONG tp_check = 0;                       // when to log where the host ended up after F6
@@ -637,10 +637,7 @@ void build_stock(uint8_t* scene) {
     for (auto& s : T.stock) s.clear();
     for (auto& s : T.goods) s.clear();
     std::fill(std::begin(T.next_tier), std::end(T.next_tier), 0);
-    std::fill(std::begin(T.stock_early), std::end(T.stock_early), false);
     int level = std::max(T.level, 1);
-    struct Later { int shop, tier; Candidate c; };
-    std::vector<Later> later;   // goods a trader sells, but not at this loot tier yet
     auto add = [&](uint8_t* def, bool part) {
         logic::Entry e = entry_of(def, part);
         if (e.id.empty() || def == T.cash_def || def == T.part_item_def) return;
@@ -655,11 +652,9 @@ void build_stock(uint8_t* scene) {
                 T.goods[s].push_back({def, e.id, name, e.price, stack, part, e.price});
             if (!logic::shop_sells(s, g)) continue;
             int price = std::max(1, e.price * logic::kShops[s].price_pct / 100);
-            if (!can) {   // not yet: remember the earliest tier (an empty shop sells that tier early, dearer)
+            if (!can) {   // not yet (Nate: no speeding ahead): remember the earliest tier, for an empty shop's note
                 int tier = std::max(e.tech_tier, 1);
-                if (!(g.modded || e.spawn_probability > 0)) continue;
-                if (!T.next_tier[s] || tier < T.next_tier[s]) T.next_tier[s] = tier;
-                later.push_back({s, tier, {def, e.id, name, logic::early_price(price), stack, part, e.price}});
+                if ((g.modded || e.spawn_probability > 0) && (!T.next_tier[s] || tier < T.next_tier[s])) T.next_tier[s] = tier;
                 continue;
             }
             T.stock[s].push_back({def, e.id, name, price, stack, part, e.price});
@@ -673,11 +668,6 @@ void build_stock(uint8_t* scene) {
         if (anymaker::readable(def, off::item_category + 16)) add(def, false);
         return true;
     });
-    // A specialist with nothing at this tier (Marine & Air, the Mod Shop early on) still has a shelf: the first tier
-    // of his goods, before it can be found, at logic::kEarlyPct of the price. Other traders keep to the loot tier.
-    for (const auto& l : later)
-        if (T.stock[l.shop].empty() || T.stock_early[l.shop])
-            if (l.tier == T.next_tier[l.shop]) { T.stock[l.shop].push_back(l.c); T.stock_early[l.shop] = true; }
     auto by_id = [](const Candidate& a, const Candidate& b) { return a.id < b.id; };
     for (auto& s : T.stock) std::sort(s.begin(), s.end(), by_id);
     for (auto& s : T.goods) std::sort(s.begin(), s.end(), by_id);
