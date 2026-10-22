@@ -10,11 +10,12 @@ namespace anyperformance {
 
 // Named steps timed inside one frame or server tick (bunker loading on the server, pieces of client.tick on the
 // main thread), indexed by the mod's step table. Times include the steps nested inside.
-constexpr int kMaxSteps = 48;
+constexpr int kMaxSteps = 80;
 struct Steps {
     double ms[kMaxSteps] = {};
     int calls[kMaxSteps] = {};
     void add(int i, double t) { if (i >= 0 && i < kMaxSteps) { ms[i] += t; ++calls[i]; } }
+    void merge(const Steps& o) { for (int i = 0; i < kMaxSteps; ++i) { ms[i] += o.ms[i]; calls[i] += o.calls[i]; } }
 };
 
 // "load_static 2412 ms, read_json_dungeon 1900 ms (2x)": the `top` biggest steps of at least min_ms, biggest first.
@@ -40,6 +41,29 @@ inline int format_steps(char* out, size_t cap, const Steps& s, const char* const
     return len;
 }
 
+// "creatures 3.1 ms, players 0.4 ms": the `top` biggest steps by average per frame or tick over `count` of them, of at
+// least min_ms on average, biggest first. Writes "" when none qualifies. Returns the length, like format_steps.
+inline int format_step_avg(char* out, size_t cap, const Steps& s, const char* const* names, int n, int top, int count,
+                           double min_ms) {
+    if (cap) out[0] = 0;
+    if (count <= 0) return 0;
+    bool used[kMaxSteps] = {};
+    int len = 0;
+    n = std::min(n, kMaxSteps);
+    for (int k = 0; k < top; ++k) {
+        int best = -1;
+        for (int i = 0; i < n; ++i)
+            if (!used[i] && s.calls[i] && s.ms[i] / count >= min_ms && (best < 0 || s.ms[i] > s.ms[best])) best = i;
+        if (best < 0) break;
+        used[best] = true;
+        size_t at = std::min(size_t(len), cap ? cap - 1 : 0);
+        int w = std::snprintf(out + at, cap - at, "%s%s %.1f ms", k ? ", " : "", names[best], s.ms[best] / count);
+        if (w < 0) break;
+        len += w;
+    }
+    return len;
+}
+
 // What one main-thread frame spent its time on, in milliseconds. Filled by the timing hooks.
 struct FrameParts {
     double client_tick = 0;   // client.tick: everything the client simulates in a frame
@@ -50,6 +74,18 @@ struct FrameParts {
     double vehicle_tasks = 0; // client_scene.vehicle.container._update_tasks: vehicle mesh rebuilds started and finished
                               // (inside tick_loading, like tile_attach)
     Steps steps;              // the timed pieces of client.tick
+};
+
+// Frame parts summed over a summary window, for the average breakdown.
+struct FrameWindow {
+    FrameParts sum;
+    double frame_ms = 0;
+    int frames = 0;
+    void add(const FrameParts& p, double ms) {
+        sum.client_tick += p.client_tick; sum.scene_tick += p.scene_tick; sum.loading += p.loading;
+        sum.tile_attach += p.tile_attach; sum.tile_attaches += p.tile_attaches; sum.vehicle_tasks += p.vehicle_tasks;
+        sum.steps.merge(p.steps); frame_ms += ms; ++frames;
+    }
 };
 
 // The biggest piece of a slow frame, for the log and the overlay. client.tick holds client_scene.tick (simulation and
@@ -82,7 +118,19 @@ struct ServerParts {
     double physics = 0;       //   physics.scene.update: the physics engine's step (Jolt, native code in game.exe)
     double network = 0;       // replication.master.replicate_peer: packing the world for each player
     double autosave = 0;      // server.autosave_game
-    Steps steps;              // bunker loading and terrain streaming steps
+    Steps steps;              // bunker loading, terrain streaming and simulation steps
+};
+
+// Server tick parts summed over a summary window, for the average breakdown.
+struct ServerWindow {
+    ServerParts sum;
+    int ticks = 0;
+    void add(const ServerParts& p) {
+        sum.total += p.total; sum.loading += p.loading; sum.tiles += p.tiles; sum.scene += p.scene;
+        sum.dungeons += p.dungeons; sum.items += p.items; sum.vehicles += p.vehicles; sum.entities += p.entities;
+        sum.physics += p.physics; sum.network += p.network; sum.autosave += p.autosave;
+        sum.steps.merge(p.steps); ++ticks;
+    }
 };
 
 // The biggest piece of a slow server tick. "Other simulation" is what is left of server_scene.tick after the parts

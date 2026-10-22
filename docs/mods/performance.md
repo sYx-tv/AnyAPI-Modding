@@ -76,6 +76,20 @@ Every 30 seconds it also writes a summary:
 [anyperformance] 30 s: 58.2 fps avg, 1% low 41.0 fps, 1790 frames, 3 hitches (worst 142 ms) | server 60.0 ticks/s, 1.9 ms avg, 6.1 max, spacing jitter 0.4 ms, 0 late, 0 bunched | tiles 4 attached (max 11.2 ms) | timer 1.0 ms
 ```
 
+followed by where an average frame and an average server tick went in that window (not only the slow ones), with the
+biggest timed steps per frame or tick:
+
+```
+[anyperformance] Frame average (1650 frames): 18.2 ms = client tick 8.1 (simulation+physics 6.4, streaming 0.3), rendering/UI 10.1 | steps: vehicles 2.2 ms, creatures and players 1.4 ms
+[anyperformance] Server tick average (1800 ticks): 22.5 ms = loading 1.1 (tiles 0.9), simulation 18.0 (bunkers 0.0, items 6.1, vehicles 2.4, entities 0.0, physics step 2.0, other 7.5), network 3.1, autosave 0.0 | steps: creatures and players 4.2 ms, creature pathfinding 1.8 ms
+```
+
+The simulation steps are the children of `server_scene.tick` (creatures spawning, creature pathfinding, creatures and
+players, their physics, projectiles, ocean, weather, pseudo objects, collision events, explosions, radio transmissions)
+and of `client_scene.tick` (vehicles, creatures and players, particles, environment, lights, weather particles,
+inventories, daylight, interaction prompts, name tags and markers). A server tick over 16.7 ms on average means the host
+cannot keep 60 ticks a second and the world runs slow for everyone.
+
 | Part of a frame | Game function timed | What it is |
 | --- | --- | --- |
 | Client tick | `client.tick` | Everything the client updates in a frame |

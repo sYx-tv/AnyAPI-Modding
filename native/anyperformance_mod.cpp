@@ -92,6 +92,7 @@ std::atomic<DWORD> g_main_thread{0};     // set by the first client.tick
 bool g_parts_loading;                    // the loading flag client.tick passed on to tick_loading this frame
 double g_frame_start = -1, g_window_start = -1;
 Window<16384> g_frames;                  // frame times of this summary window
+FrameWindow g_frame_window;              // frame parts of this summary window (not on loading screens)
 int g_hitches, g_loading_hitches, g_hitch_logs, g_tiles_window;
 double g_worst_hitch, g_tile_max_window;
 
@@ -112,6 +113,7 @@ std::atomic<double> g_server_last_ms{0};
 std::atomic<DWORD> g_server_thread{0};
 ServerParts g_tick;                      // the server tick in progress (server thread only)
 ServerParts g_worst_tick;                // the slowest tick since the main thread last took it (g_server_mutex)
+ServerWindow g_server_window;            // every tick of this summary window (g_server_mutex)
 
 // Takes the slowest server tick since the last call. Main thread.
 ServerParts take_worst_tick() {
@@ -167,12 +169,34 @@ constexpr StepSpec kSteps[] = {
     {&bind::vehicle_bunker_keycard, "wreck keycard", true},
     {&bind::vehicle_loot_deaddrop, "dead-drop loot", true},
     {&bind::save_game_inner, "world save", true},
+    {&bind::srv_creatures, "creatures (spawning)", true},
+    {&bind::srv_paths, "creature pathfinding", true},
+    {&bind::srv_actors, "creatures and players", true},
+    {&bind::srv_actors_post, "creatures and players (physics)", true},
+    {&bind::srv_projectiles, "projectiles", true},
+    {&bind::srv_ocean, "ocean", true},
+    {&bind::srv_weather, "weather", true},
+    {&bind::srv_pseudo, "pseudo objects", true},
+    {&bind::srv_collisions, "collision events", true},
+    {&bind::srv_explosions, "explosions", true},
+    {&bind::srv_transmissions, "radio transmissions", true},
     {&bind::apply_update, "network update", false},
     {&bind::client_network_state, "network state", false},
     {&bind::client_update_ui, "UI update", false},
     {&bind::client_peers_tick, "players", false},
     {&bind::client_peer_data_tick, "player data", false},
     {&bind::client_authority_update, "authority update", false},
+    {&bind::cl_vehicles, "vehicles", false},
+    {&bind::cl_actors, "creatures and players", false},
+    {&bind::cl_particles, "particles", false},
+    {&bind::cl_environment, "environment", false},
+    {&bind::cl_lights, "lights", false},
+    {&bind::cl_weather, "weather particles", false},
+    {&bind::cl_actors_post, "creatures and players (physics)", false},
+    {&bind::cl_actor_inv, "inventories", false},
+    {&bind::cl_daylight, "daylight", false},
+    {&bind::cl_interactions, "interaction prompts", false},
+    {&bind::cl_overlay, "name tags and markers", false},
 };
 constexpr int kStepCount = int(sizeof kSteps / sizeof kSteps[0]);
 static_assert(kStepCount <= kMaxSteps, "raise kMaxSteps");
@@ -491,10 +515,12 @@ void request_cpu_summary(double seconds) {
 void summary(double now) {
     double seconds = (now - g_window_start) / 1000.0;
     TickPacing pacing; double server_tiles;
+    static ServerWindow sw;   // static: two Steps arrays are too big for comfort on the stack
     {
         std::lock_guard lock(g_server_mutex);
         pacing = g_pacing; g_pacing = TickPacing{};
         server_tiles = g_server_tile_ms_window; g_server_tile_ms_window = 0;
+        sw = g_server_window; g_server_window = ServerWindow{};
     }
     if (g_frames.count) {
         char line[640];
@@ -507,6 +533,26 @@ void summary(double now) {
         }
         log(0, "%s", line);
     }
+    // Average breakdowns: where a normal frame and a normal server tick go, not only the slow ones.
+    if (g_frame_window.frames) {
+        const FrameWindow& w = g_frame_window; double n = w.frames;
+        char steps[320];
+        format_step_avg(steps, sizeof steps, w.sum.steps, step_names(), kStepCount, 6, w.frames, 0.1);
+        log(0, "Frame average (%d frames): %.1f ms = client tick %.1f (simulation+physics %.1f, streaming %.1f), "
+               "rendering/UI %.1f%s%s", w.frames, w.frame_ms / n, w.sum.client_tick / n, w.sum.scene_tick / n,
+            w.sum.loading / n, (w.frame_ms - w.sum.client_tick) / n, steps[0] ? " | steps: " : "", steps);
+    }
+    if (sw.ticks) {
+        const ServerParts& t = sw.sum; double n = sw.ticks;
+        char steps[400];
+        format_step_avg(steps, sizeof steps, t.steps, step_names(), kStepCount, 8, sw.ticks, 0.1);
+        log(0, "Server tick average (%d ticks): %.1f ms = loading %.1f (tiles %.1f), simulation %.1f (bunkers %.1f, items %.1f, "
+               "vehicles %.1f, entities %.1f, physics step %.1f, other %.1f), network %.1f, autosave %.1f%s%s",
+            sw.ticks, t.total / n, t.loading / n, t.tiles / n, t.scene / n, t.dungeons / n, t.items / n, t.vehicles / n,
+            t.entities / n, t.physics / n, (t.scene - t.dungeons - t.items - t.vehicles - t.entities - t.physics) / n,
+            t.network / n, t.autosave / n, steps[0] ? " | steps: " : "", steps);
+    }
+    g_frame_window = FrameWindow{};
     request_cpu_summary(seconds);
     g_frames.clear(); g_hitches = g_loading_hitches = g_tiles_window = 0; g_worst_hitch = g_tile_max_window = 0;
     g_window_start = now;
@@ -516,6 +562,7 @@ void summary(double now) {
 void frame_done(double frame_ms, const FrameParts& p, bool loading, double now) {
     if (frame_ms > kPauseMs) return;
     g_frames.add(frame_ms);
+    if (!loading) g_frame_window.add(p, frame_ms);
     g_tiles_window += p.tile_attaches; g_tile_max_window = std::max(g_tile_max_window, p.tile_attach);
     const char* cause = nullptr;
     if (frame_ms >= g_hitch_ms.load()) {
@@ -527,7 +574,7 @@ void frame_done(double frame_ms, const FrameParts& p, bool loading, double now) 
             log(0, "Hitch %.0f ms%s, mostly %s: client tick %.1f (simulation+physics %.1f, streaming %.1f: %d tile attach %.1f, "
                    "vehicle rebuild %.1f%s%s), rendering/UI %.1f | last server tick %.1f ms",
                 frame_ms, loading ? " on a loading screen" : "", cause, p.client_tick, p.scene_tick, p.loading, p.tile_attaches,
-                p.tile_attach, p.vehicle_tasks, steps[0] ? "; other: " : "", steps, std::max(0.0, frame_ms - p.client_tick),
+                p.tile_attach, p.vehicle_tasks, steps[0] ? "; steps: " : "", steps, std::max(0.0, frame_ms - p.client_tick),
                 g_server_last_ms.load());
         }
     }
@@ -626,6 +673,7 @@ void hk_server_tick(void* server) {
     g_pacing.add(gap < kPauseMs ? gap : 0, ms);
     g_server_tile_ms_window += g_tick.tiles;
     if (ms > g_worst_tick.total) g_worst_tick = g_tick;
+    g_server_window.add(g_tick);
 }
 // Server-thread pieces add to the tick in progress. replicate_peer also runs on the main thread (client authority
 // updates), so every piece checks the thread.

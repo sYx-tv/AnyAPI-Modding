@@ -62,6 +62,16 @@ int main() {
     assert(std::strlen(line) == 7 && n > 7);
     assert(format_steps(line, sizeof line, Steps{}, names, 4, 3, 1.0) == 0 && line[0] == 0);
 
+    // Averages over a window: per tick, one decimal, small ones left out.
+    ServerWindow sw; ServerParts tick; tick.total = 20; tick.items = 6; tick.steps.add(1, 8); tick.steps.add(0, 0.1);
+    sw.add(tick); tick.steps = Steps{}; tick.steps.add(1, 4); sw.add(tick);
+    assert(sw.ticks == 2 && sw.sum.total == 40 && sw.sum.items == 12 && sw.sum.steps.calls[1] == 2);
+    n = format_step_avg(line, sizeof line, sw.sum.steps, names, 4, 3, sw.ticks, 0.1);
+    assert(n > 0 && std::strcmp(line, "b 6.0 ms") == 0);
+    assert(format_step_avg(line, sizeof line, sw.sum.steps, names, 4, 3, 0, 0.1) == 0 && line[0] == 0);
+    FrameWindow fw; FrameParts fp; fp.client_tick = 9; fp.steps.add(2, 3); fw.add(fp, 20); fw.add(fp, 22);
+    assert(fw.frames == 2 && fw.frame_ms == 42 && fw.sum.client_tick == 18 && fw.sum.steps.ms[2] == 6);
+
     // A slow-down then catch-up becomes one episode, closed after half a second back at normal speed.
     SimEpisode e; double t = 0, f = 1.0 / 60;
     for (int i = 0; i < 60; ++i, t += f) assert(!e.add(t, f, 1.0));
