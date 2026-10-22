@@ -267,6 +267,17 @@ int main() {
         assert(job_goods(kMechanic, engine) && job_goods(kMechanic, item_part) && !job_goods(kMechanic, food) && !job_goods(kMechanic, mod));
         assert(job_goods(kGunsmith, gun) && job_goods(kOutfitter, coat) && job_goods(kGrocer, canteen) && job_goods(kBuilder, wall));
         assert(job_goods(kJunkyard, engine) && !job_goods(kJunkyard, food) && !job_goods(kModShop, mod) && !job_goods(kModShop, engine));
+        {
+            std::vector<Zone> stations = {{0, 0, 0}, {85700, 0, 49900}};
+            std::vector<Spot> map = {{{80000, 0, 56000}, "town"}, {{70000, 0, 45000}, "industrial"}, {{86000, 0, 52000}, "house"}};
+            Zone at[kShopCount]; bool placed[kShopCount];
+            assert(layout_traders(stations, map, at, placed) && placed[kMechanic] && at[kMechanic].x == 85700);
+            assert(placed[kBuilder] && at[kBuilder].x == 70000);   // the far industrial spot; the town is on the top island
+            Zone again[kShopCount]; bool placed_again[kShopCount];
+            layout_traders(stations, map, again, placed_again);
+            for (int s = 0; s < kShopCount; ++s) assert(placed[s] == placed_again[s] && at[s].x == again[s].x && at[s].z == again[s].z);
+            assert(!layout_traders({}, map, at, placed));
+        }
         assert(kTopIsland.contains({80000, 0, 56000}) && !kTopIsland.contains({80000, 0, 54300}) && !kTopIsland.contains({85966, 0, 49998}));
         assert(std::string(kShops[kMechanic].name) == "Hayzeco Autoparts" && std::string(kShops[kMechanic].id) == "mechanic");
         assert(shop_buys(kJunkyard, food) && shop_buys(kJunkyard, wall) && !shop_buys(kGrocer, engine));
