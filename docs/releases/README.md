@@ -10,6 +10,8 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Contents | Evidence |
 | --- | --- | --- | --- | --- |
+| 2026-10-21 | [mods-2026.10.21](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.21) | [AnyEngineParts 1.0.2](anyengineparts-1.0.2.md) | AnyCareer 0.0.6 (new: survival career with Cash, jobs and nine traders), AnyEngineParts bundle 1.0.2 (first for Anymaker 0.1.27; engine parts a quarter rarer in loot) | |
+| 2026-10-21 | [v0.40.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.40.1) | [0.40.1](release-0.40.1.md) | AnyAPI 0.40.1 for Anymaker 0.1.27 (port, graphics pass, menu v5 hover explanations, scene controls v3), AnyHelpers 1.0.2, AnyGraphics 1.0.3, AnyMap 1.0.1, AnyCombat 0.1.1, new AnyPerformance 0.1.1 and CustomGame 0.1.0; AnyStorage, AnyClock and AnyQuickWheel gain 0.1.27 in the catalog | |
 | 2026-10-20 | [mods-2026.10.20](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.20) | [AnyHelpers 1.0.1](anyhelpers-1.0.1.md) | AnyHelpers bundle 1.0.1 (fixes the Duplicate tool Favorites paste crash and the Workshop tab from Favorites) | |
 | 2026-10-19 | [v0.39.2](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.39.2) | [0.39.2](release-0.39.2.md) | AnyAPI 0.39.2 (lamp beams back on AMD graphics cards through their own lamp path; NVIDIA shaders unchanged) | |
 | 2026-10-19 | [v0.39.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.39.1) | [0.39.1](release-0.39.1.md) | AnyAPI 0.39.1 (lamp beams off on AMD graphics cards, gpu_info service), AnyGraphics bundle 1.0.2 (AnyGraphics 0.31.2: lamp beam settings hidden on AMD; photo free camera fix) | |

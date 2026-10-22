@@ -11,12 +11,18 @@ This release also contains rebuilds of every mod that reads the game directly, b
 only run on the exact build they were made for:
 
 - **AnyHelpers 1.0.2** (with AnyInventory, AnyMirror, AnyBalance and MCCode)
-- **AnyEngineParts 1.0.1** (with EngineSound 0.4.1 and GpsPart)
 - **AnyGraphics 1.0.3** (with AnyGraphics 0.32.0 and ThirdPerson)
 - **AnyMap 1.0.1**
 - **AnyCombat 0.1.1**
 
 AnyStorage, AnyClock and AnyQuickWheel are unchanged and gain the new build in the catalog.
+
+AnyEngineParts (with EngineSound 0.4.1 and GpsPart) for 0.1.27 is published separately as bundle 1.0.2 in
+[mods-2026.10.21](anyengineparts-1.0.2.md); the AnyEngineParts fixes below ship in it.
+
+New standalone mod: **CustomGame 0.1.0** (not in a bundle): a Custom Game page on the New Game screen with
+game mode, day speed, start time, tier, up to 20 players, survival drains, enemies, loot, weather and joint
+strength, saved with each world. [Guide](../mods/custom-game.md)
 
 New standalone mod: **AnyPerformance 0.1.1** (not in a bundle). It fixes the world slowing down and
 then rushing to catch up, and writes what caused each stutter to the log. [Guide](../mods/performance.md)
