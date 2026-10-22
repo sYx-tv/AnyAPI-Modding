@@ -226,4 +226,44 @@ inline int format_summary(char* out, size_t cap, double seconds, int frames, dou
     return n;
 }
 
+// Sample counts per code address (a function's start, or a 64-byte block when the function is unknown), for the
+// sampling profiler. Fixed size and no allocation, so the sampler never touches the heap. Keys are never 0.
+struct SampleTable {
+    static constexpr int kSize = 8192;           // power of two
+    uint64_t key[kSize] = {};
+    uint32_t self[kSize] = {}, total[kSize] = {};
+    uint32_t extra[kSize] = {};                  // the function's code size, when known
+    int used = 0;
+    uint32_t* slot(uint64_t k, uint32_t size, bool& ok) {
+        ok = false;
+        if (!k) return nullptr;
+        uint32_t h = uint32_t((k >> 4) * 0x9E3779B1u) & (kSize - 1);
+        for (int probe = 0; probe < kSize; ++probe, h = (h + 1) & (kSize - 1)) {
+            if (key[h] == k) { ok = true; return &self[h]; }
+            if (!key[h]) {
+                if (used >= kSize * 3 / 4) return nullptr;   // full enough: drop new keys, keep counting old ones
+                key[h] = k; extra[h] = size; ++used; ok = true; return &self[h];
+            }
+        }
+        return nullptr;
+    }
+    void add_self(uint64_t k, uint32_t size) { bool ok; if (uint32_t* s = slot(k, size, ok)) ++*s; }
+    void add_total(uint64_t k, uint32_t size) { bool ok; if (uint32_t* s = slot(k, size, ok)) ++total[s - self]; }
+    void clear() { std::memset(static_cast<void*>(this), 0, sizeof *this); }   // no 160 KB temporary on the stack
+    // Indices of the `n` entries with the most self (by_total false) or total samples, biggest first. Returns how many.
+    int top(int* out, int n, bool by_total) const {
+        int count = 0;
+        for (int i = 0; i < kSize; ++i) {
+            if (!key[i]) continue;
+            uint32_t v = by_total ? total[i] : self[i];
+            if (!v) continue;
+            int at = count < n ? count++ : n;
+            if (at == n) { if (v <= (by_total ? total[out[n - 1]] : self[out[n - 1]])) continue; at = n - 1; }
+            while (at > 0 && (by_total ? total[out[at - 1]] : self[out[at - 1]]) < v) { out[at] = out[at - 1]; --at; }
+            out[at] = i;
+        }
+        return count;
+    }
+};
+
 }  // namespace anyperformance

@@ -133,8 +133,24 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Hitch threshold (ms) | 50 | Frames slower than this are logged (20 to 1000) |
 | FPS overlay | Off | The live readout in the top-left corner |
 | Spread wreck loot | On | Fills wrecks on newly loaded terrain a few at a time, as above |
+| Profiler (for testing) | Off | Samples where the main and server threads spend their time, as below |
 
 Without AnyHelpers the mod works with these defaults.
+
+## Profiler
+
+**Profiler (for testing)** is off by default and only measures. When on, a background thread pauses the main and
+server threads every 2 ms for a few microseconds, copies the top of the stack and walks it. Every 120 s it logs the
+25 functions with the most time spent in them (`self`) and the 25 with the most time under them (`total`):
+
+```
+[anyperformance] Profile server thread: 60000 samples in 120 s (every 2 ms). ...
+[anyperformance] Profile server self #1: self 12.0% total 30.0% | gcl size 648 code 48 89 5c 24 ...
+```
+
+Game logic functions are placed in memory at run time, so the log names them by size and first bytes.
+`native/tools/map_profile.py <log> <game.gcl>` turns those into function names offline (add `--db` with the SDK
+reference's `sdk_index.sqlite` to name game.exe natives too). It costs about 1% of one core while on.
 
 ## Limits
 

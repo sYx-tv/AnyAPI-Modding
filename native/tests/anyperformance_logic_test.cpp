@@ -72,6 +72,20 @@ int main() {
     FrameWindow fw; FrameParts fp; fp.client_tick = 9; fp.steps.add(2, 3); fw.add(fp, 20); fw.add(fp, 22);
     assert(fw.frames == 2 && fw.frame_ms == 42 && fw.sum.client_tick == 18 && fw.sum.steps.ms[2] == 6);
 
+    // Sampling profiler table: counts per key, top lists by self and by total.
+    static SampleTable tab;
+    for (int i = 0; i < 5; ++i) tab.add_self(0x1000, 64);
+    for (int i = 0; i < 3; ++i) tab.add_self(0x2000, 128);
+    tab.add_self(0x3000, 32); tab.add_self(0, 1);
+    for (int i = 0; i < 9; ++i) tab.add_total(0x2000, 128);
+    tab.add_total(0x1000, 64);
+    int top_idx[2];
+    assert(tab.used == 3);
+    assert(tab.top(top_idx, 2, false) == 2 && tab.key[top_idx[0]] == 0x1000 && tab.key[top_idx[1]] == 0x2000);
+    assert(tab.top(top_idx, 2, true) == 2 && tab.key[top_idx[0]] == 0x2000 && tab.total[top_idx[0]] == 9);
+    assert(tab.extra[top_idx[0]] == 128);
+    tab.clear(); assert(tab.used == 0 && tab.top(top_idx, 2, false) == 0);
+
     // A slow-down then catch-up becomes one episode, closed after half a second back at normal speed.
     SimEpisode e; double t = 0, f = 1.0 / 60;
     for (int i = 0; i < 60; ++i, t += f) assert(!e.add(t, f, 1.0));

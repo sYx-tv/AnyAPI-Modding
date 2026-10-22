@@ -67,13 +67,14 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[5], g_settings_revision = ~0ull;
+uint64_t g_tokens[6], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
 std::atomic<bool> g_precise_timer{true}, g_overlay{false};
 std::atomic<double> g_hitch_ms{50};
 std::atomic<int> g_smoothing{0};         // 0 game, 1 light, 2 strong
+std::atomic<bool> g_profiler{false};      // sampling profiler (anyperformance_profiler.inc)
 bool g_timer_on;                         // timeBeginPeriod(1) is in effect (main thread)
 
 LARGE_INTEGER g_qpc_freq;
@@ -399,6 +400,7 @@ void read_settings() {
     if (g_tokens[2] && settings->get(g_tokens[2], &v)) g_overlay = v.number != 0;
     if (g_tokens[3] && settings->get(g_tokens[3], &v) && std::isfinite(v.number)) g_smoothing = std::clamp(int(v.number), 0, 2);
     if (g_tokens[4] && settings->get(g_tokens[4], &v)) g_spread_loot = v.number != 0;
+    if (g_tokens[5] && settings->get(g_tokens[5], &v)) g_profiler = v.number != 0;
 }
 
 // Counts one hitch or slow-motion log line; false once the session's limit is used up.
@@ -507,6 +509,8 @@ void cpu_worker() {
         lock.unlock(); cpu_summary(seconds); lock.lock();
     }
 }
+#include "anyperformance_profiler.inc"
+
 void request_cpu_summary(double seconds) {
     { std::lock_guard lock(g_cpu_mutex); g_cpu_pending = seconds; }
     g_cpu_wake.notify_one();
@@ -850,6 +854,11 @@ void register_settings() {
     d.description = "Fills the wrecks on newly loaded terrain a few at a time instead of all at once, which stops the big stall "
                     "while driving. Wrecks far ahead may get their items a second later. Host and solo only.";
     g_tokens[4] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "profiler"; d.label = "Profiler (for testing)"; d.kind = ANY_SETTING_BOOL; d.order = 5; d.default_number = 0;
+    d.description = "Writes the game functions that use the most CPU on the main and server threads to anymaker_modding.log "
+                    "every two minutes. Costs about 1% CPU. Leave off unless asked.";
+    g_tokens[5] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace
@@ -871,5 +880,6 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
     if (!gpu || gpu->struct_size != sizeof(*gpu) || gpu->version != 1 || !gpu->emit || !gpu->register_renderer || !ui ||
         !gpu->register_renderer(draw, nullptr)) { gpu = nullptr; log(1, "GPU drawing unavailable; no overlay (logging still works)"); }
     register_settings();
-    std::thread(install_hooks).detach();   // resolving scans game memory; keep it off the loader and frame threads
+    std::thread(install_hooks).detach();
+    std::thread(profiler_thread).detach();   // resolving scans game memory; keep it off the loader and frame threads
 }
