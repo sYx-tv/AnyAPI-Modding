@@ -1,4 +1,4 @@
-// AnyCareer 0.0.6: a survival career. Cash, nine traders with buying, selling and job boards, delivery and kill jobs.
+// AnyCareer 0.0.7: a survival career. Cash, nine traders with buying, selling and job boards, delivery and kill jobs.
 //
 //   Cash item: a new inventory item, "Cash", added to the game's item definitions right after the game adds its
 //      own (inventory_definition_container._add_definitions, on the server and the client scene). Its definition is
@@ -8,9 +8,8 @@
 //      below). Every player needs the mod, as for any mod-added item. It looks like a bundle of green bills
 //      with a paper band: a flat-colour mesh made at start-up (anycareer_cash_mesh.h) and written beside the game's
 //      part meshes; if that fails, Cash keeps the ammo box look.
-//   The Mechanic: one trader per world, at the gas station spot nearest to where the host is the first time the
-//      world runs with AnyCareer (gas station spots are read from the player's own rom/data/tiles at start-up). The
-//      spot is kept in "AnyAPI and Modding/mods/AnyCareer/worlds/<world seed>.txt". Far away, a line at the top of
+//   The Mechanic: one trader per world, at the gas station spot nearest the Survival start (gas station spots are
+//      read from the player's own rom/data/tiles at start-up). The spot is kept in "AnyAPI and Modding/mods/AnyCareer/worlds/<world seed>.txt". Far away, a line at the top of
 //      the screen gives the distance and direction; within kTradeRange, J (rebindable in Mod Controls) opens the
 //      shop, and AnyMap (when installed) shows him as a pin through its anymap.pins service. Shop rows show the
 //      part's picture (AnyAPI item images). Mouse: click a row's Buy or Sell button, a tab or X; the wheel
@@ -21,14 +20,14 @@
 //      (a stack's count is set through its own property setter; emptied stacks are removed with
 //      server_scene.inventory.destroy_item) and drops the part at your feet; selling removes the item first and
 //      then drops the Cash. The shop's stock only exists in the mod, so there is no box to break, steal from or
-//      duplicate. Host and solo only in this build.
+//      duplicate. Trading and jobs are the host's; joiners see every trader's pin and a note at the counter.
 //   The other traders (logic::kShops): Builder (building parts), Junkyard (cheap used parts, new every
 //      day; buys anything at scrap price), Grocer (food, drink, survival supplies), Medic (medical), Marine & Air (boat and plane parts) and
 //      the Mod Shop (parts other mods add: any part the game's own rom/data/vehicle_component_definitions.json
 //      doesn't list). Also the Outfitter (clothing) and the Gunsmith (guns and ammo, a bit dearer). One of each,
 //      spread over the map (Nate): each at the spot of his kind of place (town, industrial, farm, ...) farthest from
-//      the traders already standing, never on the top island (logic::place_spread, logic::kTopIsland), placed once
-//      per world and saved with it, with his own AnyMap pin. A trader whose goods all start at a later loot tier (Marine &
+//      the traders already standing, never on the top island (logic::layout_traders: from the map alone, so every PC
+//      works out the same spots; Hayzeco at the gas station nearest the Survival start), with his own AnyMap pin. A trader whose goods all start at a later loot tier (Marine &
 //      Air and the Mod Shop at tier 1) stands there with an empty shelf that says which tier
 //      unlocks them (Nate: no speeding ahead).
 //      The Mechanic is called Hayzeco Autoparts on screen (Nate). Items are bought as themselves (create_item with their definition), parts
@@ -571,7 +570,6 @@ struct Trader {
     int32_t level = -1;
     int64_t restock = -1, day = -1;
     std::vector<logic::StockRow> shelf[logic::kShopCount];
-    bool place_tried[logic::kShopCount] = {};
     bool stock_knows_mods = false;                // built after the game's part list was read
     std::vector<Candidate> goods[logic::kShopCount];   // what each trader's deliveries can ask for (findable now), sorted by id
     std::vector<logic::Offer> offers[logic::kShopCount];   // today's boards
@@ -1301,15 +1299,25 @@ void trader_tick(uint8_t* scene) {
     }
     if (!T.cash_def || !T.part_item_def) return;
     bool dirty = false;
-    if (!T.world.placed && g_stations_ready) {
-        Vec3 p = rd<Vec3>(peer, off::peer_position);
-        int i = logic::nearest(g_stations, p.x, p.z);
-        if (i >= 0) {
+    // Every trader where logic::layout_traders puts him, so joiners (who work it out themselves) see the same spots.
+    // Worlds from before layout 3 move theirs once (Hayzeco was already at that gas station in every test world).
+    if (g_stations_ready && (!T.world.placed || T.world.layout < 3)) {
+        logic::Zone at[logic::kShopCount];
+        bool placed[logic::kShopCount];
+        if (logic::layout_traders(g_stations, g_places, at, placed)) {
             T.world.placed = true;
-            T.world.trader = g_stations[size_t(i)];
+            T.world.trader = at[logic::kMechanic];
+            for (int s = 1; s < logic::kShopCount; ++s) {
+                bool moved = T.world.shops[s].placed != placed[s] || T.world.shops[s].at.x != at[s].x || T.world.shops[s].at.z != at[s].z;
+                T.world.shops[s].placed = placed[s];
+                T.world.shops[s].at = at[s];
+                if (moved) T.world.shops[s].taken.clear();
+                log(placed[s] ? 0 : 1, "ANYCAREER_SHOP_PLACED shop=%s ok=%d at=(%.0f, %.0f) moved=%d", logic::kShops[s].id, placed[s] ? 1 : 0, at[s].x, at[s].z, moved ? 1 : 0);
+            }
+            T.world.layout = 3;
+            T.offers_board = -2;
             dirty = true;
-            log(0, "ANYCAREER_MECHANIC placed_at=(%.0f, %.0f, %.0f) from_host=(%.0f, %.0f) distance_m=%.0f", T.world.trader.x, T.world.trader.y,
-                T.world.trader.z, p.x, p.z, std::hypot(T.world.trader.x - p.x, T.world.trader.z - p.z));
+            log(0, "ANYCAREER_MECHANIC placed_at=(%.0f, %.0f, %.0f) layout=3", T.world.trader.x, T.world.trader.y, T.world.trader.z);
         }
     }
     AnyWorldTimeSnapshotV1 time;
@@ -1345,31 +1353,6 @@ void trader_tick(uint8_t* scene) {
         static int stock_logs = 0;
         if (stock_logs++ < 20 || any_new)
             log(0, "ANYCAREER_STOCK loot_level=%d days=%lld stock/shelf:%s", level, (long long)T.world.days, list.c_str());
-    }
-    // One of each trader, spread over the map (not the top island): each at his kind of place farthest from the traders
-    // already standing, placed once per world, then saved. Worlds from before had them around the Mechanic: moved once.
-    if (T.world.placed && g_stations_ready) {
-        if (T.world.layout < 2) {
-            for (int s = 1; s < logic::kShopCount; ++s) { T.world.shops[s].placed = false; T.world.shops[s].taken.clear(); }
-            T.world.layout = 2;
-            T.offers_board = -2;
-            dirty = true;
-            log(0, "ANYCAREER_SHOP_LAYOUT spread=1");
-        }
-        for (int s = 1; s < logic::kShopCount; ++s) {
-            if (shop_placed(s) || T.place_tried[s]) continue;
-            T.place_tried[s] = true;
-            std::vector<logic::Zone> placed;
-            for (int o = 0; o < logic::kShopCount; ++o) if (shop_placed(o)) placed.push_back(shop_at(o));
-            int i = logic::place_spread(s, g_places, placed, {logic::kTopIsland});
-            if (i < 0) { log(1, "ANYCAREER_SHOP_PLACED shop=%s ok=0 reason=no_spot", logic::kShops[s].id); continue; }
-            T.world.shops[s].placed = true;
-            T.world.shops[s].at = g_places[size_t(i)].at;
-            T.offers_board = -2;   // his board starts at his door
-            dirty = true;
-            log(0, "ANYCAREER_SHOP_PLACED shop=%s ok=1 place=%s at=(%.0f, %.0f) from_mechanic_m=%.0f", logic::kShops[s].id, g_places[size_t(i)].filter.c_str(),
-                T.world.shops[s].at.x, T.world.shops[s].at.z, std::hypot(T.world.shops[s].at.x - T.world.trader.x, T.world.shops[s].at.z - T.world.trader.z));
-        }
     }
     // A new job board every in-game day.
     if (T.world.placed && T.world.board != T.world.days) {
@@ -1776,8 +1759,24 @@ void draw(const AnyFrameV1* f, void*) {
     if (session) { AnySessionStateV1 s; if (session->copy(&s)) g_mode = s.mode; }
     std::lock_guard lock(g_ui_mutex);
     g_frame_w = float(f->width); g_frame_h = float(f->height);
-    bool live = g_ready && f->focused && gameplay() && hosting() && career_mode();
-    if (!live) { if (g_open) close_shop(); if (!hosting()) update_pin(nullptr); return; }
+    // A joiner has no server tick: the traders' spots come from the map alone (logic::layout_traders, as the host
+    // places them). Trading stays with the host for now; a joiner gets the pins and a note at the counter.
+    const bool host_here = hosting();
+    static View joiner;
+    static bool joiner_ready = false;
+    if (!host_here && !joiner_ready && g_stations_ready) {
+        logic::Zone at[logic::kShopCount];
+        bool placed[logic::kShopCount];
+        if (logic::layout_traders(g_stations, g_places, at, placed)) {
+            joiner.placed = true;
+            joiner.trader = at[logic::kMechanic];
+            for (int s = 0; s < logic::kShopCount; ++s) joiner.shops[s] = {placed[s], at[s]};
+            log(0, "ANYCAREER_JOINER traders=1 mechanic=(%.0f, %.0f)", at[logic::kMechanic].x, at[logic::kMechanic].z);
+        }
+        joiner_ready = true;
+    }
+    bool live = g_ready && f->focused && gameplay() && career_mode() && (host_here || joiner.placed);
+    if (!live) { if (g_open) close_shop(); if (!host_here) update_pin(nullptr); return; }
     ULONGLONG now = GetTickCount64();
     if (now - g_local_at > 100) {
         g_local = local_player();
@@ -1787,7 +1786,8 @@ void draw(const AnyFrameV1* f, void*) {
         g_client_actor_id = actor && anymaker::readable(actor + off::client_actor_id, 4) ? rd<int32_t>(actor, off::client_actor_id) : -3;
     }
     View v;
-    { std::lock_guard view_lock(g_view_mutex); v = g_view; }
+    if (host_here) { std::lock_guard view_lock(g_view_mutex); v = g_view; }
+    else v = joiner;
     if (g_open && !(g_dropoff ? at_dropoff(v, g_local) : shop_in_range(v, g_local) == g_shop)) close_shop();
     update_pin(&v);
     if (v.board >= 0 && v.board != g_seen_board) {   // a new job board (not the one already there when the world loaded)
@@ -1821,7 +1821,8 @@ void draw(const AnyFrameV1* f, void*) {
         text(x, y, w, 34, g_toast, 16, 0xffe8c66a, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
     std::wstring prompt;
-    if (here >= 0) prompt = L"Press " + key_name() + L" to trade with " + (here == logic::kMechanic ? L"" : L"the ") + wide(logic::kShops[here].name);
+    if (here >= 0 && !host_here) prompt = wide(logic::kShops[here].name) + L": only the host can trade for now";
+    else if (here >= 0) prompt = L"Press " + key_name() + L" to trade with " + (here == logic::kMechanic ? L"" : L"the ") + wide(logic::kShops[here].name);
     else if (at_dropoff(v, g_local)) prompt = L"Press " + key_name() + (v.job_state == 1 ? L" to deliver" : L" to pick your reward");
     if (!prompt.empty()) {
         float y = float(f->height) * 0.62f;

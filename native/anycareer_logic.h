@@ -357,6 +357,27 @@ inline int place_spread(int shop, const std::vector<Spot>& spots, const std::vec
     return best;
 }
 
+// Where every trader stands, worked out the same on every PC from the map alone (multiplayer: joiners have no server
+// state, so they place the pins themselves; layout 3). Hayzeco Autoparts: the gas station nearest the Survival start
+// (the host's spawn in every test world); the others spread from there. False if the map has no gas station.
+inline constexpr Zone kSurvivalStart{85611, 0, 49871};
+inline bool layout_traders(const std::vector<Zone>& stations, const std::vector<Spot>& places, Zone (&at)[kShopCount], bool (&placed)[kShopCount]) {
+    for (int s = 0; s < kShopCount; ++s) { placed[s] = false; at[s] = {}; }
+    int m = nearest(stations, kSurvivalStart.x, kSurvivalStart.z);
+    if (m < 0) return false;
+    at[kMechanic] = stations[size_t(m)];
+    placed[kMechanic] = true;
+    std::vector<Zone> standing{at[kMechanic]};
+    for (int s = 1; s < kShopCount; ++s) {
+        int i = place_spread(s, places, standing, {kTopIsland});
+        if (i < 0) continue;
+        at[s] = places[size_t(i)].at;
+        placed[s] = true;
+        standing.push_back(at[s]);
+    }
+    return true;
+}
+
 // A boat or plane part, by its category or id (the Marine & Air trader's goods; the Mechanic leaves them to him).
 inline bool marine_air(const std::string& category, const std::string& id) {
     static constexpr const char* kWords[] = {"boat", "marine", "ship", "hull", "propeller", "plane", "aero", "aircraft", "wing", "rudder",
