@@ -66,9 +66,10 @@ static void refresh_players(uint8_t* scene){std::vector<Player> list;
  std::lock_guard<std::mutex> lock(mutex);players=std::move(list);}
 
 static void heal(uint8_t* character){double one=1,zero=0;bool no=false;
- // Inferred directions: hunger, thirst, heat, cold, infection and wetness build up from 0; oxygen and blood are full at 1.
- set_blood(character,&one);set_hunger(character,&zero);set_thirst(character,&zero);set_oxygen(character,&one);set_hot(character,&zero);
- set_cold(character,&zero);set_infection(character,&zero);set_wetness(character,&zero);bleeding(character,&no);broken_leg(character,&no);}
+ // Every meter is full (healthy) at 1 and shows its warning icon as it drains; tested in game, where 0 lit hunger, thirst,
+ // heat, cold and infection. Wetness is the exception: 0 is dry.
+ set_blood(character,&one);set_hunger(character,&one);set_thirst(character,&one);set_oxygen(character,&one);set_hot(character,&one);
+ set_cold(character,&one);set_infection(character,&one);set_wetness(character,&zero);bleeding(character,&no);broken_leg(character,&no);}
 
 // The game's own debug teleport: it moves the peer's authority actor and makes that client reload into place.
 static bool teleport(uint8_t* server,uint8_t* who,Vec3 to){auto data=*(void**)(who+kPeerData);if(!data)return false;TeleportEvent e{};e.position=to;teleport_event(server,data,&e);return true;}
