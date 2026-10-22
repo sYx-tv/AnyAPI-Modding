@@ -438,13 +438,17 @@ bool add_ours(void* container, const void* outfit, const std::string& text) {
     return ok;
 }
 
-// The Cash definitions added so far (one per definition container): the ammo_box init hook knows Cash by these.
+// The newest Cash definitions (one per definition container; each world load makes a server and a client one): the
+// ammo_box init hook knows Cash by these. A ring, so the current world's always fit however many worlds were loaded
+// in one run (a full list once left loot Cash at the ammo box's 9999 fill from the third load on).
 std::atomic<const uint8_t*> g_cash_defs[4]{};
+std::atomic<uint32_t> g_cash_next{0};
+std::mutex g_cash_mutex;
 void remember_cash(const uint8_t* def) {
-    for (auto& d : g_cash_defs) {
-        const uint8_t* empty = nullptr;
-        if (d.load() == def || d.compare_exchange_strong(empty, def)) return;
-    }
+    if (!def) return;
+    std::lock_guard lock(g_cash_mutex);
+    for (auto& d : g_cash_defs) if (d.load() == def) return;
+    g_cash_defs[g_cash_next++ % 4].store(def);
 }
 bool is_cash(const uint8_t* def) {
     for (const auto& d : g_cash_defs) if (def && d.load() == def) return true;
