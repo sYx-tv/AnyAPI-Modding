@@ -77,7 +77,7 @@ static bool read_settings(){if(!settings_api)return false;auto revision=settings
  auto message="SETTINGS_APPLIED revision="+std::to_string(revision)+" minimap="+std::to_string(options.minimap)+" size="+std::to_string(options.size)+" range="+std::to_string(options.range)+" north_up="+std::to_string(options.north_up)+" names="+std::to_string(options.names)+" marker_scale="+std::to_string(options.marker)+" guidance="+std::to_string(options.guide)+" label_bytes="+std::to_string(options.waypoint_label.size())+" corner="+std::to_string(options.corner)+" opacity="+std::to_string(options.opacity)+" mini_names="+std::to_string(options.mini_names)+" grid="+std::to_string(options.grid)+" mini_route="+std::to_string(options.mini_route)+" vehicles="+std::to_string(options.vehicles)+" zombies="+std::to_string(options.zombies);host.log(0,"anymap",message.c_str());return true;}
 static HMODULE mod_module{};static ULONG_PTR gdiplus_token{};
 static std::mutex state_mutex;static bool last_focus{};
-static std::filesystem::path game_dir,cache_dir;static bool visible{};
+static std::filesystem::path game_dir,cache_dir,data_dir;static bool visible{};
 static atlas::KeyEdge m_key;static atlas::View view;static atlas::SmoothZoom zoom_motion;
 static mapmarkers::Store saved_markers;static bool naming{},replace_name{},shift_held[3]{},editor_held[256]{};static uint64_t editing_marker{};static atlas::Point editing_position;static std::string editing_name;static RectF editor_save,editor_cancel,editor_route,editor_delete;
 static roads::Graph road_graph;static roads::Route route;
@@ -117,9 +117,9 @@ static atlas::Point mouse_point(int x,int y){return {(x-map_left)/map_side,(y-ma
 // Check whether a normalized point falls inside the atlas square, including its edges.
 static bool inside(atlas::Point p){return p.x>=0&&p.x<=1&&p.y>=0&&p.y<=1;}
 // Save the waypoint enabled flag and world X/Z in the helper folder; never change the game save.
-static void save_waypoint(){std::ofstream f(cache_dir/L"waypoint.dat",std::ios::binary);uint32_t magic=0x32505741,valid=waypoint?1:0;f.write((char*)&magic,4);f.write((char*)&valid,4);f.write((char*)&target,sizeof(target));}
+static void save_waypoint(){std::ofstream f(data_dir/L"waypoint.dat",std::ios::binary);uint32_t magic=0x32505741,valid=waypoint?1:0;f.write((char*)&magic,4);f.write((char*)&valid,4);f.write((char*)&target,sizeof(target));}
 // Restore a saved waypoint only when its format, coordinates and atlas bounds are valid.
-static void load_waypoint(){std::ifstream f(cache_dir/L"waypoint.dat",std::ios::binary);uint32_t magic{},valid{};atlas::Point p;
+static void load_waypoint(){std::ifstream f(data_dir/L"waypoint.dat",std::ios::binary);uint32_t magic{},valid{};atlas::Point p;
  if(f.read((char*)&magic,4)&&f.read((char*)&valid,4)&&f.read((char*)&p,sizeof(p))&&magic==0x32505741&&valid==1){atlas::Point uv;if(atlas::project(p.x,p.y,uv)&&inside(uv)){waypoint=true;target=p;}}}
 // Format a nonnegative distance for display in metres or kilometres.
 static std::wstring meters(double d){if(d>=1000)return std::to_wstring(int(d/100)/10)+L"."+std::to_wstring(int(d/100)%10)+L" km";return std::to_wstring(int(std::max(0.,d)))+L" m";}
@@ -209,7 +209,21 @@ static void blip(MapGraphics& g,const mapactors::Blip& b,PointF at){Pen edge(Col
  case mapactors::Creature:{SolidBrush fill(Color(255,244,160,48));g.FillEllipse(&fill,at.X-4.5f,at.Y-4.5f,9.f,9.f);g.DrawEllipse(&edge,at.X-4.5f,at.Y-4.5f,9.f,9.f);break;}
  }}
 // Refresh the copied blips for this world; the sample itself runs on the client tick.
-static void update_blips(){if(!live||!(options.minimap||visible)||!(options.vehicles||options.zombies)){blips.clear();return;}mapactors::request(players.world_epoch,visible?100:150);mapactors::copy(players.world_epoch,blips);}
+static void update_blips(){if(!live){blips.clear();return;}bool want=(options.minimap||visible)&&(options.vehicles||options.zombies);mapactors::state.want_blips=want;
+ // Sampling also reads the world seed for per-save markers, so it runs in every world; it walks actors only when blips are shown.
+ mapactors::request(players.world_epoch,want?(visible?100:150):1000);if(want)mapactors::copy(players.world_epoch,blips);else blips.clear();}
+// Markers and the waypoint belong to one save, keyed by its world seed (replicated, so joiners get it too):
+// AnyMap/worlds/<seed>/. The first save opened after updating inherits the old shared files, which are then
+// renamed *.migrated. Without the experimental reader (another game build) the old shared files stay in use.
+static uint64_t world_epoch{};static int32_t world_seed{};static bool world_known{};
+static void use_world(int32_t seed){std::error_code ec;auto dir=cache_dir/L"worlds"/std::to_wstring(seed);bool fresh=!std::filesystem::exists(dir,ec);std::filesystem::create_directories(dir,ec);if(ec){host.log(2,"anymap","WORLD_DATA folder_failed=1 shared_files=1");return;}
+ unsigned migrated=0;if(fresh){const wchar_t* names[]={L"markers.tsv",L"waypoint.dat"};for(auto name:names){auto legacy=cache_dir/name;if(!std::filesystem::exists(legacy,ec))continue;std::filesystem::copy_file(legacy,dir/name,std::filesystem::copy_options::overwrite_existing,ec);if(ec)continue;auto done=legacy;done+=L".migrated";std::filesystem::rename(legacy,done,ec);++migrated;}}
+ data_dir=dir;world_seed=seed;world_known=true;naming=false;selected_marker=0;marker_scroll=0;route={};routed_at=0;waypoint=false;target={};
+ saved_markers=mapmarkers::Store{};saved_markers.file=dir/L"markers.tsv";saved_markers.load();load_waypoint();
+ auto message="WORLD_DATA seed="+std::to_string(seed)+" markers="+std::to_string(saved_markers.records.size())+" waypoint="+std::to_string(waypoint)+" migrated_files="+std::to_string(migrated);host.log(0,"anymap",message.c_str());}
+// A new world hides the previous save's markers until its seed is known.
+static void update_world(){if(!live||!mapactors::state.ready)return;if(players.world_epoch!=world_epoch){world_epoch=players.world_epoch;if(world_known){world_known=false;naming=false;selected_marker=0;route={};routed_at=0;waypoint=false;saved_markers=mapmarkers::Store{};}}
+ int32_t seed;if(!world_known&&mapactors::world_seed(players.world_epoch,seed))use_world(seed);}
 // Marker editing is a map-owned modal. Its UTF-8 value is staged until a durable save.
 static void begin_marker(uint64_t id,atlas::Point at){editing_marker=id;editing_position=at;auto m=saved_markers.find(id);editing_name=m?m->name:"Marker "+std::to_string(saved_markers.next);naming=true;replace_name=true;dragging=false;zoom_motion.cancel(view);saved_markers.error.clear();memset(editor_held,0,sizeof(editor_held));}
 static bool finish_marker(){if(!saved_markers.save(editing_marker,editing_position,editing_name)){log_event("MARKER_SAVE failed=1 pending_retained=1");return false;}naming=false;log_event("MARKER_SAVE saved=1");return true;}
@@ -420,7 +434,7 @@ static void gpu_render(const AnyFrameV1* frame,void*){
  if(!last_focus){pose_motion.reset();if(visible)close_map();return;}
  if((ui_api&&!gameplay_ui())||(menu_api&&menu_api->settings_open())){pose_motion.reset();m_key.held=false;if(visible)close_map();return;}
  live=host.copy_players(&players,&ui_flags);if(!live){players={};route={};routed_at=0;pose_motion.reset();}
- if(live&&(!local_player()||(routed_at&&route_epoch!=players.world_epoch))){route={};routed_at=0;}update_route();update_blips();
+ if(live&&(!local_player()||(routed_at&&route_epoch!=players.world_epoch))){route={};routed_at=0;}update_route();update_blips();update_world();
  if(!visible&&(!options.minimap||!live||!local_player()||(!ui_api&&(!(ui_flags&2)||(ui_flags&1))))){pose_motion.reset();return;}
  if(live)pose_motion.update(players,frame->tick);if(visible)zoom_motion.advance(view,frame->tick);
  float scale=float(options.size/100);int w=visible?frame->width:int(320*scale),h=visible?frame->height:int((waypoint&&options.guide?385:300)*scale);
@@ -433,7 +447,7 @@ static void mod_render(const AnyFrameV1* frame,AnyCanvasV1* canvas,void*){
  if(gpu_api)return;std::lock_guard<std::mutex> lock(state_mutex);last_focus=frame->focused!=0;frame_width=frame->width;frame_height=frame->height;if(read_settings())painted_at=0;
  if(!last_focus){if(visible)close_map();return;}if((ui_api&&!gameplay_ui())||(menu_api&&menu_api->settings_open())){m_key.held=false;if(visible)close_map();return;}live=host.copy_players(&players,&ui_flags);
  if(!live){players={};route={};routed_at=0;}
- if(live&&(!local_player()||(routed_at&&route_epoch!=players.world_epoch))){route={};routed_at=0;}update_route();update_blips();
+ if(live&&(!local_player()||(routed_at&&route_epoch!=players.world_epoch))){route={};routed_at=0;}update_route();update_blips();update_world();
  if(!visible&&(!options.minimap||!live||!local_player()||(!ui_api&&(!(ui_flags&2)||(ui_flags&1)))))return;
  float scale=float(options.size/100);if(visible&&(!painted_at||frame->tick-painted_at>=16))zoom_motion.advance(view,frame->tick);uint32_t w=visible?frame->width:uint32_t(320*scale),h=visible?frame->height:uint32_t((waypoint&&options.guide?385:300)*scale);
  if(!painted_at||frame->tick-painted_at>=(visible?16:33)||painted_full!=visible||painted_width!=w||painted_height!=h){
@@ -451,7 +465,7 @@ static void mod_shutdown(void*){mapactors::state.stop=true;std::lock_guard<std::
 // Normal DLL plugin entry point, invoked by the host after its build guard succeeds.
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,AnyModCallbacksV1* callbacks){
  if(!api||!callbacks||api->struct_size!=sizeof(*api)||api->abi!=ANYAPI_MOD_ABI||!api->log||!api->copy_players||!api->capture_input||!api->game_directory||!api->plugin_directory)return false;
- host=*api;game_dir=api->game_directory;cache_dir=std::filesystem::path(api->plugin_directory)/L"AnyMap";std::error_code folder_error;std::filesystem::create_directories(cache_dir,folder_error);
+ host=*api;game_dir=api->game_directory;cache_dir=std::filesystem::path(api->plugin_directory)/L"AnyMap";data_dir=cache_dir;std::error_code folder_error;std::filesystem::create_directories(cache_dir,folder_error);
  GdiplusStartupInput input;if(GdiplusStartup(&gdiplus_token,&input,nullptr)!=Ok)return false;
  HRSRC resource=FindResourceW(mod_module,MAKEINTRESOURCEW(101),MAKEINTRESOURCEW(10));HGLOBAL memory=resource?LoadResource(mod_module,resource):nullptr;
  const char* data=memory?(const char*)LockResource(memory):nullptr;DWORD bytes=resource?SizeofResource(mod_module,resource):0;
