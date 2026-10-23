@@ -173,6 +173,9 @@ struct LeanInput {
     double measured_rate = std::numeric_limits<double>::quiet_NaN();
     double gain_scale = 1;       // 0..1: backs off when the physics fights back
     double speed = 0;            // m/s: a moving bike is caught further over before the assist gives up
+    // The turn's yaw rate (rad/s about world up), smoothed; NaN = the physics' own. The chassis weaves from tick to
+    // tick, and at speed that noise alone swings the balanced lean from one side's limit to the other.
+    double yaw_rate = std::numeric_limits<double>::quiet_NaN();
 };
 struct LeanOutput {
     Vec3 angular_velocity;       // what to set
@@ -210,7 +213,7 @@ inline LeanOutput lean_assist(const LeanInput& in) {
     Vec3 side = normalized(cross(u, f));                      // the part's -x: points to the rider's left
     out.lean_deg = std::asin(std::clamp(dot(side, world_up), -1.0, 1.0)) * 180 / kPi;
     // Balanced up: gravity plus the turn's acceleration (omega x v, yaw part only).
-    Vec3 yaw = world_up * dot(in.angular_velocity, world_up);
+    Vec3 yaw = world_up * (std::isfinite(in.yaw_rate) ? in.yaw_rate : dot(in.angular_velocity, world_up));
     Vec3 centripetal = cross(yaw, in.linear_velocity);
     centripetal = centripetal - world_up * dot(centripetal, world_up);
     double max_c = kGravity * std::tan(rad(kMaxLeanDeg));

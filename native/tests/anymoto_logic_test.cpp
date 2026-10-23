@@ -115,6 +115,10 @@ int main() {
     Vec3 centripetal = cross(Vec3{0, 0.6, 0}, Vec3{0, 0, 15});   // +x: the turn's centre
     // The correction rolls the top toward the centre: about +z, toward +x means negative angular velocity.
     assert(centripetal.x > 0 && dot(o.angular_velocity, {0, 0, 1}) < 0);
+    // A smoothed yaw rate replaces the physics' own: no smoothed turn, no turn lean.
+    in.yaw_rate = 0;
+    assert(std::abs(lean_assist(in).target_deg) < 0.01);
+    in.yaw_rate = std::numeric_limits<double>::quiet_NaN();
     // Simulate with gravity tipping it over (a bike's mass 0.6 m up): tipped 15 degrees, it settles upright within
     // 2 s at power 0.6, at 60 and at 30 ticks a second, whichever way the physics spins (spin_sign).
     for (double hz : {60.0, 30.0})

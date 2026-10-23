@@ -534,6 +534,7 @@ struct Assist {
     double kept_ema = 1;           // the same, smoothed: below 0 the physics throws the roll back (a rider on board)
     double gain = 1;               // full strength always: backing off with a rider on left the bike to fall
     double rate_f = 0;             // roll rate from the bike's own lean change, lightly smoothed
+    double yaw_f = 0;              // yaw rate, smoothed over about 0.4 s (sets the turn's balanced lean)
     bool have_rate = false;
     double next_log = 0;
 };
@@ -552,6 +553,7 @@ int slot_of(std::string_view name) {
 struct Rider {
     uint64_t vehicle_body[2];      // the vehicle's physics.object handle, as the seat keeps a copy of it
     void* capsule;                 // the rider's physics.object
+    const void* seat;              // the seat_data that welds it
     double seen;
 };
 std::mutex g_rider_mutex;
@@ -570,10 +572,21 @@ void hk_seat_tick(void* self, void* scene, void* actor_physics, uint64_t is_auth
     void* capsule = static_cast<uint8_t*>(actor_physics) + seat_off::capsule;
     double now = now_seconds();
     std::lock_guard lock(g_rider_mutex);
-    std::erase_if(g_riders, [&](const Rider& r) { return r.capsule == capsule || now - r.seen > 1.0; });
-    if (body[0]) g_riders.push_back({{body[0], body[1]}, capsule, now});
+    std::erase_if(g_riders, [&](const Rider& r) { return r.capsule == capsule || r.seat == self || now - r.seen > 5.0; });
+    if (body[0]) g_riders.push_back({{body[0], body[1]}, capsule, self, now});
 }
-// The capsules welded to this vehicle body seen in the last tenth of a second.
+// The rider leaves the world: forget their capsule before it is freed.
+using seat_destroy_t = void (*)(void* self, void* scene);
+anymaker::cell_hook h_seat_destroy;
+void hk_seat_destroy(void* self, void* scene) {
+    {
+        std::lock_guard lock(g_rider_mutex);
+        std::erase_if(g_riders, [&](const Rider& r) { return r.seat == self; });
+    }
+    reinterpret_cast<seat_destroy_t>(h_seat_destroy.original)(self, scene);
+}
+// The capsules welded to this vehicle body. Actors don't run their seat tick every physics tick (it was missing on
+// most ticks while stopped), so a weld counts until its seat says otherwise or goes quiet for 2 s.
 int riders_of(const void* vehicle_body, void** out, int max) {
     uint64_t body[2];
     std::memcpy(body, vehicle_body, sizeof body);
@@ -581,7 +594,7 @@ int riders_of(const void* vehicle_body, void** out, int max) {
     int n = 0;
     std::lock_guard lock(g_rider_mutex);
     for (const Rider& r : g_riders)
-        if (n < max && r.vehicle_body[0] == body[0] && r.vehicle_body[1] == body[1] && now - r.seen < 0.1) out[n++] = r.capsule;
+        if (n < max && r.vehicle_body[0] == body[0] && r.vehicle_body[1] == body[1] && now - r.seen < 2.0) out[n++] = r.capsule;
     return n;
 }
 
@@ -648,6 +661,8 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
         }
         a.prev_lean = lean;
         a.have_prev = true;
+        if (in.dt > 0 && in.dt < 0.1) a.yaw_f += in.dt / (in.dt + 0.4) * (in.angular_velocity.y - a.yaw_f);
+        in.yaw_rate = a.yaw_f;
         in.spin_sign = a.sign;
         in.gain_scale = a.gain;
         // The physics' own roll rate has no lag, so it damps best; only while the physics throws the roll back (a
@@ -708,7 +723,7 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
             a.kept = a.kept_n = 0;
         }
     }
-    static std::atomic<int> logs{900};   // one a second for 15 minutes
+    static std::atomic<int> logs{1800};  // one a second for 30 minutes
     if (log_now && logs.fetch_sub(1) > 0)
         log(0, "lean assist: lean %.1f deg (moving %.0f deg/s), target %.1f deg, roll rate %.2f -> %.2f rad/s, spin sign %+.0f, "
                "roll rate kept between ticks %.2f, smoothed roll %.2f rad/s, gain %.2f, speed %.1f m/s, pivot %.2f m below the centre of mass, riders moved %d, power %.1f, %s (dt %.4f s)",
@@ -838,7 +853,9 @@ void install_hooks() {
         if (!data || !h_gyro_get_f64.install(data, (void*)&hk_gyro_get_f64)) log(1, "Lean Assist data channels unavailable");
         if (!props || !h_gyro_properties.install(props, (void*)&hk_gyro_properties)) log(1, "Lean Assist Power row unavailable (it runs at 0.6)");
         void** seat = route::cell(bind::server_seat_tick);
-        if (!seat || !h_seat_tick.install(seat, (void*)&hk_seat_tick)) log(1, "seat hook not installed; Lean Assist can't carry the rider and fights them");
+        void** seat_gone = route::cell(bind::server_seat_destroy);
+        if (!seat || !seat_gone || !h_seat_destroy.install(seat_gone, (void*)&hk_seat_destroy) || !h_seat_tick.install(seat, (void*)&hk_seat_tick))
+            log(1, "seat hooks not installed; Lean Assist can't carry the rider and fights them");
         g_ready = true;
         log(0, "Ready after %d s. Load or start a world to add the motorcycle parts (definition file %s).", attempt, g_json_path.c_str());
         return;
@@ -848,6 +865,7 @@ void remove_hooks() {
     h_gyro_properties.remove((void*)&hk_gyro_properties);
     h_gyro_get_f64.remove((void*)&hk_gyro_get_f64);
     h_seat_tick.remove((void*)&hk_seat_tick);
+    h_seat_destroy.remove((void*)&hk_seat_destroy);
     h_gyro_tick.remove((void*)&hk_gyro_tick);
     h_hand_pose.remove((void*)&hk_hand_pose);
     h_add_definitions.remove((void*)&hk_add_definitions);
