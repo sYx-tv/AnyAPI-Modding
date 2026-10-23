@@ -173,14 +173,15 @@ inline Mesh fork_base() {
     Vec3 h = fork_head();
     m.box({-0.12, -0.04, -0.04}, {0.12, 0.04, 0.08}, kPaint0);       // cross plate: steering links on its ends
     m.box({-0.04, -0.12, -0.04}, {0.04, 0.12, 0.08}, kPaint0);       // upright: brake link above, data port below
-    m.box({-0.05, 0.05, 0.00}, {0.05, h.y + 0.03, h.z - 0.035}, kPaint0);
+    m.box({-0.04, 0.05, 0.04}, {0.04, h.y + 0.03, 0.12}, kPaint0);   // neck up to the steering head
     for (int s = -1; s <= 1; s += 2) m.prism(2, {s * 0.08, 0, 0.08}, 0.009, 0, 0.008, kBolt, 6);
-    // The mounting face (-z): torque in the middle, the brake link above, a steering link either side.
-    Vec3 back{0, 0, -1}, up{0, 1, 0};
-    marker(m, {0, 0, -0.04}, back, up, Marker::torque);
-    marker(m, {0, 0.08, -0.04}, back, up, Marker::link_in);
-    marker(m, {0.08, 0, -0.04}, back, up, Marker::link_in);
-    marker(m, {-0.08, 0, -0.04}, back, up, Marker::link_in);
+    // Torque on the mounting face (as the stock wheel). The links sit on the neck's sides, clear of the frame:
+    // steering in on each side (cell (0,2,1)), the brake above the -x one (cell (0,3,1)).
+    Vec3 up{0, 1, 0};
+    marker(m, {0, 0, -0.04}, {0, 0, -1}, up, Marker::torque);
+    marker(m, {-0.04, 0.16, 0.08}, {-1, 0, 0}, up, Marker::link_in);
+    marker(m, {0.04, 0.16, 0.08}, {1, 0, 0}, up, Marker::link_in);
+    marker(m, {-0.04, 0.24, 0.08}, {-1, 0, 0}, up, Marker::link_in);
     return m;
 }
 // Upper fork: turns with the steering about the raked axis. Origin at the steering head (top yoke), the legs run
@@ -231,11 +232,11 @@ inline Mesh swingarm_base() {
     Mesh m;
     m.box({-0.12, -0.04, -0.04}, {0.12, 0.04, 0.06}, kPaint0);       // pivot block: the drive face is its right end
     m.box({-0.04, -0.12, -0.04}, {0.04, 0.12, 0.06}, kPaint0);       // upright: brake link above, data port below
-    m.box({-0.035, 0.12, -0.04}, {0.035, kShockTop.y + 0.03, kShockTop.z + 0.03}, kPaint0);
+    m.box({-0.04, 0.12, -0.04}, {0.04, kShockTop.y + 0.03, kShockTop.z + 0.03}, kPaint0);
     m.prism(0, kShockTop, 0.016, -0.05, 0.05, kBolt, 6);
-    // Drive in on the +x end (a pulley wheel goes here), the brake link on the mounting face above the middle.
+    // Drive in on the +x end (a pulley wheel goes here), the brake link on the shock bracket's -x side (cell (0,2,0)).
     marker(m, {0.12, 0, 0}, {1, 0, 0}, {0, 1, 0}, Marker::torque);
-    marker(m, {0, 0.08, -0.04}, {0, 0, -1}, {0, 1, 0}, Marker::link_in);
+    marker(m, {-0.04, 0.16, 0}, {-1, 0, 0}, {0, 1, 0}, Marker::link_in);
     return m;
 }
 // Swings about the pivot (origin); +z runs to the axle.

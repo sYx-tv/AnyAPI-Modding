@@ -460,8 +460,8 @@ void hk_hand_pose(const void* self, const void* vehicle, bool* is_r, void* hand_
         if (!finite(m)) return;
         m.m[9] = grip.x; m.m[10] = grip.y; m.m[11] = grip.z;
     };
-    place(is_r, hand_r, -1);   // the rider faces +z with y up: their right hand is on -x
-    place(is_l, hand_l, 1);
+    place(is_r, hand_r, 1);    // the game's frames are left-handed: facing +z with y up, the rider's right is +x
+    place(is_l, hand_l, -1);
     static std::atomic<int> logs{2};
     if (logs.fetch_sub(1) > 0)
         log(0, "client: hands on the handlebar grips (hand transform types %d / %d)", hand_r ? at<int32_t>(hand_r, off::deferred_type) : -1,
