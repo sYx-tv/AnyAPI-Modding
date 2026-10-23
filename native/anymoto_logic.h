@@ -195,6 +195,12 @@ inline double lean_rate_for(Vec3 forward, Vec3 up, double wf) {
     double c = std::sqrt(std::max(1e-6, 1 - l * l));
     return wf * dot(cross(cross(f, u), f), world_up) / c;
 }
+// A roll set about the centre of mass swings the tyres' contact patches sideways, and the tyres' grip throws it
+// back (and scrubs them). Adding this to the linear velocity makes the same change in spin pivot about the contact
+// line instead: the velocity of `pivot` stays as it was. The game's point velocity is spin x offset.
+inline Vec3 pivot_velocity_change(Vec3 spin_change, Vec3 pivot, Vec3 centre_of_mass) {
+    return cross(spin_change, pivot - centre_of_mass) * -1.0;
+}
 inline LeanOutput lean_assist(const LeanInput& in) {
     LeanOutput out;
     out.angular_velocity = in.angular_velocity;
@@ -224,7 +230,7 @@ inline LeanOutput lean_assist(const LeanInput& in) {
     double k = 120 * in.strength * std::clamp(in.gain_scale, 0.0, 1.0), c = 2 * std::sqrt(k);
     double dt = std::min(in.dt, 0.05);
     // Parked and settled: leave it be. Nudging an upright bike every tick scrubs its tyres sideways (dust).
-    if (in.speed < 0.5 && std::abs(error) < rad(0.8) && std::abs(rate) < 0.05) { out.active = true; out.settled = true; return out; }
+    if (in.speed < 0.5 && std::abs(error) < rad(1.0) && std::abs(rate) < 0.15) { out.active = true; out.settled = true; return out; }
     double delta = (k * error - c * rate) * dt;
     delta = std::clamp(delta, -kMaxRollAccel * dt, kMaxRollAccel * dt);
     out.angular_velocity = in.angular_velocity + f * (s * delta);

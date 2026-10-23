@@ -64,6 +64,7 @@ template <class T> T at(const void* base, ptrdiff_t offset) { return *reinterpre
 // Reference layouts (0.1.27 metadata).
 namespace off {
 constexpr ptrdiff_t server_component_definition = 312;   // server_scene.vehicle_component.m_definition
+constexpr ptrdiff_t server_component_vehicle = 320;      // .m_parent_vehicle
 constexpr ptrdiff_t server_wheel_tuning = 480 + 8;       // server wheel: m_element_wheel (480) .m_definition (+8)
 constexpr ptrdiff_t client_component_definition = 176;   // client_scene.vehicle_component.m_definition
 constexpr ptrdiff_t client_wheel_element = 224;          // client wheel: m_element_wheel
@@ -321,6 +322,18 @@ void add_tyre_size(void* container) {
 // Server: the game sets the tuning by id; ours get theirs after.
 using assign_t = void (*)(void** component);
 anymaker::cell_hook h_assign;
+// Our server wheels by vehicle, so the Lean Assist can find where the tyres touch the ground. Entries are checked
+// before use (still ours, still on that vehicle) and dropped when not.
+std::mutex g_wheels_mutex;
+std::unordered_map<const void*, std::vector<void*>> g_wheels;
+void remember_wheel(void* component) {
+    if (!can_read(static_cast<uint8_t*>(component) + off::server_component_vehicle, 8)) return;
+    const void* vehicle = at<const void*>(component, off::server_component_vehicle);
+    if (!vehicle) return;
+    std::lock_guard lock(g_wheels_mutex);
+    auto& list = g_wheels[vehicle];
+    if (std::find(list.begin(), list.end(), component) == list.end()) list.push_back(component);
+}
 void hk_assign(void** component) {
     reinterpret_cast<assign_t>(h_assign.original)(component);
     void* self = component && can_read(component, 8) ? *component : nullptr;
@@ -328,6 +341,7 @@ void hk_assign(void** component) {
     const void* tuning = tuning_for(server_kind(self));
     if (!tuning || !can_read(static_cast<uint8_t*>(self) + off::server_wheel_tuning, 8)) return;
     at<const void*>(self, off::server_wheel_tuning) = tuning;
+    remember_wheel(self);
     static std::atomic<int> logs{4};
     if (logs.fetch_sub(1) > 0) log(0, "server: %s tuning set", server_kind(self) == Kind::fork ? "fork" : "swingarm");
 }
@@ -472,8 +486,40 @@ void hk_hand_pose(const void* self, const void* vehicle, bool* is_r, void* hand_
 using physics_vec_t = void (*)(Vec3* ret, const void* object);
 using physics_set_vec_t = void (*)(void* object, const Vec3* value);
 physics_vec_t g_get_angular, g_get_linear;
-physics_set_vec_t g_set_angular;
+physics_set_vec_t g_set_angular, g_set_linear;
 mat_of_t g_server_vehicle_transform, g_server_component_transform;
+physics_vec_t g_get_com;
+// Where the bike's tyres touch the ground, in the world: the middle of our fork's and swingarm's contact points.
+bool contact_point(void* vehicle, const Mat34& vehicle_transform, Vec3* out) {
+    std::vector<void*> list;
+    {
+        std::lock_guard lock(g_wheels_mutex);
+        auto found = g_wheels.find(vehicle);
+        if (found == g_wheels.end()) return false;
+        auto& l = found->second;
+        l.erase(std::remove_if(l.begin(), l.end(), [&](void* c) {
+            if (!can_read(static_cast<uint8_t*>(c) + off::server_component_definition, 16)) return true;
+            Kind k = known_kind(at<const void*>(c, off::server_component_definition));
+            return (k != Kind::fork && k != Kind::swingarm) || at<const void*>(c, off::server_component_vehicle) != vehicle;
+        }), l.end());
+        list = l;
+    }
+    Vec3 sum{};
+    int n = 0;
+    for (void* c : list) {
+        Mat34 local;
+        g_server_component_transform(&local, c);
+        Mat34 world = compose(vehicle_transform, local);
+        if (!finite(world)) continue;
+        Kind k = known_kind(at<const void*>(c, off::server_component_definition));
+        Vec3 tyre = apply(world, (k == Kind::fork ? fork_tuning() : swingarm_tuning()).tyre);
+        sum = sum + tyre - Vec3{0, kMotorcycleTyreRadius, 0};
+        ++n;
+    }
+    if (!n) return false;
+    *out = sum * (1.0 / n);
+    return true;
+}
 
 struct Assist {
     double power = 0.6;            // Properties: Power (0..1); per session
@@ -572,9 +618,23 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
         if (a.have_rate && a.kept_ema < 0.3) in.measured_rate = a.rate_f;
     }
     LeanOutput out = lean_assist(in);
-    double set_wf = 0;
+    double set_wf = 0, pivot_height = -1;
     if (out.active && !out.settled && std::isfinite(out.angular_velocity.x) && std::isfinite(out.angular_velocity.y) && std::isfinite(out.angular_velocity.z)) {
         g_set_angular(physics, &out.angular_velocity);
+        // Pivot about the tyres' contact line, not the centre of mass, so the tyres are not dragged sideways.
+        Vec3 com, contact;
+        bool have_contact = g_set_linear && g_get_com && contact_point(vehicle, v, &contact);
+        if (!have_contact && g_get_com) {
+            g_get_com(&com, physics);
+            contact = com - Vec3{0, 0.5, 0};                       // no wheels found: about half a metre down
+            have_contact = g_set_linear != nullptr;
+        }
+        if (have_contact) {
+            g_get_com(&com, physics);
+            Vec3 lin = in.linear_velocity + pivot_velocity_change(out.angular_velocity - in.angular_velocity, contact, com);
+            if (std::isfinite(lin.x) && std::isfinite(lin.y) && std::isfinite(lin.z)) g_set_linear(physics, &lin);
+            pivot_height = dot(com - contact, Vec3{0, 1, 0});
+        }
         set_wf = dot(out.angular_velocity, f);
     }
     bool log_now = false;
@@ -598,8 +658,8 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
     static std::atomic<int> logs{900};   // one a second for 15 minutes
     if (log_now && logs.fetch_sub(1) > 0)
         log(0, "lean assist: lean %.1f deg (moving %.0f deg/s), target %.1f deg, roll rate %.2f -> %.2f rad/s, spin sign %+.0f, "
-               "roll rate kept between ticks %.2f, smoothed roll %.2f rad/s, gain %.2f, speed %.1f m/s, power %.1f, %s (dt %.4f s)",
-            out.lean_deg, observed * 180 / kPi, out.target_deg, wf, set_wf, sign, kept, rate_f, gain, in.speed, in.strength,
+               "roll rate kept between ticks %.2f, smoothed roll %.2f rad/s, gain %.2f, speed %.1f m/s, pivot %.2f m below the centre of mass, power %.1f, %s (dt %.4f s)",
+            out.lean_deg, observed * 180 / kPi, out.target_deg, wf, set_wf, sign, kept, rate_f, gain, in.speed, pivot_height, in.strength,
             out.settled ? "settled" : out.active ? "correcting" : "idle", in.dt);
 }
 
@@ -682,6 +742,9 @@ void install_hooks() {
         g_get_angular = reinterpret_cast<physics_vec_t>(route::function(bind::physics_get_angular_velocity));
         g_get_linear = reinterpret_cast<physics_vec_t>(route::function(bind::physics_get_linear_velocity));
         g_set_angular = reinterpret_cast<physics_set_vec_t>(route::function(bind::physics_set_angular_velocity));
+        g_set_linear = reinterpret_cast<physics_set_vec_t>(route::function(bind::physics_set_linear_velocity));
+        g_get_com = reinterpret_cast<physics_vec_t>(route::function(bind::physics_get_center_of_mass));
+        if (!g_set_linear || !g_get_com) log(1, "Lean Assist: linear velocity or centre of mass not found (%d/%d); it rolls about the centre of mass", !!g_set_linear, !!g_get_com);
         if (!g_get_definition || !g_client_component_transform || !g_accessory_transform || !g_steering_transform || !g_element_render ||
             !g_mesh_by_index || !g_add_mesh) {
             log(2, "wheel drawing functions not found (lookup %d, transform %d, accessory %d, steering %d, tyre %d, mesh %d/%d); AnyMoto is off",

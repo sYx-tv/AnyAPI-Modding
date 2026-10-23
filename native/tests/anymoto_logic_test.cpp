@@ -145,6 +145,12 @@ int main() {
         }
         assert(std::abs(phi) < rad(2));
     }
+    // Pivoting about the contact line: the contact point's velocity (v + w x r) is unchanged by the spin change.
+    {
+        Vec3 com{0, 0.6, 0}, contact{0, 0, 0.1}, dw{0, 0, 1.5};
+        Vec3 dv = pivot_velocity_change(dw, contact, com);
+        assert(near(dv + cross(dw, contact - com), {0, 0, 0}, 1e-12) && std::abs(dv.x) > 0.8);
+    }
     // Parked and upright: no nudging (that scrubs the tyres).
     {
         LeanInput still;
