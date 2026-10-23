@@ -128,8 +128,31 @@ int main() {
                 w -= 9.81 / 0.6 * std::sin(phi) * sim.dt;   // gravity tips it further
                 phi -= w * sim.dt;
             }
-            assert(std::abs(phi) < rad(1.5));
+            assert(std::abs(phi) < rad(2));
         }
+    // With a rider the physics' roll rate bounces +-2 rad/s from tick to tick: damping on the smoothed rate seen from
+    // the lean (measured_rate) still settles it, and the bounce is passed through, not pumped.
+    {
+        double phi = rad(15), w = 0;
+        for (int k = 0; k < 120; ++k) {
+            double bounce = (k % 2 ? 2.0 : -2.0);
+            LeanInput sim;
+            sim.forward = {0, 0, 1}; sim.up = {std::sin(phi), std::cos(phi), 0};
+            sim.angular_velocity = {0, 0, w + bounce}; sim.measured_rate = w; sim.strength = 1; sim.dt = 1.0 / 60;
+            w = dot(lean_assist(sim).angular_velocity, {0, 0, 1}) - bounce;
+            w -= 9.81 / 1.0 * std::sin(phi) / 60;
+            phi -= w / 60;
+        }
+        assert(std::abs(phi) < rad(2));
+    }
+    // Parked and upright: no nudging (that scrubs the tyres).
+    {
+        LeanInput still;
+        still.forward = {0, 0, 1}; still.up = {std::sin(rad(0.3)), std::cos(rad(0.3)), 0}; still.strength = 1; still.dt = 1.0 / 60;
+        still.measured_rate = 0.01;
+        LeanOutput o2 = lean_assist(still);
+        assert(o2.active && o2.settled);
+    }
     // Without the assist the same bike falls past 60 degrees within 2 s (the sim above is a real test).
     {
         double phi = rad(15), w = 0;

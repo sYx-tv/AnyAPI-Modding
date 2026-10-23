@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <cstring>
 #include <string>
 
@@ -166,16 +167,24 @@ struct LeanInput {
     double strength;             // 0..1 (Properties: Power)
     double dt;                   // s
     double spin_sign = 1;        // +1 when a positive angular velocity about f turns u the way rotation_* does here
+    // The roll rate seen from the bike's own motion (this file's convention, rad/s), smoothed; NaN = use the
+    // physics' angular velocity instead. With a rider on, the physics' value bounces from tick to tick (the
+    // rider is a separate body pulling back on the seat), and damping on it pumps that bounce up.
+    double measured_rate = std::numeric_limits<double>::quiet_NaN();
+    double gain_scale = 1;       // 0..1: backs off when the physics fights back
+    double speed = 0;            // m/s: a moving bike is caught further over before the assist gives up
 };
 struct LeanOutput {
     Vec3 angular_velocity;       // what to set
     double lean_deg = 0;         // current lean, + = right side down
     double target_deg = 0;       // balanced lean for this turn
     bool active = false;
+    bool settled = false;        // active, but nothing to correct: leave the physics alone
 };
 constexpr double kGravity = 9.81;
 constexpr double kMaxLeanDeg = 45;
 constexpr double kGiveUpDeg = 70;  // past this it has fallen over; let it lie
+constexpr double kGiveUpMovingDeg = 85;
 constexpr double kMaxRollAccel = 80;  // rad/s^2
 // How fast the lean (radians, as lean_deg measures it) changes for a roll rate wf about the forward axis, in this
 // file's rotation convention. The mod compares it with the lean change it sees to learn the physics' spin_sign.
@@ -203,16 +212,19 @@ inline LeanOutput lean_assist(const LeanInput& in) {
     if (c_len > max_c) centripetal = centripetal * (max_c / c_len);
     Vec3 target_up = normalized(world_up * kGravity + centripetal);
     out.target_deg = std::asin(std::clamp(dot(side, target_up), -1.0, 1.0)) * 180 / kPi;
-    if (dot(u, world_up) < std::cos(rad(kGiveUpDeg))) return out;   // on its side: leave it
+    double give_up = in.speed > 3 ? kGiveUpMovingDeg : kGiveUpDeg;
+    if (dot(u, world_up) < std::cos(rad(give_up))) return out;      // on its side: leave it
     // Roll error about the forward axis (rotate u onto target_up), and the current roll rate.
     double error = dot(cross(u, target_up), f);
     // The physics may spin the other way round for the same vector: spin_sign maps between them.
     double s = in.spin_sign < 0 ? -1.0 : 1.0;
-    double rate = s * dot(in.angular_velocity, f);
+    double rate = std::isfinite(in.measured_rate) ? in.measured_rate : s * dot(in.angular_velocity, f);
     // Stiff enough to beat gravity's tip-over (about g / height = 16 /s^2 for a bike's mass 0.6 m up) with room
     // to spare at the default power, critically damped at every strength.
-    double k = 120 * in.strength, c = 2 * std::sqrt(k);
+    double k = 120 * in.strength * std::clamp(in.gain_scale, 0.0, 1.0), c = 2 * std::sqrt(k);
     double dt = std::min(in.dt, 0.05);
+    // Parked and settled: leave it be. Nudging an upright bike every tick scrubs its tyres sideways (dust).
+    if (in.speed < 0.5 && std::abs(error) < rad(0.8) && std::abs(rate) < 0.05) { out.active = true; out.settled = true; return out; }
     double delta = (k * error - c * rate) * dt;
     delta = std::clamp(delta, -kMaxRollAccel * dt, kMaxRollAccel * dt);
     out.angular_velocity = in.angular_velocity + f * (s * delta);
