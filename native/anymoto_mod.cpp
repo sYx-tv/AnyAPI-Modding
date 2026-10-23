@@ -479,6 +479,13 @@ struct Assist {
     double power = 0.6;            // Properties: Power (0..1); per session
     double slots[4] = {0, 1, 0, 0};// data: rps (stock), assist input (unconnected = on), lean, target_lean
     double last = 0;
+    // Learning which way the physics spins: the lean change seen against the one the read roll rate predicts.
+    bool have_prev = false;
+    double prev_lean = 0, prev_set_wf = 0;
+    double agree = 0, weight = 0;  // decaying sums of observed * predicted and predicted^2
+    double sign = 1;
+    double kept = 0, kept_n = 0;   // how much of the roll rate we set is still there next tick (1 = all)
+    double next_log = 0;
 };
 std::mutex g_assist_mutex;
 std::unordered_map<const void*, Assist> g_assists;   // keyed by server component; nodes keep their address
@@ -513,19 +520,64 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
     in.up = column(world, 1);
     g_get_angular(&in.angular_velocity, physics);
     g_get_linear(&in.linear_velocity, physics);
+    const Vec3 f = normalized(in.forward);
+    const double wf = dot(in.angular_velocity, f);
+    double observed = 0, predicted = lean_rate_for(in.forward, in.up, wf);
+    {
+        std::lock_guard lock(g_assist_mutex);
+        Assist& a = g_assists[self];
+        LeanOutput probe = lean_assist(LeanInput{in.forward, in.up, {}, {}, 1, 1, 1});   // lean only
+        double lean = rad(probe.lean_deg);
+        if (a.have_prev && in.dt > 0.002 && in.dt < 0.1) {
+            observed = (lean - a.prev_lean) / in.dt;
+            // The lean change over the last tick against the roll rate the physics reports now, which moved it.
+            double p = predicted;
+            if (std::abs(p) > 0.05) {
+                a.agree = a.agree * 0.98 + observed * p;
+                a.weight = a.weight * 0.98 + p * p;
+                if (a.weight > 0.02) {
+                    double ratio = a.agree / a.weight;
+                    double sign = ratio < -0.3 ? -1 : ratio > 0.3 ? 1 : a.sign;
+                    if (sign != a.sign) log(1, "lean assist: the physics spins the other way round from this mod's maths (fit %.2f); flipped", ratio);
+                    a.sign = sign;
+                }
+            }
+            if (std::abs(a.prev_set_wf) > 0.05) {
+                a.kept += wf / a.prev_set_wf;
+                a.kept_n += 1;
+            }
+        }
+        a.prev_lean = lean;
+        a.have_prev = true;
+        in.spin_sign = a.sign;
+    }
     LeanOutput out = lean_assist(in);
-    if (out.active && std::isfinite(out.angular_velocity.x) && std::isfinite(out.angular_velocity.y) && std::isfinite(out.angular_velocity.z))
+    double set_wf = 0;
+    if (out.active && std::isfinite(out.angular_velocity.x) && std::isfinite(out.angular_velocity.y) && std::isfinite(out.angular_velocity.z)) {
         g_set_angular(physics, &out.angular_velocity);
+        set_wf = dot(out.angular_velocity, f);
+    }
+    bool log_now = false;
+    double sign = 1, kept = -1;
     {
         std::lock_guard lock(g_assist_mutex);
         Assist& a = g_assists[self];
         a.slots[2] = out.lean_deg;
         a.slots[3] = out.target_deg;
+        a.prev_set_wf = set_wf;
+        if (now >= a.next_log) {
+            log_now = true;
+            a.next_log = now + 1.0;
+            sign = a.sign;
+            if (a.kept_n > 0) kept = a.kept / a.kept_n;
+            a.kept = a.kept_n = 0;
+        }
     }
-    static std::atomic<int> logs{4};
-    if (logs.fetch_sub(1) > 0)
-        log(0, "lean assist: lean %.1f deg, target %.1f deg, power %.1f, %s (dt %.4f s)", out.lean_deg, out.target_deg, in.strength,
-            out.active ? "correcting" : "idle", in.dt);
+    static std::atomic<int> logs{900};   // one a second for 15 minutes
+    if (log_now && logs.fetch_sub(1) > 0)
+        log(0, "lean assist: lean %.1f deg (moving %.0f deg/s), target %.1f deg, roll rate %.2f -> %.2f rad/s, spin sign %+.0f, "
+               "roll rate kept between ticks %.2f, power %.1f, %s (dt %.4f s)", out.lean_deg, observed * 180 / kPi, out.target_deg, wf,
+            set_wf, sign, kept, in.strength, out.active ? "correcting" : "idle", in.dt);
 }
 
 using get_f64_t = void (*)(double** ret, void* self, const anymaker::gc_string_view* name);

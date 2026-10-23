@@ -115,18 +115,35 @@ int main() {
     Vec3 centripetal = cross(Vec3{0, 0.6, 0}, Vec3{0, 0, 15});   // +x: the turn's centre
     // The correction rolls the top toward the centre: about +z, toward +x means negative angular velocity.
     assert(centripetal.x > 0 && dot(o.angular_velocity, {0, 0, 1}) < 0);
-    // Simulate: a bike tipped 15 degrees settles upright within 2 s at power 0.6.
+    // Simulate with gravity tipping it over (a bike's mass 0.6 m up): tipped 15 degrees, it settles upright within
+    // 2 s at power 0.6, at 60 and at 30 ticks a second, whichever way the physics spins (spin_sign).
+    for (double hz : {60.0, 30.0})
+        for (double spin : {1.0, -1.0}) {
+            double phi = rad(15), w = 0;   // our convention: +w about +z lowers phi
+            for (int k = 0; k < int(2 * hz); ++k) {
+                LeanInput sim;
+                sim.forward = {0, 0, 1}; sim.up = {std::sin(phi), std::cos(phi), 0};
+                sim.angular_velocity = {0, 0, spin * w}; sim.strength = 0.6; sim.dt = 1 / hz; sim.spin_sign = spin;
+                w = spin * dot(lean_assist(sim).angular_velocity, {0, 0, 1});
+                w -= 9.81 / 0.6 * std::sin(phi) * sim.dt;   // gravity tips it further
+                phi -= w * sim.dt;
+            }
+            assert(std::abs(phi) < rad(1.5));
+        }
+    // Without the assist the same bike falls past 60 degrees within 2 s (the sim above is a real test).
     {
         double phi = rad(15), w = 0;
-        for (int k = 0; k < 120; ++k) {
-            LeanInput sim;
-            sim.forward = {0, 0, 1}; sim.up = {std::sin(phi), std::cos(phi), 0};
-            sim.angular_velocity = {0, 0, w}; sim.strength = 0.6; sim.dt = 1.0 / 60;
-            w = dot(lean_assist(sim).angular_velocity, {0, 0, 1});
-            w += -9.81 / 0.6 * std::sin(phi) * sim.dt * 0;   // assist alone (gravity tested in game)
-            phi -= w * sim.dt;
-        }
-        assert(std::abs(phi) < rad(1.5));
+        for (int k = 0; k < 120; ++k) { w -= 9.81 / 0.6 * std::sin(phi) / 60; phi -= w / 60; if (phi > rad(60)) break; }
+        assert(phi > rad(60));
+    }
+    // lean_rate_for: +w about forward lowers the lean of a bike leaning right in this convention.
+    {
+        double l0 = lean_assist(LeanInput{{0, 0, 1}, {std::sin(rad(20)), std::cos(rad(20)), 0}, {}, {}, 1, 1, 1}).lean_deg;
+        double a = 0.01;
+        Vec3 up1 = Vec3{std::sin(rad(20) - a), std::cos(rad(20) - a), 0};   // turned by +a about +z
+        double l1 = lean_assist(LeanInput{{0, 0, 1}, up1, {}, {}, 1, 1, 1}).lean_deg;
+        double predicted = lean_rate_for({0, 0, 1}, {std::sin(rad(20)), std::cos(rad(20)), 0}, 1) * a * 180 / kPi;
+        assert(near(l1 - l0, predicted, 0.01));
     }
 
     // Definitions: five parts, the wheel parts with 12 moving meshes, names the game shows.

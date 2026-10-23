@@ -165,6 +165,7 @@ struct LeanInput {
     Vec3 linear_velocity;        // m/s, world
     double strength;             // 0..1 (Properties: Power)
     double dt;                   // s
+    double spin_sign = 1;        // +1 when a positive angular velocity about f turns u the way rotation_* does here
 };
 struct LeanOutput {
     Vec3 angular_velocity;       // what to set
@@ -175,6 +176,16 @@ struct LeanOutput {
 constexpr double kGravity = 9.81;
 constexpr double kMaxLeanDeg = 45;
 constexpr double kGiveUpDeg = 70;  // past this it has fallen over; let it lie
+constexpr double kMaxRollAccel = 80;  // rad/s^2
+// How fast the lean (radians, as lean_deg measures it) changes for a roll rate wf about the forward axis, in this
+// file's rotation convention. The mod compares it with the lean change it sees to learn the physics' spin_sign.
+inline double lean_rate_for(Vec3 forward, Vec3 up, double wf) {
+    const Vec3 world_up{0, 1, 0};
+    Vec3 f = normalized(forward), u = normalized(up);
+    double l = dot(normalized(cross(u, f)), world_up);
+    double c = std::sqrt(std::max(1e-6, 1 - l * l));
+    return wf * dot(cross(cross(f, u), f), world_up) / c;
+}
 inline LeanOutput lean_assist(const LeanInput& in) {
     LeanOutput out;
     out.angular_velocity = in.angular_velocity;
@@ -195,12 +206,16 @@ inline LeanOutput lean_assist(const LeanInput& in) {
     if (dot(u, world_up) < std::cos(rad(kGiveUpDeg))) return out;   // on its side: leave it
     // Roll error about the forward axis (rotate u onto target_up), and the current roll rate.
     double error = dot(cross(u, target_up), f);
-    double rate = dot(in.angular_velocity, f);
-    double k = 40 * in.strength, c = 2 * std::sqrt(k);            // critically damped at every strength
+    // The physics may spin the other way round for the same vector: spin_sign maps between them.
+    double s = in.spin_sign < 0 ? -1.0 : 1.0;
+    double rate = s * dot(in.angular_velocity, f);
+    // Stiff enough to beat gravity's tip-over (about g / height = 16 /s^2 for a bike's mass 0.6 m up) with room
+    // to spare at the default power, critically damped at every strength.
+    double k = 120 * in.strength, c = 2 * std::sqrt(k);
     double dt = std::min(in.dt, 0.05);
     double delta = (k * error - c * rate) * dt;
-    delta = std::clamp(delta, -30 * dt, 30 * dt);                 // at most 30 rad/s^2
-    out.angular_velocity = in.angular_velocity + f * delta;
+    delta = std::clamp(delta, -kMaxRollAccel * dt, kMaxRollAccel * dt);
+    out.angular_velocity = in.angular_velocity + f * (s * delta);
     out.active = true;
     return out;
 }
