@@ -532,7 +532,7 @@ struct Assist {
     double sign = 1;
     double kept = 0, kept_n = 0;   // how much of the roll rate we set is still there next tick (1 = all), for the log
     double kept_ema = 1;           // the same, smoothed: below 0 the physics throws the roll back (a rider on board)
-    double gain = 1;               // backs off while kept_ema is below 0, recovers when it is healthy
+    double gain = 1;               // full strength always: backing off with a rider on left the bike to fall
     double rate_f = 0;             // roll rate from the bike's own lean change, lightly smoothed
     bool have_rate = false;
     double next_log = 0;
@@ -599,8 +599,6 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
                 a.kept_n += 1;
                 a.kept_ema = a.kept_ema * 0.9 + k * 0.1;
             }
-            if (a.kept_ema < 0) a.gain = std::max(0.25, a.gain * 0.93);
-            else if (a.kept_ema > 0.5) a.gain = std::min(1.0, a.gain * 1.01);
             double per_rad = lean_rate_for(in.forward, in.up, 1);
             if (std::abs(per_rad) > 0.3) {
                 double r = observed / per_rad;
