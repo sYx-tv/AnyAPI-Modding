@@ -9,7 +9,7 @@ two-wheeler around it:
 
 | Part | What it does |
 | --- | --- |
-| Motorcycle Fork | Front suspension. Takes the Motorcycle Wheel, steers up to 30 degrees from the steering links, brakes from the brake link, 14 cm of travel. The fork legs slide as it compresses. |
+| Motorcycle Fork | Front suspension. Takes the Motorcycle Wheel, steers up to 30 degrees from the steering links, brakes from the brake link, 14 cm of travel. The legs are drawn with a 25 degree rake and slide as it compresses. |
 | Motorcycle Swingarm | Rear suspension. Takes the Motorcycle Wheel, brakes, 12 cm of travel. The arm swings and the shock compresses. Drive comes in through the torque face on its side at the pivot. |
 | Lean Assist | Keeps the bike upright and leans it into turns. **Power** (0 to 1, default 0.6) is in the Properties tool. The data input `assist` switches it off at 0 (unconnected = on); outputs `lean` and `target_lean` in degrees. |
 | Motorcycle Seat | A saddle with the normal seat control faces. |
@@ -43,6 +43,7 @@ leaning into a turn by speed and turn rate). It gives up past 70 degrees, so a c
 | --- | --- |
 | Fork and swingarm accept and spin the Motorcycle Wheel, suspension, steering, brakes, drive through the torque face | Likely: the same game code as the stock wheel, with our tuning table |
 | Moving fork legs, swingarm and shock | Likely |
+| Raked fork | Drawing only: the game moves and steers a wheel along the part's whole axes, so the tyre still travels straight up and steers about a vertical axis. At full lock and full compression the drawn axle is within about 3 cm of the tyre |
 | Lean Assist holding the bike up | Likely: needs tuning in game |
 | Handlebars turning, hands on the grips | Unproven: the hand placement hook is new |
 | A straddling rider pose | Not possible yet: the game has only two seated poses (Properties: Pose) |

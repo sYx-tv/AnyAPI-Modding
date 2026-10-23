@@ -111,6 +111,31 @@ inline WheelTuning swingarm_tuning() { return {{0, -0.12, 0.52}, 0.12, 0, kMotor
 constexpr double kPi = 3.14159265358979323846;
 inline double rad(double deg) { return deg * kPi / 180; }
 
+// Fork rake (drawing only). The game moves and steers a wheel along whole axes of the part (its tuning rotation is
+// an integer matrix), so the tyre travels straight up and steers about a vertical axis. The fork is drawn raked:
+// the legs run from the steering head, set back up the raked steering axis, to wherever the axle is, and the whole
+// fork turns about the raked axis. At rest the axle sits on that axis, so nothing is off there; compressed and at
+// full lock the fork's axle ends up within about 3 cm of the game's.
+constexpr double kForkRakeDeg = 25;
+constexpr double kForkLength = 0.75;                     // axle to steering head (top yoke) at rest, along the axis
+inline Vec3 fork_head() {
+    Vec3 t = fork_tuning().tyre;
+    return {t.x, t.y + kForkLength * std::cos(rad(kForkRakeDeg)), t.z - kForkLength * std::sin(rad(kForkRakeDeg))};
+}
+struct ForkFrames { Mat34 upper, lower; };              // upper: origin at the head, legs down -y; lower: origin at the axle, legs up +y
+// axle: the tyre centre in the part frame (the game's x and z stay put; y moves with the suspension).
+// steer: the steering angle in radians, as the game turns the tyre about +y.
+inline ForkFrames fork_frames(Vec3 axle, double steer) {
+    Vec3 h = fork_head();
+    Vec3 d = axle - h;
+    double leg = length(d);
+    double beta = leg > 1e-6 ? std::atan2(-d.z, -d.y) : -rad(kForkRakeDeg);
+    double rake = rad(kForkRakeDeg);
+    Mat34 turn = compose(compose(rotation_x(-rake), rotation_y(steer)), rotation_x(rake));   // about the raked axis
+    Mat34 upper = compose(compose(translation(h), turn), rotation_x(beta));
+    return {upper, compose(upper, translation({0, -leg, 0}))};
+}
+
 // Swingarm drawing: pivot at the frame face, shock from a bracket above the pivot to 55% along the arm.
 constexpr Vec3 kSwingarmPivot{0, 0, 0.04};
 constexpr Vec3 kShockTop{0, 0.24, 0.10};
@@ -186,10 +211,16 @@ struct MeshPaths {
     std::string lean_assist, seat, handlebars_base, handlebars_bars;
 };
 
-inline std::string dyn(const std::string& path, Vec3 pos) {
+inline std::string dyn(const std::string& path, Vec3 pos, const Mat34* rot = nullptr) {
     char b[64];
     std::snprintf(b, sizeof b, "%.3f, %.3f, %.3f", pos.x, pos.y, pos.z);
-    return "{\"path\": \"" + path + "\", \"pos\": [" + b + "]}";
+    std::string s = "{\"path\": \"" + path + "\", \"pos\": [" + b + "]";
+    if (rot) {
+        s += ", \"preview_rot\": [";
+        for (int i = 0; i < 9; ++i) { std::snprintf(b, sizeof b, "%s%.6f", i ? ", " : "", rot->m[i]); s += b; }
+        s += "]";
+    }
+    return s + "}";
 }
 // Twelve moving meshes, like the stock wheel: other game code may ask a wheel for any of them. Ours use the first
 // three; the rest are a hidden speck inside the head.
@@ -201,15 +232,18 @@ inline std::string wheel_meshes(const std::string& a, Vec3 pa, const std::string
 
 inline std::string definitions_json(const MeshPaths& m) {
     WheelTuning f = fork_tuning();
+    ForkFrames rest = fork_frames(f.tyre, 0);
+    std::string fork_meshes = dyn(m.fork_steer, fork_head(), &rest.upper) + ", " + dyn(m.fork_lower, f.tyre, &rest.lower);
+    for (int i = 2; i < 12; ++i) fork_meshes += ", " + dyn(m.hidden, {0, 0, 0});
     std::string wheel_common = R"("class": "wheel", "category": "wheel", "tags_generated": "interactable,mechanical,port,torque,", "inspection_geometry": [], "mateable_port_types": 2, "data_descriptors": [{"type": "type_f64_output", "name": "brake_factor"}, {"type": "type_f64_output", "name": "rps"}], "tech_tier": 2, "spawn_probability": 0.3, "loot_group": "mechanical", "constraint_orientations": [], "force_emitter_element_rotor": {"blades": []})";
     std::string fork = std::string(R"({"id": ")") + kForkId + R"(", "name": "Motorcycle Fork", "description": "Fits the Motorcycle Wheel. Place it on the front face of the bike's frame. Steers up to 30 degrees from the steering links (left and right on the mounting face) and brakes from the brake link above them. 14 cm of travel.", )" + wheel_common +
-        R"(, "zones": [{"bounds_min": [-1, -1, 0], "bounds_max": [1, 1, 1]}, {"bounds_min": [-1, 0, 2], "bounds_max": [1, 0, 4]}, {"bounds_min": [-2, -1, 5], "bounds_max": [2, 0, 6]}, {"bounds_min": [-2, -4, 5], "bounds_max": [-2, -2, 6]}, {"bounds_min": [2, -4, 5], "bounds_max": [2, -2, 6]}], )"
+        R"(, "zones": [{"bounds_min": [-1, -1, 0], "bounds_max": [1, 1, 1]}, {"bounds_min": [-1, 1, 1], "bounds_max": [1, 3, 2]}, {"bounds_min": [-2, 2, 2], "bounds_max": [2, 3, 2]}, {"bounds_min": [-2, -1, 5], "bounds_max": [2, 0, 6]}, {"bounds_min": [-2, -4, 5], "bounds_max": [-2, -3, 5]}, {"bounds_min": [-2, -2, 4], "bounds_max": [-2, -1, 4]}, {"bounds_min": [-2, 0, 3], "bounds_max": [-2, 1, 3]}, {"bounds_min": [2, -4, 5], "bounds_max": [2, -3, 5]}, {"bounds_min": [2, -2, 4], "bounds_max": [2, -1, 4]}, {"bounds_min": [2, 0, 3], "bounds_max": [2, 1, 3]}], )"
         R"("interaction_zones": [{"bounds_min": [-0.1, -0.5, 0.34], "bounds_max": [0.1, -0.3, 0.54]}], )"
         R"("surfaces": [{"id": "torque", "dir": 4, "type": "torque"}, {"pos": [0, 1, 0], "dir": 4, "gender": 2, "type": "mechanical"}, {"pos": [1, 0, 0], "dir": 4, "gender": 2, "type": "mechanical"}, {"pos": [-1, 0, 0], "dir": 4, "gender": 2, "type": "mechanical"}, {"pos": [0, -1, 0], "dir": 4, "gender": 2, "type": "port"}], )"
         R"("logic_nodes": [{"id": "steering_pos", "pos": [-1, 0, 0], "direction": 4, "type": "mechanical_in"}, {"id": "steering_neg", "pos": [1, 0, 0], "direction": 4, "type": "mechanical_in"}, {"id": "brake", "pos": [0, 1, 0], "direction": 4, "type": "mechanical_in"}], )"
         R"("mesh_static": {"mesh_path": ")" + m.fork_base + R"("}, "meshes_dynamic": [)" +
-        wheel_meshes(m.fork_steer, {0, 0, f.tyre.z}, m.fork_lower, f.tyre, m.hidden, {0, 0, 0}, m.hidden) +
-        R"(], "bounds_override_min": [-3, -10, 0], "bounds_override_max": [3, 2, 10]})";
+        fork_meshes +
+        R"(], "bounds_override_min": [-3, -10, 0], "bounds_override_max": [3, 5, 10]})";
     std::string swing = std::string(R"({"id": ")") + kSwingarmId + R"(", "name": "Motorcycle Swingarm", "description": "Fits the Motorcycle Wheel. Place it on the back face of the bike's frame. Drive from the torque face on its right side at the pivot (a pulley wheel there takes a belt from an engine wheel). Brake link on the mounting face. 12 cm of travel.", )" + wheel_common +
         R"(, "zones": [{"bounds_min": [-1, -1, 0], "bounds_max": [1, 1, 1]}, {"bounds_min": [0, 2, 0], "bounds_max": [0, 3, 1]}, {"bounds_min": [-2, -1, 2], "bounds_max": [-2, 0, 5]}, {"bounds_min": [2, -1, 2], "bounds_max": [2, 0, 5]}], )"
         R"("interaction_zones": [{"bounds_min": [-0.1, -0.22, 0.42], "bounds_max": [0.1, -0.02, 0.62]}], )"

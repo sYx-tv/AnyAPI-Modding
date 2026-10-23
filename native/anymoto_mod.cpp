@@ -1,7 +1,7 @@
 // AnyMoto: motorcycle parts for the stock Motorcycle Wheel item.
 //
 //   Motorcycle Fork      a wheel part placed on the front face of a bike's frame: steers from the steering links,
-//                        brakes from the brake link, 14 cm of travel; sliding fork legs and a mudguard.
+//                        brakes from the brake link, 14 cm of travel; raked sliding fork legs and a mudguard.
 //   Motorcycle Swingarm  a wheel part placed on the back face: drive from the torque face on its side at the pivot
 //                        (a pulley wheel there takes a belt from an engine wheel), 12 cm of travel; the arm swings
 //                        and the shock compresses.
@@ -406,8 +406,9 @@ void hk_wheel_render(const void* self, const Mat34* transform, void* out) {
         // The game steers the tyre by R * rotation_y(angle) in the tuning's rotated frame; the same in the part frame.
         Mat34 r = rotation_of(g_rotation[0]);
         Mat34 steer = compose(compose(r, rotation_y(steering_angle_of(steering))), transpose_rotation(r));
-        add_dynamic(out, definition, 0, compose(render, compose(translation({0, 0, fork_tuning().tyre.z}), steer)));
-        add_dynamic(out, definition, 1, compose(render, compose(translation(tyre), steer)));
+        ForkFrames f = fork_frames(tyre, steering_angle_of(steer));
+        add_dynamic(out, definition, 0, compose(render, f.upper));
+        add_dynamic(out, definition, 1, compose(render, f.lower));
     } else {
         add_dynamic(out, definition, 0, compose(render, compose(translation(kSwingarmPivot), rotation_x(swingarm_angle(tyre)))));
         Vec3 along = tyre - kSwingarmPivot;

@@ -65,6 +65,25 @@ int main() {
     Vec3 grip0 = apply(bars_frame(0), kGripRight), grip1 = apply(bars_frame(1), kGripRight);
     assert(grip0.x > 0.25 && std::abs(grip1.z - grip0.z) > 0.1);
 
+    // Fork rake: at rest the legs run from the head down the raked axis to the axle; compressed, the lower frame
+    // still lands on the axle; steering turns about the raked axis, so the head stays put.
+    {
+        Vec3 tyre = fork_tuning().tyre, head = fork_head();
+        assert(head.y > tyre.y + 0.6 && head.z < tyre.z - 0.25);
+        ForkFrames rest = fork_frames(tyre, 0);
+        assert(near(column(rest.upper, 3), head) && near(column(rest.lower, 3), tyre, 1e-9));
+        Vec3 up_leg = column(rest.upper, 1);   // +y of the upper frame points up the legs, tipped back by the rake
+        assert(near(std::atan2(-up_leg.z, up_leg.y), rad(kForkRakeDeg), 1e-9));
+        Vec3 squashed = tyre + Vec3{0, 0.14, 0};
+        assert(near(column(fork_frames(squashed, 0).lower, 3), squashed, 1e-9));
+        ForkFrames lock = fork_frames(tyre, rad(30));
+        assert(near(column(lock.upper, 3), head, 1e-9) && near(column(lock.lower, 3), tyre, 1e-9));
+        Vec3 axle_dir = column(lock.lower, 0);   // the axle swings toward the steering, mostly level
+        assert(std::abs(axle_dir.z) > 0.4 && std::abs(axle_dir.y) < 0.25);
+        Vec3 off = column(fork_frames(squashed, rad(30)).lower, 3) - squashed;
+        assert(length(off) < 0.035);
+    }
+
     // Lean assist: upright and going straight = no correction; tipped right = pushed back left; strength 0 = off.
     LeanInput in;
     in.forward = {0, 0, 1}; in.up = {0, 1, 0}; in.strength = 1; in.dt = 1.0 / 60;
@@ -118,6 +137,7 @@ int main() {
     size_t fork = json.find(kForkId), swing = json.find(kSwingarmId);
     size_t count = 0;
     for (size_t p = json.find("\"path\"", fork); p != std::string::npos && p < swing; p = json.find("\"path\"", p + 1)) ++count;
+    assert(json.find("preview_rot", fork) < swing);
     assert(count == 12);
     assert(json.find("type_f64_input\", \"name\": \"assist\"") != std::string::npos);
     int depth = 0;

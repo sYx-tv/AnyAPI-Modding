@@ -104,54 +104,54 @@ inline std::vector<uint8_t> encode_mesh(const Mesh& m, const std::string& name) 
 
 // ------------------------------------------------------------------------------------------- fork
 constexpr double kForkLegX = 0.135;        // tyre half width 0.08 + slider radius + 2 cm
-// Static: the head that bolts to the frame's front face, and the arm over to the steering head.
+// Static: the block that bolts to the frame's front face and the neck up to the steering head.
 inline Mesh fork_base() {
     Mesh m;
-    WheelTuning t = fork_tuning();
+    Vec3 h = fork_head();
     m.box({-0.07, -0.11, -0.04}, {0.07, 0.11, 0.10}, kPaint0);
-    m.box({-0.05, 0.00, 0.10}, {0.05, 0.08, t.tyre.z - 0.03}, kPaint0);
-    m.box({-0.06, -0.02, t.tyre.z - 0.10}, {0.06, 0.10, t.tyre.z - 0.03}, kIron);
+    m.box({-0.05, 0.05, 0.00}, {0.05, h.y + 0.03, h.z - 0.035}, kPaint0);
     for (int s = -1; s <= 1; s += 2)
         for (int r = -1; r <= 1; r += 2) m.prism(2, {s * 0.045, r * 0.07, 0.10}, 0.009, 0, 0.008, kBolt, 6);
     return m;
 }
-// Turns with the steering, about the steering axis (origin of this mesh): head tube, yokes, chrome stanchions.
+// Upper fork: turns with the steering about the raked axis. Origin at the steering head (top yoke), the legs run
+// down -y (fork_frames lines -y up with the axle): head tube, yokes, chrome stanchions.
 inline Mesh fork_steer() {
     Mesh m;
-    WheelTuning t = fork_tuning();
-    m.prism(1, {0, 0, 0}, 0.038, -0.14, 0.10, kIron);
-    m.box({-kForkLegX - 0.035, 0.03, -0.05}, {kForkLegX + 0.035, 0.08, 0.05}, kPaint1);
-    m.box({-kForkLegX - 0.035, -0.16, -0.05}, {kForkLegX + 0.035, -0.11, 0.05}, kPaint1);
+    m.prism(1, {0, 0, 0}, 0.038, -0.16, 0.06, kIron);
+    m.box({-kForkLegX - 0.035, 0.00, -0.05}, {kForkLegX + 0.035, 0.05, 0.05}, kPaint1);
+    m.box({-kForkLegX - 0.035, -0.18, -0.05}, {kForkLegX + 0.035, -0.13, 0.05}, kPaint1);
     for (int s = -1; s <= 1; s += 2) {
-        m.prism(1, {s * kForkLegX, 0, 0}, 0.022, t.tyre.y + 0.06, 0.09, kChrome, 12);
-        m.prism(1, {s * kForkLegX, 0, 0}, 0.026, 0.08, 0.10, kIron, 8);   // top cap
+        m.prism(1, {s * kForkLegX, 0, 0}, 0.022, -0.50, 0.06, kChrome, 12);
+        m.prism(1, {s * kForkLegX, 0, 0}, 0.026, 0.05, 0.07, kIron, 8);    // top cap
     }
-    m.prism(1, {0, 0, 0}, 0.02, 0.08, 0.11, kBolt, 6);
+    m.prism(1, {0, 0, 0}, 0.02, 0.05, 0.08, kBolt, 6);
     return m;
 }
-// Slides with the suspension and turns with the steering. Origin = the axle.
+// Lower fork: sliders, axle, caliper and mudguard. Origin at the axle, the legs run up +y along the raked line.
 inline Mesh fork_lower() {
     Mesh m;
     for (int s = -1; s <= 1; s += 2) {
-        m.prism(1, {s * kForkLegX, 0, 0}, 0.032, -0.045, 0.17, kPaint0, 12);
-        m.prism(1, {s * kForkLegX, 0, 0}, 0.036, 0.15, 0.17, kIron, 12);           // dust seal
+        m.prism(1, {s * kForkLegX, 0, 0}, 0.032, -0.045, 0.45, kPaint0, 12);
+        m.prism(1, {s * kForkLegX, 0, 0}, 0.036, 0.43, 0.45, kIron, 12);           // dust seal
         m.box({s * kForkLegX - 0.03, -0.035, -0.035}, {s * kForkLegX + 0.03, 0.035, 0.035}, kIron);
         m.prism(0, {s * (kForkLegX + 0.032), 0, 0}, 0.014, -0.004, 0.004, kBolt, 6);
     }
     m.prism(0, {0, 0, 0}, 0.012, -kForkLegX - 0.03, kForkLegX + 0.03, kMid, 8);
-    // Brake caliper on the left leg and the mudguard over the tyre.
+    // Brake caliper behind the left leg and the mudguard over the tyre. This frame is tipped back by the rake, so
+    // the mudguard's arc is turned forward by the same angle to sit over the top of the tyre.
     m.box({-kForkLegX + 0.015, 0.03, -0.11}, {-kForkLegX + 0.05, 0.09, -0.04}, kIron);
     const double r0 = kMotorcycleTyreRadius + 0.04, r1 = r0 + 0.012;
     for (int k = 0; k < 10; ++k) {
-        double a0 = rad(-35 + 11 * k), a1 = rad(-35 + 11 * (k + 1));   // from behind (-z) over the top to the front
+        double a0 = rad(-35 + kForkRakeDeg + 11 * k), a1 = rad(-35 + kForkRakeDeg + 11 * (k + 1));   // behind, over the top, to the front
         Vec3 o0{0, r0 * std::cos(a0), r0 * std::sin(a0)}, o1{0, r0 * std::cos(a1), r0 * std::sin(a1)};
         Vec3 p0{0, r1 * std::cos(a0), r1 * std::sin(a0)}, p1{0, r1 * std::cos(a1), r1 * std::sin(a1)};
         const double w = 0.065;
         m.quad(p0 + Vec3{-w, 0, 0}, p0 + Vec3{w, 0, 0}, p1 + Vec3{w, 0, 0}, p1 + Vec3{-w, 0, 0}, kPaint1);
         m.quad(o0 + Vec3{w, 0, 0}, o0 + Vec3{-w, 0, 0}, o1 + Vec3{-w, 0, 0}, o1 + Vec3{w, 0, 0}, kPaint1);
     }
-    for (int s = -1; s <= 1; s += 2)   // stays from the sliders to the mudguard
-        m.box({s < 0 ? -kForkLegX : 0.06, 0.14, -0.01}, {s < 0 ? -0.06 : kForkLegX, 0.155, 0.01}, kMid);
+    for (int s = -1; s <= 1; s += 2)   // stays from the sliders to the mudguard's edges
+        m.box({s < 0 ? -kForkLegX + 0.03 : 0.06, r0 - 0.012, -0.012}, {s < 0 ? -0.06 : kForkLegX - 0.03, r0 + 0.004, 0.012}, kMid);
     return m;
 }
 
