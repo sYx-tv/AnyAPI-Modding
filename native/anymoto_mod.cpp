@@ -487,7 +487,7 @@ struct Assist {
     double kept = 0, kept_n = 0;   // how much of the roll rate we set is still there next tick (1 = all), for the log
     double kept_ema = 1;           // the same, smoothed: below 0 the physics throws the roll back (a rider on board)
     double gain = 1;               // backs off while kept_ema is below 0, recovers when it is healthy
-    double rate_f = 0;             // roll rate from the bike's own lean change, smoothed
+    double rate_f = 0;             // roll rate from the bike's own lean change, lightly smoothed
     bool have_rate = false;
     double next_log = 0;
 };
@@ -558,7 +558,7 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
             double per_rad = lean_rate_for(in.forward, in.up, 1);
             if (std::abs(per_rad) > 0.3) {
                 double r = observed / per_rad;
-                double alpha = in.dt / (in.dt + 0.05);
+                double alpha = in.dt / (in.dt + 0.015);
                 a.rate_f = a.have_rate ? a.rate_f + alpha * (r - a.rate_f) : r;
                 a.have_rate = true;
             }
@@ -567,7 +567,9 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
         a.have_prev = true;
         in.spin_sign = a.sign;
         in.gain_scale = a.gain;
-        if (a.have_rate) in.measured_rate = a.rate_f;
+        // The physics' own roll rate has no lag, so it damps best; only while the physics throws the roll back (a
+        // rider on board) does the rate seen from the lean take over.
+        if (a.have_rate && a.kept_ema < 0.3) in.measured_rate = a.rate_f;
     }
     LeanOutput out = lean_assist(in);
     double set_wf = 0;
