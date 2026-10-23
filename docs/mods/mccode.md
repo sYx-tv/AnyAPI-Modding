@@ -120,6 +120,13 @@ the nodes again replaces the hand-made changes (Ctrl+Z in the Code view brings t
 - **This MC**: this microcontroller's inputs, outputs, variables, lists, functions and types, read from your code
   as you type, plus the ports the game reports. Click a name to insert it.
 - **Watch**: live variable and port values from the game's debugger, while the program runs or is paused.
+- **Parts**: a guide to setting up a microcontroller. It covers wiring and naming parts, reading and setting a
+  channel, and on_tick, with examples you can click to insert. Below the guide are the channels of the parts wired
+  to this microcontroller, then every part in the game that has channels, grouped by category. Click a part to see
+  each channel's type and the game's own description of it, and click a channel to insert `Part_Name.channel`.
+  The list is read at run time from your game's part definitions through AnyAPI's item catalog, so it follows game
+  updates and includes parts that other mods add from their files. Parts that aren't listed, like gas and liquid
+  valves, have no channels: wire their input to a part that has a channel and an output, such as the stepper motor.
 
 ## Debugging
 
@@ -169,5 +176,6 @@ changes, Enter opens its settings, Home recentres, Esc goes back to the blocks.
 ## Log
 
 MCCode writes to `anymaker_modding.log` beside `game.exe`: `Ready after N s` once it found the game functions,
-then a line for each program it reads or loads. `line map off` means breakpoints and the running line were
+then a line for each program it reads or loads. `PARTS_GUIDE parts_with_channels=N` counts the parts the Parts
+tab found the first time it opened. `line map off` means breakpoints and the running line were
 turned off for that script.
