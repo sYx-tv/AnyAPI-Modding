@@ -20,6 +20,7 @@
 #include <windows.h>
 #include "anyapi_services_v1.h"
 #include "anyapi_gpu_draw_v1.h"
+#include "anyapi_item_catalog_v1.h"
 #include "anyapi_experimental.hpp"
 #include "mccode_bindings.h"
 #include "route_cell.h"
@@ -28,6 +29,7 @@
 #include "mccode_complete.h"
 #include "mccode_nodes.h"
 #include "mccode_scripts.h"
+#include "mccode_parts.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -46,6 +48,7 @@ constexpr const char* kTempScript = "mccode_view";   // name of the Save round t
 
 AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
+const AnyItemCatalogV1* catalog;   // part definitions for the Parts tab (optional)
 std::atomic<bool> g_ready{false}, g_stop{false};
 
 void log(int level, const char* fmt, ...) {
@@ -186,7 +189,8 @@ struct Snapshot {
 struct State {
     // view
     bool open = false, editor_visible = false, captured = false;
-    int tab = 0;                 // side panel: 0 commands, 1 this microcontroller, 2 watch
+    int tab = 0;                 // side panel: 0 commands, 1 this microcontroller, 2 watch, 3 parts guide
+    int part_open = -1;          // Parts tab: the part whose channels are shown
     float side_scroll = 0;
     int scroll_line = 0, scroll_col = 0;
     bool follow_cursor = true;
@@ -465,11 +469,12 @@ struct Box {
     float x = 0, y = 0, w = 0, h = 0;
     bool contains(float px, float py) const { return px >= x && px < x + w && py >= y && py < y + h; }
 };
+constexpr int kTabCount = 4;
 enum Btn { kApply, kReload, kUndo, kPause, kStepIn, kStepOver, kStepOut, kCopy, kPaste, kMode, kClose, kBtnCount };
 const wchar_t* kBtnLabel[kBtnCount] = {L"▶ Apply", L"Reload", L"Undo", L"Pause", L"Step in", L"Step over", L"Step out", L"Copy all", L"Paste", L"Nodes", L"×"};
 struct Layout {
     float s = 1, font = 15, line_h = 20, cw = 9;
-    Box button, panel, toolbar, btn[kBtnCount], editor, gutter, text, diag, side, tabs[3], side_body;
+    Box button, panel, toolbar, btn[kBtnCount], editor, gutter, text, diag, side, tabs[kTabCount], side_body;
     int rows = 1, cols = 1;
 };
 Layout layout(float w, float h) {
@@ -491,7 +496,7 @@ Layout layout(float w, float h) {
     float top = l.toolbar.y + l.toolbar.h;
     float side_w = std::min(420 * s, l.panel.w * .34f);
     l.side = {l.panel.x + l.panel.w - side_w, top, side_w, l.panel.y + l.panel.h - top};
-    for (int i = 0; i < 3; ++i) l.tabs[i] = {l.side.x + 8 * s + i * (side_w - 16 * s) / 3, top + 6 * s, (side_w - 16 * s) / 3 - 4 * s, 28 * s};
+    for (int i = 0; i < kTabCount; ++i) l.tabs[i] = {l.side.x + 8 * s + i * (side_w - 16 * s) / kTabCount, top + 6 * s, (side_w - 16 * s) / kTabCount - 4 * s, 28 * s};
     l.side_body = {l.side.x + 8 * s, top + 40 * s, side_w - 16 * s, l.side.h - 48 * s};
     l.font = 15 * s;
     l.line_h = 20 * s;
@@ -840,8 +845,88 @@ void set_clipboard(const std::string& s) {
 }
 
 // Side panel rows, built the same way for drawing and clicking.
-enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode, InsertScript };
+enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode, InsertScript, TogglePart };
 struct SideRow { std::string label, help, insert; bool header = false; uint32_t color = 0xffe8ecef; SideAct act = SideAct::None; int arg = 0; };
+// Parts tab: the setup guide, the parts wired to this microcontroller, then every part that has channels.
+const std::vector<parts::Part>& all_parts() {
+    static std::vector<parts::Part> list;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        if (!catalog) return;
+        uint32_t n = std::min<uint32_t>(catalog->count(), 10000), bad = 0;
+        std::string json;
+        for (uint32_t i = 0; i < n; ++i) {
+            AnyItemDefinitionV1 d;
+            if (!catalog->copy(i, &d) || !(d.valid_fields & ANY_ITEM_VEHICLE_COMPONENT)) continue;
+            uint32_t need = 0;
+            catalog->definition_json(i, nullptr, 0, &need);
+            if (!need || need > (1u << 20)) continue;
+            json.assign(need, '\0');
+            if (!catalog->definition_json(i, json.data(), need, &need)) continue;
+            json.resize(strnlen(json.data(), json.size()));
+            parts::Part part{d.id, d.name[0] ? d.name : d.id, d.category, {}};
+            if (parts::parse_part(json, part)) list.push_back(std::move(part)); else ++bad;
+        }
+        parts::sort_parts(list);
+        size_t channels = 0;
+        for (auto& p : list) channels += p.channels.size();
+        log(1, "PARTS_GUIDE parts_with_channels=%zu channels=%zu unreadable=%u", list.size(), channels, bad);
+    });
+    return list;
+}
+const parts::Channel* find_channel(const std::string& name) {
+    for (auto& p : all_parts())
+        for (auto& c : p.channels) if (c.name == name) return &c;
+    return nullptr;
+}
+void parts_rows(std::vector<SideRow>& rows) {
+    constexpr size_t kWrap = 52;
+    constexpr uint32_t kDimText = 0xff8b96a0, kCode = 0xff8fd18f;
+    rows.push_back({"Set up a microcontroller", "", "", true});
+    for (auto& line : parts::setup_guide()) {
+        for (auto& w : parts::wrap(line.text, kWrap)) rows.push_back({w, "", "", false, 0xffe8ecef});
+        if (line.code) {
+            std::string first = line.code;
+            first = first.substr(0, first.find('\n'));
+            first.erase(std::remove(first.begin(), first.end(), '$'), first.end());
+            rows.push_back({"   " + first, "click to insert", line.code, false, kCode});
+        }
+    }
+    rows.push_back({"Wired to this MC", "", "", true});
+    if (g.snap.part_ports.empty()) rows.push_back({"Nothing wired yet", "", "", false, kDimText});
+    for (auto& pp : g.snap.part_ports) {
+        if (pp.part.empty() || pp.channel.empty()) continue;
+        const parts::Channel* c = find_channel(pp.channel);
+        std::string help = std::string(pp.input ? "read" : "set") + (c && !c->type.empty() ? ", " + c->type : "");
+        rows.push_back({pp.part + "." + pp.channel, help, pp.part + "." + pp.channel, false, pp.input ? 0xff7cc8ff : 0xffffb86c});
+        if (c && !c->doc.empty())
+            for (auto& w : parts::wrap(c->doc, kWrap)) rows.push_back({"   " + w, "", "", false, kDimText});
+    }
+    auto& list = all_parts();
+    if (!catalog || list.empty()) {
+        rows.push_back({"Every part", "", "", true});
+        rows.push_back({"The part list needs AnyAPI's item catalog, which didn't load.", "", "", false, kDimText});
+        return;
+    }
+    rows.push_back({"Every part with channels (" + std::to_string(list.size()) + ")", "", "", true});
+    rows.push_back({"Click a part to see what code can read and set on it.", "", "", false, kDimText});
+    std::string category;
+    for (size_t i = 0; i < list.size(); ++i) {
+        auto& p = list[i];
+        if (p.category != category) { category = p.category; if (!category.empty()) rows.push_back({category, "", "", false, 0xffc586c0}); }
+        bool open = g.part_open == int(i);
+        rows.push_back({(open ? "- " : "+ ") + p.name, std::to_string(p.channels.size()) + (p.channels.size() == 1 ? " channel" : " channels"),
+                        "", false, 0xfff1d36b, SideAct::TogglePart, int(i)});
+        if (!open) continue;
+        std::string name = parts::code_name(p.name);
+        for (auto& c : p.channels) {
+            const char* hint = parts::type_hint(c.type);
+            rows.push_back({"   " + name + "." + c.name, c.type + (*hint ? std::string(": ") + hint : std::string()), name + "." + c.name, false, 0xffe8ecef});
+            for (auto& w : parts::wrap(c.doc, kWrap)) rows.push_back({"      " + w, "", "", false, kDimText});
+        }
+    }
+}
+
 std::vector<SideRow> side_rows() {
     std::vector<SideRow> rows;
     if (g.nodes_mode && g.tab == 0) {
@@ -913,6 +998,8 @@ std::vector<SideRow> side_rows() {
             for (auto& p : g.snap.ports) rows.push_back({p, "", "", false, 0xffaab4bd});
         }
         if (rows.empty()) rows.push_back({"Nothing defined yet", "Add one with define var, define in or define out", ""});
+    } else if (g.tab == 3) {
+        parts_rows(rows);
     } else {
         rows.push_back({"Live values", "", "", true});
         if (g.snap.watch.empty()) rows.push_back({"No values yet", "They appear while the program runs or is paused", ""});
@@ -1355,9 +1442,9 @@ void draw(const AnyFrameV1* frame, void*) {
     }
     // side panel
     p.box(l.side, 0xff13181d, 6 * s);
-    const wchar_t* tabs[3] = {L"Commands", L"This MC", L"Watch"};
+    const wchar_t* tabs[kTabCount] = {L"Commands", L"This MC", L"Watch", L"Parts"};
     if (g.nodes_mode) { tabs[0] = L"Add node"; tabs[1] = L"Selected"; }
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < kTabCount; ++i) {
         p.box(l.tabs[i], g.tab == i ? 0xff2b333b : 0xff1b2127, 5 * s);
         p.text(l.tabs[i].x, l.tabs[i].y, l.tabs[i].w, l.tabs[i].h, tabs[i], 13 * s, g.tab == i ? kYellow : kDim, ANY_GPU_CENTER | (g.tab == i ? uint32_t(ANY_GPU_BOLD) : 0u));
     }
@@ -1692,11 +1779,14 @@ uint32_t input(const AnyInputV1* e, void*) {
         if (g.nodes_mode && e->button == 2 && l.editor.contains(x, y)) { nodes_mouse_down(l, x, y, 2); return 1; }
         if (e->button != 1) return 1;
         for (int i = 0; i < kBtnCount; ++i) if (l.btn[i].contains(x, y)) { press(i); capture(g.open); return 1; }
-        for (int i = 0; i < 3; ++i) if (l.tabs[i].contains(x, y)) { g.tab = i; g.side_scroll = 0; return 1; }
+        for (int i = 0; i < kTabCount; ++i) if (l.tabs[i].contains(x, y)) { g.tab = i; g.side_scroll = 0; return 1; }
         if (l.side_body.contains(x, y)) {
             auto rows = side_rows();
             int i = int((y - l.side_body.y + g.side_scroll) / (22 * l.s));
             if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act == SideAct::InsertScript) insert_script(rows[size_t(i)].arg);
+            else if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act == SideAct::TogglePart) {
+                g.part_open = g.part_open == rows[size_t(i)].arg ? -1 : rows[size_t(i)].arg;
+            }
             else if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act != SideAct::None) nodes_side_click(rows[size_t(i)]);
             else if (i >= 0 && i < int(rows.size()) && !rows[size_t(i)].insert.empty() && !g.nodes_mode) insert_snippet(rows[size_t(i)].insert);
             return 1;
@@ -1822,6 +1912,8 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
     if (auto services = AnyAPI_Services()) {
         auto* gd = static_cast<const AnyGpuDrawV1*>(services->query("anyapi.gpu_draw", 1));
         if (gd && gd->struct_size == sizeof(*gd) && gd->version == 1 && gd->emit && gd->register_renderer && gd->register_renderer(draw, nullptr)) gpu = gd;
+        auto* cat = static_cast<const AnyItemCatalogV1*>(services->query("anyapi.item_catalog", 1));
+        if (cat && cat->struct_size == sizeof(*cat) && cat->version == 1 && cat->count && cat->copy && cat->definition_json) catalog = cat;
     }
     if (!gpu) { log(2, "anyapi.gpu_draw is missing; MCCode needs it to draw the Code view"); return; }
     std::thread(install_hooks).detach();   // resolving scans game memory; keep it off the loader and frame threads
