@@ -12,8 +12,8 @@ two-wheeler around it:
 | Motorcycle Fork | Front suspension. Takes the Motorcycle Wheel, steers up to 30 degrees from the steering links, brakes from the brake link, 14 cm of travel. The legs are drawn with a 25 degree rake and slide as it compresses. |
 | Motorcycle Swingarm | Rear suspension. Takes the Motorcycle Wheel, brakes, 12 cm of travel. The arm swings and the shock compresses. Drive comes in through the torque face on its side at the pivot. |
 | Lean Assist | Keeps the bike upright and leans it into turns. **Power** (0 to 1, default 0.6) is in the Properties tool. The data input `assist` switches it off at 0 (unconnected = on); outputs `lean` and `target_lean` in degrees. |
-| Motorcycle Seat | A saddle with the normal seat control faces. |
-| Handlebars | The steering wheel's links on bars that turn about a raked axis. Seated hands go to the grips. |
+| Motorcycle Seat | A sculpted saddle with the normal seat control faces (front and both sides of its base). |
+| Handlebars | The steering wheel's links on bars that turn about a raked axis: steering and both pedal links on the front of the riser. Seated hands go to the grips. |
 
 ## Building a bike
 
@@ -25,6 +25,8 @@ two-wheeler around it:
 3. Place the **seat**, and the **handlebars** on the seat's front control face (or anywhere a steering wheel would
    go). Link the handlebars' steering link to the fork's steering links and the brake pedal link to the brakes.
 4. Place a **Lean Assist** anywhere on the frame with its arrow pointing forward.
+
+Every connection face carries the game's own style of marker: teal and yellow pads for mechanical links, red arrows for control faces and a hex nut for torque faces.
 
 ## How it works
 

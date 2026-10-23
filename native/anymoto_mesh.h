@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -80,6 +81,68 @@ struct Mesh {
     }
 };
 
+// ------------------------------------------------------------------------------------------- face markers
+// The game's parts show what each connection face does with a small flat marker: a dark chamfered plate with four
+// bolt heads, a teal and yellow pad for a mechanical link (teal outside on the receiving side, yellow outside on
+// the plugging side), a red arrow for a control face and a hex nut for a torque face. Drawn just proud of the face.
+constexpr Rgb kLinkTeal{30, 153, 153};
+constexpr Rgb kLinkYellow{255, 204, 49};
+constexpr Rgb kControlRed{255, 62, 0};
+enum class Marker { link_in, link_out, control, torque };
+struct FaceFrame {
+    Vec3 centre, normal, up, right;
+    FaceFrame(Vec3 c, Vec3 n, Vec3 u) : centre(c), normal(n), up(u), right(cross(u, n)) {}
+    Vec3 at(double x, double y, double lift) const { return centre + right * x + up * y + normal * lift; }
+};
+// A flat polygon given counter-clockwise as seen from outside, in face coordinates.
+inline void flat(Mesh& m, const FaceFrame& f, const std::vector<std::pair<double, double>>& pts, double lift, Rgb c) {
+    double cx = 0, cy = 0;
+    for (auto& p : pts) { cx += p.first; cy += p.second; }
+    cx /= double(pts.size()); cy /= double(pts.size());
+    uint32_t centre = m.vertex(f.at(cx, cy, lift), f.normal, c);
+    std::vector<uint32_t> ring;
+    for (auto& p : pts) ring.push_back(m.vertex(f.at(p.first, p.second, lift), f.normal, c));
+    for (size_t k = 0; k < ring.size(); ++k) m.tri(centre, ring[k], ring[(k + 1) % ring.size()]);
+}
+// An octagon with flat sides `r` from its centre, sides square to the face axes.
+inline std::vector<std::pair<double, double>> octagon(double x, double y, double r) {
+    std::vector<std::pair<double, double>> p;
+    double k = r * std::tan(kPi / 8);
+    double xs[8] = {r, k, -k, -r, -r, -k, k, r}, ys[8] = {k, r, r, k, -k, -r, -r, -k};
+    for (int i = 0; i < 8; ++i) p.push_back({x + xs[i], y + ys[i]});
+    return p;
+}
+inline std::vector<std::pair<double, double>> square(double h) { return {{h, -h}, {h, h}, {-h, h}, {-h, -h}}; }
+// A short octagonal boss standing out of the face.
+inline void boss(Mesh& m, const FaceFrame& f, double r, double lift0, double lift1, Rgb c) {
+    auto p = octagon(0, 0, r);
+    for (size_t k = 0; k < p.size(); ++k) {
+        auto& a = p[k];
+        auto& b = p[(k + 1) % p.size()];
+        m.quad(f.at(a.first, a.second, lift0), f.at(b.first, b.second, lift0), f.at(b.first, b.second, lift1), f.at(a.first, a.second, lift1), c);
+    }
+    flat(m, f, p, lift1, c);
+}
+inline void marker(Mesh& m, Vec3 centre, Vec3 normal, Vec3 up, Marker kind) {
+    FaceFrame f(centre, normalized(normal), normalized(up));
+    if (kind == Marker::torque) {
+        flat(m, f, octagon(0, 0, 0.03), 0.0008, kBolt);
+        flat(m, f, octagon(0, 0, 0.02), 0.0014, kIron);
+        boss(m, f, 0.0135, 0.0014, 0.011, kBolt);
+        return;
+    }
+    flat(m, f, {{0.03, -0.02}, {0.03, 0.02}, {0.02, 0.03}, {-0.02, 0.03}, {-0.03, 0.02}, {-0.03, -0.02}, {-0.02, -0.03}, {0.02, -0.03}}, 0.0008, kIron);
+    for (int sx = -1; sx <= 1; sx += 2)
+        for (int sy = -1; sy <= 1; sy += 2) flat(m, f, octagon(sx * 0.0195, sy * 0.0195, 0.0036), 0.0014, kind == Marker::control ? kMid : kBolt);
+    if (kind == Marker::control) {
+        flat(m, f, {{0.013, 0.0077}, {-0.013, 0.0077}, {0, -0.0148}}, 0.0014, kControlRed);
+        return;
+    }
+    bool in = kind == Marker::link_in;
+    flat(m, f, octagon(0, 0, 0.0205), 0.0014, in ? kLinkTeal : kLinkYellow);
+    flat(m, f, square(0.0083), 0.002, in ? kLinkYellow : kLinkTeal);
+}
+
 // The 32-byte attribute header of the game's static part meshes (position, colour, uv, normal), then 56 zero bytes.
 inline const uint8_t* attribute_header() {
     static const uint8_t h[88] = {3, 0, 0, 0, 1, 0, 0, 0, 5, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0};
@@ -108,10 +171,16 @@ constexpr double kForkLegX = 0.135;        // tyre half width 0.08 + slider radi
 inline Mesh fork_base() {
     Mesh m;
     Vec3 h = fork_head();
-    m.box({-0.07, -0.11, -0.04}, {0.07, 0.11, 0.10}, kPaint0);
+    m.box({-0.12, -0.04, -0.04}, {0.12, 0.04, 0.08}, kPaint0);       // cross plate: steering links on its ends
+    m.box({-0.04, -0.12, -0.04}, {0.04, 0.12, 0.08}, kPaint0);       // upright: brake link above, data port below
     m.box({-0.05, 0.05, 0.00}, {0.05, h.y + 0.03, h.z - 0.035}, kPaint0);
-    for (int s = -1; s <= 1; s += 2)
-        for (int r = -1; r <= 1; r += 2) m.prism(2, {s * 0.045, r * 0.07, 0.10}, 0.009, 0, 0.008, kBolt, 6);
+    for (int s = -1; s <= 1; s += 2) m.prism(2, {s * 0.08, 0, 0.08}, 0.009, 0, 0.008, kBolt, 6);
+    // The mounting face (-z): torque in the middle, the brake link above, a steering link either side.
+    Vec3 back{0, 0, -1}, up{0, 1, 0};
+    marker(m, {0, 0, -0.04}, back, up, Marker::torque);
+    marker(m, {0, 0.08, -0.04}, back, up, Marker::link_in);
+    marker(m, {0.08, 0, -0.04}, back, up, Marker::link_in);
+    marker(m, {-0.08, 0, -0.04}, back, up, Marker::link_in);
     return m;
 }
 // Upper fork: turns with the steering about the raked axis. Origin at the steering head (top yoke), the legs run
@@ -160,17 +229,20 @@ inline double swingarm_length() { return length(swingarm_tuning().tyre - kSwinga
 // Static: the pivot bracket on the frame's back face and the shock's top bracket.
 inline Mesh swingarm_base() {
     Mesh m;
-    m.box({-0.12, -0.08, -0.04}, {0.12, 0.08, 0.06}, kPaint0);
-    m.box({-0.035, 0.08, -0.04}, {0.035, kShockTop.y + 0.03, kShockTop.z + 0.03}, kPaint0);
+    m.box({-0.12, -0.04, -0.04}, {0.12, 0.04, 0.06}, kPaint0);       // pivot block: the drive face is its right end
+    m.box({-0.04, -0.12, -0.04}, {0.04, 0.12, 0.06}, kPaint0);       // upright: brake link above, data port below
+    m.box({-0.035, 0.12, -0.04}, {0.035, kShockTop.y + 0.03, kShockTop.z + 0.03}, kPaint0);
     m.prism(0, kShockTop, 0.016, -0.05, 0.05, kBolt, 6);
-    for (int s = -1; s <= 1; s += 2) m.prism(2, {s * 0.08, 0.05, 0.06}, 0.009, 0, 0.008, kBolt, 6);
+    // Drive in on the +x end (a pulley wheel goes here), the brake link on the mounting face above the middle.
+    marker(m, {0.12, 0, 0}, {1, 0, 0}, {0, 1, 0}, Marker::torque);
+    marker(m, {0, 0.08, -0.04}, {0, 0, -1}, {0, 1, 0}, Marker::link_in);
     return m;
 }
 // Swings about the pivot (origin); +z runs to the axle.
 inline Mesh swingarm_arm() {
     Mesh m;
     double len = swingarm_length();
-    m.prism(0, {0, 0, 0}, 0.034, -0.13, 0.13, kIron);
+    m.prism(0, {0, 0, 0}, 0.034, -0.11, 0.11, kIron);
     for (int s = -1; s <= 1; s += 2) {
         m.box({s * 0.10 - 0.016, -0.032, 0.0}, {s * 0.10 + 0.016, 0.032, len + 0.035}, kPaint0);
         m.box({s * 0.10 - 0.02, -0.02, len - 0.03}, {s * 0.10 + 0.02, 0.02, len + 0.04}, kIron);   // chain adjuster
@@ -212,15 +284,81 @@ inline Mesh lean_assist() {
 }
 
 // ------------------------------------------------------------------------------------------- seat
-// A saddle on a 3 x 2 x 7 cell base: pan, cushion with a raised back, a narrow nose at the front (+z).
+// A saddle on a 3 x 1 x 7 cell base (x +-0.12, z +-0.28): a dark pan with the seat's control faces, and a sculpted
+// cushion lofted from cross-sections: wide and stepped up at the back, a dipped rider pocket, a narrow tapered nose
+// at the front (+z). Trim (paint slot 1) piping runs round the cushion's lower edge.
+inline double seat_half_width(double z) {
+    double t = std::clamp((z + 0.02) / 0.27, 0.0, 1.0);          // 0 at the pocket, 1 at the nose tip
+    double s = t * t * (3 - 2 * t);
+    return 0.118 - 0.07 * s;
+}
+inline double seat_top(double z) {
+    struct K { double z, y; };
+    static const K keys[] = {{-0.28, 0.035}, {-0.25, 0.075}, {-0.17, 0.08}, {-0.12, 0.05}, {-0.04, 0.032}, {0.06, 0.04}, {0.18, 0.03}, {0.28, 0.0}};
+    if (z <= keys[0].z) return keys[0].y;
+    for (size_t k = 0; k + 1 < std::size(keys); ++k)
+        if (z <= keys[k + 1].z) {
+            double t = (z - keys[k].z) / (keys[k + 1].z - keys[k].z);
+            t = t * t * (3 - 2 * t);
+            return keys[k].y + (keys[k + 1].y - keys[k].y) * t;
+        }
+    return keys[std::size(keys) - 1].y;
+}
 inline Mesh seat() {
     Mesh m;
-    m.box({-0.11, -0.12, -0.27}, {0.11, -0.07, 0.27}, kIron);
-    m.box({-0.115, -0.07, -0.26}, {0.115, 0.03, 0.06}, kPaint0);
-    m.box({-0.08, -0.07, 0.06}, {0.08, 0.015, 0.20}, kPaint0);
-    m.box({-0.05, -0.07, 0.20}, {0.05, 0.0, 0.27}, kPaint0);
-    m.box({-0.115, 0.03, -0.26}, {0.115, 0.08, -0.19}, kPaint1);
-    for (int s = -1; s <= 1; s += 2) m.box({s * 0.116 - 0.002, -0.05, -0.25}, {s * 0.116 + 0.002, 0.02, 0.04}, kPaint1);   // piping
+    m.box({-0.12, -0.12, -0.28}, {0.12, -0.05, 0.28}, kIron);
+    m.box({-0.105, -0.05, -0.27}, {0.105, -0.04, 0.27}, kMid);      // cushion tray
+    const double bottom = -0.04, piping = -0.02;
+    const int sections = 22, around = 10;
+    auto ring = [&](double z) {
+        std::vector<Vec3> p;
+        double w = seat_half_width(z), top = seat_top(z), side = std::max(piping + 0.012, top - 0.035);
+        p.push_back({w, piping, z});
+        for (int k = 0; k <= around; ++k) {                       // right side up over the crown to the left side
+            double a = kPi * k / around;
+            double c = std::cos(a), sn = std::sin(a);
+            double x = w * (c >= 0 ? 1 : -1) * std::pow(std::abs(c), 0.45);
+            double y = side + (top - side) * std::pow(sn, 0.7);
+            p.push_back({x, y, z});
+        }
+        p.push_back({-w, piping, z});
+        return p;
+    };
+    const double z0 = -0.27, z1 = 0.265;
+    std::vector<std::vector<Vec3>> rings;
+    for (int k = 0; k <= sections; ++k) rings.push_back(ring(z0 + (z1 - z0) * k / sections));
+    for (int k = 0; k < sections; ++k)
+        for (size_t j = 0; j + 1 < rings[k].size(); ++j)
+            m.quad(rings[k][j], rings[k][j + 1], rings[k + 1][j + 1], rings[k + 1][j], kPaint0);
+    // End caps.
+    auto cap = [&](const std::vector<Vec3>& r, bool front) {
+        Vec3 c{0, (r[0].y + r[r.size() / 2].y) / 2, r[0].z};
+        Vec3 n{0, 0, front ? 1.0 : -1.0};
+        uint32_t ci = m.vertex(c, n, kPaint0);
+        for (size_t j = 0; j + 1 < r.size(); ++j) {
+            uint32_t a = m.vertex(r[j], n, kPaint0), b = m.vertex(r[j + 1], n, kPaint0);
+            if (front) m.tri(ci, a, b); else m.tri(ci, b, a);
+        }
+        uint32_t a = m.vertex(r.back(), n, kPaint0), b = m.vertex(r.front(), n, kPaint0);
+        if (front) m.tri(ci, a, b); else m.tri(ci, b, a);
+    };
+    cap(rings.front(), false);
+    cap(rings.back(), true);
+    // Piping: a trim band round the lower edge, from the tray up to the cushion's sides.
+    for (int k = 0; k < sections; ++k) {
+        double za = rings[k][0].z, zb = rings[k + 1][0].z;
+        double wa = seat_half_width(za) + 0.002, wb = seat_half_width(zb) + 0.002;
+        for (int s = -1; s <= 1; s += 2) {
+            Vec3 a{s * wa, bottom, za}, b{s * wb, bottom, zb}, c{s * wb, piping + 0.004, zb}, d{s * wa, piping + 0.004, za};
+            if (s > 0) m.quad(a, d, c, b, kPaint1); else m.quad(a, b, c, d, kPaint1);
+        }
+    }
+    // Stitched seam across the step from the pocket up to the pillion pad.
+    m.box({-seat_half_width(-0.13) + 0.012, seat_top(-0.13) - 0.006, -0.136}, {seat_half_width(-0.13) - 0.012, seat_top(-0.13) + 0.004, -0.128}, kPaint1);
+    // Control faces on the pan: main at the front, one each side.
+    marker(m, {0, -0.08, 0.28}, {0, 0, 1}, {0, 1, 0}, Marker::control);
+    marker(m, {-0.12, -0.08, 0.08}, {-1, 0, 0}, {0, 1, 0}, Marker::control);
+    marker(m, {0.12, -0.08, 0.08}, {1, 0, 0}, {0, 1, 0}, Marker::control);
     return m;
 }
 
@@ -228,10 +366,13 @@ inline Mesh seat() {
 // Static: a riser from the seat's control face up to the steering head.
 inline Mesh handlebars_base() {
     Mesh m;
-    m.box({-0.035, -0.12, -0.04}, {0.035, -0.06, 0.04}, kPaint0);
-    m.prism(1, {0, 0, kBarsPivot.z}, 0.022, -0.06, kBarsPivot.y - 0.03, kIron);
+    m.box({-0.04, -0.12, -0.04}, {0.04, 0.20, 0.04}, kPaint0);        // riser block: links on its front face
+    m.prism(1, {0, 0, kBarsPivot.z}, 0.022, 0.20, kBarsPivot.y - 0.03, kIron);
     m.box({-0.045, kBarsPivot.y - 0.07, kBarsPivot.z - 0.04}, {0.045, kBarsPivot.y - 0.025, kBarsPivot.z + 0.05}, kPaint1);   // headlight shell
     m.box({-0.03, kBarsPivot.y - 0.065, kBarsPivot.z + 0.05}, {0.03, kBarsPivot.y - 0.03, kBarsPivot.z + 0.055}, kAmber);
+    // Control face (mounts on the seat's) at the back, steering and the two pedal links on the front.
+    marker(m, {0, -0.08, -0.04}, {0, 0, -1}, {0, 1, 0}, Marker::control);
+    for (int k = 0; k < 3; ++k) marker(m, {0, 0.08 * k, 0.04}, {0, 0, 1}, {0, 1, 0}, Marker::link_out);
     return m;
 }
 // Turns about the raked steering axis (origin, +y): clamp, bar, grips, levers and a small dial.
