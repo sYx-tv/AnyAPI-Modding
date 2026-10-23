@@ -26,7 +26,11 @@
 // Fix 3, spread wreck loot (on by default): a terrain tile that loads on the host fills all its wrecks with loot in
 // one server tick (about 7 ms a wreck); the mod lets 8 ms of it run per tick and fills the rest over the next ticks.
 //
-// Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot.
+// Fix 4, distant container items (on by default): containers on parked vehicles over 50 m away place their items
+// every 8th frame instead of every frame (see hk_inventory).
+//
+// Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot,
+// profiler, distant container items.
 //
 // EXPERIMENTAL. Hooks game functions through the experimental SDK (anyperformance_bindings.h): Anymaker 0.1.27 /
 // Steam build 26113663 only. Read anymaker_modding.log.
@@ -67,7 +71,7 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[6], g_settings_revision = ~0ull;
+uint64_t g_tokens[7], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
@@ -219,6 +223,23 @@ constexpr bool is_tile_save(int i) {
 }
 using six_t = void (*)(void*, void*, void*, void*, void*, void*);
 anymaker::cell_hook h_steps[kStepCount];
+
+// Fix 4, distant container items: client_scene.vehicle_component.inventory.tick runs for every container of every
+// loaded vehicle every frame and walks every item in it to place it in the world (13% of the main thread in the
+// 0.1.2 profile). A container on a vehicle more than kInventoryNear from the local player that has not moved since its
+// last real tick is ticked every kInventoryEvery frames, with the frame times it skipped added to delta_time.
+constexpr double kInventoryNear = 50, kInventoryMoved = 0.02;
+constexpr int kInventoryEvery = 8;
+constexpr ptrdiff_t kClientVehiclePos = 0x310 + 0x48;   // client_scene.vehicle.m_transform (mat34) translation
+using inventory_tick_t = void (*)(void* self, void* client, void* vehicle, void* scene, const double* dt);
+anymaker::cell_hook h_inventory;
+std::atomic<bool> g_inventory_lod{true};
+struct InventoryLod { double pos[3]; double dt; };
+std::unordered_map<void*, InventoryLod> g_inventory;   // main thread only, keyed by the inventory component
+double g_local_pos[3];
+bool g_local_ok;
+uint32_t g_frame_no;
+long long g_inventory_ran, g_inventory_skipped;
 
 // ------------------------------------------------------------------ spread wreck loot (server thread)
 // When a terrain tile goes into the world, server_scene.environment_tile_task.integrate loops over every vehicle, calls
@@ -401,6 +422,7 @@ void read_settings() {
     if (g_tokens[3] && settings->get(g_tokens[3], &v) && std::isfinite(v.number)) g_smoothing = std::clamp(int(v.number), 0, 2);
     if (g_tokens[4] && settings->get(g_tokens[4], &v)) g_spread_loot = v.number != 0;
     if (g_tokens[5] && settings->get(g_tokens[5], &v)) g_profiler = v.number != 0;
+    if (g_tokens[6] && settings->get(g_tokens[6], &v)) g_inventory_lod = v.number != 0;
 }
 
 // Counts one hitch or slow-motion log line; false once the session's limit is used up.
@@ -546,6 +568,11 @@ void summary(double now) {
                "rendering/UI %.1f%s%s", w.frames, w.frame_ms / n, w.sum.client_tick / n, w.sum.scene_tick / n,
             w.sum.loading / n, (w.frame_ms - w.sum.client_tick) / n, steps[0] ? " | steps: " : "", steps);
     }
+    if (g_inventory_ran + g_inventory_skipped) {
+        log(0, "Distant container items: %lld updates skipped, %lld run (%.0f%% saved)", g_inventory_skipped, g_inventory_ran,
+            100.0 * double(g_inventory_skipped) / double(g_inventory_ran + g_inventory_skipped));
+        g_inventory_ran = g_inventory_skipped = 0;
+    }
     if (sw.ticks) {
         const ServerParts& t = sw.sum; double n = sw.ticks;
         char steps[400];
@@ -614,6 +641,43 @@ anymaker::cell_hook h_physics;
 anymaker::cell_hook h_server_loading, h_server_scene, h_dungeons, h_items, h_vehicles, h_entities, h_vehicles_post, h_items_post,
     h_replicate, h_autosave;
 
+void update_local_player() {
+    static AnySessionPlayersV1 players;
+    if (g_frame_no % 4) return;
+    g_local_ok = false;
+    if (!g_inventory_lod || !host.copy_players || !host.copy_players(&players, nullptr)) return;
+    for (uint32_t i = 0; i < players.count && i < ANYAPI_PLAYERS_CAPACITY; ++i) {
+        const auto& p = players.players[i];
+        if ((p.valid_fields & (PLAYER_LOCAL | PLAYER_POSITION)) != (PLAYER_LOCAL | PLAYER_POSITION)) continue;
+        std::copy(p.position, p.position + 3, g_local_pos);
+        g_local_ok = std::isfinite(p.position[0]) && std::isfinite(p.position[1]) && std::isfinite(p.position[2]);
+        return;
+    }
+}
+
+void hk_inventory(void* self, void* client, void* vehicle, void* scene, const double* dt) {
+    auto run = [&](const double* d) { reinterpret_cast<inventory_tick_t>(h_inventory.original)(self, client, vehicle, scene, d); };
+    auto* v = static_cast<const uint8_t*>(vehicle);
+    if (!g_inventory_lod || !g_local_ok || g_stop || !dt || !v || !anymaker::readable(v + kClientVehiclePos, 24)) return run(dt);
+    const auto* pos = reinterpret_cast<const double*>(v + kClientVehiclePos);
+    double dx = pos[0] - g_local_pos[0], dy = pos[1] - g_local_pos[1], dz = pos[2] - g_local_pos[2];
+    if (!(dx * dx + dy * dy + dz * dz > kInventoryNear * kInventoryNear)) { g_inventory.erase(self); return run(dt); }
+    if (g_inventory.size() > 20000) g_inventory.clear();
+    auto [it, fresh] = g_inventory.try_emplace(self);
+    auto& e = it->second;
+    double mx = pos[0] - e.pos[0], my = pos[1] - e.pos[1], mz = pos[2] - e.pos[2];
+    bool moved = fresh || mx * mx + my * my + mz * mz > kInventoryMoved * kInventoryMoved;
+    // Spread containers over the frames by address so the work stays even.
+    bool turn = (g_frame_no + uint32_t(reinterpret_cast<uintptr_t>(self) >> 6)) % kInventoryEvery == 0;
+    e.dt += *dt;
+    if (!moved && !turn) { ++g_inventory_skipped; return; }
+    double total = e.dt;
+    e.dt = 0;
+    std::copy(pos, pos + 3, e.pos);
+    ++g_inventory_ran;
+    run(&total);
+}
+
 void hk_client_tick(void* client, const double* dt, const bool* loading, void* frontend, void* game_settings) {
     double start = now_ms();
     auto* c = static_cast<uint8_t*>(client);
@@ -628,6 +692,8 @@ void hk_client_tick(void* client, const double* dt, const bool* loading, void* f
         if (g_window_start < 0) g_window_start = start;
         else if (start - g_window_start >= kSummarySeconds * 1000) summary(start);
         g_frame_start = start; g_parts = FrameParts{}; g_parts_loading = loading && *loading;
+        ++g_frame_no;
+        update_local_player();
         if (!g_main_thread) {
             g_main_thread = GetCurrentThreadId();
             std::thread(cpu_worker).detach();
@@ -762,6 +828,7 @@ void install_hooks() {
         {&bind::server_scene_tick, &h_server_scene, (void*)&hk_server_scene, "server simulation", false},
         {&bind::replicate_peer, &h_replicate, (void*)&hk_replicate, "network replication", false},
         {&bind::autosave_game, &h_autosave, (void*)&hk_autosave, "autosave", false},
+        {&bind::cl_inventory, &h_inventory, (void*)&hk_inventory, "vehicle inventory", false},
         {&bind::server_tick, &h_server_tick, (void*)&hk_server_tick, "server tick", false},
         {&bind::client_tick, &h_client_tick, (void*)&hk_client_tick, "client tick", false},   // last: it starts the frame clock
     };
@@ -820,7 +887,7 @@ void shutdown(void*) {
     h_server_scene.remove((void*)&hk_server_scene); h_dungeons.remove((void*)&hk_dungeons); h_items.remove((void*)&hk_items);
     h_vehicles.remove((void*)&hk_vehicles); h_entities.remove((void*)&hk_entities); h_vehicles_post.remove((void*)&hk_vehicles_post);
     h_items_post.remove((void*)&hk_items_post); h_replicate.remove((void*)&hk_replicate); h_autosave.remove((void*)&hk_autosave);
-    h_physics.remove((void*)&hk_physics);
+    h_physics.remove((void*)&hk_physics); h_inventory.remove((void*)&hk_inventory);
     for (int i = 0; i < kStepCount; ++i) h_steps[i].remove(kStepHooks[size_t(i)]);
     if (g_timer_on) { timeEndPeriod(1); g_timer_on = false; }
 }
@@ -859,6 +926,11 @@ void register_settings() {
     d.description = "Writes the game functions that use the most CPU on the main and server threads to anymaker_modding.log "
                     "every two minutes. Costs about 1% CPU. Leave off unless asked.";
     g_tokens[5] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "inventory_lod"; d.label = "Distant container items"; d.kind = ANY_SETTING_BOOL; d.order = 6; d.default_number = 1;
+    d.description = "Updates the items inside containers of parked vehicles more than 50 m away every 8th frame instead of "
+                    "every frame. Anything moving or near you is updated every frame.";
+    g_tokens[6] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace

@@ -58,6 +58,14 @@ on tiles at the edge of the loaded area). A wreck that is gone by then is skippe
 server thread fills the whole queue first. Only a save from the pause menu in that second can miss queued loot; the log
 says so when it happens. Each batch logs `Spread wreck loot: N wrecks filled over M server ticks`.
 
+## Distant container items
+
+Every frame the game places every item inside every container of every loaded vehicle, including wrecks full of
+loot far away. In the 0.1.2 profile that was 13% of the main thread. With **Distant container items** on, a
+container on a vehicle more than 50 m from you that has not moved is updated every 8th frame, with the skipped
+frame time passed on; anything near you or moving is updated every frame. Every 30 s the log shows
+`Distant container items: N updates skipped, M run (P% saved)`.
+
 ## Frame hitches
 
 **Hitch logger.** Every frame slower than the hitch threshold (50 ms by default) is written to
@@ -133,6 +141,7 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Hitch threshold (ms) | 50 | Frames slower than this are logged (20 to 1000) |
 | FPS overlay | Off | The live readout in the top-left corner |
 | Spread wreck loot | On | Fills wrecks on newly loaded terrain a few at a time, as above |
+| Distant container items | On | Parked vehicles over 50 m away update the items in their containers every 8th frame, as below |
 | Profiler (for testing) | Off | Samples where the main and server threads spend their time, as below |
 
 Without AnyHelpers the mod works with these defaults.
