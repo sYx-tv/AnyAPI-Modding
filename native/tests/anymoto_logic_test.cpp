@@ -119,6 +119,13 @@ int main() {
     in.yaw_rate = 0;
     assert(std::abs(lean_assist(in).target_deg) < 0.01);
     in.yaw_rate = std::numeric_limits<double>::quiet_NaN();
+    // Steering sets the turn lean: full steering at speed leans 35 degrees, none when crawling.
+    {
+        LeanInput t = in;
+        t.linear_velocity = {0, 0, 20}; t.speed = 20; t.yaw_rate = steer_yaw_rate(1, 20);
+        assert(std::abs(std::abs(lean_assist(t).target_deg) - kSteerLeanDeg) < 0.5);
+        assert(std::abs(steer_yaw_rate(1, 1.5)) < 1e-9);
+    }
     // Roll sensitivity scales the turn lean: 0 stays upright, 2 leans further than balanced.
     in.turn_lean = 0;
     assert(std::abs(lean_assist(in).target_deg) < 0.01);

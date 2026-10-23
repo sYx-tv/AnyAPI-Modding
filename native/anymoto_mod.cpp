@@ -66,6 +66,7 @@ namespace off {
 constexpr ptrdiff_t server_component_definition = 312;   // server_scene.vehicle_component.m_definition
 constexpr ptrdiff_t server_component_vehicle = 320;      // .m_parent_vehicle
 constexpr ptrdiff_t server_wheel_tuning = 480 + 8;       // server wheel: m_element_wheel (480) .m_definition (+8)
+constexpr ptrdiff_t server_wheel_steering = 480 + 0x1f0; // .m_element_wheel.m_value_steering (f64, the smoothed steering input)
 constexpr ptrdiff_t client_component_definition = 176;   // client_scene.vehicle_component.m_definition
 constexpr ptrdiff_t client_wheel_element = 224;          // client wheel: m_element_wheel
 constexpr ptrdiff_t client_wheel_tuning = 224 + 8;       // .m_definition
@@ -490,6 +491,26 @@ physics_set_vec_t g_set_angular, g_set_linear;
 mat_of_t g_server_vehicle_transform, g_server_component_transform;
 physics_vec_t g_get_com;
 // Where the bike's tyres touch the ground, in the world: the middle of our fork's and swingarm's contact points.
+// The rider's steering, from the fork(s): the wheel's smoothed steering input, about -1..1. NaN = no fork.
+double fork_steering(void* vehicle) {
+    std::vector<void*> list;
+    {
+        std::lock_guard lock(g_wheels_mutex);
+        auto found = g_wheels.find(vehicle);
+        if (found != g_wheels.end()) list = found->second;
+    }
+    double sum = 0;
+    int n = 0;
+    for (void* c : list) {
+        if (!can_read(static_cast<uint8_t*>(c) + off::server_component_definition, 16) || at<const void*>(c, off::server_component_vehicle) != vehicle) continue;
+        if (known_kind(at<const void*>(c, off::server_component_definition)) != Kind::fork) continue;
+        if (!can_read(static_cast<uint8_t*>(c) + off::server_wheel_steering, 8)) continue;
+        double v = at<double>(c, off::server_wheel_steering);
+        if (std::isfinite(v)) { sum += std::clamp(v, -1.0, 1.0); ++n; }
+    }
+    return n ? sum / n : std::numeric_limits<double>::quiet_NaN();
+}
+
 bool contact_point(void* vehicle, const Mat34& vehicle_transform, Vec3* out) {
     std::vector<void*> list;
     {
@@ -535,7 +556,8 @@ struct Assist {
     double kept_ema = 1;           // the same, smoothed: below 0 the physics throws the roll back (a rider on board)
     double gain = 1;               // full strength always: backing off with a rider on left the bike to fall
     double rate_f = 0;             // roll rate from the bike's own lean change, lightly smoothed
-    double yaw_f = 0;              // yaw rate, smoothed over about 0.4 s (sets the turn's balanced lean)
+    double yaw_f = 0;              // yaw rate, smoothed over about 0.4 s
+    double steer_agree = 0;        // decaying sum of steering x yaw: which way the steering turns the bike
     bool have_rate = false;
     double next_log = 0;
 };
@@ -625,6 +647,7 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
     g_get_angular(&in.angular_velocity, physics);
     g_get_linear(&in.linear_velocity, physics);
     in.speed = length(in.linear_velocity);
+    const double steer = fork_steering(vehicle);
     const Vec3 f = normalized(in.forward);
     const double wf = dot(in.angular_velocity, f);
     double observed = 0, predicted = lean_rate_for(in.forward, in.up, wf);
@@ -664,7 +687,16 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
         a.prev_lean = lean;
         a.have_prev = true;
         if (in.dt > 0 && in.dt < 0.1) a.yaw_f += in.dt / (in.dt + 0.4) * (in.angular_velocity.y - a.yaw_f);
-        in.yaw_rate = a.yaw_f;
+        // The turn lean comes from the rider's steering, not from the bike's yaw: a leaned bike turns by itself, so a
+        // lean set from the yaw fed itself and weaved side to side at speed. Which way the steering turns the bike is
+        // learned from the yaw it brings; until then the bike is held upright.
+        if (std::isfinite(steer)) {
+            if (in.speed > 3 && std::abs(steer) > 0.15 && in.dt > 0 && in.dt < 0.1) a.steer_agree = a.steer_agree * 0.995 + steer * a.yaw_f * in.dt;
+            double sign = a.steer_agree > 0.02 ? 1 : a.steer_agree < -0.02 ? -1 : 0;
+            in.yaw_rate = sign * steer_yaw_rate(steer, in.speed);
+        } else {
+            in.yaw_rate = a.yaw_f;
+        }
         in.spin_sign = a.sign;
         in.gain_scale = a.gain;
         // The physics' own roll rate has no lag, so it damps best; only while the physics throws the roll back (a
@@ -708,7 +740,7 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
         set_wf = dot(out.angular_velocity, f);
     }
     bool log_now = false;
-    double sign = 1, kept = -1, gain = 1, rate_f = 0;
+    double sign = 1, kept = -1, gain = 1, rate_f = 0, steer_agree = 0;
     {
         std::lock_guard lock(g_assist_mutex);
         Assist& a = g_assists[self];
@@ -721,6 +753,7 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
             sign = a.sign;
             gain = a.gain;
             rate_f = a.rate_f;
+            steer_agree = a.steer_agree;
             if (a.kept_n > 0) kept = a.kept / a.kept_n;
             a.kept = a.kept_n = 0;
         }
@@ -728,8 +761,8 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
     static std::atomic<int> logs{1800};  // one a second for 30 minutes
     if (log_now && logs.fetch_sub(1) > 0)
         log(0, "lean assist: lean %.1f deg (moving %.0f deg/s), target %.1f deg, roll rate %.2f -> %.2f rad/s, spin sign %+.0f, "
-               "roll rate kept between ticks %.2f, smoothed roll %.2f rad/s, gain %.2f, speed %.1f m/s, pivot %.2f m below the centre of mass, riders moved %d, power %.1f, turn lean %.1f, %s (dt %.4f s)",
-            out.lean_deg, observed * 180 / kPi, out.target_deg, wf, set_wf, sign, kept, rate_f, gain, in.speed, pivot_height, rider_count, in.strength, in.turn_lean,
+               "roll rate kept between ticks %.2f, smoothed roll %.2f rad/s, gain %.2f, speed %.1f m/s, pivot %.2f m below the centre of mass, riders moved %d, power %.1f, turn lean %.1f, steering %.2f (learned way %.3f), %s (dt %.4f s)",
+            out.lean_deg, observed * 180 / kPi, out.target_deg, wf, set_wf, sign, kept, rate_f, gain, in.speed, pivot_height, rider_count, in.strength, in.turn_lean, steer, steer_agree,
             out.settled ? "settled" : out.active ? "correcting" : "idle", in.dt);
 }
 

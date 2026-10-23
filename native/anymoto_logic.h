@@ -205,6 +205,14 @@ inline double lean_rate_for(Vec3 forward, Vec3 up, double wf) {
 inline Vec3 pivot_velocity_change(Vec3 spin_change, Vec3 pivot, Vec3 centre_of_mass) {
     return cross(spin_change, pivot - centre_of_mass) * -1.0;
 }
+// The yaw rate whose balanced lean is the turn lean for this much steering: full steering leans 35 degrees, fading
+// in from 2 to 10 m/s (no lean when crawling).
+constexpr double kSteerLeanDeg = 35;
+inline double steer_yaw_rate(double steer, double speed) {
+    double fade = std::clamp((speed - 2) / 8, 0.0, 1.0);
+    double lean = rad(kSteerLeanDeg) * std::clamp(steer, -1.0, 1.0) * fade;
+    return kGravity * std::tan(lean) / std::max(speed, 1.0);
+}
 inline LeanOutput lean_assist(const LeanInput& in) {
     LeanOutput out;
     out.angular_velocity = in.angular_velocity;

@@ -11,7 +11,7 @@ two-wheeler around it:
 | --- | --- |
 | Motorcycle Fork | Front suspension. Takes the Motorcycle Wheel, steers up to 30 degrees from the steering links, brakes from the brake link, 14 cm of travel. The legs are drawn with a 25 degree rake and slide as it compresses. |
 | Motorcycle Swingarm | Rear suspension. Takes the Motorcycle Wheel, brakes, 12 cm of travel. The arm swings and the shock compresses. Drive comes in through the torque face on its side at the pivot. |
-| Lean Assist | Keeps the bike upright and leans it into turns. **Power** (0 to 1, default 0.6) and **Roll sensitivity** (0 to 2, default 1: how far it leans into turns; 0 stays upright, 2 leans twice the balanced angle) are in the Properties tool. The data input `assist` switches it off at 0 (unconnected = on); outputs `lean` and `target_lean` in degrees. |
+| Lean Assist | Keeps the bike upright and leans it into turns. **Power** (0 to 1, default 0.6) and **Roll sensitivity** (0 to 2, default 1: how far it leans as you steer; at 1, full steering above 10 m/s leans 35 degrees, 0 stays upright) are in the Properties tool. The data input `assist` switches it off at 0 (unconnected = on); outputs `lean` and `target_lean` in degrees. |
 | Motorcycle Seat | A sculpted saddle with the normal seat control faces (front and both sides of its base). |
 | Handlebars | The steering wheel's links on bars that turn about a raked axis: steering and both pedal links on the front of the riser. Seated hands go to the grips. |
 
