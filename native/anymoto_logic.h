@@ -217,7 +217,8 @@ inline LeanOutput lean_assist(const LeanInput& in) {
     double c_len = length(centripetal);
     if (c_len > max_c) centripetal = centripetal * (max_c / c_len);
     Vec3 target_up = normalized(world_up * kGravity + centripetal);
-    out.target_deg = std::asin(std::clamp(dot(side, target_up), -1.0, 1.0)) * 180 / kPi;
+    // The bike's lean measured from target_up is lean - target, so the target is the difference.
+    out.target_deg = out.lean_deg - std::asin(std::clamp(dot(side, target_up), -1.0, 1.0)) * 180 / kPi;
     double give_up = in.speed > 3 ? kGiveUpMovingDeg : kGiveUpDeg;
     if (dot(u, world_up) < std::cos(rad(give_up))) return out;      // on its side: leave it
     // Roll error about the forward axis (rotate u onto target_up), and the current roll rate.

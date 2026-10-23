@@ -546,6 +546,45 @@ int slot_of(std::string_view name) {
     return -1;
 }
 
+// A seated rider is a separate physics body (their capsule) welded to the vehicle's body. Spinning the bike alone
+// stretches the weld, and the weld throws the spin back next tick: the assist fights the rider and the tyres skate.
+// The seat tick names both bodies, so the assist can move the rider's capsule with the bike as one piece.
+struct Rider {
+    uint64_t vehicle_body[2];      // the vehicle's physics.object handle, as the seat keeps a copy of it
+    void* capsule;                 // the rider's physics.object
+    double seen;
+};
+std::mutex g_rider_mutex;
+std::vector<Rider> g_riders;
+namespace seat_off {
+constexpr ptrdiff_t seat_physics = 0xa0;   // server_scene.actor.seat_data._m_seat_physics (copy of the vehicle's body while welded)
+constexpr ptrdiff_t capsule = 0x8;         // physics.actor_character._m_capsule (its primary physics object)
+}
+using seat_tick_t = void (*)(void* self, void* scene, void* actor_physics, uint64_t is_authority, void* vehicles);
+anymaker::cell_hook h_seat_tick;
+void hk_seat_tick(void* self, void* scene, void* actor_physics, uint64_t is_authority, void* vehicles) {
+    reinterpret_cast<seat_tick_t>(h_seat_tick.original)(self, scene, actor_physics, is_authority, vehicles);
+    if (!g_ready.load() || !self || !actor_physics) return;
+    uint64_t body[2];
+    std::memcpy(body, static_cast<uint8_t*>(self) + seat_off::seat_physics, sizeof body);
+    void* capsule = static_cast<uint8_t*>(actor_physics) + seat_off::capsule;
+    double now = now_seconds();
+    std::lock_guard lock(g_rider_mutex);
+    std::erase_if(g_riders, [&](const Rider& r) { return r.capsule == capsule || now - r.seen > 1.0; });
+    if (body[0]) g_riders.push_back({{body[0], body[1]}, capsule, now});
+}
+// The capsules welded to this vehicle body seen in the last tenth of a second.
+int riders_of(const void* vehicle_body, void** out, int max) {
+    uint64_t body[2];
+    std::memcpy(body, vehicle_body, sizeof body);
+    double now = now_seconds();
+    int n = 0;
+    std::lock_guard lock(g_rider_mutex);
+    for (const Rider& r : g_riders)
+        if (n < max && r.vehicle_body[0] == body[0] && r.vehicle_body[1] == body[1] && now - r.seen < 0.1) out[n++] = r.capsule;
+    return n;
+}
+
 using tick_t = void (*)(void* self, void* vehicle, void* scene);
 anymaker::cell_hook h_gyro_tick;
 void hk_gyro_tick(void* self, void* vehicle, void* scene) {
@@ -617,10 +656,12 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
     }
     LeanOutput out = lean_assist(in);
     double set_wf = 0, pivot_height = -1;
+    int rider_count = 0;
     if (out.active && !out.settled && std::isfinite(out.angular_velocity.x) && std::isfinite(out.angular_velocity.y) && std::isfinite(out.angular_velocity.z)) {
         g_set_angular(physics, &out.angular_velocity);
         // Pivot about the tyres' contact line, not the centre of mass, so the tyres are not dragged sideways.
         Vec3 com, contact;
+        const Vec3 spin_change = out.angular_velocity - in.angular_velocity;
         bool have_contact = g_set_linear && g_get_com && contact_point(vehicle, v, &contact);
         if (!have_contact && g_get_com) {
             g_get_com(&com, physics);
@@ -629,9 +670,23 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
         }
         if (have_contact) {
             g_get_com(&com, physics);
-            Vec3 lin = in.linear_velocity + pivot_velocity_change(out.angular_velocity - in.angular_velocity, contact, com);
+            Vec3 lin = in.linear_velocity + pivot_velocity_change(spin_change, contact, com);
             if (std::isfinite(lin.x) && std::isfinite(lin.y) && std::isfinite(lin.z)) g_set_linear(physics, &lin);
             pivot_height = dot(com - contact, Vec3{0, 1, 0});
+            // The riders turn with the bike about the same line, so their welds stay where they are.
+            void* riders[4];
+            rider_count = riders_of(physics, riders, 4);
+            for (int i = 0; i < rider_count; ++i) {
+                Vec3 w, l, c;
+                g_get_angular(&w, riders[i]);
+                g_get_linear(&l, riders[i]);
+                g_get_com(&c, riders[i]);
+                w = w + spin_change;
+                l = l + pivot_velocity_change(spin_change, contact, c);
+                if (!std::isfinite(w.x + w.y + w.z + l.x + l.y + l.z)) continue;
+                g_set_angular(riders[i], &w);
+                g_set_linear(riders[i], &l);
+            }
         }
         set_wf = dot(out.angular_velocity, f);
     }
@@ -656,8 +711,8 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
     static std::atomic<int> logs{900};   // one a second for 15 minutes
     if (log_now && logs.fetch_sub(1) > 0)
         log(0, "lean assist: lean %.1f deg (moving %.0f deg/s), target %.1f deg, roll rate %.2f -> %.2f rad/s, spin sign %+.0f, "
-               "roll rate kept between ticks %.2f, smoothed roll %.2f rad/s, gain %.2f, speed %.1f m/s, pivot %.2f m below the centre of mass, power %.1f, %s (dt %.4f s)",
-            out.lean_deg, observed * 180 / kPi, out.target_deg, wf, set_wf, sign, kept, rate_f, gain, in.speed, pivot_height, in.strength,
+               "roll rate kept between ticks %.2f, smoothed roll %.2f rad/s, gain %.2f, speed %.1f m/s, pivot %.2f m below the centre of mass, riders moved %d, power %.1f, %s (dt %.4f s)",
+            out.lean_deg, observed * 180 / kPi, out.target_deg, wf, set_wf, sign, kept, rate_f, gain, in.speed, pivot_height, rider_count, in.strength,
             out.settled ? "settled" : out.active ? "correcting" : "idle", in.dt);
 }
 
@@ -782,6 +837,8 @@ void install_hooks() {
                 !!g_server_vehicle_transform, !!g_server_component_transform, !!tick);
         if (!data || !h_gyro_get_f64.install(data, (void*)&hk_gyro_get_f64)) log(1, "Lean Assist data channels unavailable");
         if (!props || !h_gyro_properties.install(props, (void*)&hk_gyro_properties)) log(1, "Lean Assist Power row unavailable (it runs at 0.6)");
+        void** seat = route::cell(bind::server_seat_tick);
+        if (!seat || !h_seat_tick.install(seat, (void*)&hk_seat_tick)) log(1, "seat hook not installed; Lean Assist can't carry the rider and fights them");
         g_ready = true;
         log(0, "Ready after %d s. Load or start a world to add the motorcycle parts (definition file %s).", attempt, g_json_path.c_str());
         return;
@@ -790,6 +847,7 @@ void install_hooks() {
 void remove_hooks() {
     h_gyro_properties.remove((void*)&hk_gyro_properties);
     h_gyro_get_f64.remove((void*)&hk_gyro_get_f64);
+    h_seat_tick.remove((void*)&hk_seat_tick);
     h_gyro_tick.remove((void*)&hk_gyro_tick);
     h_hand_pose.remove((void*)&hk_hand_pose);
     h_add_definitions.remove((void*)&hk_add_definitions);
