@@ -176,6 +176,7 @@ struct LeanInput {
     // The turn's yaw rate (rad/s about world up), smoothed; NaN = the physics' own. The chassis weaves from tick to
     // tick, and at speed that noise alone swings the balanced lean from one side's limit to the other.
     double yaw_rate = std::numeric_limits<double>::quiet_NaN();
+    double turn_lean = 1;        // 0..2 (Properties: Roll sensitivity): how far into a turn it leans, 1 = balanced
 };
 struct LeanOutput {
     Vec3 angular_velocity;       // what to set
@@ -215,7 +216,7 @@ inline LeanOutput lean_assist(const LeanInput& in) {
     // Balanced up: gravity plus the turn's acceleration (omega x v, yaw part only).
     Vec3 yaw = world_up * (std::isfinite(in.yaw_rate) ? in.yaw_rate : dot(in.angular_velocity, world_up));
     Vec3 centripetal = cross(yaw, in.linear_velocity);
-    centripetal = centripetal - world_up * dot(centripetal, world_up);
+    centripetal = (centripetal - world_up * dot(centripetal, world_up)) * std::clamp(in.turn_lean, 0.0, 2.0);
     double max_c = kGravity * std::tan(rad(kMaxLeanDeg));
     double c_len = length(centripetal);
     if (c_len > max_c) centripetal = centripetal * (max_c / c_len);
@@ -223,7 +224,8 @@ inline LeanOutput lean_assist(const LeanInput& in) {
     // The bike's lean measured from target_up is lean - target, so the target is the difference.
     out.target_deg = out.lean_deg - std::asin(std::clamp(dot(side, target_up), -1.0, 1.0)) * 180 / kPi;
     double give_up = in.speed > 3 ? kGiveUpMovingDeg : kGiveUpDeg;
-    if (dot(u, world_up) < std::cos(rad(give_up))) return out;      // on its side: leave it
+    // On its side or upside down: leave it. Roll only, so a nose-down stop or a slope doesn't let go of the bike.
+    if (std::abs(out.lean_deg) > give_up || dot(u, world_up) < 0) return out;
     // Roll error about the forward axis (rotate u onto target_up), and the current roll rate.
     double error = dot(cross(u, target_up), f);
     // The physics may spin the other way round for the same vector: spin_sign maps between them.

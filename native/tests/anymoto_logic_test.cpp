@@ -119,6 +119,19 @@ int main() {
     in.yaw_rate = 0;
     assert(std::abs(lean_assist(in).target_deg) < 0.01);
     in.yaw_rate = std::numeric_limits<double>::quiet_NaN();
+    // Roll sensitivity scales the turn lean: 0 stays upright, 2 leans further than balanced.
+    in.turn_lean = 0;
+    assert(std::abs(lean_assist(in).target_deg) < 0.01);
+    in.linear_velocity = {0, 0, 5};
+    in.turn_lean = 1;
+    double balanced = lean_assist(in).target_deg;
+    in.turn_lean = 2;
+    assert(std::abs(lean_assist(in).target_deg) > std::abs(balanced) * 1.5);
+    in.turn_lean = 1; in.linear_velocity = {0, 0, 15};
+    // Pitched nose down 40 degrees (a hard stop) but upright: still holding.
+    in.up = {0, std::cos(rad(40)), -std::sin(rad(40))}; in.forward = {0, -std::sin(rad(40)), std::cos(rad(40))};
+    assert(lean_assist(in).active);
+    in.up = {0, 1, 0}; in.forward = {0, 0, 1};
     // Simulate with gravity tipping it over (a bike's mass 0.6 m up): tipped 15 degrees, it settles upright within
     // 2 s at power 0.6, at 60 and at 30 ticks a second, whichever way the physics spins (spin_sign).
     for (double hz : {60.0, 30.0})

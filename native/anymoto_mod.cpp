@@ -523,6 +523,7 @@ bool contact_point(void* vehicle, const Mat34& vehicle_transform, Vec3* out) {
 
 struct Assist {
     double power = 0.6;            // Properties: Power (0..1); per session
+    double turn_lean = 1;          // Properties: Roll sensitivity (0..2), how far it leans into turns; per session
     double slots[4] = {0, 1, 0, 0};// data: rps (stock), assist input (unconnected = on), lean, target_lean
     double last = 0;
     // Learning which way the physics spins: the lean change seen against the one the read roll rate predicts.
@@ -612,6 +613,7 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
         in.dt = a.last > 0 ? now - a.last : 0;
         a.last = now;
         in.strength = std::abs(a.slots[1]) > 1e-6 ? std::clamp(a.power, 0.0, 1.0) : 0;
+        in.turn_lean = a.turn_lean;
     }
     Mat34 v, c;
     g_server_vehicle_transform(&v, vehicle);
@@ -726,8 +728,8 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
     static std::atomic<int> logs{1800};  // one a second for 30 minutes
     if (log_now && logs.fetch_sub(1) > 0)
         log(0, "lean assist: lean %.1f deg (moving %.0f deg/s), target %.1f deg, roll rate %.2f -> %.2f rad/s, spin sign %+.0f, "
-               "roll rate kept between ticks %.2f, smoothed roll %.2f rad/s, gain %.2f, speed %.1f m/s, pivot %.2f m below the centre of mass, riders moved %d, power %.1f, %s (dt %.4f s)",
-            out.lean_deg, observed * 180 / kPi, out.target_deg, wf, set_wf, sign, kept, rate_f, gain, in.speed, pivot_height, rider_count, in.strength,
+               "roll rate kept between ticks %.2f, smoothed roll %.2f rad/s, gain %.2f, speed %.1f m/s, pivot %.2f m below the centre of mass, riders moved %d, power %.1f, turn lean %.1f, %s (dt %.4f s)",
+            out.lean_deg, observed * 180 / kPi, out.target_deg, wf, set_wf, sign, kept, rate_f, gain, in.speed, pivot_height, rider_count, in.strength, in.turn_lean,
             out.settled ? "settled" : out.active ? "correcting" : "idle", in.dt);
 }
 
@@ -746,6 +748,7 @@ using get_properties_t = void (*)(void* self, void* properties);
 using add_f64_range_t = void (*)(void* properties, const int32_t* label, double* const* value, const double* min, const double* max, const double* step);
 constexpr int kAddPropertyF64RangeSlot = 10;     // server_scene.peer.property_data method table (as AnyEngineParts)
 constexpr int32_t kLocPower = 323;               // e_localization_string property_power
+constexpr int32_t kLocRollSensitivity = 329;     // e_localization_string property_sensitivity_roll
 anymaker::cell_hook h_gyro_properties;
 void* container_method(void* container, int slot) {
     if (!container || !anymaker::readable(container, 8)) return nullptr;
@@ -759,13 +762,18 @@ void hk_gyro_properties(void* self, void* properties) {
     auto add = reinterpret_cast<add_f64_range_t>(container_method(properties, kAddPropertyF64RangeSlot));
     if (!add) return;
     double* power = nullptr;
+    double* turn_lean = nullptr;
     {
         std::lock_guard lock(g_assist_mutex);
         power = &g_assists[self].power;
+        turn_lean = &g_assists[self].turn_lean;
     }
     double min = 0, max = 1, step = 0.1;
     int32_t label = kLocPower;
     add(properties, &label, &power, &min, &max, &step);
+    double lean_max = 2;
+    label = kLocRollSensitivity;
+    add(properties, &label, &turn_lean, &min, &lean_max, &step);
 }
 
 // ================================================================== install (background thread)
