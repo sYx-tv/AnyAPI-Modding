@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gcl_metadata import Program  # noqa: E402
 
-LINE = re.compile(r"Profile (\w+) (self|total) #(\d+): self ([\d.]+)% total ([\d.]+)% \| (.*)$")
+LINE = re.compile(r"(?:Profile )?(\w+) (self|total) #(\d+): self ([\d.]+)% total ([\d.]+)% \| (.*)$")
 HEAD = re.compile(r"Profile (\w+) thread: (\d+) samples in (\d+) s")
 
 
