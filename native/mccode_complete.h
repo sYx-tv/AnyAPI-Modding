@@ -74,7 +74,6 @@ inline Result suggest(const std::string& line, int col, const Symbols& sy, const
         } else {
             if (stmt_start) {
                 add("on_tick", "runs every game tick", "on_tick {\n\t$\n}", 0xffc586c0);
-                add("on_render", "runs every frame", "on_render {\n\t$\n}", 0xffc586c0);
                 add("if", "block", "if $ {\n\t\n}", 0xffc586c0);
                 add("elseif", "block", "elseif $ {\n\t\n}", 0xffc586c0);
                 add("else", "block", "else {\n\t$\n}", 0xffc586c0);

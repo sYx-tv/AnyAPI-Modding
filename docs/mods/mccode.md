@@ -45,7 +45,7 @@ on_tick {
 
 | What | Write | Notes |
 | --- | --- | --- |
-| Blocks | `on_tick { }`, `on_render { }` | `on_tick` runs every game tick |
+| Blocks | `on_tick { }` | Runs every game tick. The game has an `on_render` word but never runs it and won't load it, so MCCode rejects it |
 | Variables | `define var integer speed` | Types: `bool`, `integer`, `fractional`, `string`, `analogue`, or a `define type` |
 | Lists | `define list fractional samples` | `samples.append(x)`, `samples.insert(i, x)`, `samples.erase(i)`, `samples.clear()`, `samples[i]`, `len(samples)` |
 | Parts | `RearLeft.rps`, `RearLeft.brake_factor = 1.0` | A part wired to the microcontroller needs no define: read or set its channels with a dot, using the names the game shows |
