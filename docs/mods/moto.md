@@ -55,3 +55,4 @@ leaning into a turn by speed and turn rate). It gives up past 70 degrees, so a c
 
 * Single player and host only for Lean Assist (it runs where the vehicle's physics runs).
 * The Motorcycle Wheel is still a loot item (tier 2); AnyMoto does not change where it spawns.
+* All five parts are world loot from the first bunker on (tech tier 2, mechanical): fork, swingarm, seat and handlebars at spawn chance 0.15, Lean Assist 0.1 (the same as the stock Motorcycle Wheel).
