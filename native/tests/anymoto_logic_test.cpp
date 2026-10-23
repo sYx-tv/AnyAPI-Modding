@@ -178,6 +178,12 @@ int main() {
     size_t count = 0;
     for (size_t p = json.find("\"path\"", fork); p != std::string::npos && p < swing; p = json.find("\"path\"", p + 1)) ++count;
     assert(json.find("preview_rot", fork) < swing);
+    // The game reads a wheel's links by index (steering_pos, steering_neg, brake): the swingarm needs all three.
+    for (size_t at : {fork, swing}) {
+        size_t nodes = json.find("\"logic_nodes\"", at);
+        size_t p0 = json.find("steering_pos", nodes), p1 = json.find("steering_neg", nodes), p2 = json.find("\"brake\"", nodes);
+        assert(p0 < p1 && p1 < p2 && p2 < json.find("mesh_static", nodes));
+    }
     assert(count == 12);
     assert(json.find("type_f64_input\", \"name\": \"assist\"") != std::string::npos);
     int depth = 0;

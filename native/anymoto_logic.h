@@ -274,8 +274,10 @@ inline std::string definitions_json(const MeshPaths& m) {
     std::string swing = std::string(R"({"id": ")") + kSwingarmId + R"(", "name": "Motorcycle Swingarm", "description": "Fits the Motorcycle Wheel. Place it on the back face of the bike's frame. Drive comes in through the torque face (the hex nut) on the left end of the pivot block, seen from the seat: put a pulley wheel there and belt it to the engine. Brake link on the right side of the shock bracket. 12 cm of travel.", )" + wheel_common +
         R"(, "zones": [{"bounds_min": [-1, -1, 0], "bounds_max": [1, 1, 1]}, {"bounds_min": [0, 2, 0], "bounds_max": [0, 3, 1]}, {"bounds_min": [-2, -1, 2], "bounds_max": [-2, 0, 5]}, {"bounds_min": [2, -1, 2], "bounds_max": [2, 0, 5]}], )"
         R"("interaction_zones": [{"bounds_min": [-0.1, -0.22, 0.42], "bounds_max": [0.1, -0.02, 0.62]}], )"
-        R"("surfaces": [{"id": "torque", "pos": [1, 0, 0], "dir": 1, "type": "torque"}, {"pos": [0, 2, 0], "gender": 2, "type": "mechanical"}, {"pos": [0, -1, 0], "dir": 4, "gender": 2, "type": "port"}], )"
-        R"("logic_nodes": [{"id": "brake", "pos": [0, 2, 0], "direction": 0, "type": "mechanical_in"}], )"
+        R"("surfaces": [{"id": "torque", "pos": [1, 0, 0], "dir": 1, "type": "torque"}, {"pos": [0, 2, 0], "gender": 2, "type": "mechanical"}, {"pos": [-1, 0, 0], "dir": 4, "gender": 2, "type": "mechanical"}, {"pos": [1, 0, 0], "dir": 4, "gender": 2, "type": "mechanical"}, {"pos": [0, -1, 0], "dir": 4, "gender": 2, "type": "port"}], )"
+        // The game reads a wheel's links by position in this list: steering_pos, steering_neg, brake. The swingarm
+        // does not steer, so its two steering links sit unused on the mounting face, against the frame.
+        R"("logic_nodes": [{"id": "steering_pos", "pos": [-1, 0, 0], "direction": 4, "type": "mechanical_in"}, {"id": "steering_neg", "pos": [1, 0, 0], "direction": 4, "type": "mechanical_in"}, {"id": "brake", "pos": [0, 2, 0], "direction": 0, "type": "mechanical_in"}], )"
         R"("mesh_static": {"mesh_path": ")" + m.swingarm_base + R"("}, "meshes_dynamic": [)" +
         wheel_meshes(m.swingarm_arm, kSwingarmPivot, m.swingarm_shock, kShockTop, m.hidden, {0, 0, 0}, m.hidden) +
         R"(], "bounds_override_min": [-3, -7, 0], "bounds_override_max": [3, 4, 11]})";
