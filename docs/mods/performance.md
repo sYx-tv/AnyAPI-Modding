@@ -45,7 +45,7 @@ entrance load/create/physics, the bunker's static load (save file parse, objects
 navmesh, objects load, layers (load and populate with loot, creatures and vehicles), and the saves and unloads when a
 player leaves. Terrain streaming steps are the tile's objects and loot zones going into the world, the tile's terrain, path and
 tree bodies going into physics (with `physics bodies added` counting every body the server adds), creature spawn zones,
-sleeping creatures, keycards and dead-drop loot in wrecks, wreck loot (with its loot tables, required loot, floor loot and furniture loot timed on their own, and the furniture's loot table, placement, item creation and storing), navmesh tiles, the pieces of creatures and players (creature separation, player characters, animals, basic zombies) and of items (item ticks, inside-bunker checks), and the save and unload of tiles
+sleeping creatures, keycards and dead-drop loot in wrecks, wreck loot (with its loot tables, required loot, floor loot and furniture loot timed on their own, and the furniture's loot table, placement, item creation and storing), navmesh tiles, the pieces of creatures and players (creature separation, player characters, animals, basic zombies) and of items (loose items, item ticks, inside-bunker checks, water volume checks, loose item streaming), and the save and unload of tiles
 left behind.
 
 ## Wreck loot on new terrain
@@ -54,7 +54,7 @@ When a terrain tile loads on the host, the game fills every wreck on it with loo
 required, floor and furniture items) in one server tick, about 7 ms a wreck. A tile with 80 wrecks held the server for
 over 600 ms, the biggest cause of slow motion while driving. **Spread wreck loot** (on by default) lets 8 ms of wreck
 loot run per server tick and queues the rest by vehicle id, filling it over the next ticks (80 wrecks take about 1.3 s,
-on tiles at the edge of the loaded area). A wreck that is gone by then is skipped. A world save on the server thread
+on tiles at the edge of the loaded area). A wreck that is gone by then is skipped. An autosave waits (up to a minute) until no wreck is waiting, since it saves every loaded tile and would fill them all in one tick; the log shows `autosave waits for N wrecks` and `autosave ran after waiting S s`. Any other world save on the server thread
 fills the whole queue first, and a tile save fills that tile's own waiting wrecks (logged as `tile X,Y,Z was saved`). One wreck can cost 100-280 ms on its own in towns; every millisecond over the budget is paid back at 4 ms a tick before the next queued wreck runs, so heavy wrecks are spaced out and the world catches up between them. Only a save from the pause menu in that second can miss queued loot; the log
 says so when it happens. Each batch logs `Spread wreck loot: N wrecks filled over M server ticks`.
 
@@ -83,6 +83,24 @@ loot far away. In the 0.1.2 profile that was 13% of the main thread. With **Dist
 container on a vehicle more than 50 m from you that has not moved is updated every 8th frame, with the skipped
 frame time passed on; anything near you or moving is updated every frame. Every 30 s the log shows
 `Distant container items: N container updates, S skipped (P% saved), F far ones run, X with no player position`.
+
+## Fast water checks
+
+Everything that floats (loose items, bodies, creatures) asks the server each tick whether it is inside a vehicle's
+buoyancy volume (`server_scene.ocean_data.get_is_inside_buoyancy_volume`), and the game tests every such vehicle in
+turn: 22% of the server thread in a town log. With **Fast water checks** on, the mod first tests the point against a
+sphere around each vehicle that holds its bounds and answers "no" itself when the point is outside all of them; anything
+close goes to the game. Every 512th answer is checked against the game's, and a mismatch turns the fix off. Every 30 s
+the log shows `Fast water checks: N answered by the mod (C checked against the game, all matched), M left to the game`.
+
+## Distant loose items
+
+Every server tick the game updates every item lying in the world (`server_scene.item_floor.tick`: the item's own logic,
+everything inside it, and an inside-bunker check). With **Distant loose items** on, an item more than 100 m from every
+player is updated on one tick in 8. Player positions are the ones the server streams items around
+(`item_floor_container.replicate_stream`), so joiners count too; with no player position known every item runs. Item
+physics is untouched. Timers on far items (a burning flare, a light's battery) run slower while nobody is near. Every
+30 s the log shows `Distant loose items: N item updates, S skipped (P% saved), F far ones run, X with no player position`.
 
 ## Frame hitches
 
@@ -163,6 +181,8 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Fast furniture loot | On | Remembers which loot items do not fit in a wreck's furniture while it fills, as below |
 | Fast navmesh cleanup | On | Answers the game's check of empty navmesh cells around unloading terrain itself, as below |
 | Distant container items | On | Parked vehicles over 50 m away update the items in their containers every 8th frame, as below |
+| Fast water checks | On | Answers "inside a boat's volume?" itself for points nowhere near one, as below |
+| Distant loose items | On | Loot on the ground over 100 m from every player updates every 8th server tick, as below |
 | Profiler (for testing) | Off | Samples where the main and server threads spend their time, as below |
 
 Without AnyHelpers the mod works with these defaults.

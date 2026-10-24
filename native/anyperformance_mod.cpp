@@ -35,8 +35,16 @@
 // Fix 6, fast furniture loot (on by default): remembers failed loot placements in a wreck's furniture while it is
 // filled (see place_known_fail).
 //
+// Fix 7, fast water checks (on by default): answers "is this point inside a boat's air pocket" itself when the point is
+// nowhere near any boat (see water_point_outside_all).
+//
+// Fix 8, distant loose items (on by default): loot on the ground far from every player updates one tick in 8 (see
+// floor_item_far).
+//
+// Autosave waits (up to a minute) while wrecks are still waiting for their loot, so it does not fill them all at once.
+//
 // Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot,
-// profiler, distant container items.
+// profiler, distant container items, fast navmesh cleanup, fast furniture loot, wreck loot per tick, fast water checks.
 //
 // EXPERIMENTAL. Hooks game functions through the experimental SDK (anyperformance_bindings.h): Anymaker 0.1.27 /
 // Steam build 26113663 only. Read anymaker_modding.log.
@@ -78,7 +86,7 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[10], g_settings_revision = ~0ull;
+uint64_t g_tokens[12], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
@@ -198,6 +206,9 @@ constexpr StepSpec kSteps[] = {
     {&bind::srv_zombies, "basic zombies", true},
     {&bind::srv_item_ticks, "item ticks", true},
     {&bind::srv_dungeon_check, "inside-bunker checks", true},
+    {&bind::srv_buoyancy, "water volume checks", true},
+    {&bind::srv_floor_item, "loose items", true},
+    {&bind::srv_floor_stream, "loose item streaming", true},
     {&bind::srv_actors_post, "creatures and players (physics)", true},
     {&bind::srv_projectiles, "projectiles", true},
     {&bind::srv_ocean, "ocean", true},
@@ -238,9 +249,13 @@ constexpr int step_index(const anymaker::func_desc* desc) {
 constexpr int kTileStep = step_index(&bind::tile_task_integrate_server), kLootStep = step_index(&bind::vehicle_generate_loot),
               kSaveStep = step_index(&bind::save_game_inner), kNavDestroyStep = step_index(&bind::nav_tile_destroy),
               kFurnitureStep = step_index(&bind::loot_furniture), kPlaceStep = step_index(&bind::loot_position),
-              kStoreStep = step_index(&bind::item_store);
+              kStoreStep = step_index(&bind::item_store), kWaterStep = step_index(&bind::srv_buoyancy),
+              kFloorItemStep = step_index(&bind::srv_floor_item),
+              kFloorStreamStep = step_index(&bind::srv_floor_stream);
 static_assert(kTileStep >= 0 && kLootStep >= 0 && kSaveStep >= 0, "the wreck loot queue needs these steps");
 static_assert(kNavDestroyStep >= 0, "the navmesh cleanup needs its step");
+static_assert(kWaterStep >= 0, "the water checks need their step");
+static_assert(kFloorItemStep >= 0 && kFloorStreamStep >= 0, "distant loose items need their steps");
 static_assert(kFurnitureStep >= 0 && kPlaceStep >= 0 && kStoreStep >= 0, "the furniture placement cache needs these steps");
 constexpr bool is_tile_save(int i) {
     return kSteps[i].desc == &bind::tile_save_level_1 || kSteps[i].desc == &bind::tile_save_level_2 ||
@@ -325,6 +340,99 @@ bool place_known_fail(const void* inventory, uint64_t component_size, int32_t w,
         if (f.inventory == inventory && f.component_size == component_size &&
             ((w >= f.w && h >= f.h) || (w >= f.h && h >= f.w))) return true;
     return false;
+}
+
+// Fix 7, fast water checks: everything that floats (items, bodies, creatures) asks
+// server_scene.ocean_data.get_is_inside_buoyancy_volume whether a point is inside a vehicle's buoyancy volume (an
+// air pocket in a boat), up to 22% of the server thread in a town log. For each vehicle in m_vehicles_buoyancy the
+// game moves the point into the vehicle's frame, tests it against the vehicle's bounds (get_bounds: m_bounds_nodes,
+// or its merge with m_component_bounds) and only then tests the surfaces; when no vehicle matches it returns false
+// and leaves its outputs alone. The mod first tests the point against a sphere around each vehicle that holds the
+// merged bounds, which needs no frame change, and answers false itself when the point is outside all of them. Every
+// 512th answer is checked against the game's own and a mismatch turns the fix off.
+constexpr ptrdiff_t kOceanBuoyVehicles = 0x20;   // ocean_data.m_vehicles_buoyancy (vector<ptr<server_scene.vehicle>>)
+constexpr ptrdiff_t kVehicleBasis = 0x5e8, kVehicleOrigin = 0x630;   // mat34: mat33 (v0, v1, v2) then t
+constexpr ptrdiff_t kVehicleBoundsNodes = 0x9c8, kVehicleBoundsComponents = 0x9f8;   // collision.aab: min, max
+constexpr ptrdiff_t kVehicleReadEnd = 0xa28;
+std::atomic<bool> g_fast_water{true};
+bool g_water_broken;   // server thread: a checked answer differed from the game's
+struct WaterVehicles {
+    const void* ocean = nullptr; anymaker::gc_vector_raw seen{};
+    std::vector<const uint8_t*> vehicles;   // server thread only, checked readable when the vector changed
+    bool valid = false;
+} g_water;
+std::atomic<long long> g_water_answered{0}, g_water_run{0}, g_water_checked{0};
+// False when the point may be inside a vehicle's volume or the data does not look right (then the game's code runs).
+bool water_point_outside_all(const void* ocean, const double* p) {
+    auto* vec = static_cast<const uint8_t*>(ocean) + kOceanBuoyVehicles;
+    anymaker::gc_vector_raw v;
+    if (g_water.valid && g_water.ocean == ocean) std::memcpy(&v, vec, sizeof v);
+    else if (!anymaker::readable(vec, sizeof v)) return false;
+    else std::memcpy(&v, vec, sizeof v);
+    if (!g_water.valid || g_water.ocean != ocean || g_water.seen.buffer != v.buffer || g_water.seen.offset != v.offset ||
+        g_water.seen.count != v.count || g_water.seen.capacity != v.capacity) {
+        g_water.valid = false;
+        if (v.count < 0 || v.count > 100000 || v.element_size != 8 || (v.count && (v.capacity < v.count || v.offset < 0 ||
+            v.offset >= v.capacity || !v.buffer || !anymaker::readable(v.buffer, size_t(v.capacity) * 8))))
+            return false;
+        g_water.vehicles.clear();
+        for (int32_t i = 0; i < v.count; ++i) {
+            const uint8_t* veh;
+            std::memcpy(&veh, v.buffer + size_t((int64_t(v.offset) + i) % v.capacity) * 8, 8);
+            if (veh && !anymaker::readable(veh, kVehicleReadEnd)) return false;
+            g_water.vehicles.push_back(veh);
+        }
+        g_water.ocean = ocean; g_water.seen = v; g_water.valid = true;
+    }
+    for (const uint8_t* veh : g_water.vehicles) {
+        if (!veh) continue;   // the game skips null entries
+        double basis[9], t[3], box[2][6];
+        std::memcpy(basis, veh + kVehicleBasis, sizeof basis);
+        std::memcpy(t, veh + kVehicleOrigin, sizeof t);
+        std::memcpy(box[0], veh + kVehicleBoundsNodes, sizeof box[0]);
+        std::memcpy(box[1], veh + kVehicleBoundsComponents, sizeof box[1]);
+        for (int k = 0; k < 3; ++k) {   // a rigid frame keeps distances; anything else goes to the game
+            double n = basis[3 * k] * basis[3 * k] + basis[3 * k + 1] * basis[3 * k + 1] + basis[3 * k + 2] * basis[3 * k + 2];
+            if (!(std::fabs(n - 1.0) < 1e-3)) return false;
+        }
+        double r2 = 0;
+        for (int k = 0; k < 3; ++k) {
+            double lo = std::min(box[0][k], box[1][k]), hi = std::max(box[0][k + 3], box[1][k + 3]);
+            r2 += std::max(lo * lo, hi * hi);
+        }
+        double dx = p[0] - t[0], dy = p[1] - t[1], dz = p[2] - t[2], d2 = dx * dx + dy * dy + dz * dz;
+        double r = std::sqrt(r2) * 1.01 + 0.5;
+        if (!std::isfinite(d2) || !std::isfinite(r) || d2 <= r * r) return false;
+    }
+    return true;
+}
+
+// Fix 8, distant loose items: server_scene.item_floor_container.tick runs item_floor.tick for every item lying in the
+// world each server tick (item logic for it and everything inside it, and an inside-bunker check), thousands of items
+// in a town. An item more than kFloorNear from every player runs on one tick in kFloorEvery instead. Player positions
+// come from item_floor_container.replicate_stream, which the server calls for each player with the position it streams
+// items around. Item timers (a flare burning, a light's battery) run slower while nobody is near; physics is not
+// touched (that is item_floor.post_physics).
+constexpr ptrdiff_t kFloorItemPos = 0xb8;   // item_floor.m_transform (+0x70, mat34).t
+constexpr double kFloorNear = 100, kFloorPeerFreshMs = 3000;
+constexpr uint32_t kFloorEvery = 8;
+std::atomic<bool> g_floor_lod{true};
+struct FloorPeer { double pos[3]; double seen_ms = -1e18; };
+FloorPeer g_floor_peers[64];   // server thread only, by peer index
+uint32_t g_server_tick_no;     // server thread
+std::atomic<long long> g_floor_run{0}, g_floor_skipped{0}, g_floor_far_run{0}, g_floor_no_peer{0};
+// True when the item is far from every player seen in the last few seconds; false when it is near one or no player is known.
+bool floor_item_far(const uint8_t* item) {
+    double now = now_ms(); bool any = false;
+    double p[3]; std::memcpy(p, item + kFloorItemPos, sizeof p);
+    for (const auto& peer : g_floor_peers) {
+        if (now - peer.seen_ms > kFloorPeerFreshMs) continue;
+        any = true;
+        double dx = p[0] - peer.pos[0], dy = p[1] - peer.pos[1], dz = p[2] - peer.pos[2];
+        if (!(dx * dx + dy * dy + dz * dz > kFloorNear * kFloorNear)) return false;   // NaN counts as near
+    }
+    if (!any) ++g_floor_no_peer;
+    return any;
 }
 
 // ------------------------------------------------------------------ spread wreck loot (server thread)
@@ -460,6 +568,44 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
             place_watched = true;
         }
     if constexpr (I == kFurnitureStep) { if (g_furniture_depth++ == 0) g_place_fails.clear(); }
+    // (bool) get_is_inside_buoyancy_volume (const ocean_data, const vec3 world_position, f64 out_height, vec3 out_velocity)
+    if constexpr (I == kWaterStep) {
+        if (g_fast_water && !g_water_broken && a && b && c && water_point_outside_all(b, static_cast<const double*>(c))) {
+            if (++g_water_answered % 512 == 0) {
+                bool game = false; double height = 0, velocity[3] = {};
+                original(&game, b, c, &height, velocity, f, g, h, i, j);
+                ++g_water_checked;
+                if (game) {
+                    g_water_broken = true;
+                    log(1, "Fast water checks: the game found a point inside a vehicle's volume that the mod ruled out, "
+                           "so the fix is off until the game restarts");
+                    original(a, b, c, d, e, f, g, h, i, j); return;
+                }
+            }
+            *static_cast<bool*>(a) = false;
+            return;
+        } else if (g_fast_water && !g_water_broken) {
+            ++g_water_run;
+        }
+    }
+    // () item_floor_container.replicate_stream (container, islands, const s32 tick, const server_peer, const s32 peer_index,
+    // const vec3 peer_position, replicator, const bool)
+    if constexpr (I == kFloorStreamStep)
+        if (e && f) {
+            int32_t index; std::memcpy(&index, e, 4);
+            if (index >= 0 && index < 64) {
+                auto& peer = g_floor_peers[index];
+                std::memcpy(peer.pos, f, sizeof peer.pos);
+                peer.seen_ms = now_ms();
+            }
+        }
+    // () item_floor.tick (item_floor, server_scene): the game reads the item right away, so it is not checked here
+    if constexpr (I == kFloorItemStep)
+        if (g_floor_lod && a) {
+            if (!floor_item_far(static_cast<const uint8_t*>(a))) ++g_floor_run;
+            else if ((g_server_tick_no + uint32_t(reinterpret_cast<uintptr_t>(a) >> 6)) % kFloorEvery) { ++g_floor_skipped; return; }
+            else ++g_floor_far_run;
+        }
     if constexpr (I == kNavDestroyStep)   // (bool) _try_destroy_navigation_tile (container, const s32 x, const s32 y, scene)
         if (g_fast_navmesh && a && b && c && d && anymaker::readable(c, 4) && anymaker::readable(d, 4)) {
             bool used = true;
@@ -594,6 +740,8 @@ void read_settings() {
     if (g_tokens[6] && settings->get(g_tokens[6], &v)) g_inventory_lod = v.number != 0;
     if (g_tokens[7] && settings->get(g_tokens[7], &v)) g_fast_navmesh = v.number != 0;
     if (g_tokens[8] && settings->get(g_tokens[8], &v)) g_place_cache_on = v.number != 0;
+    if (g_tokens[10] && settings->get(g_tokens[10], &v)) g_fast_water = v.number != 0;
+    if (g_tokens[11] && settings->get(g_tokens[11], &v)) g_floor_lod = v.number != 0;
     if (g_tokens[9] && settings->get(g_tokens[9], &v) && std::isfinite(v.number)) g_loot_budget_ms = std::clamp(v.number, 2.0, 30.0);
 }
 
@@ -744,6 +892,17 @@ void summary(double now) {
         long long hits = g_place_hits.exchange(0), misses = g_place_misses.exchange(0);
         log(0, "Fast furniture loot: %lld placement searches answered from memory, %lld run (%.0f%% saved)", hits, misses,
             100.0 * double(hits) / double(hits + misses));
+    }
+    if (g_floor_run + g_floor_skipped + g_floor_far_run) {
+        long long run = g_floor_run.exchange(0), skipped = g_floor_skipped.exchange(0), far_run = g_floor_far_run.exchange(0),
+                  none = g_floor_no_peer.exchange(0), all = run + skipped + far_run;
+        log(0, "Distant loose items: %lld item updates, %lld skipped (%.0f%% saved), %lld far ones run, %lld with no player position",
+            all, skipped, all ? 100.0 * double(skipped) / double(all) : 0.0, far_run, none);
+    }
+    if (g_water_answered + g_water_run) {
+        long long answered = g_water_answered.exchange(0), run = g_water_run.exchange(0), checked = g_water_checked.exchange(0);
+        log(0, "Fast water checks: %lld answered by the mod (%lld checked against the game, all matched), %lld left to the game",
+            answered, checked, run);
     }
     if (g_nav_skipped + g_nav_run) {
         long long skipped = g_nav_skipped.exchange(0), run = g_nav_run.exchange(0);
@@ -915,6 +1074,7 @@ void hk_update_tasks(void* container, void* client, void* scene) {
 void hk_server_tick(void* server) {
     g_server_thread.store(GetCurrentThreadId(), std::memory_order_relaxed);
     g_tick = ServerParts{};
+    ++g_server_tick_no;
     g_loot_ms_tick = 0;
     double start = now_ms();
     reinterpret_cast<server_tick_t>(h_server_tick.original)(server);
@@ -963,7 +1123,27 @@ void hk_replicate(const int32_t* peer, void* data, void* object, void* buffer) {
 void hk_physics(void* scene, const double* dt) {
     TIMED(physics, reinterpret_cast<physics_update_t>(h_physics.original)(scene, dt));
 }
-void hk_autosave(bool* ret, void* server) { TIMED(autosave, reinterpret_cast<autosave_t>(h_autosave.original)(ret, server)); }
+// server.tick calls autosave_game once the autosave timer runs out and resets the timer only when it returns true, so
+// returning false asks again next tick. An autosave saves every loaded tile, which fills every waiting wreck at once
+// (1.4 s in a town log), so it waits until the loot queue is empty, up to a minute.
+constexpr double kAutosaveWaitMaxMs = 60000;
+double g_autosave_wait_start = -1;   // server thread
+void hk_autosave(bool* ret, void* server) {
+    if (ret && g_spread_loot && g_loot_pending.load(std::memory_order_relaxed)) {
+        double t = now_ms();
+        if (g_autosave_wait_start < 0) {
+            g_autosave_wait_start = t;
+            log(0, "Spread wreck loot: autosave waits for %d wrecks to get their loot", g_loot_pending.load());
+        }
+        if (t - g_autosave_wait_start < kAutosaveWaitMaxMs) { *ret = false; return; }
+        log(1, "Spread wreck loot: autosave waited a minute, saving now with %d wrecks still waiting", g_loot_pending.load());
+    }
+    if (g_autosave_wait_start >= 0) {
+        log(0, "Spread wreck loot: autosave ran after waiting %.1f s", (now_ms() - g_autosave_wait_start) / 1000.0);
+        g_autosave_wait_start = -1;
+    }
+    TIMED(autosave, reinterpret_cast<autosave_t>(h_autosave.original)(ret, server));
+}
 #undef TIMED
 
 // ------------------------------------------------------------------ overlay (render thread)
@@ -1139,6 +1319,16 @@ void register_settings() {
     d.description = "How long Spread wreck loot may fill wrecks each server tick. Higher fills more wrecks at once, so loot "
                     "is ready sooner but the server has less room for everything else (a tick is 16.7 ms).";
     g_tokens[9] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "fast_water"; d.label = "Fast water checks"; d.kind = ANY_SETTING_BOOL; d.order = 10; d.default_number = 1;
+    d.description = "Skips the game's check of every boat for things that are nowhere near one, when items, bodies and "
+                    "creatures ask whether they are inside a boat's air pocket. Same result, less server load. Host and solo only.";
+    g_tokens[10] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "floor_item_lod"; d.label = "Distant loose items"; d.kind = ANY_SETTING_BOOL; d.order = 11; d.default_number = 1;
+    d.description = "Loot lying on the ground more than 100 m from every player updates 8 times less often. Big saving in towns. "
+                    "Flares and lights left far away burn a little longer. Host and solo only.";
+    g_tokens[11] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace
