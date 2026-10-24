@@ -193,6 +193,12 @@ constexpr StepSpec kSteps[] = {
     {&bind::srv_creatures, "creatures (spawning)", true},
     {&bind::srv_paths, "creature pathfinding", true},
     {&bind::srv_actors, "creatures and players", true},
+    {&bind::srv_separation, "creature separation", true},
+    {&bind::srv_players, "player characters", true},
+    {&bind::srv_animals, "animals", true},
+    {&bind::srv_zombies, "basic zombies", true},
+    {&bind::srv_item_ticks, "item ticks", true},
+    {&bind::srv_dungeon_check, "inside-bunker checks", true},
     {&bind::srv_actors_post, "creatures and players (physics)", true},
     {&bind::srv_projectiles, "projectiles", true},
     {&bind::srv_ocean, "ocean", true},
@@ -468,8 +474,11 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
         }
     [[maybe_unused]] void* outer_task = g_tile_task;
     if constexpr (I == kTileStep) { ++g_tile_depth; g_tile_task = b; }   // (bool) integrate: a is the result
+    static thread_local int depth = 0;   // a step that calls itself (item ticks walk their children) counts once
     double start = now_ms();
+    ++depth;
     original(a, b, c, d, e, f, g, h, i, j);
+    --depth;
     double ms = now_ms() - start;
     if constexpr (I == kTileStep) { --g_tile_depth; g_tile_task = outer_task; }
     if constexpr (I == kFurnitureStep) { if (--g_furniture_depth == 0) g_place_fails.clear(); }
@@ -478,6 +487,7 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
             ++g_place_misses;
             if (!*static_cast<const bool*>(a) && g_place_fails.size() < 100000) g_place_fails.insert(place_key);
         }
+    if (depth > 0) return;
     if constexpr (I == kLootStep) g_loot_ms_tick += ms;
     (kSteps[I].server ? g_tick.steps : g_parts.steps).add(I, ms);
 }

@@ -10,7 +10,7 @@ namespace anyperformance {
 
 // Named steps timed inside one frame or server tick (bunker loading on the server, pieces of client.tick on the
 // main thread), indexed by the mod's step table. Times include the steps nested inside.
-constexpr int kMaxSteps = 80;
+constexpr int kMaxSteps = 96;
 struct Steps {
     double ms[kMaxSteps] = {};
     int calls[kMaxSteps] = {};
