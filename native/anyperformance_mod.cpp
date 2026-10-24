@@ -162,6 +162,11 @@ constexpr StepSpec kSteps[] = {
     {&bind::loot_tables, "wreck loot tables", true},
     {&bind::loot_required, "wreck required loot", true},
     {&bind::loot_floor, "wreck floor loot", true},
+    {&bind::loot_furniture, "wreck furniture loot", true},
+    {&bind::loot_furniture_table, "furniture loot table", true},
+    {&bind::loot_position, "furniture loot placement", true},
+    {&bind::item_create, "item creation", true},
+    {&bind::item_store, "item stored in a container", true},
     {&bind::tile_loaded_event, "tile loaded event", true},
     {&bind::tile_save_level_1, "terrain tile save (near)", true},
     {&bind::tile_save_level_2, "terrain tile save (mid)", true},
@@ -225,7 +230,9 @@ constexpr bool is_tile_save(int i) {
     return kSteps[i].desc == &bind::tile_save_level_1 || kSteps[i].desc == &bind::tile_save_level_2 ||
            kSteps[i].desc == &bind::tile_save_level_3;
 }
-using six_t = void (*)(void*, void*, void*, void*, void*, void*);
+// Steps take up to 10 pointer arguments (the furniture loot table takes 9 and a result). A step with fewer passes
+// along whatever is in the caller's stack slots, which it never reads.
+using step_fn_t = void (*)(void*, void*, void*, void*, void*, void*, void*, void*, void*, void*);
 anymaker::cell_hook h_steps[kStepCount];
 
 // Fix 4, distant container items: client_scene.vehicle_component.inventory.tick runs for every container of every
@@ -270,6 +277,8 @@ std::vector<PendingLoot> g_loot_queue;        // server thread only
 std::atomic<int> g_loot_pending{0};
 size_t g_loot_next;                           // first entry of g_loot_queue not filled yet
 int g_tile_depth;                             // inside a server tile integrate
+double g_loot_debt;                           // wreck loot ms over budget not yet paid back (server thread)
+constexpr double kLootRepayMs = 4;
 double g_loot_ms_tick;                        // wreck loot run in the server tick in progress
 int g_loot_queued_total, g_loot_skipped_total, g_loot_ticks;   // the batch since the queue was last empty
 vehicle_by_id_t g_vehicle_by_id;
@@ -290,12 +299,12 @@ bool queue_loot(void* vehicle, void* scene, const void* tier) {
 }
 // Fills queued wreck loot for scene until budget_ms of loot has run this tick (all of it with budget_ms < 0).
 bool fill_one(PendingLoot& p, void* scene) {
-    auto original = reinterpret_cast<six_t>(h_steps[kLootStep].original);
+    auto original = reinterpret_cast<step_fn_t>(h_steps[kLootStep].original);
     void* now = nullptr;
     if (p.scene == scene) g_vehicle_by_id(&now, static_cast<uint8_t*>(scene) + kSceneVehicles, &p.id);
     if (now != p.vehicle) { p.vehicle = nullptr; return false; }   // gone, or another world
     double start = now_ms();
-    original(p.vehicle, scene, &p.tier, nullptr, nullptr, nullptr);
+    original(p.vehicle, scene, &p.tier, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
     double ms = now_ms() - start;
     g_loot_ms_tick += ms;
     g_tick.steps.add(kLootStep, ms);
@@ -347,14 +356,14 @@ void* server_scene_of(void* server) {
     return s && anymaker::readable(s + kServerScene, 8) ? *reinterpret_cast<void**>(s + kServerScene) : nullptr;
 }
 
-template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void* f) {
-    auto original = reinterpret_cast<six_t>(h_steps[I].original);
+template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void* f, void* g, void* h, void* i, void* j) {
+    auto original = reinterpret_cast<step_fn_t>(h_steps[I].original);
     bool mine = kSteps[I].server ? on_server_thread() : GetCurrentThreadId() == g_main_thread;
     if (!mine) {
         if constexpr (I == kSaveStep)
             if (int n = g_loot_pending.load(std::memory_order_relaxed))
                 log(1, "a save from outside the server thread ran with %d wrecks still waiting for their loot", n);
-        original(a, b, c, d, e, f); return;
+        original(a, b, c, d, e, f, g, h, i, j); return;
     }
     if constexpr (I == kLootStep)
         if (g_tile_depth > 0 && queue_loot(a, b, c)) return;
@@ -369,7 +378,7 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
     [[maybe_unused]] void* outer_task = g_tile_task;
     if constexpr (I == kTileStep) { ++g_tile_depth; g_tile_task = b; }   // (bool) integrate: a is the result
     double start = now_ms();
-    original(a, b, c, d, e, f);
+    original(a, b, c, d, e, f, g, h, i, j);
     double ms = now_ms() - start;
     if constexpr (I == kTileStep) { --g_tile_depth; g_tile_task = outer_task; }
     if constexpr (I == kLootStep) g_loot_ms_tick += ms;
@@ -784,8 +793,14 @@ void hk_server_tick(void* server) {
     g_loot_ms_tick = 0;
     double start = now_ms();
     reinterpret_cast<server_tick_t>(h_server_tick.original)(server);
-    if (g_loot_pending.load(std::memory_order_relaxed))
-        if (void* scene = server_scene_of(server)) fill_loot(scene, kLootBudgetMs);
+    if (g_loot_pending.load(std::memory_order_relaxed)) {
+        // One wreck can cost 100-280 ms on its own (towns). Every ms over the budget is paid back first at
+        // kLootRepayMs a tick, so heavy wrecks are spaced out and the world catches up between them.
+        if (g_loot_debt > 0) g_loot_debt -= kLootRepayMs;
+        else if (void* scene = server_scene_of(server)) fill_loot(scene, kLootBudgetMs);
+        g_loot_debt += std::max(0.0, g_loot_ms_tick - kLootBudgetMs);
+        if (!g_loot_pending.load(std::memory_order_relaxed)) g_loot_debt = 0;
+    }
     double ms = now_ms() - start;
     g_tick.total = ms;
     g_server_last_ms = ms;

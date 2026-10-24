@@ -45,7 +45,7 @@ entrance load/create/physics, the bunker's static load (save file parse, objects
 navmesh, objects load, layers (load and populate with loot, creatures and vehicles), and the saves and unloads when a
 player leaves. Terrain streaming steps are the tile's objects and loot zones going into the world, the tile's terrain, path and
 tree bodies going into physics (with `physics bodies added` counting every body the server adds), creature spawn zones,
-sleeping creatures, keycards and dead-drop loot in wrecks, wreck loot (with its loot tables, required loot and floor loot timed on their own; the rest is furniture), navmesh tiles, and the save and unload of tiles
+sleeping creatures, keycards and dead-drop loot in wrecks, wreck loot (with its loot tables, required loot, floor loot and furniture loot timed on their own, and the furniture's loot table, placement, item creation and storing), navmesh tiles, and the save and unload of tiles
 left behind.
 
 ## Wreck loot on new terrain
@@ -55,7 +55,7 @@ required, floor and furniture items) in one server tick, about 7 ms a wreck. A t
 over 600 ms, the biggest cause of slow motion while driving. **Spread wreck loot** (on by default) lets 8 ms of wreck
 loot run per server tick and queues the rest by vehicle id, filling it over the next ticks (80 wrecks take about 1.3 s,
 on tiles at the edge of the loaded area). A wreck that is gone by then is skipped. A world save on the server thread
-fills the whole queue first, and a tile save fills that tile's own waiting wrecks (logged as `tile X,Y,Z was saved`). Only a save from the pause menu in that second can miss queued loot; the log
+fills the whole queue first, and a tile save fills that tile's own waiting wrecks (logged as `tile X,Y,Z was saved`). One wreck can cost 100-280 ms on its own in towns; every millisecond over the budget is paid back at 4 ms a tick before the next queued wreck runs, so heavy wrecks are spaced out and the world catches up between them. Only a save from the pause menu in that second can miss queued loot; the log
 says so when it happens. Each batch logs `Spread wreck loot: N wrecks filled over M server ticks`.
 
 ## Distant container items
