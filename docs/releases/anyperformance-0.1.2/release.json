@@ -1,0 +1,17 @@
+{
+  "Packages": {
+    "AnyPerformance": {
+      "Id": "anyperformance",
+      "MinimumApi": 46,
+      "GameBuilds": [
+        {
+          "Version": "0.1.27",
+          "SteamBuild": 26113663,
+          "ExeSha256": "097e1167477587c51a3b93ab7e7843382d99d30010678c9bd89a2fee648fec23",
+          "GclSha256": "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22"
+        }
+      ],
+      "Description": "Fixes the world slowing down and then rushing to catch up (including the stall when new terrain fills its wrecks with loot), updates the items in far-away parked vehicles less often for more FPS, and logs what causes stutters. Standalone mod, not part of a bundle. Anymaker 0.1.27 only."
+    }
+  }
+}
