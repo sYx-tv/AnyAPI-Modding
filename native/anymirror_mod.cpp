@@ -218,7 +218,7 @@ using can_add_plate_t = void (*)(bool* ret, const uint8_t* vehicle, const anymak
 using can_add_edge_t = void (*)(bool* ret, const uint8_t* vehicle, const Grid* p0, const Grid* p1, const int32_t* size);
 using paint_edge_t = void (*)(uint8_t* peer_data, const int32_t* color, const int32_t* vehicle_id, const int32_t* edge_id);
 constexpr int32_t kWindowType = 1, kHiddenColor = 68;   // vehicle_plate_util.e_plate_type.window; paint tool C68
-anymaker::cell_hook h_can_plate;
+anymaker::cell_hook h_can_plate, h_is_planar, h_is_convex;
 can_add_edge_t g_can_edge; paint_edge_t g_paint_edge;
 uint64_t g_split_token;
 std::atomic<int> g_split_logs{12};
@@ -296,6 +296,19 @@ void hk_can_plate(bool* ret, const uint8_t* vehicle, const anymaker::gc_vector_r
     if (!logged) { logged = true; log(0, "bent window loop of %d corners accepted: %zu flat pieces, %zu cuts", n, plan->plan.pieces.size(), plan->plan.cuts.size()); }
 }
 
+// While edges are picked, the plate tools refuse an edge that leaves the plane of the edges picked so far, or makes the
+// loop non-convex (state_add_plate_select_edges._get_is_planar / _get_is_convex). With splitting on both answer yes, so a
+// bent loop can be picked; can_add_plate then decides when it closes (a split exists for windows, the stock rule otherwise).
+using select_planar_t = void (*)(bool* ret, const void* state, const Grid* node_pos);
+using select_convex_t = void (*)(bool* ret, const void* state, const Grid* node_pos, const void* vehicle);
+void hk_is_planar(bool* ret, const void* state, const Grid* node_pos) {
+    reinterpret_cast<select_planar_t>(h_is_planar.original)(ret, state, node_pos);
+    if (ret && !*ret && split_on()) *ret = true;
+}
+void hk_is_convex(bool* ret, const void* state, const Grid* node_pos, const void* vehicle) {
+    reinterpret_cast<select_convex_t>(h_is_convex.original)(ret, state, node_pos, vehicle);
+    if (ret && !*ret && split_on()) *ret = true;
+}
 void hk_push_edge(uint8_t* peer_data, const int32_t* vehicle_id, const Grid* p0, const Grid* p1, const int32_t* size);
 void hk_add_plate(uint8_t* peer_data, const int32_t* vehicle_id, anymaker::gc_vector_raw* node_ids, const bool* is_reverse, const int32_t* type);
 // Sends a bent window as cut struts plus one window per piece. False when the request is not a bent window.
@@ -523,8 +536,11 @@ void install_hooks() {
         void** can_plate = locate(bind::client_can_add_plate);
         g_can_edge = reinterpret_cast<can_add_edge_t>(function(bind::client_can_add_edge));
         g_paint_edge = reinterpret_cast<paint_edge_t>(function(bind::client_push_paint_edge));
-        bool split_ok = plate_ok && can_plate && g_can_edge && g_paint_edge && h_can_plate.install(can_plate, (void*)&hk_can_plate);
-        log(split_ok ? 0 : 1, "bent window split %s (check %d, strut check %d, paint %d)", split_ok ? "ready" : "unavailable", !!can_plate, !!g_can_edge, !!g_paint_edge);
+        void** is_planar = locate(bind::select_is_planar), ** is_convex = locate(bind::select_is_convex);
+        bool split_ok = plate_ok && can_plate && is_planar && is_convex && g_can_edge && g_paint_edge && h_can_plate.install(can_plate, (void*)&hk_can_plate) &&
+            h_is_planar.install(is_planar, (void*)&hk_is_planar) && h_is_convex.install(is_convex, (void*)&hk_is_convex);
+        log(split_ok ? 0 : 1, "bent window split %s (check %d, pick %d%d, strut check %d, paint %d)", split_ok ? "ready" : "unavailable", !!can_plate,
+            !!is_planar, !!is_convex, !!g_can_edge, !!g_paint_edge);
         g_ready = true;
         log(0, "Ready after %d s: grid size %s, wall %s. Equip an edge tool and press the mirror key.", attempt,
             g_grid_size_ptr ? "found" : "default 0.25 m", g_box_fn ? "available" : "unavailable");
@@ -532,6 +548,8 @@ void install_hooks() {
     }
 }
 void remove_hooks() {
+    h_is_convex.remove((void*)&hk_is_convex);
+    h_is_planar.remove((void*)&hk_is_planar);
     h_can_plate.remove((void*)&hk_can_plate);
     h_add_plate.remove((void*)&hk_add_plate);
     for (int i = kRemoveCount - 1; i >= 0; --i) h_remove[i].remove(kRemoveHooks[i]);
