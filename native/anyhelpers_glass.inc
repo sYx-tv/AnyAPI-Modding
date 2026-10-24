@@ -6,7 +6,8 @@
 // window glass list instead (add_triangle_glass, the call window plates make), tinted by get_window_glass_color(intact).
 // Curved windows (setting, on by default): vehicle_plate_util.get_is_suitable_for_window is the window shape rule, run only
 // when a window plate is placed or a plate is switched to window (the tool on the client, the event handler on the host).
-// It is answered yes for any plate shape. Saves do not re-check it, so the windows load in the unmodded game too.#include "anymaker_sdk_runtime.hpp"
+// It is answered yes for any plate shape. Saves do not re-check it, so the windows load in the unmodded game too.
+#include "anymaker_sdk_runtime.hpp"
 #include "route_cell.h"
 #include "anyhelpers_bindings.h"
 #include <atomic>
