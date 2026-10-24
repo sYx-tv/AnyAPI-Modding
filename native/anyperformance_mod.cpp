@@ -52,6 +52,7 @@
 #include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <cwchar>
 #include <mutex>
 #include <thread>
@@ -239,7 +240,7 @@ std::unordered_map<void*, InventoryLod> g_inventory;   // main thread only, keye
 double g_local_pos[3];
 bool g_local_ok;
 uint32_t g_frame_no;
-long long g_inventory_ran, g_inventory_skipped;
+long long g_inventory_ran, g_inventory_skipped, g_inventory_calls, g_inventory_no_player;
 
 // ------------------------------------------------------------------ spread wreck loot (server thread)
 // When a terrain tile goes into the world, server_scene.environment_tile_task.integrate loops over every vehicle, calls
@@ -248,15 +249,19 @@ long long g_inventory_ran, g_inventory_skipped;
 // server for over 600 ms and the world went into slow motion. With "Spread wreck loot" on, wreck loot inside a tile
 // integrate runs until kLootBudgetMs of loot has run this tick; the rest is queued by vehicle id and filled after the
 // following ticks, kLootBudgetMs a tick (80 wrecks take about 1.3 s, on tiles at the edge of the loaded area). A
-// queued wreck that is gone by then is skipped. Before any save or tile save on the server thread the whole queue is
-// filled first, so a save never stores a wreck as looted without its items. Only a save from the main thread (the
+// queued wreck that is gone by then is skipped. Before a world save on the server thread the whole queue is filled,
+// and before a tile save that tile's own wrecks are, so a save never stores a wreck as looted without its items. Only a save from the main thread (the
 // pause menu's save in the first second after a tile loads) can miss queued loot; that is logged.
 constexpr double kLootBudgetMs = 8;
 constexpr ptrdiff_t kServerScene = 0xa0;      // server.m_scene, ref<server_scene> at +0x98: object pointer at +0xa0
 constexpr ptrdiff_t kSceneVehicles = 0x1b0;   // server_scene.m_vehicles (server_scene.vehicle.container)
 constexpr ptrdiff_t kVehicleId = 0x40;        // server_scene.vehicle.m_id (s32)
 using vehicle_by_id_t = void (*)(void** ret, void* container, const int32_t* id);
-struct PendingLoot { void* scene; void* vehicle; int32_t id, tier; };
+// tile/grid: the tile the wreck was queued in (environment_tile_task.m_tile_loaded +0x310, m_position +0x8), so a
+// tile save fills only its own wrecks (environment_tile.m_grid_position +0x170). vehicle == nullptr: already filled.
+struct PendingLoot { void* scene; void* vehicle; int32_t id, tier; const void* tile; int32_t grid[3]; bool has_grid; };
+constexpr ptrdiff_t kTaskTile = 0x310, kTaskGrid = 0x8, kTileGrid = 0x170;
+void* g_tile_task;                            // the server tile integrate in progress
 std::atomic<bool> g_spread_loot{true};
 std::vector<PendingLoot> g_loot_queue;        // server thread only
 std::atomic<int> g_loot_pending{0};
@@ -271,25 +276,60 @@ bool queue_loot(void* vehicle, void* scene, const void* tier) {
     if (!g_spread_loot || !g_vehicle_by_id || g_loot_ms_tick < kLootBudgetMs) return false;
     auto* v = static_cast<uint8_t*>(vehicle);
     if (!v || !scene || !anymaker::readable(v + kVehicleId, 4) || (tier && !anymaker::readable(tier, 4))) return false;
-    g_loot_queue.push_back({scene, vehicle, *reinterpret_cast<const int32_t*>(v + kVehicleId),
-                            tier ? *static_cast<const int32_t*>(tier) : 0});
+    PendingLoot p{scene, vehicle, *reinterpret_cast<const int32_t*>(v + kVehicleId), tier ? *static_cast<const int32_t*>(tier) : 0};
+    auto* task = static_cast<const uint8_t*>(g_tile_task);
+    if (task && anymaker::readable(task + kTaskTile, 8)) p.tile = *reinterpret_cast<void* const*>(task + kTaskTile);
+    if (task && anymaker::readable(task + kTaskGrid, 12)) { std::memcpy(p.grid, task + kTaskGrid, 12); p.has_grid = true; }
+    g_loot_queue.push_back(p);
     g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
     ++g_loot_queued_total;
     return true;
 }
 // Fills queued wreck loot for scene until budget_ms of loot has run this tick (all of it with budget_ms < 0).
-void fill_loot(void* scene, double budget_ms) {
+bool fill_one(PendingLoot& p, void* scene) {
     auto original = reinterpret_cast<six_t>(h_steps[kLootStep].original);
+    void* now = nullptr;
+    if (p.scene == scene) g_vehicle_by_id(&now, static_cast<uint8_t*>(scene) + kSceneVehicles, &p.id);
+    if (now != p.vehicle) { p.vehicle = nullptr; return false; }   // gone, or another world
+    double start = now_ms();
+    original(p.vehicle, scene, &p.tier, nullptr, nullptr, nullptr);
+    double ms = now_ms() - start;
+    g_loot_ms_tick += ms;
+    g_tick.steps.add(kLootStep, ms);
+    p.vehicle = nullptr;
+    return true;
+}
+// A tile is being saved (unloaded or changing detail): fill the queued wrecks of that tile only. Wrecks queued with
+// no known tile are filled too, to be safe.
+void fill_tile_loot(const void* tile, void* scene) {
+    auto* t = static_cast<const uint8_t*>(tile);
+    int32_t grid[3]{};
+    bool has_grid = t && anymaker::readable(t + kTileGrid, 12);
+    if (has_grid) std::memcpy(grid, t + kTileGrid, 12);
+    int filled = 0;
+    for (size_t i = g_loot_next; i < g_loot_queue.size(); ++i) {
+        auto& p = g_loot_queue[i];
+        if (!p.vehicle) continue;
+        bool same = (p.tile && p.tile == tile) || (has_grid && p.has_grid && std::memcmp(p.grid, grid, 12) == 0) ||
+                    (!p.tile && !p.has_grid);
+        if (!same) continue;
+        if (fill_one(p, scene)) ++filled; else ++g_loot_skipped_total;
+    }
+    if (filled) log(0, "Spread wreck loot: tile %d,%d,%d was saved, so its %d waiting wrecks were filled at once", grid[0],
+                    grid[1], grid[2], filled);
+    // Diagnostics for the first saves that match nothing, to check the tile matching in game.
+    static int unmatched_logs = 0;
+    if (!filled && unmatched_logs < 5 && g_loot_next < g_loot_queue.size()) {
+        const auto& q = g_loot_queue[g_loot_next];
+        ++unmatched_logs;
+        log(0, "Spread wreck loot: tile %d,%d,%d saved with none of its wrecks waiting (first waiting wreck is from tile %d,%d,%d%s)",
+            grid[0], grid[1], grid[2], q.grid[0], q.grid[1], q.grid[2], q.tile ? "" : ", no tile pointer");
+    }
+}
+void fill_loot(void* scene, double budget_ms) {
     while (g_loot_next < g_loot_queue.size() && (budget_ms < 0 || g_loot_ms_tick < budget_ms)) {
-        PendingLoot p = g_loot_queue[g_loot_next++];
-        void* now = nullptr;
-        if (p.scene == scene) g_vehicle_by_id(&now, static_cast<uint8_t*>(scene) + kSceneVehicles, &p.id);
-        if (now != p.vehicle) { ++g_loot_skipped_total; continue; }   // gone, or another world
-        double start = now_ms();
-        original(p.vehicle, scene, &p.tier, nullptr, nullptr, nullptr);
-        double ms = now_ms() - start;
-        g_loot_ms_tick += ms;
-        g_tick.steps.add(kLootStep, ms);
+        PendingLoot& p = g_loot_queue[g_loot_next++];
+        if (p.vehicle && !fill_one(p, scene)) ++g_loot_skipped_total;   // null: filled by its tile's save
     }
     ++g_loot_ticks;
     if (g_loot_next >= g_loot_queue.size()) {
@@ -319,12 +359,16 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
         if (g_loot_pending.load(std::memory_order_relaxed))
             if (void* scene = server_scene_of(a)) fill_loot(scene, -1);
     if constexpr (is_tile_save(I))  // environment_tile.save_level_N (tile, server_scene, ...)
-        if (g_loot_pending.load(std::memory_order_relaxed) && b) fill_loot(b, -1);
-    if constexpr (I == kTileStep) ++g_tile_depth;
+        if (g_loot_pending.load(std::memory_order_relaxed) && b) {
+            fill_tile_loot(a, b);
+            g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
+        }
+    [[maybe_unused]] void* outer_task = g_tile_task;
+    if constexpr (I == kTileStep) { ++g_tile_depth; g_tile_task = a; }
     double start = now_ms();
     original(a, b, c, d, e, f);
     double ms = now_ms() - start;
-    if constexpr (I == kTileStep) --g_tile_depth;
+    if constexpr (I == kTileStep) { --g_tile_depth; g_tile_task = outer_task; }
     if constexpr (I == kLootStep) g_loot_ms_tick += ms;
     (kSteps[I].server ? g_tick.steps : g_parts.steps).add(I, ms);
 }
@@ -568,10 +612,12 @@ void summary(double now) {
                "rendering/UI %.1f%s%s", w.frames, w.frame_ms / n, w.sum.client_tick / n, w.sum.scene_tick / n,
             w.sum.loading / n, (w.frame_ms - w.sum.client_tick) / n, steps[0] ? " | steps: " : "", steps);
     }
-    if (g_inventory_ran + g_inventory_skipped) {
-        log(0, "Distant container items: %lld updates skipped, %lld run (%.0f%% saved)", g_inventory_skipped, g_inventory_ran,
-            100.0 * double(g_inventory_skipped) / double(g_inventory_ran + g_inventory_skipped));
-        g_inventory_ran = g_inventory_skipped = 0;
+    if (h_inventory.cell && g_inventory_lod) {
+        long long calls = g_inventory_calls;
+        log(0, "Distant container items: %lld container updates, %lld skipped (%.0f%% saved), %lld far ones run, "
+               "%lld with no player position", calls, g_inventory_skipped, calls ? 100.0 * double(g_inventory_skipped) / double(calls) : 0.0,
+            g_inventory_ran, g_inventory_no_player);
+        g_inventory_ran = g_inventory_skipped = g_inventory_calls = g_inventory_no_player = 0;
     }
     if (sw.ticks) {
         const ServerParts& t = sw.sum; double n = sw.ticks;
@@ -658,6 +704,8 @@ void update_local_player() {
 void hk_inventory(void* self, void* client, void* vehicle, void* scene, const double* dt) {
     auto run = [&](const double* d) { reinterpret_cast<inventory_tick_t>(h_inventory.original)(self, client, vehicle, scene, d); };
     auto* v = static_cast<const uint8_t*>(vehicle);
+    ++g_inventory_calls;
+    if (g_inventory_lod && !g_local_ok) ++g_inventory_no_player;
     if (!g_inventory_lod || !g_local_ok || g_stop || !dt || !v || !anymaker::readable(v + kClientVehiclePos, 24)) return run(dt);
     const auto* pos = reinterpret_cast<const double*>(v + kClientVehiclePos);
     double dx = pos[0] - g_local_pos[0], dy = pos[1] - g_local_pos[1], dz = pos[2] - g_local_pos[2];

@@ -54,8 +54,8 @@ When a terrain tile loads on the host, the game fills every wreck on it with loo
 required, floor and furniture items) in one server tick, about 7 ms a wreck. A tile with 80 wrecks held the server for
 over 600 ms, the biggest cause of slow motion while driving. **Spread wreck loot** (on by default) lets 8 ms of wreck
 loot run per server tick and queues the rest by vehicle id, filling it over the next ticks (80 wrecks take about 1.3 s,
-on tiles at the edge of the loaded area). A wreck that is gone by then is skipped, and every save or tile save on the
-server thread fills the whole queue first. Only a save from the pause menu in that second can miss queued loot; the log
+on tiles at the edge of the loaded area). A wreck that is gone by then is skipped. A world save on the server thread
+fills the whole queue first, and a tile save fills that tile's own waiting wrecks (logged as `tile X,Y,Z was saved`). Only a save from the pause menu in that second can miss queued loot; the log
 says so when it happens. Each batch logs `Spread wreck loot: N wrecks filled over M server ticks`.
 
 ## Distant container items
@@ -64,7 +64,7 @@ Every frame the game places every item inside every container of every loaded ve
 loot far away. In the 0.1.2 profile that was 13% of the main thread. With **Distant container items** on, a
 container on a vehicle more than 50 m from you that has not moved is updated every 8th frame, with the skipped
 frame time passed on; anything near you or moving is updated every frame. Every 30 s the log shows
-`Distant container items: N updates skipped, M run (P% saved)`.
+`Distant container items: N container updates, S skipped (P% saved), F far ones run, X with no player position`.
 
 ## Frame hitches
 
