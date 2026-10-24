@@ -33,7 +33,7 @@
 // empty ones itself (see nav_cell_used).
 //
 // Fix 6, fast furniture loot (on by default): remembers failed loot placements in a wreck's furniture while it is
-// filled (see PlaceKey).
+// filled (see place_known_fail).
 //
 // Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot,
 // profiler, distant container items.
@@ -63,7 +63,6 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <string>
@@ -307,21 +306,26 @@ bool nav_cell_used(const void* container, int32_t x, int32_t y, bool& used) {
     return true;
 }
 
-// Fix 6, furniture placement cache: generate_loot_furniture picks random items for each container and calls
-// vehicle._get_valid_loot_position_rotation_in_furniture for each, which tries every cell of the container in both
-// rotations (43,000 calls and 250 ms for one town wreck). When nothing fits it returns false without touching the
-// random generator or anything else, so a repeat of the same question gets the same answer until an item is stored.
-// The mod remembers those failures within one generate_loot_furniture call and forgets them on every store.
-struct PlaceKey { const void* inventory; const void* item; uint64_t component_size, item_size;
-                  bool operator==(const PlaceKey& o) const { return inventory == o.inventory && item == o.item &&
-                      component_size == o.component_size && item_size == o.item_size; } };
-struct PlaceHash { size_t operator()(const PlaceKey& k) const {
-    uint64_t h = uint64_t(uintptr_t(k.inventory)) * 0x9e3779b97f4a7c15ull ^ uint64_t(uintptr_t(k.item)) * 0xc2b2ae3d27d4eb4full;
-    return size_t(h ^ k.component_size * 0x165667b19e3779f9ull ^ k.item_size); } };
+// Fix 6, fast furniture loot: generate_loot_furniture tries random loot items in each container of a wreck and calls
+// vehicle._get_valid_loot_position_rotation_in_furniture for each, which tests every cell of the container in two
+// rotations (40,000 calls and 240 ms for one town wreck). When nothing fits it returns false without touching the
+// random generator. inventory.can_store_item_rotated fails for an item whose definition is not nestable
+// (inventory_definition.m_inventory.m_is_nestable, +0x1c8), and otherwise depends only on the item's size
+// (m_inventory.m_size, +0x170), the container's bounds and the items already in it. So inside one
+// generate_loot_furniture call, where items are only added: a non-nestable item never fits, and once a w x h item has
+// no place in a container (either way round), nothing at least that big (either way round) fits there either.
+constexpr ptrdiff_t kDefSize = 0x170, kDefNestable = 0x1c8;
+struct PlaceFail { const void* inventory; uint64_t component_size; int32_t w, h; };
 std::atomic<bool> g_place_cache_on{true};
-std::unordered_set<PlaceKey, PlaceHash> g_place_fails;   // server thread only
+std::vector<PlaceFail> g_place_fails;   // server thread only, cleared around each generate_loot_furniture call
 int g_furniture_depth;
 std::atomic<long long> g_place_hits{0}, g_place_misses{0};
+bool place_known_fail(const void* inventory, uint64_t component_size, int32_t w, int32_t h) {
+    for (const auto& f : g_place_fails)
+        if (f.inventory == inventory && f.component_size == component_size &&
+            ((w >= f.w && h >= f.h) || (w >= f.h && h >= f.w))) return true;
+    return false;
+}
 
 // ------------------------------------------------------------------ spread wreck loot (server thread)
 // When a terrain tile goes into the world, server_scene.environment_tile_task.integrate loops over every vehicle, calls
@@ -441,18 +445,20 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
         if (g_tile_depth > 0 && queue_loot(a, b, c)) return;
     // (bool) _get_valid_loot_position_rotation_in_furniture (vehicle, random, inventory, const vec2_s32 component_size,
     // const inventory_definition item, const vec2_s32 item_size, out pos, out rot)
-    [[maybe_unused]] PlaceKey place_key{};
-    [[maybe_unused]] bool place_cached = false;
+    [[maybe_unused]] PlaceFail place{};
+    [[maybe_unused]] bool place_watched = false;
     if constexpr (I == kPlaceStep)
-        if (g_place_cache_on && g_furniture_depth > 0 && a && d && e && f && g && anymaker::readable(e, 8) && anymaker::readable(g, 8)) {
-            place_key.inventory = d; place_key.item = f;
-            std::memcpy(&place_key.component_size, e, 8); std::memcpy(&place_key.item_size, g, 8);
-            if (g_place_fails.count(place_key)) { *static_cast<bool*>(a) = false; ++g_place_hits; return; }
-            place_cached = true;
+        if (g_place_cache_on && g_furniture_depth > 0 && a && d && e && f && anymaker::readable(e, 8) &&
+            anymaker::readable(static_cast<const uint8_t*>(f) + kDefSize, 8) &&
+            anymaker::readable(static_cast<const uint8_t*>(f) + kDefNestable, 1)) {
+            auto* def = static_cast<const uint8_t*>(f);
+            place.inventory = d; std::memcpy(&place.component_size, e, 8);
+            std::memcpy(&place.w, def + kDefSize, 4); std::memcpy(&place.h, def + kDefSize + 4, 4);
+            if (!def[kDefNestable] || place_known_fail(place.inventory, place.component_size, place.w, place.h)) {
+                *static_cast<bool*>(a) = false; ++g_place_hits; return;
+            }
+            place_watched = true;
         }
-    if constexpr (I == kStoreStep)   // store_item_rotated (inventory, ...): that container changed
-        if (!g_place_fails.empty())
-            for (auto it = g_place_fails.begin(); it != g_place_fails.end();) it = it->inventory == a ? g_place_fails.erase(it) : std::next(it);
     if constexpr (I == kFurnitureStep) { if (g_furniture_depth++ == 0) g_place_fails.clear(); }
     if constexpr (I == kNavDestroyStep)   // (bool) _try_destroy_navigation_tile (container, const s32 x, const s32 y, scene)
         if (g_fast_navmesh && a && b && c && d && anymaker::readable(c, 4) && anymaker::readable(d, 4)) {
@@ -483,9 +489,9 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
     if constexpr (I == kTileStep) { --g_tile_depth; g_tile_task = outer_task; }
     if constexpr (I == kFurnitureStep) { if (--g_furniture_depth == 0) g_place_fails.clear(); }
     if constexpr (I == kPlaceStep)
-        if (place_cached) {
+        if (place_watched) {
             ++g_place_misses;
-            if (!*static_cast<const bool*>(a) && g_place_fails.size() < 100000) g_place_fails.insert(place_key);
+            if (!*static_cast<const bool*>(a) && g_place_fails.size() < 4096) g_place_fails.push_back(place);
         }
     if (depth > 0) return;
     if constexpr (I == kLootStep) g_loot_ms_tick += ms;

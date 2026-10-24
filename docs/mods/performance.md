@@ -60,12 +60,13 @@ says so when it happens. Each batch logs `Spread wreck loot: N wrecks filled ove
 
 ## Fast furniture loot
 
-A heavy town wreck spends about 95% of its loot time placing items in its cabinets and shelves: the game picks random
-items and, for each, tries every slot of the container in both rotations (43,000 searches and 250 ms for one wreck).
-When nothing fits, that search changes nothing, not even the random numbers, so asking again gives the same answer
-until an item is stored there. With **Fast furniture loot** on, the mod remembers those failed searches while one
-wreck's furniture fills and forgets a container's entries whenever an item is stored in it. The loot is the same.
-Every 30 s the log shows `Fast furniture loot: N placement searches answered from memory, M run (P% saved)`.
+A heavy town wreck spends most of its loot time placing items in its cabinets and shelves: the game picks random
+items and, for each, tests every slot of the container in two rotations (40,000 searches and 240 ms for one wreck).
+A search that finds nothing changes nothing, not even the random numbers. Whether an item fits depends only on
+whether its kind can go in containers at all and on its size, so while one wreck's furniture fills (items are only
+added), the mod answers two cases itself: an item that can never go in a container, and an item at least as big
+(either way round) as one that already found no place in that container. Every 30 s the log shows
+`Fast furniture loot: N placement searches answered from memory, M run (P% saved)`.
 
 ## Fast navmesh cleanup
 
