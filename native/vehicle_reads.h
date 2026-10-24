@@ -29,6 +29,8 @@ constexpr ptrdiff_t node_grid_pos = 16 + 8;          // property_vec3_s32 _m_val
 constexpr ptrdiff_t edge_id = 8;                     // s32
 constexpr ptrdiff_t edge_node_id_0 = 16 + 8;         // property_s32 _m_value
 constexpr ptrdiff_t edge_node_id_1 = 32 + 8;
+constexpr ptrdiff_t edge_color = 48 + 8;            // property_s32 _m_value: palette index
+constexpr ptrdiff_t edge_size = 64 + 8;
 // client_scene.vehicle_plate
 constexpr ptrdiff_t plate_id = 8;                    // s32
 constexpr ptrdiff_t plate_nodes = 16 + 8;            // m_nodes -> vector<ref<vehicle_plate_node>>
