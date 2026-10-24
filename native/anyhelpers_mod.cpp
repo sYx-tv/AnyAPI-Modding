@@ -51,7 +51,7 @@ static uint32_t input(const AnyInputV1* e,void*){std::lock_guard<std::mutex> loc
 #include "anyhelpers_settings.inc"
 #include "anyhelpers_favorites.inc"
 #include "anyhelpers_admin.inc"
-#include "anyhelpers_glass.inc"
+#include "anyhelpers_windows.inc"
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,AnyModCallbacksV1* callbacks){if(!api||!callbacks||api->abi!=1||api->struct_size!=sizeof(*api)||!api->log||!api->capture_input||!api->plugin_directory)return false;
  host=*api;auto services=AnyAPI_Services();menu=services?(const AnyMenuV2*)services->query("anyapi.menu",2):nullptr;if(!menu||menu->struct_size!=sizeof(*menu))return false;
  state.file=std::filesystem::path(api->plugin_directory)/L"AnyHelpers"/L"bindings.tsv";
@@ -60,10 +60,10 @@ extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,Any
  auto rejected=state.load();state.file=canonical;callbacks->id="anyhelpers";
  AnyMenuTabV2 section;section.icon=ANY_MENU_ICON_KEYBOARD;section.id="mod_controls";section.title="MOD CONTROLS";section.order=100;section.draw=draw;section.event=event;section.dirty=dirty;section.defaults=defaults;
  if(!menu->add_tab(&section)||!services->input_filter(input,nullptr,100)||!services->publish("modcontrols.bindings",1,&bindings)||!services->publish("anyhelpers.controls",1,&bindings)||!settingsmod::init(services))return false;
- favorites::init();bool admin_tab=adminui::init(services);callbacks->shutdown=[](void*){favorites::shutdown();admin::shutdown();glass::shutdown();};
+ favorites::init();bool admin_tab=adminui::init(services);callbacks->shutdown=[](void*){favorites::shutdown();admin::shutdown();windows::shutdown();};
  log("DLL_READY native_tabs_registered="+std::to_string(admin_tab?3:2)+" legacy_binding_service=1 rejected_saved_rows="+std::to_string(rejected));return true;}
 // Game functions are resolved after the JIT has loaded, on a background thread. Bundled mods only list their
 // parts (for the Enabled rows) once every DLL has loaded.
-extern "C" __declspec(dllexport) void AnyAPI_ModReady(){favorites::start();admin::start();glass::start();settingsmod::add_part_rows(AnyAPI_Services());}
+extern "C" __declspec(dllexport) void AnyAPI_ModReady(){favorites::start();admin::start();windows::start();settingsmod::add_part_rows(AnyAPI_Services());}
 BOOL APIENTRY DllMain(HMODULE module,DWORD reason,LPVOID){if(reason==DLL_PROCESS_ATTACH)DisableThreadLibraryCalls(module);return TRUE;}
 

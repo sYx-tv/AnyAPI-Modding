@@ -1,5 +1,5 @@
 #pragma once
-// AnyHelpers game bindings (Duplicate tool favorites, the host admin panel, glass struts and curved windows), generated for Anymaker 0.1.27 /
+// AnyHelpers game bindings (Duplicate tool favorites, the host admin panel and bent windows), generated for Anymaker 0.1.27 /
 // Steam build 26113663 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the SDK reference root (reference-0.1.27), one --signature per binding below.
@@ -70,8 +70,6 @@ inline constexpr global_desc g_time_start_offset{"g_time_start_offset","48 8b 0d
 inline constexpr func_desc edge_static_geometry{"() vehicle_edge_util.add_static_geometry (const vec3_s32, const vec3_s32, const s32, const s32, vehicle_plates_edges_builder)","53 55 56 57 48 81 ec d8 04 00 00 48 8b ac 24 20 05 00 00 48 89 8c 24 38 02 00 00 48 89 94 24 40",{"53 55 56 57 48 81 ec a8 00 00 00 48 89 4c 24 58 48 89 54 24 60 4c 89 44 24 68 48 83 79 50 00 0f", {664u}, 1},"",0u,-1};
 // (color8) vehicle_plate_util.get_window_glass_color (const e_vehicle_glass_state) | side: client
 inline constexpr func_desc window_glass_color{"(color8) vehicle_plate_util.get_window_glass_color (const e_vehicle_glass_state)","53 55 56 48 83 ec 40 48 89 4c 24 20 48 89 54 24 28 48 8b 15 58 00 00 00 48 8b 1d 51 00 00 00 48",{"53 55 56 57 41 54 41 55 41 56 48 81 ec 00 0a 00 00 48 8b b4 24 60 0a 00 00 4c 8b a4 24 68 0a 00", {9424u}, 1},"",0u,-1};
-// () vehicle_plates_edges_builder.add_edge_triangle (vehicle_plates_edges_builder, const vec3, const vec3, const vec3, const vec3, const s32) | side: shared
-inline constexpr func_desc edge_triangle{"() vehicle_plates_edges_builder.add_edge_triangle (vehicle_plates_edges_builder, const vec3, const vec3, const vec3, const vec3, const s32)","53 55 56 48 81 ec 80 00 00 00 48 8b 9c 24 c0 00 00 00 48 8b ac 24 c8 00 00 00 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 4c 89 4c 24 38 48 89 5c 24 40 48 89 6c 24 48 48 8d 44 24 50 48 8d 49 78",{"53 55 56 48 81 ec 40 01 00 00 48 8b 9c 24 80 01 00 00 48 89 8c 24 a0 00 00 00 48 89 94 24 a8 00", {648u}, 1},"",0u,-1};
 // () vehicle_plates_edges_builder.add_triangle_glass (vehicle_plates_edges_builder, const vec3, const vec3, const vec3, const vec3, const color8) | side: shared
 inline constexpr func_desc triangle_glass{"() vehicle_plates_edges_builder.add_triangle_glass (vehicle_plates_edges_builder, const vec3, const vec3, const vec3, const vec3, const color8)","53 55 56 48 81 ec 80 00 00 00 48 8b 9c 24 c0 00 00 00 48 8b ac 24 c8 00 00 00 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 4c 89 4c 24 38 48 89 5c 24 40 48 89 6c 24 48 48 8d 44 24 50 48 8d 49 28 48 8b 35 a8",{"53 55 56 57 41 54 41 55 41 56 48 81 ec 00 0a 00 00 48 8b b4 24 60 0a 00 00 4c 8b a4 24 68 0a 00", {9440u}, 1},"",0u,-1};
 // (bool) vehicle_plate_util.get_is_suitable_for_window (const vec3_s32, const vec3, const s32, const vector<vec3_s32>) | side: shared
