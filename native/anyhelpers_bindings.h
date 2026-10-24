@@ -1,5 +1,5 @@
 #pragma once
-// AnyHelpers game bindings (Duplicate tool favorites, the host admin panel and glass struts), generated for Anymaker 0.1.27 /
+// AnyHelpers game bindings (Duplicate tool favorites, the host admin panel, glass struts and curved windows), generated for Anymaker 0.1.27 /
 // Steam build 26113663 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the SDK reference root (reference-0.1.27), one --signature per binding below.
@@ -74,4 +74,6 @@ inline constexpr func_desc window_glass_color{"(color8) vehicle_plate_util.get_w
 inline constexpr func_desc edge_triangle{"() vehicle_plates_edges_builder.add_edge_triangle (vehicle_plates_edges_builder, const vec3, const vec3, const vec3, const vec3, const s32)","53 55 56 48 81 ec 80 00 00 00 48 8b 9c 24 c0 00 00 00 48 8b ac 24 c8 00 00 00 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 4c 89 4c 24 38 48 89 5c 24 40 48 89 6c 24 48 48 8d 44 24 50 48 8d 49 78",{"53 55 56 48 81 ec 40 01 00 00 48 8b 9c 24 80 01 00 00 48 89 8c 24 a0 00 00 00 48 89 94 24 a8 00", {648u}, 1},"",0u,-1};
 // () vehicle_plates_edges_builder.add_triangle_glass (vehicle_plates_edges_builder, const vec3, const vec3, const vec3, const vec3, const color8) | side: shared
 inline constexpr func_desc triangle_glass{"() vehicle_plates_edges_builder.add_triangle_glass (vehicle_plates_edges_builder, const vec3, const vec3, const vec3, const vec3, const color8)","53 55 56 48 81 ec 80 00 00 00 48 8b 9c 24 c0 00 00 00 48 8b ac 24 c8 00 00 00 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 4c 89 4c 24 38 48 89 5c 24 40 48 89 6c 24 48 48 8d 44 24 50 48 8d 49 28 48 8b 35 a8",{"53 55 56 57 41 54 41 55 41 56 48 81 ec 00 0a 00 00 48 8b b4 24 60 0a 00 00 4c 8b a4 24 68 0a 00", {9440u}, 1},"",0u,-1};
+// (bool) vehicle_plate_util.get_is_suitable_for_window (const vec3_s32, const vec3, const s32, const vector<vec3_s32>) | side: shared
+inline constexpr func_desc suitable_for_window{"(bool) vehicle_plate_util.get_is_suitable_for_window (const vec3_s32, const vec3, const s32, const vector<vec3_s32>)","53 55 56 57 48 81 ec 38 0b 00 00 48 89 d7 48 8b b4 24 80 0b 00 00 48 89 8c 24 18 09 00 00 48 89",{"53 55 56 57 48 81 ec d8 01 00 00 48 8b bc 24 20 02 00 00 48 89 8c 24 48 01 00 00 48 89 94 24 50 01 00 00 4c 89 84 24 58 01 00 00 4c 89 8c 24 60 01 00 00 48 89 bc 24 68 01 00 00 48 8d 84 24 70 01 00 00 48 8b 1d b6", {1880u}, 1},"",0u,-1};
 }  // namespace anyhelpers::bind
