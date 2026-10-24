@@ -51,6 +51,21 @@ inline bool flat_convex(const std::vector<P>& p, const std::vector<int>& idx) {
     return std::fabs(turn - 6.283185307179586) < 1e-6;
 }
 
+// No corner of the loop is sharper than min_degrees (straight corners are fine). Thin slivers make windows the game
+// cannot frame: in game a needle-thin piece drew huge black glass over the world.
+inline bool corners_ok(const std::vector<P>& p, const std::vector<int>& idx, double min_degrees = 12) {
+    size_t n = idx.size();
+    for (size_t i = 0; i < n; ++i) {
+        P a = p[idx[(i + n - 1) % n]], b = p[idx[i]], c = p[idx[(i + 1) % n]];
+        P u = sub(a, b), v = sub(c, b);
+        double lu = std::sqrt(double(dot(u, u))), lv = std::sqrt(double(dot(v, v)));
+        if (lu == 0 || lv == 0) return false;
+        double cosine = double(dot(u, v)) / (lu * lv);
+        if (cosine > std::cos(min_degrees * 3.141592653589793 / 180)) return false;   // angle below the limit
+    }
+    return true;
+}
+
 struct Plan {
     std::vector<std::vector<int>> pieces;           // loop indices, each in the loop's own order
     std::vector<std::pair<int, int>> cuts;          // loop index pairs joined by a new strut
@@ -115,6 +130,7 @@ template <class CutOk> Plan split(const std::vector<P>& p, CutOk&& cut_ok) {
                 if (!clear || !inside(poly, (X[a] + X[b]) / 2, (Y[a] + Y[b]) / 2)) continue;
                 std::vector<int> s1(poly.begin() + i, poly.begin() + j + 1), s2(poly.begin() + j, poly.end());
                 s2.insert(s2.end(), poly.begin(), poly.begin() + i + 1);
+                if (!corners_ok(p, s1) || !corners_ok(p, s2)) continue;
                 int score = (flat_convex(p, s1) ? int(s1.size()) : 0) + (flat_convex(p, s2) ? int(s2.size()) : 0);
                 if (score > best_score && cut_ok(a, b)) { best_score = score; best_i = i; best_j = j; }
             }

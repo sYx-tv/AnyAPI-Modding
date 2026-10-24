@@ -1,9 +1,11 @@
 // Bent windows support, with AnyMirror's auto-split (it cuts a bent window loop into flat pieces joined by hidden struts):
 // - Hidden struts: a strut painted kHiddenColor is not drawn (vehicle_edge_util.add_static_geometry returns at once). It still
 //   holds plates and collides, and players without the mod see a strut in that paint colour.
-// - Frameless windows (setting, on by default, local look only): while vehicle_plate_util.add_static_geometry builds an intact
-//   window plate, its frame and rim faces (add_plate_triangle) go to the window glass list (add_triangle_glass) with the
-//   window's own tint, so pieces meeting at a hidden strut read as one pane.
+// - Frameless windows (setting, on by default, local look only): vehicle_plate_util.add_static_geometry builds a window plate
+//   as a solid plate (type basic) whose faces (add_plate_triangle) all go to the window glass list (add_triangle_glass) with
+//   the window's tint, so the glass runs edge to edge and pieces meeting at a hidden strut read as one pane. A window the
+//   stock shape rule refuses is always built this way: the stock window frame math (inset corners) blows up on thin or
+//   sharp shapes and drew huge black glass over the world in game (2026-10-24).
 // - Any window shape (setting, on by default): vehicle_plate_util.get_is_suitable_for_window is the window shape rule, run only
 //   when a window is placed or a plate is switched to window (the tool on the client, the event handler on the host). It is
 //   answered yes. Saves do not re-check it, so the windows load in the unmodded game too.
@@ -25,7 +27,7 @@ static uint64_t shape_setting,frameless_setting;
 static GlassTriangleFn glass_triangle;static GlassColorFn glass_color;
 static std::atomic<bool> ready{},stop{};
 static thread_local bool building_frameless{};static thread_local Color8 window_tint{};
-static std::atomic<uint64_t> hidden_count{},frameless_count{},shape_count{};
+static std::atomic<uint64_t> hidden_count{},frameless_count{},shape_count{},odd_count{};
 
 static bool setting_on(uint64_t token){AnySettingValueV1 v;return !token||!settingsmod::get(token,&v)||v.number!=0;}
 static void hk_static(const void* node_0,const void* node_1,const int32_t* color,const int32_t* size,void* builder){
@@ -33,9 +35,13 @@ static void hk_static(const void* node_0,const void* node_1,const int32_t* color
  ((StaticGeometryFn)h_static.original)(node_0,node_1,color,size,builder);}
 static void hk_plate(const void* nodes,const void* normal,const int32_t* front,const int32_t* back,const void* dir,const int32_t* size,const int32_t* type,
  const int32_t* border,const int32_t* glass_state,const void* impacts,void* builder){auto original=(PlateGeometryFn)h_plate.original;
- if(!type||*type!=1||!glass_state||*glass_state!=0||!setting_on(frameless_setting)){original(nodes,normal,front,back,dir,size,type,border,glass_state,impacts,builder);return;}
- glass_color(&window_tint,glass_state);if(!frameless_count.fetch_add(1))log("FRAMELESS_WINDOW_FIRST");
- building_frameless=true;original(nodes,normal,front,back,dir,size,type,border,glass_state,impacts,builder);building_frameless=false;}
+ if(!type||*type!=1||!glass_state){original(nodes,normal,front,back,dir,size,type,border,glass_state,impacts,builder);return;}
+ bool stock_shape=false;((SuitableFn)h_window.original)(&stock_shape,dir,normal,size,nodes);
+ if(stock_shape&&!setting_on(frameless_setting)){original(nodes,normal,front,back,dir,size,type,border,glass_state,impacts,builder);return;}
+ glass_color(&window_tint,glass_state);
+ if(!frameless_count.fetch_add(1))log(std::string("FRAMELESS_WINDOW_FIRST stock_shape=")+(stock_shape?"1":"0"));
+ if(!stock_shape&&!odd_count.fetch_add(1))log("ODD_WINDOW_AS_GLASS_FIRST");
+ const int32_t basic=0;building_frameless=true;original(nodes,normal,front,back,dir,size,&basic,border,glass_state,impacts,builder);building_frameless=false;}
 static void hk_plate_triangle(void* builder,const void* p0,const void* p1,const void* p2,const void* normal,const int32_t* color){
  if(building_frameless){glass_triangle(builder,p0,p1,p2,normal,&window_tint);return;}
  ((TriangleFn)h_plate_triangle.original)(builder,p0,p1,p2,normal,color);}

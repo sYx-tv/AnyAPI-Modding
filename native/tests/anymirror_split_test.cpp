@@ -23,5 +23,8 @@ int main(){
  for(auto& piece:b.pieces){int drops=0;for(size_t i=0;i<piece.size();++i)drops+=piece[(i+1)%piece.size()]<piece[i];assert(drops==1);}
  // When no strut may be added, nothing is planned.
  assert(split(bent,[](int,int){return false;}).pieces.empty());
+ // A long thin strip that bends is not cut into needles: no piece has a corner under 12 degrees, or nothing is planned.
+ std::vector<P> strip{{0,0,0},{40,0,0},{80,0,4},{80,1,4},{40,1,0},{0,1,0}};
+ Plan e=run(strip);for(auto& piece:e.pieces)assert(corners_ok(strip,piece));
  return 0;
 }
