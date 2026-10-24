@@ -9,8 +9,7 @@
 //      with a paper band: a flat-colour mesh made at start-up (anycareer_cash_mesh.h) and written beside the game's
 //      part meshes; if that fails, Cash keeps the ammo box look.
 //   The Mechanic: one trader per world, at the gas station spot nearest the Survival start (gas station spots are
-//      read from the player's own rom/data/tiles at start-up). The spot is kept in "AnyAPI and Modding/mods/AnyCareer/worlds/<world seed>.txt". Far away, a line at the top of
-//      the screen gives the distance and direction; within kTradeRange, J (rebindable in Mod Controls) opens the
+//      read from the player's own rom/data/tiles at start-up). The spot is kept in "AnyAPI and Modding/mods/AnyCareer/worlds/<world seed>.txt". Traders show on AnyMap; within kTradeRange, J (rebindable in Mod Controls) opens the
 //      shop, and AnyMap (when installed) shows him as a pin through its anymap.pins service. Shop rows show the
 //      part's picture (AnyAPI item images). Mouse: click a row's Buy or Sell button, a tab or X; the wheel
 //      scrolls; right click closes. The keyboard works too. Buy: up to 16 mechanical and electrical parts that can drop at the world's loot level, 1-3 of each, picked from
@@ -2074,19 +2073,15 @@ void draw(const AnyFrameV1* f, void*) {
         box(ANY_GPU_ROUND_RECT, x, y, w, 34, 0xd0181b20, 6);
         text(x, y, w, 34, prompt, 16, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
-    if (here < 0) {
-        std::wstring hint = L"Hayzeco Autoparts: " + wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.trader.x, v.trader.z));
-        text(x, 8, w, 22, hint, 14, 0xffd8dde3, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
-    }
     if (v.job_state == 1 && v.job_kill) {
         std::wstring hint = L"Kill job: " + std::to_wstring(v.job_have) + L" of " + v.job_text + L". Then back to the " + wide(logic::kShops[v.job_shop].name) + L".";
-        text(x - 100, 30, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+        text(x - 100, 8, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     } else if (v.job_state == 1 && !at_dropoff(v, g_local)) {
         std::wstring hint = L"Delivery: " + v.job_text + L" (" + std::to_wstring(v.job_have) + L"/" + std::to_wstring(v.job_count) + L"), " +
                             wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.job_at.x, v.job_at.z));
-        text(x - 100, 30, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+        text(x - 100, 8, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     } else if (v.job_state == 2) {
-        text(x - 100, 30, w + 200, 22, (v.job_kill ? L"Kill job done: pick your reward in the " : L"Delivered: pick your reward in the ") + wide(logic::kShops[v.job_shop].name) +
+        text(x - 100, 8, w + 200, 22, (v.job_kill ? L"Kill job done: pick your reward in the " : L"Delivered: pick your reward in the ") + wide(logic::kShops[v.job_shop].name) +
              L" Jobs tab", 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
 }
