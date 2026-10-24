@@ -18,7 +18,8 @@ settings on AMD graphics cards, where AnyAPI 0.39.1 switches lamp beams off; wit
 they are back. 0.31.3 fixes your own head showing in first person after leaving photo mode (when F5 switched
 ThirdPerson to first person while the camera was flying), and the free camera staying at the last world's
 spot after loading another world with photo mode still on. 0.32.0 (with AnyAPI 0.40.1) splits the
-section into sub-menus and fixes the AA, sun shaft, contact shadow and cloud bugs below. See the
+section into sub-menus and fixes the AA, sun shaft, contact shadow and cloud bugs below. 0.33.0
+(with AnyAPI 0.40.2) adds reflections and a sun glint on the sea (see Water below). See the
 [release records](../releases/README.md).
 
 ## Sub-menus (0.32.0)
@@ -60,6 +61,34 @@ New looks in 0.32.0 (AnyAPI 0.40.1):
 
 With an older AnyAPI, Soft film falls back to Clean, Soft & warm to Vivid, and
 the Light colour and Wind rows are hidden.
+
+## Water (0.33.0)
+
+Two rows in the Sky and weather group, with AnyAPI 0.40.2 (hidden with an older
+AnyAPI):
+
+- **Water reflections** (Off, Low, Medium or High) mirrors boats, coasts, hills
+  and anything else on screen above the sea in the water, on top of the game's
+  own sky reflection. Like real water it reflects most at grazing angles and
+  little when you look straight down. Only what is on screen can reflect: an
+  object above the top of the screen or behind the camera leaves the game's sky
+  reflection as it was, and reflections fade out toward the screen edges
+  instead of cutting off. Low, Medium and High trace each ray more carefully
+  (16, 24 or 32 steps at half resolution), so higher levels miss fewer thin
+  objects and cost more GPU time.
+- **Sun glint** (Off or On) adds a bright, rippling path of sunlight on the sea
+  while the sun is up, in the game's sun colour, so it turns orange at sunrise
+  and sunset and is gone at night.
+
+Small ripples fixed in the world shape both. They drift with the game's wind and
+grow as it picks up; far away they blend into a calm mirror with a wider glint
+instead of sparkling. Distant water fades into the game's fog as before. Only
+ocean pixels change, and nothing is drawn while the camera is underwater.
+
+High, Natural, Moody, Clear Day and Soft & warm use Medium reflections; Ultra,
+Cinematic and Vibrant use High. All of them add the sun glint. Off,
+Performance, Low and Balanced leave the water as the game draws it. **Show GPU
+cost** includes the water pass.
 
 ## Tone mapping and colour (0.30.0)
 
@@ -197,8 +226,8 @@ washes out the whole scene. More fog is available in Custom.
 | Performance | SSAO, shadows, fog blur, bloom, base fog, clouds and grass off | FXAA |
 | Low | Shadows on, low bloom/base fog; SSAO, fog blur and grass off | SMAA Medium |
 | Balanced | Native effects on; medium bloom/base fog, contact shadows Low | TAA High |
-| High | Native effects on; high bloom, medium base fog; subtle Vivid look, Medium detailed shading, bounce light and contact shadows, local light beams | TAA High, sharpening Low |
-| Ultra | As High with a Vivid look, strong bloom and glare, High detailed shading, bounce light and contact shadows, bright sun, many clouds, very far objects and clear sun beams | TAA extra smooth Ultra, sharpening Low |
+| High | Native effects on; high bloom, medium base fog; subtle Vivid look, Medium detailed shading, bounce light and contact shadows, local light beams, Medium water reflections and sun glint | TAA High, sharpening Low |
+| Ultra | As High with a Vivid look, strong bloom and glare, High detailed shading, bounce light and contact shadows, bright sun, many clouds, very far objects, clear sun beams and High water reflections | TAA extra smooth Ultra, sharpening Low |
 | Cinematic | As Ultra, with a strong teal & orange film grade, a medium vignette, stronger beams, extreme object distance, stronger sun beams, Medium depth of field and Low motion blur | TAA extra smooth Ultra, sharpening Medium |
 | Natural | High, with Clean tone mapping, no colour look or vignette, softer bloom and glare, no volumetric fog | TAA High, sharpening Low |
 | Vibrant | Ultra, with a strong Vivid look, many clouds, a bright sun and stars, strong clear sun beams and low base fog | TAA extra smooth Ultra, sharpening Low |
@@ -268,7 +297,8 @@ when scene AA misses one.
 frames is kept. **Sharpening** (Off / Low / Medium / High) restores detail
 softened by AA. It is contrast-adaptive, so flat areas and hard edges are left
 alone, and it runs before the HUD. **Show GPU cost** adds a line with the GPU
-time of volumetric lighting and scene AA, plus the frame rate.
+time of volumetric lighting and scene AA, plus the frame rate (with AnyAPI 0.40.2, the water pass
+too).
 
 See [Scene AA development](../development/scene-antialiasing.md) and
 [Scene antialiasing](../api/scene-antialiasing.md).

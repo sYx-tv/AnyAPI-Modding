@@ -3,6 +3,8 @@
 AnyAPI 0.36.0. Query `anyapi.scene_effects`, version 1, using
 `AnyServicesV1::query`. The service table is declared in
 [`anyapi_scene_effects_v1.h`](../../sdk/include/anyapi_scene_effects_v1.h).
+Version 2 (AnyAPI 0.40.2, [`anyapi_scene_effects_v2.h`](../../sdk/include/anyapi_scene_effects_v2.h))
+adds reflections and a sun glint on the ocean; see [Water](#water-version-2).
 
 Scene effects finish the HDR scene: tone mapping, a colour look, eye
 adaptation, bloom, sun glare and vignette. The pass records on the game's
@@ -62,6 +64,59 @@ trip and the image is unchanged.
 Only one active mod owns the policy, as with the other scene services.
 
 Turn `hide_ui` off whenever a menu needs to be seen; AnyGraphics does this whenever the player leaves gameplay. `photo_available` in the status says the switch was found.
+
+## Water (version 2)
+
+Query `anyapi.scene_effects` version 2 for `AnySceneEffectsV2`. Its `set` takes
+`AnySceneEffectsParametersV2` (`struct_size`, `version` 2): the whole v1
+parameter block in `effects` (`struct_size`, `version` 1, the same ranges as
+above) plus:
+
+| Field | Range | Meaning |
+| --- | --- | --- |
+| `water_reflections` | 0-1 | Screen-space reflections on the ocean; 0 is off |
+| `sun_glint` | 0-2 | Sun highlight on the rippled ocean; 0 is off |
+| `reflection_quality` | 0-2 | 16, 24 or 32 ray steps (each followed by 4 refinement steps) |
+
+Values out of range, a wrong size or version, or another mod owning the policy
+reject the call and change nothing. The water draws only while `effects.enabled`
+is 1. Version 1 stays available and unchanged; a v1 `set` turns the water off,
+so a mod that does not know about it never leaves it on. `status` is the v1
+status call, and `status_v2` fills `AnySceneEffectsStatusV2`: the v1 status in
+`effects`, plus `water_ready`, `water_ms` (smoothed GPU time, negative until
+measured) and `water_frames`.
+
+The pass records after bounce light and before volumetric lighting, so fog,
+sun shafts and the finishing pass treat the water like the rest of the scene:
+
+- **Where.** Only pixels the game marks as ocean in its G-buffer are touched;
+  the pass reads that mark as a mask and nothing else. The ocean writes no
+  depth, so the water surface is the sea level plane (y = 0) under each pixel.
+  The pass records nothing while the game's ocean is off, while the camera is
+  more than a metre under the sea, and in special views (scope, vision modes).
+- **Surface.** A flat sea with small value-noise ripples (8 m down to 1 m), fixed
+  in the world and drifting with the game's wind, stronger as the wind rises.
+  Ripples smaller than a pixel fade out and widen the glint instead, so distant
+  water is a calm mirror rather than noise.
+- **Reflections.** At half resolution the reflected ray is traced across the
+  screen through the depth buffer (linear steps with jitter, then a binary
+  search, a thickness test, and a fade toward the screen edges and for rays
+  that turn back toward the camera). A full-resolution composite upsamples the
+  result, using only ocean texels at a similar distance, and adds
+  `Fresnel × (hit colour − sky estimate)` with Schlick Fresnel (0.02 head-on).
+  The sky estimate is the game's own sky gradient, which its water already
+  reflects, so a ray that finds nothing leaves the pixel exactly as the game
+  drew it.
+- **Glint.** A GGX highlight (roughness 0.1, plus the ripple detail lost to
+  distance) in the game's sun colour, at the same brightness scale as the
+  game's sunlight, capped so it blooms instead of turning into a flat band. It
+  fades out as the sun reaches the horizon.
+- Both fade with distance like the game's own fog.
+
+Limits: only what is on screen can reflect (an object above the top of the
+screen or behind the camera does not); the glint is not shadowed, so it can
+show on water in the shade of a cliff or boat; waves and swell are not
+modelled, and the surface is always taken at sea level.
 
 ## Eye adaptation
 
@@ -179,7 +234,7 @@ rejected-frame counts, `gpu_ms` (smoothed GPU time of the pass),
 `contact_ready` and `contact_ms` the contact shadow pass, `gi_ready` and
 `gi_ms` the bounce light pass, and `lens_ready` and `lens_ms` the depth of
 field and motion blur pass, and `distance_available` and `distance_scale`
-the draw distance hooks. The values are read
+the draw distance hooks. `status_v2` adds the water pass (see above). The values are read
 back seven frames late without a fence.
 
 ## Limits
@@ -189,4 +244,7 @@ modes), when the native HDR target, depth or command bindings fail their
 checks, or when the pass cannot create its resources. Ambient occlusion is bypassed the
 same way and the game's own SSAO result is then kept. The game's bloom stays
 off while the policy is enabled. Effects cover the scene only: water and glass
-are finished like everything else, and no material data is used.
+are finished like everything else, and no material data is used, apart from the
+ocean mask the version 2 water pass reads. The water pass bypasses the same
+way, with `SCENE_WATER bypass=` reasons in the log, and the game's water is
+then left as it is.

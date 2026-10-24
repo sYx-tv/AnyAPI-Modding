@@ -15,6 +15,7 @@
 #include "anyapi_scene_antialiasing_v2.h"
 #include "anyapi_scene_timing_v1.h"
 #include "anyapi_scene_effects_v1.h"
+#include "anyapi_scene_effects_v2.h"
 #include "anyapi_scene_antialiasing_v1.h"
 #include "anyapi_post_process_v1.h"
 #include "anygraphics_options.h"
@@ -44,6 +45,10 @@ static AnySceneEffectsParametersV1 effects_policy;static unsigned effects_reads{
 static bool effects_set(const AnySceneEffectsParametersV1* p){effects_policy=*p;return true;}
 static bool effects_status(AnySceneEffectsStatusV1* s){++effects_reads;s->ready=1;s->gpu_ms=.4f;return true;}
 static const AnySceneEffectsV1 effects_api{sizeof(AnySceneEffectsV1),1,effects_set,effects_status};
+static AnySceneEffectsParametersV2 water_policy;static unsigned water_sets{},water_reads{};
+static bool effects_set_v2(const AnySceneEffectsParametersV2* p){water_policy=*p;++water_sets;return effects_set(&p->effects);}
+static bool effects_status_v2(AnySceneEffectsStatusV2* s){++water_reads;s->water_ready=1;s->water_ms=.3f;return effects_status(&s->effects);}
+static const AnySceneEffectsV2 effects2_api{sizeof(AnySceneEffectsV2),2,effects_set_v2,effects_status,effects_status_v2};
 static AnySceneParametersV1 policy;static bool ready=true;static unsigned submissions{},post_calls{};
 static bool reject_scene=false;
 static bool set(const AnySceneParametersV1* p){++submissions;if(reject_scene)return false;policy=*p;return true;}
@@ -60,7 +65,7 @@ static const AnyPostProcessV1 post{sizeof(AnyPostProcessV1),1,forbidden,nullptr,
 static void log(uint32_t,const char*,const char* text){std::cout<<text<<'\n';}
 int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitbuf;using namespace graphics_options;assert(argc==4||argc==5);bool local=argc==5&&std::wstring(argv[4])==L"--local-lights",absent=argc==5&&!local;
  auto fixture=LoadLibraryW(argv[1]);assert(fixture);auto service=AnyAPI_Services();assert(service);assert(service->publish("anyapi.post_process",1,&post));if(!absent){assert(service->publish("anyapi.scene_controls",1,&scene));assert(service->publish("anyapi.scene_controls",2,&scene_v2));assert(service->publish("anyapi.scene_antialiasing",1,&aa_api));assert(service->publish("anyapi.scene_lighting",1,&lighting_api));}auto graphics=LoadLibraryW(argv[3]);assert(graphics);
- if(local){assert(service->publish("anyapi.scene_lighting",2,&local_api));assert(service->publish("anyapi.scene_lighting",3,&shaped_api));assert(service->publish("anyapi.scene_antialiasing",2,&aa2_api));assert(service->publish("anyapi.scene_timing",1,&timing_api));assert(service->publish("anyapi.scene_effects",1,&effects_api));assert(service->publish("anyapi.scene_controls",3,&scene_v3));}
+ if(local){assert(service->publish("anyapi.scene_lighting",2,&local_api));assert(service->publish("anyapi.scene_lighting",3,&shaped_api));assert(service->publish("anyapi.scene_antialiasing",2,&aa2_api));assert(service->publish("anyapi.scene_timing",1,&timing_api));assert(service->publish("anyapi.scene_effects",1,&effects_api));assert(service->publish("anyapi.scene_effects",2,&effects2_api));assert(service->publish("anyapi.scene_controls",3,&scene_v3));}
  auto root=std::filesystem::temp_directory_path()/(L"AnyGraphicsNative-"+std::to_wstring(GetCurrentProcessId()));std::filesystem::create_directories(root/L"AnyHelpers");
  // Migration retains native keys, ignores removed post FX and does not load AnyHelpers.
  {std::ofstream old(root/L"AnyHelpers"/L"settings.tsv");old<<"anygraphics.scene\tsun_light\t3\t312e35\nanygraphics.general\tcomparison\t4\t31\nanygraphics.sharpness\tsharpen\t1\t31\n";}
@@ -97,20 +102,26 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
   // Depth of field and motion blur are Cinematic only.
   assert(effects_policy.depth_of_field==(preset==6?1.f:0.f)&&effects_policy.motion_blur==(preset==6?.4f:0.f));
   const float reach[]={1,1,1,1.5f,2,3};assert(effects_policy.draw_distance==reach[i]);
-  const float sun[]={0,.6f,1,1,1.5f,1.5f},cloud[]={0,0,.6f,1,1.5f,1.5f};assert(effects_policy.sun_disc==sun[i]&&effects_policy.clouds==cloud[i]);}
+  const float sun[]={0,.6f,1,1,1.5f,1.5f},cloud[]={0,0,.6f,1,1.5f,1.5f};assert(effects_policy.sun_disc==sun[i]&&effects_policy.clouds==cloud[i]);
+  // Water reflections and glint from High up (Medium on High, High on Ultra and Cinematic); off below.
+  const float water[]={0,0,0,1,1,1};const uint32_t water_quality[]={1,1,1,1,2,2};assert(water_sets&&water_policy.water_reflections==water[i]&&water_policy.sun_glint==water[i]&&water_policy.reflection_quality==water_quality[i]);}
+ apply(Preset,4);assert(water_policy.water_reflections==1&&water_policy.sun_glint==1&&effects_policy.enabled);apply(Preset,1);assert(water_policy.water_reflections==0&&water_policy.sun_glint==0);
  // Looks: Natural keeps the game's colours, Vibrant is the shader-pack look, Moody a darker grade; all keep fog light.
  apply(Preset,NaturalProfile);assert(effects_policy.tonemap==2&&effects_policy.look==0&&effects_policy.vignette==0&&lighting_policy.fog_strength==0);
- apply(Preset,VibrantProfile);assert(effects_policy.look==5&&effects_policy.look_strength==1&&effects_policy.clouds==1.5f&&effects_policy.sun_disc==1.5f&&lighting_policy.fog_density==.001f&&shaped_policy.clarity==1);
+ apply(Preset,VibrantProfile);assert(water_policy.water_reflections==1&&water_policy.reflection_quality==2);assert(effects_policy.look==5&&effects_policy.look_strength==1&&effects_policy.clouds==1.5f&&effects_policy.sun_disc==1.5f&&lighting_policy.fog_density==.001f&&shaped_policy.clarity==1);
  apply(Preset,MoodyProfile);assert(effects_policy.look==1&&effects_policy.look_strength==1&&effects_policy.vignette==.5f&&lighting_policy.fog_density==.001f&&std::abs(lighting_policy.sun_shafts-2)<.001f);
  // Presets show the top rows and closed groups; Custom keeps the current values and opens every group.
  event(ANY_MENU_OPEN);stage(0,0);auto preset_rows=rows();event(ANY_MENU_CANCEL);
  apply(Preset,ClearDayProfile);assert(effects_policy.tonemap==2&&effects_policy.look==0&&lighting_policy.fog_strength==0&&std::abs(aa2_policy.sharpening-.55f)<.001f);
- apply(Preset,SoftWarmProfile);assert(effects_policy.tonemap==3&&effects_policy.look==6&&!effects_policy.ambient_occlusion);if(local){assert(look_sets&&look_policy.key_tint[0]==1.08f&&look_policy.shade_tint[2]==1.1f&&look_policy.wind_scale==1);apply(Preset,CustomProfile);apply(WindStrength,3);assert(look_policy.wind_scale==2.5f);apply(LightColour,0);assert(look_policy.key_tint[0]==1);}
+ apply(Preset,SoftWarmProfile);assert(effects_policy.tonemap==3&&effects_policy.look==6&&!effects_policy.ambient_occlusion&&water_policy.water_reflections==1&&water_policy.reflection_quality==1&&water_policy.sun_glint==1);if(local){assert(look_sets&&look_policy.key_tint[0]==1.08f&&look_policy.shade_tint[2]==1.1f&&look_policy.wind_scale==1);apply(Preset,CustomProfile);apply(WindStrength,3);assert(look_policy.wind_scale==2.5f);apply(LightColour,0);assert(look_policy.key_tint[0]==1);}
  apply(Preset,MoodyProfile);apply(Preset,CustomProfile);assert(effects_policy.look==1&&effects_policy.vignette==.5f);event(ANY_MENU_OPEN);stage(0,0);std::cout<<"ROWS preset="<<preset_rows<<" custom="<<rows()<<std::endl;assert(rows()>preset_rows+15);event(ANY_MENU_CANCEL);
  // Shaping rows submit their own values; the GPU cost readout polls timing while the menu draws.
  apply(Preset,3);apply(Preset,CustomProfile);apply(ShaftClarity,3);apply(BeamReach,3);apply(SunResponse,0);apply(TemporalLighting,0);assert(shaped_policy.clarity==0&&shaped_policy.beam_reach==0&&!shaped_policy.sun_response&&!shaped_policy.temporal);
  apply(NativeAA,5);apply(Sharpening,3);apply(AAQuality,1);assert(aa2_policy.enabled&&aa2_policy.method==4&&aa2_policy.quality==1&&std::abs(aa2_policy.sharpening-.8f)<.001f);apply(NativeAA,6);assert(aa2_policy.method==4&&aa2_policy.quality==2);apply(NativeAA,2);assert(!aa2_policy.enabled);
- event(ANY_MENU_OPEN);stage(0,0);assert(timing_reads>0&&effects_reads>0);event(ANY_MENU_CANCEL);
+ event(ANY_MENU_OPEN);stage(0,0);assert(timing_reads>0&&effects_reads>0&&water_reads>0);event(ANY_MENU_CANCEL);
+ // Water rows: Low, Medium and High are ray qualities 0-2 at full strength; the glint is a separate switch.
+ apply(WaterReflections,1);assert(water_policy.water_reflections==1&&water_policy.reflection_quality==0&&water_policy.sun_glint==0&&effects_policy.enabled);apply(SunGlint,1);assert(water_policy.sun_glint==1);
+ apply(WaterReflections,3);assert(water_policy.reflection_quality==2);apply(WaterReflections,0);assert(water_policy.water_reflections==0&&water_policy.sun_glint==1);apply(SunGlint,0);assert(water_policy.sun_glint==0);
  apply(ToneMapping,3);apply(ColourLook,3);apply(LookStrength,0);apply(SunGlare,0);apply(Vignette,3);apply(Brightness,1);
  assert(effects_policy.enabled&&effects_policy.tonemap==2&&effects_policy.look==3&&effects_policy.look_strength==.5f&&effects_policy.glare==0&&effects_policy.vignette==.8f&&effects_policy.exposure==1);
  apply(DetailedAO,1);apply(ToneMapping,0);assert(effects_policy.enabled&&!effects_policy.finish&&effects_policy.ambient_occlusion);
@@ -147,5 +158,5 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
 
  }
  {std::ifstream saved(root/L"AnyGraphics"/L"settings.tsv");std::string text((std::istreambuf_iterator<char>(saved)),{});assert(text.find("comparison")==std::string::npos&&text.find("sharpen")==std::string::npos);}
- FreeLibrary(graphics);FreeLibrary(fixture);std::filesystem::remove_all(root);std::cout<<"PASS: native-only Graphics section, no AnyHelpers dependency or post-FX registrations, migration, draft/apply/cancel/reset, quality levels, thirteen profiles, light colour and wind, TAA, sharpening, beam shaping, GPU cost readout, gameplay bypass and unavailable service\n";
+ FreeLibrary(graphics);FreeLibrary(fixture);std::filesystem::remove_all(root);std::cout<<"PASS: native-only Graphics section, no AnyHelpers dependency or post-FX registrations, migration, draft/apply/cancel/reset, quality levels, thirteen profiles, light colour and wind, water reflections, TAA, sharpening, beam shaping, GPU cost readout, gameplay bypass and unavailable service\n";
 }
