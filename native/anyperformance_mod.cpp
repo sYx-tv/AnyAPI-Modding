@@ -32,6 +32,9 @@
 // Fix 5, fast navmesh cleanup (on by default): a terrain tile unload checks ~8,300 navmesh cells; the mod answers the
 // empty ones itself (see nav_cell_used).
 //
+// Fix 6, fast furniture loot (on by default): remembers failed loot placements in a wreck's furniture while it is
+// filled (see PlaceKey).
+//
 // Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot,
 // profiler, distant container items.
 //
@@ -60,6 +63,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <string>
@@ -75,7 +79,7 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[8], g_settings_revision = ~0ull;
+uint64_t g_tokens[9], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
@@ -227,9 +231,12 @@ constexpr int step_index(const anymaker::func_desc* desc) {
     return -1;
 }
 constexpr int kTileStep = step_index(&bind::tile_task_integrate_server), kLootStep = step_index(&bind::vehicle_generate_loot),
-              kSaveStep = step_index(&bind::save_game_inner), kNavDestroyStep = step_index(&bind::nav_tile_destroy);
+              kSaveStep = step_index(&bind::save_game_inner), kNavDestroyStep = step_index(&bind::nav_tile_destroy),
+              kFurnitureStep = step_index(&bind::loot_furniture), kPlaceStep = step_index(&bind::loot_position),
+              kStoreStep = step_index(&bind::item_store);
 static_assert(kTileStep >= 0 && kLootStep >= 0 && kSaveStep >= 0, "the wreck loot queue needs these steps");
 static_assert(kNavDestroyStep >= 0, "the navmesh cleanup needs its step");
+static_assert(kFurnitureStep >= 0 && kPlaceStep >= 0 && kStoreStep >= 0, "the furniture placement cache needs these steps");
 constexpr bool is_tile_save(int i) {
     return kSteps[i].desc == &bind::tile_save_level_1 || kSteps[i].desc == &bind::tile_save_level_2 ||
            kSteps[i].desc == &bind::tile_save_level_3;
@@ -293,6 +300,22 @@ bool nav_cell_used(const void* container, int32_t x, int32_t y, bool& used) {
     used = g_nav.cells.count(nav_key(x, y)) != 0;
     return true;
 }
+
+// Fix 6, furniture placement cache: generate_loot_furniture picks random items for each container and calls
+// vehicle._get_valid_loot_position_rotation_in_furniture for each, which tries every cell of the container in both
+// rotations (43,000 calls and 250 ms for one town wreck). When nothing fits it returns false without touching the
+// random generator or anything else, so a repeat of the same question gets the same answer until an item is stored.
+// The mod remembers those failures within one generate_loot_furniture call and forgets them on every store.
+struct PlaceKey { const void* inventory; const void* item; uint64_t component_size, item_size;
+                  bool operator==(const PlaceKey& o) const { return inventory == o.inventory && item == o.item &&
+                      component_size == o.component_size && item_size == o.item_size; } };
+struct PlaceHash { size_t operator()(const PlaceKey& k) const {
+    uint64_t h = uint64_t(uintptr_t(k.inventory)) * 0x9e3779b97f4a7c15ull ^ uint64_t(uintptr_t(k.item)) * 0xc2b2ae3d27d4eb4full;
+    return size_t(h ^ k.component_size * 0x165667b19e3779f9ull ^ k.item_size); } };
+std::atomic<bool> g_place_cache_on{true};
+std::unordered_set<PlaceKey, PlaceHash> g_place_fails;   // server thread only
+int g_furniture_depth;
+std::atomic<long long> g_place_hits{0}, g_place_misses{0};
 
 // ------------------------------------------------------------------ spread wreck loot (server thread)
 // When a terrain tile goes into the world, server_scene.environment_tile_task.integrate loops over every vehicle, calls
@@ -409,6 +432,21 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
     }
     if constexpr (I == kLootStep)
         if (g_tile_depth > 0 && queue_loot(a, b, c)) return;
+    // (bool) _get_valid_loot_position_rotation_in_furniture (vehicle, random, inventory, const vec2_s32 component_size,
+    // const inventory_definition item, const vec2_s32 item_size, out pos, out rot)
+    [[maybe_unused]] PlaceKey place_key{};
+    [[maybe_unused]] bool place_cached = false;
+    if constexpr (I == kPlaceStep)
+        if (g_place_cache_on && g_furniture_depth > 0 && a && d && e && f && g && anymaker::readable(e, 8) && anymaker::readable(g, 8)) {
+            place_key.inventory = d; place_key.item = f;
+            std::memcpy(&place_key.component_size, e, 8); std::memcpy(&place_key.item_size, g, 8);
+            if (g_place_fails.count(place_key)) { *static_cast<bool*>(a) = false; ++g_place_hits; return; }
+            place_cached = true;
+        }
+    if constexpr (I == kStoreStep)   // store_item_rotated (inventory, ...): that container changed
+        if (!g_place_fails.empty())
+            for (auto it = g_place_fails.begin(); it != g_place_fails.end();) it = it->inventory == a ? g_place_fails.erase(it) : std::next(it);
+    if constexpr (I == kFurnitureStep) { if (g_furniture_depth++ == 0) g_place_fails.clear(); }
     if constexpr (I == kNavDestroyStep)   // (bool) _try_destroy_navigation_tile (container, const s32 x, const s32 y, scene)
         if (g_fast_navmesh && a && b && c && d && anymaker::readable(c, 4) && anymaker::readable(d, 4)) {
             bool used = true;
@@ -433,6 +471,12 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
     original(a, b, c, d, e, f, g, h, i, j);
     double ms = now_ms() - start;
     if constexpr (I == kTileStep) { --g_tile_depth; g_tile_task = outer_task; }
+    if constexpr (I == kFurnitureStep) { if (--g_furniture_depth == 0) g_place_fails.clear(); }
+    if constexpr (I == kPlaceStep)
+        if (place_cached) {
+            ++g_place_misses;
+            if (!*static_cast<const bool*>(a) && g_place_fails.size() < 100000) g_place_fails.insert(place_key);
+        }
     if constexpr (I == kLootStep) g_loot_ms_tick += ms;
     (kSteps[I].server ? g_tick.steps : g_parts.steps).add(I, ms);
 }
@@ -532,6 +576,7 @@ void read_settings() {
     if (g_tokens[5] && settings->get(g_tokens[5], &v)) g_profiler = v.number != 0;
     if (g_tokens[6] && settings->get(g_tokens[6], &v)) g_inventory_lod = v.number != 0;
     if (g_tokens[7] && settings->get(g_tokens[7], &v)) g_fast_navmesh = v.number != 0;
+    if (g_tokens[8] && settings->get(g_tokens[8], &v)) g_place_cache_on = v.number != 0;
 }
 
 // Counts one hitch or slow-motion log line; false once the session's limit is used up.
@@ -676,6 +721,11 @@ void summary(double now) {
         log(0, "Frame average (%d frames): %.1f ms = client tick %.1f (simulation+physics %.1f, streaming %.1f), "
                "rendering/UI %.1f%s%s", w.frames, w.frame_ms / n, w.sum.client_tick / n, w.sum.scene_tick / n,
             w.sum.loading / n, (w.frame_ms - w.sum.client_tick) / n, steps[0] ? " | steps: " : "", steps);
+    }
+    if (g_place_hits + g_place_misses) {
+        long long hits = g_place_hits.exchange(0), misses = g_place_misses.exchange(0);
+        log(0, "Fast furniture loot: %lld placement searches answered from memory, %lld run (%.0f%% saved)", hits, misses,
+            100.0 * double(hits) / double(hits + misses));
     }
     if (g_nav_skipped + g_nav_run) {
         long long skipped = g_nav_skipped.exchange(0), run = g_nav_run.exchange(0);
@@ -1060,6 +1110,11 @@ void register_settings() {
     d.description = "When terrain unloads, skips the game's slow check of thousands of empty navmesh cells around it. "
                     "Cuts part of the stutter when driving into new areas. Host and solo only.";
     g_tokens[7] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "fast_furniture_loot"; d.label = "Fast furniture loot"; d.kind = ANY_SETTING_BOOL; d.order = 8; d.default_number = 1;
+    d.description = "Remembers which loot items do not fit in a wreck's cabinets and shelves while it is being filled, instead of "
+                    "searching every slot again. Same loot, much faster. Host and solo only.";
+    g_tokens[8] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace
