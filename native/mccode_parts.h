@@ -1,21 +1,31 @@
 #pragma once
 // MCCode parts guide: which parts a microcontroller can read or set, built at run time from the game's own part
 // definitions (AnyAPI's item catalog hands over each part's JSON; its "data_descriptors" list the channels the
-// game offers a microcontroller). Nothing here ships game data: the list is read from the player's install.
+// game offers a microcontroller) and from the definition files mods write under "AnyAPI and Modding" for the parts
+// they add. Nothing here ships game data: the list is read from the player's install.
 #include "anyapi_asset_json.h"
 #include <algorithm>
+#include <cstring>
 #include <string>
 #include <vector>
 
 namespace mccode::parts {
 
-struct Channel { std::string name, type, doc; };
-struct Part { std::string id, name, category; std::vector<Channel> channels; };
+// dir: what code does with the channel. A part's output is read by code, a part's input is set by it.
+enum class Dir { Unknown, Read, Set };
+struct Channel { std::string name, type, doc; Dir dir = Dir::Unknown; };
+struct Part { std::string id, name, category; std::vector<Channel> channels; std::string source; };   // source: the mod that adds it
 
 // The type a channel carries, in the words the Code view uses.
 inline std::string type_label(const std::string& raw) {
     std::string t;
     for (char c : raw) t += char(c >= 'A' && c <= 'Z' ? c + 32 : c);
+    // The game's names read "type_f64_output": drop the prefix and the direction so "input" isn't taken for int.
+    if (t.rfind("type_", 0) == 0) t = t.substr(5);
+    for (const char* suffix : {"_input", "_output"}) {
+        size_t n = strlen(suffix);
+        if (t.size() > n && t.compare(t.size() - n, n, suffix) == 0) { t.resize(t.size() - n); break; }
+    }
     if (t.find("bool") != std::string::npos) return "bool";
     if (t.find("analog") != std::string::npos) return "analogue";
     if (t.find("string") != std::string::npos || t == "text") return "string";
@@ -24,6 +34,14 @@ inline std::string type_label(const std::string& raw) {
         t.find("double") != std::string::npos || t.find("number") != std::string::npos)
         return "fractional";
     return raw;
+}
+
+inline Dir type_dir(const std::string& raw) {
+    auto ends = [&](const char* suffix) {
+        size_t n = strlen(suffix);
+        return raw.size() >= n && raw.compare(raw.size() - n, n, suffix) == 0;
+    };
+    return ends("_output") ? Dir::Read : ends("_input") ? Dir::Set : Dir::Unknown;
 }
 
 // What a value of that type means to the player.
@@ -50,23 +68,61 @@ inline std::string code_name(const std::string& display) {
     return out;
 }
 
+inline void read_channels(const assetjson::Value& definition, Part& part) {
+    auto& list = definition.get("data_descriptors");
+    if (list.kind != 'a') return;
+    for (auto& d : list.array) {
+        if (d.kind != 'o') continue;
+        auto& name = d.get("name");
+        if (name.kind != 's' || name.text.empty()) continue;
+        auto& type = d.get("type");
+        auto& doc = d.get("documentation");
+        std::string raw = type.kind == 's' ? type.text : std::string();
+        part.channels.push_back({name.text, type_label(raw), doc.kind == 's' ? doc.text : std::string(), type_dir(raw)});
+    }
+}
+
 // One part's channels from its definition JSON; false when the JSON can't be read.
 inline bool parse_part(const std::string& json, Part& part) {
     try {
-        auto root = assetjson::Parser(json).parse();
-        auto& list = root.get("data_descriptors");
-        if (list.kind != 'a') return true;
-        for (auto& d : list.array) {
-            if (d.kind != 'o') continue;
-            auto& name = d.get("name");
-            if (name.kind != 's' || name.text.empty()) continue;
-            auto& type = d.get("type");
-            auto& doc = d.get("documentation");
-            part.channels.push_back({name.text, type_label(type.kind == 's' ? type.text : std::string()), doc.kind == 's' ? doc.text : std::string()});
-        }
+        read_channels(assetjson::Parser(json).parse(), part);
         return true;
     } catch (...) {
         return false;
+    }
+}
+
+// The parts in a mod's definition file ({"definitions": [{"id", "name", "category", "data_descriptors"}, ...]}).
+// Files that aren't definition files give nothing; source names the mod folder, used when a part has no category.
+inline std::vector<Part> parse_definition_file(const std::string& json, const std::string& source) {
+    std::vector<Part> out;
+    try {
+        auto root = assetjson::Parser(json).parse();
+        auto& defs = root.get("definitions");
+        if (defs.kind != 'a') return out;
+        for (auto& d : defs.array) {
+            if (d.kind != 'o') continue;
+            auto& id = d.get("id");
+            if (id.kind != 's' || id.text.empty()) continue;
+            auto& name = d.get("name");
+            auto& category = d.get("category");
+            Part p{id.text, name.kind == 's' && !name.text.empty() ? name.text : id.text,
+                   category.kind == 's' && !category.text.empty() ? category.text : source, {}};
+            p.source = source;
+            read_channels(d, p);
+            out.push_back(std::move(p));
+        }
+    } catch (...) {
+        out.clear();
+    }
+    return out;
+}
+
+// Adds mod parts to the stock list: a mod part with the same id as a listed one replaces it.
+inline void merge_mod_parts(std::vector<Part>& parts, std::vector<Part> mod) {
+    for (auto& m : mod) {
+        auto it = std::find_if(parts.begin(), parts.end(), [&](const Part& p) { return p.id == m.id; });
+        if (it != parts.end()) *it = std::move(m); else parts.push_back(std::move(m));
     }
 }
 
