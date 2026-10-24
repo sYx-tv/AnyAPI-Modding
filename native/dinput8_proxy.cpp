@@ -5257,6 +5257,7 @@ static DWORD WINAPI framework_runtime_thread(void*) {
 #include "anyapi_scene_sky.inc"
 #include "anyapi_scene_contact.inc"
 #include "anyapi_scene_gi.inc"
+#include "anyapi_scene_water.inc"
 #include "anyapi_scene_lens.inc"
 #include "anyapi_scene_distance.inc"
 #include "anyapi_scene_photo.inc"

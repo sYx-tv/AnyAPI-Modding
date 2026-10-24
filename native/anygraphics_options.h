@@ -4,7 +4,7 @@
 #include <array>
 #include <cmath>
 namespace graphics_options {
-enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,ShaftClarity,BeamReach,SunResponse,TemporalLighting,Sharpening,CostReadout,ToneMapping,ColourLook,LookStrength,EyeAdaptation,Brightness,SceneBloom,SunGlare,Vignette,DetailedAO,NightSky,Moonlight,ContactShadows,BounceLight,DepthOfField,MotionBlur,DrawDistance,SunDisc,CloudLayer,FocusBlur,LightColour,WindStrength,Count};
+enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,ShaftClarity,BeamReach,SunResponse,TemporalLighting,Sharpening,CostReadout,ToneMapping,ColourLook,LookStrength,EyeAdaptation,Brightness,SceneBloom,SunGlare,Vignette,DetailedAO,NightSky,Moonlight,ContactShadows,BounceLight,DepthOfField,MotionBlur,DrawDistance,SunDisc,CloudLayer,FocusBlur,LightColour,WindStrength,WaterReflections,SunGlint,Count};
 struct Option {const char* id;const char* group;const char* label;const char* description;uint32_t kind;float initial,minimum,maximum,step;};
 static constexpr Option definitions[]={
  {"enabled","General","Enable AnyGraphics","Use the selected native graphics settings. Off restores the game's own settings.",ANY_SETTING_BOOL,1,0,1,1},
@@ -62,7 +62,9 @@ static constexpr Option definitions[]={
  {"cloud_layer","Sky","Cloud layer","A high layer of drifting clouds above the game's own. Lit by the sun by day, glowing at sunrise and sunset, and moonlit at night.",ANY_SETTING_CHOICE,0,0,3,1},
  {"focus_blur","Scene","Blur strength","How strongly depth of field blurs what is out of focus. 1 is the level's normal blur; higher blurs more and farther.",ANY_SETTING_NUMBER,1,.25f,3,.05f},
  {"light_colour","Lighting","Light colour","Golden sunlight and cool blue shade, put into the game's own lights rather than over the screen. Brightness stays the same.",ANY_SETTING_CHOICE,0,0,3,1},
- {"wind_strength","Sky","Wind in trees","How hard trees and grass sway. Only the look changes: vehicles, physics and other players are not affected.",ANY_SETTING_CHOICE,1,0,3,1}
+ {"wind_strength","Sky","Wind in trees","How hard trees and grass sway. Only the look changes: vehicles, physics and other players are not affected.",ANY_SETTING_CHOICE,1,0,3,1},
+ {"water_reflections","Sky","Water reflections","Boats, coasts and hills mirrored in the sea, on top of the game's sky reflection. Only what is on screen can reflect; higher levels trace more carefully and cost more GPU time.",ANY_SETTING_CHOICE,0,0,3,1},
+ {"sun_glint","Sky","Sun glint","A bright, rippling path of sunlight on the sea while the sun is up, in the colour of the sunlight.",ANY_SETTING_CHOICE,0,0,1,1}
 };
 static_assert(std::size(definitions)==Count);
 using Values=std::array<float,Count>;
@@ -87,7 +89,7 @@ inline uint32_t aa_method(float choice){return choice>=5?4:choice>=4?2:1;}
 inline uint32_t aa_quality(float choice,float quality){return uint32_t(std::min(3.f,quality+(choice>=6?1.f:0.f)));}
 // Menu order: new rows sit next to the controls they modify.
 inline constexpr Index order[]={Enabled,GameplayOnly,Preset,Advanced,NativeAA,AAQuality,Sharpening,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,DetailedAO,NativeShadows,ContactShadows,BounceLight,DrawDistance,NativeFogBlur,SunLight,SkyLight,AmbientLight,LightColour,FogDensity,SceneExposure,Clouds,Grass,Foliage,WindStrength,
- ToneMapping,ColourLook,LookStrength,Brightness,EyeAdaptation,SceneBloom,SunGlare,Vignette,DepthOfField,FocusBlur,MotionBlur,SunDisc,CloudLayer,NightSky,Moonlight,
+ ToneMapping,ColourLook,LookStrength,Brightness,EyeAdaptation,SceneBloom,SunGlare,Vignette,DepthOfField,FocusBlur,MotionBlur,SunDisc,CloudLayer,WaterReflections,SunGlint,NightSky,Moonlight,
  Atmosphere,SunShafts,ShaftIntensity,ShaftClarity,BeamReach,SunResponse,BeamFocus,LightingQuality,TemporalLighting,GroundFog,LocalBeams,LocalIntensity,LocalBudget,CostReadout};
 static_assert(std::size(order)==Count);
 template<size_t N> inline uint32_t nearest(float value,const float(&levels)[N]){uint32_t best=0;for(uint32_t i=1;i<N;++i)if(std::abs(value-levels[i])<std::abs(value-levels[best]))best=i;return best;}
@@ -99,7 +101,7 @@ inline constexpr Group group_of(Index i){
  switch(i){
  case Atmosphere:case SunShafts:case ShaftIntensity:case ShaftClarity:case BeamReach:case SunResponse:case BeamFocus:case LightingQuality:case TemporalLighting:case GroundFog:case LocalBeams:case LocalIntensity:case LocalBudget:case SunLight:case SkyLight:case AmbientLight:case LightColour:return Lighting;
  case NativeShadows:case ContactShadows:case NativeSSAO:case DetailedAO:case BounceLight:return Shadows;
- case SunDisc:case CloudLayer:case NightSky:case Moonlight:case Clouds:case NativeFogBlur:case WindStrength:return Sky;
+ case SunDisc:case CloudLayer:case NightSky:case Moonlight:case Clouds:case NativeFogBlur:case WindStrength:case WaterReflections:case SunGlint:return Sky;
  case AAQuality:case Sharpening:return AntiAliasing;
  case DepthOfField:case FocusBlur:case MotionBlur:return Camera;
  case ToneMapping:case LookStrength:case EyeAdaptation:case SceneBloom:case SunGlare:case Vignette:case NativeBloom:case BloomAmount:case BloomThreshold:case SceneExposure:return Finish;
@@ -117,7 +119,7 @@ inline Values profile(const Values& current,int level){
  auto tier=size_t(level==VibrantProfile?4:level>=NaturalProfile?3:level-1);
  static constexpr float aa[]={2,3,5,5,6,6},aa_quality[]={1,1,2,2,3,3},sharpen[]={0,0,0,1,1,2};
  v[NativeAA]=aa[tier];v[AAQuality]=aa_quality[tier];v[Sharpening]=sharpen[tier];
- v[NativeSSAO]=level>=3?2.f:1.f;static constexpr float ao[]={0,0,0,2,3,3};v[DetailedAO]=ao[tier];static constexpr float night[]={0,1,2,2,3,3},moon[]={0,1,2,2,2,2};v[NightSky]=night[tier];v[Moonlight]=moon[tier];static constexpr float contact[]={0,0,1,2,3,3};v[ContactShadows]=contact[tier];static constexpr float bounce[]={0,0,0,2,3,3};v[BounceLight]=bounce[tier];static constexpr float dof[]={0,0,0,0,0,2},blur[]={0,0,0,0,0,1};v[DepthOfField]=dof[tier];v[MotionBlur]=blur[tier];static constexpr float object_reach[]={0,0,0,1,2,3};v[DrawDistance]=object_reach[tier];static constexpr float sun_levels[]={0,1,2,2,3,3},cloud_tiers[]={0,0,1,2,3,3};v[SunDisc]=sun_levels[tier];v[CloudLayer]=cloud_tiers[tier];v[NativeShadows]=level>=2?2.f:1.f;v[NativeFogBlur]=level>=3?2.f:1.f;
+ v[NativeSSAO]=level>=3?2.f:1.f;static constexpr float ao[]={0,0,0,2,3,3};v[DetailedAO]=ao[tier];static constexpr float night[]={0,1,2,2,3,3},moon[]={0,1,2,2,2,2};v[NightSky]=night[tier];v[Moonlight]=moon[tier];static constexpr float contact[]={0,0,1,2,3,3};v[ContactShadows]=contact[tier];static constexpr float bounce[]={0,0,0,2,3,3};v[BounceLight]=bounce[tier];static constexpr float dof[]={0,0,0,0,0,2},blur[]={0,0,0,0,0,1};v[DepthOfField]=dof[tier];v[MotionBlur]=blur[tier];static constexpr float object_reach[]={0,0,0,1,2,3};v[DrawDistance]=object_reach[tier];static constexpr float sun_levels[]={0,1,2,2,3,3},cloud_tiers[]={0,0,1,2,3,3};v[SunDisc]=sun_levels[tier];v[CloudLayer]=cloud_tiers[tier];static constexpr float water[]={0,0,0,2,3,3},glint[]={0,0,0,1,1,1};v[WaterReflections]=water[tier];v[SunGlint]=glint[tier];v[NativeShadows]=level>=2?2.f:1.f;v[NativeFogBlur]=level>=3?2.f:1.f;
  static constexpr float bloom[]={0,.05f,.1f,.2f,.35f,.35f};v[NativeBloom]=level>=2?2.f:1.f;v[BloomAmount]=bloom[tier];v[BloomThreshold]=.75f;
  // Fog and beams are artistic strengths, not sample quality. High tiers add
  // samples and lights but keep fog light: no preset goes past Low volumetric
