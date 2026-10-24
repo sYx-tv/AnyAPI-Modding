@@ -79,7 +79,7 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[9], g_settings_revision = ~0ull;
+uint64_t g_tokens[10], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
@@ -322,12 +322,13 @@ std::atomic<long long> g_place_hits{0}, g_place_misses{0};
 // vehicle.generate_loot (required, floor and furniture items) for each wreck on that tile that has none yet, then marks
 // the tile's loot as done. Each call creates the wreck's items, about 7 ms in 0.1.27, so a tile with 80 wrecks held the
 // server for over 600 ms and the world went into slow motion. With "Spread wreck loot" on, wreck loot inside a tile
-// integrate runs until kLootBudgetMs of loot has run this tick; the rest is queued by vehicle id and filled after the
-// following ticks, kLootBudgetMs a tick (80 wrecks take about 1.3 s, on tiles at the edge of the loaded area). A
+// integrate runs until g_loot_budget_ms of loot has run this tick; the rest is queued by vehicle id and filled after the
+// following ticks, g_loot_budget_ms a tick (80 wrecks take about 1.3 s, on tiles at the edge of the loaded area). A
 // queued wreck that is gone by then is skipped. Before a world save on the server thread the whole queue is filled,
 // and before a tile save that tile's own wrecks are, so a save never stores a wreck as looted without its items. Only a save from the main thread (the
 // pause menu's save in the first second after a tile loads) can miss queued loot; that is logged.
-constexpr double kLootBudgetMs = 8;
+constexpr double kLootBudgetDefaultMs = 8;
+std::atomic<double> g_loot_budget_ms{kLootBudgetDefaultMs};   // setting "loot_budget_ms", 2 to 30
 constexpr ptrdiff_t kServerScene = 0xa0;      // server.m_scene, ref<server_scene> at +0x98: object pointer at +0xa0
 constexpr ptrdiff_t kSceneVehicles = 0x1b0;   // server_scene.m_vehicles (server_scene.vehicle.container)
 constexpr ptrdiff_t kVehicleId = 0x40;        // server_scene.vehicle.m_id (s32)
@@ -350,7 +351,7 @@ vehicle_by_id_t g_vehicle_by_id;
 
 // Queues one generate_loot call from a tile integrate once this tick's budget is used. True when queued.
 bool queue_loot(void* vehicle, void* scene, const void* tier) {
-    if (!g_spread_loot || !g_vehicle_by_id || g_loot_ms_tick < kLootBudgetMs) return false;
+    if (!g_spread_loot || !g_vehicle_by_id || g_loot_ms_tick < g_loot_budget_ms.load()) return false;
     auto* v = static_cast<uint8_t*>(vehicle);
     if (!v || !scene || !anymaker::readable(v + kVehicleId, 4) || (tier && !anymaker::readable(tier, 4))) return false;
     PendingLoot p{scene, vehicle, *reinterpret_cast<const int32_t*>(v + kVehicleId), tier ? *static_cast<const int32_t*>(tier) : 0};
@@ -577,6 +578,7 @@ void read_settings() {
     if (g_tokens[6] && settings->get(g_tokens[6], &v)) g_inventory_lod = v.number != 0;
     if (g_tokens[7] && settings->get(g_tokens[7], &v)) g_fast_navmesh = v.number != 0;
     if (g_tokens[8] && settings->get(g_tokens[8], &v)) g_place_cache_on = v.number != 0;
+    if (g_tokens[9] && settings->get(g_tokens[9], &v) && std::isfinite(v.number)) g_loot_budget_ms = std::clamp(v.number, 2.0, 30.0);
 }
 
 // Counts one hitch or slow-motion log line; false once the session's limit is used up.
@@ -904,8 +906,8 @@ void hk_server_tick(void* server) {
         // One wreck can cost 100-280 ms on its own (towns). Every ms over the budget is paid back first at
         // kLootRepayMs a tick, so heavy wrecks are spaced out and the world catches up between them.
         if (g_loot_debt > 0) g_loot_debt -= kLootRepayMs;
-        else if (void* scene = server_scene_of(server)) fill_loot(scene, kLootBudgetMs);
-        g_loot_debt += std::max(0.0, g_loot_ms_tick - kLootBudgetMs);
+        else if (void* scene = server_scene_of(server)) fill_loot(scene, g_loot_budget_ms.load());
+        g_loot_debt += std::max(0.0, g_loot_ms_tick - g_loot_budget_ms.load());
         if (!g_loot_pending.load(std::memory_order_relaxed)) g_loot_debt = 0;
     }
     double ms = now_ms() - start;
@@ -1115,6 +1117,12 @@ void register_settings() {
     d.description = "Remembers which loot items do not fit in a wreck's cabinets and shelves while it is being filled, instead of "
                     "searching every slot again. Same loot, much faster. Host and solo only.";
     g_tokens[8] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "loot_budget_ms"; d.label = "Wreck loot per tick (ms)"; d.kind = ANY_SETTING_INTEGER; d.order = 9;
+    d.default_number = kLootBudgetDefaultMs; d.minimum = 2; d.maximum = 30; d.step = 1;
+    d.description = "How long Spread wreck loot may fill wrecks each server tick. Higher fills more wrecks at once, so loot "
+                    "is ready sooner but the server has less room for everything else (a tick is 16.7 ms).";
+    g_tokens[9] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace

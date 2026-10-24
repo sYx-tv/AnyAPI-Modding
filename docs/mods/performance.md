@@ -158,6 +158,7 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Hitch threshold (ms) | 50 | Frames slower than this are logged (20 to 1000) |
 | FPS overlay | Off | The live readout in the top-left corner |
 | Spread wreck loot | On | Fills wrecks on newly loaded terrain a few at a time, as above |
+| Wreck loot per tick (ms) | 8 | How long Spread wreck loot may fill wrecks each server tick (2 to 30). Higher fills more wrecks at once. Applies at once |
 | Fast furniture loot | On | Remembers which loot items do not fit in a wreck's furniture while it fills, as below |
 | Fast navmesh cleanup | On | Answers the game's check of empty navmesh cells around unloading terrain itself, as below |
 | Distant container items | On | Parked vehicles over 50 m away update the items in their containers every 8th frame, as below |
