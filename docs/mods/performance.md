@@ -58,6 +58,14 @@ on tiles at the edge of the loaded area). A wreck that is gone by then is skippe
 fills the whole queue first, and a tile save fills that tile's own waiting wrecks (logged as `tile X,Y,Z was saved`). One wreck can cost 100-280 ms on its own in towns; every millisecond over the budget is paid back at 4 ms a tick before the next queued wreck runs, so heavy wrecks are spaced out and the world catches up between them. Only a save from the pause menu in that second can miss queued loot; the log
 says so when it happens. Each batch logs `Spread wreck loot: N wrecks filled over M server ticks`.
 
+## Fast navmesh cleanup
+
+When a terrain tile unloads, the server checks every navmesh cell around it, about 8,300 of them, and each check
+first lists the terrain tiles in range (56 ms for one unload in a town log). Most cells have no navmesh tile, and then
+the check changes nothing. With **Fast navmesh cleanup** on, the mod keeps a set of the cells that have one and answers
+the empty ones itself; the rest go to the game as before. Every 30 s the log shows
+`Fast navmesh cleanup: N empty cells answered by the mod, M left to the game`.
+
 ## Distant container items
 
 Every frame the game places every item inside every container of every loaded vehicle, including wrecks full of
@@ -141,6 +149,7 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Hitch threshold (ms) | 50 | Frames slower than this are logged (20 to 1000) |
 | FPS overlay | Off | The live readout in the top-left corner |
 | Spread wreck loot | On | Fills wrecks on newly loaded terrain a few at a time, as above |
+| Fast navmesh cleanup | On | Answers the game's check of empty navmesh cells around unloading terrain itself, as below |
 | Distant container items | On | Parked vehicles over 50 m away update the items in their containers every 8th frame, as below |
 | Profiler (for testing) | Off | Samples where the main and server threads spend their time, as below |
 

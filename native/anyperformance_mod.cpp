@@ -29,6 +29,9 @@
 // Fix 4, distant container items (on by default): containers on parked vehicles over 50 m away place their items
 // every 8th frame instead of every frame (see hk_inventory).
 //
+// Fix 5, fast navmesh cleanup (on by default): a terrain tile unload checks ~8,300 navmesh cells; the mod answers the
+// empty ones itself (see nav_cell_used).
+//
 // Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot,
 // profiler, distant container items.
 //
@@ -72,7 +75,7 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[7], g_settings_revision = ~0ull;
+uint64_t g_tokens[8], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
@@ -224,8 +227,9 @@ constexpr int step_index(const anymaker::func_desc* desc) {
     return -1;
 }
 constexpr int kTileStep = step_index(&bind::tile_task_integrate_server), kLootStep = step_index(&bind::vehicle_generate_loot),
-              kSaveStep = step_index(&bind::save_game_inner);
+              kSaveStep = step_index(&bind::save_game_inner), kNavDestroyStep = step_index(&bind::nav_tile_destroy);
 static_assert(kTileStep >= 0 && kLootStep >= 0 && kSaveStep >= 0, "the wreck loot queue needs these steps");
+static_assert(kNavDestroyStep >= 0, "the navmesh cleanup needs its step");
 constexpr bool is_tile_save(int i) {
     return kSteps[i].desc == &bind::tile_save_level_1 || kSteps[i].desc == &bind::tile_save_level_2 ||
            kSteps[i].desc == &bind::tile_save_level_3;
@@ -251,6 +255,44 @@ double g_local_pos[3];
 bool g_local_ok;
 uint32_t g_frame_no;
 long long g_inventory_ran, g_inventory_skipped, g_inventory_calls, g_inventory_no_player;
+
+// Fix 5, fast navmesh cleanup: when a terrain tile unloads, the server calls
+// environment_tile_container._try_destroy_navigation_tile for every navmesh cell around it (about 8,300 cells, 56 ms
+// in a town log). Each call first builds the list of terrain tiles in range, then looks for a navmesh tile at that cell
+// in m_navigation_tiles and destroys it. Its only caller ignores the result, and when no navmesh tile is at the cell
+// the call changes nothing, so the mod answers those calls itself from a set of the cells that have one.
+constexpr ptrdiff_t kNavTiles = 0x1e0;   // environment_tile_container.m_navigation_tiles (vector<navigation_tile>,
+                                         // m_grid_coord vec2_s32 first)
+std::atomic<bool> g_fast_navmesh{true};
+struct NavCells {
+    const void* container = nullptr; anymaker::gc_vector_raw seen{};
+    std::unordered_map<uint64_t, int> cells;   // server thread only
+    bool valid = false;
+} g_nav;
+std::atomic<long long> g_nav_skipped{0}, g_nav_run{0};
+uint64_t nav_key(int32_t x, int32_t y) { return uint64_t(uint32_t(x)) << 32 | uint32_t(y); }
+// False when the vector does not look right (then the game's own code runs).
+bool nav_cell_used(const void* container, int32_t x, int32_t y, bool& used) {
+    auto* vec = static_cast<const uint8_t*>(container) + kNavTiles;
+    if (!anymaker::readable(vec, sizeof(anymaker::gc_vector_raw))) return false;
+    anymaker::gc_vector_raw v;
+    std::memcpy(&v, vec, sizeof v);
+    if (!g_nav.valid || g_nav.container != container || g_nav.seen.buffer != v.buffer || g_nav.seen.offset != v.offset ||
+        g_nav.seen.count != v.count || g_nav.seen.capacity != v.capacity) {
+        g_nav.valid = false;
+        if (v.count < 0 || v.count > 1000000 || v.element_size < 8 || (v.count && (v.capacity < v.count || v.offset < 0 ||
+            v.offset >= v.capacity || !v.buffer || !anymaker::readable(v.buffer, size_t(v.capacity) * v.element_size))))
+            return false;
+        g_nav.cells.clear();
+        for (int32_t i = 0; i < v.count; ++i) {
+            auto* e = reinterpret_cast<const int32_t*>(v.buffer + size_t((int64_t(v.offset) + i) % v.capacity) * v.element_size);
+            ++g_nav.cells[nav_key(e[0], e[1])];
+        }
+        g_nav.container = container; g_nav.seen = v; g_nav.valid = true;
+    }
+    used = g_nav.cells.count(nav_key(x, y)) != 0;
+    return true;
+}
 
 // ------------------------------------------------------------------ spread wreck loot (server thread)
 // When a terrain tile goes into the world, server_scene.environment_tile_task.integrate loops over every vehicle, calls
@@ -322,7 +364,7 @@ void fill_tile_loot(const void* tile, void* scene) {
     for (size_t i = g_loot_next; i < g_loot_queue.size(); ++i) {
         auto& p = g_loot_queue[i];
         if (!p.vehicle) continue;
-        bool same = (p.tile && p.tile == tile) || (has_grid && p.has_grid && std::memcmp(p.grid, grid, 12) == 0) ||
+        bool same = (p.tile && p.tile == tile) || (has_grid && p.has_grid && p.grid[0] == grid[0] && p.grid[1] == grid[1]) ||
                     (!p.tile && !p.has_grid);
         if (!same) continue;
         if (fill_one(p, scene)) ++filled; else ++g_loot_skipped_total;
@@ -367,6 +409,16 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
     }
     if constexpr (I == kLootStep)
         if (g_tile_depth > 0 && queue_loot(a, b, c)) return;
+    if constexpr (I == kNavDestroyStep)   // (bool) _try_destroy_navigation_tile (container, const s32 x, const s32 y, scene)
+        if (g_fast_navmesh && a && b && c && d && anymaker::readable(c, 4) && anymaker::readable(d, 4)) {
+            bool used = true;
+            if (nav_cell_used(b, *static_cast<const int32_t*>(c), *static_cast<const int32_t*>(d), used) && !used) {
+                *static_cast<bool*>(a) = true;   // what the game returns when no navmesh tile is at the cell
+                ++g_nav_skipped;
+                return;
+            }
+            ++g_nav_run;
+        }
     if constexpr (I == kSaveStep)   // server._save_game (server, ...)
         if (g_loot_pending.load(std::memory_order_relaxed))
             if (void* scene = server_scene_of(a)) fill_loot(scene, -1);
@@ -479,6 +531,7 @@ void read_settings() {
     if (g_tokens[4] && settings->get(g_tokens[4], &v)) g_spread_loot = v.number != 0;
     if (g_tokens[5] && settings->get(g_tokens[5], &v)) g_profiler = v.number != 0;
     if (g_tokens[6] && settings->get(g_tokens[6], &v)) g_inventory_lod = v.number != 0;
+    if (g_tokens[7] && settings->get(g_tokens[7], &v)) g_fast_navmesh = v.number != 0;
 }
 
 // Counts one hitch or slow-motion log line; false once the session's limit is used up.
@@ -623,6 +676,10 @@ void summary(double now) {
         log(0, "Frame average (%d frames): %.1f ms = client tick %.1f (simulation+physics %.1f, streaming %.1f), "
                "rendering/UI %.1f%s%s", w.frames, w.frame_ms / n, w.sum.client_tick / n, w.sum.scene_tick / n,
             w.sum.loading / n, (w.frame_ms - w.sum.client_tick) / n, steps[0] ? " | steps: " : "", steps);
+    }
+    if (g_nav_skipped + g_nav_run) {
+        long long skipped = g_nav_skipped.exchange(0), run = g_nav_run.exchange(0);
+        log(0, "Fast navmesh cleanup: %lld empty cells answered by the mod, %lld left to the game", skipped, run);
     }
     if (h_inventory.cell && g_inventory_lod) {
         long long calls = g_inventory_calls;
@@ -998,6 +1055,11 @@ void register_settings() {
     d.description = "Updates the items inside containers of parked vehicles more than 50 m away every 8th frame instead of "
                     "every frame. Anything moving or near you is updated every frame.";
     g_tokens[6] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "fast_navmesh"; d.label = "Fast navmesh cleanup"; d.kind = ANY_SETTING_BOOL; d.order = 7; d.default_number = 1;
+    d.description = "When terrain unloads, skips the game's slow check of thousands of empty navmesh cells around it. "
+                    "Cuts part of the stutter when driving into new areas. Host and solo only.";
+    g_tokens[7] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace
