@@ -36,6 +36,9 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -848,34 +851,99 @@ void set_clipboard(const std::string& s) {
 enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode, InsertScript, TogglePart };
 struct SideRow { std::string label, help, insert; bool header = false; uint32_t color = 0xffe8ecef; SideAct act = SideAct::None; int arg = 0; };
 // Parts tab: the setup guide, the parts wired to this microcontroller, then every part that has channels.
-const std::vector<parts::Part>& all_parts() {
-    static std::vector<parts::Part> list;
-    static std::once_flag once;
-    std::call_once(once, [] {
-        if (!catalog) return;
-        uint32_t n = std::min<uint32_t>(catalog->count(), 10000), bad = 0;
-        std::string json;
-        for (uint32_t i = 0; i < n; ++i) {
-            AnyItemDefinitionV1 d;
-            if (!catalog->copy(i, &d) || !(d.valid_fields & ANY_ITEM_VEHICLE_COMPONENT)) continue;
-            uint32_t need = 0;
-            catalog->definition_json(i, nullptr, 0, &need);
-            if (!need || need > (1u << 20)) continue;
-            json.assign(need, '\0');
-            if (!catalog->definition_json(i, json.data(), need, &need)) continue;
-            json.resize(strnlen(json.data(), json.size()));
-            parts::Part part{d.id, d.name[0] ? d.name : d.id, d.category, {}};
-            if (parts::parse_part(json, part)) list.push_back(std::move(part)); else ++bad;
-        }
-        parts::sort_parts(list);
-        size_t channels = 0;
-        for (auto& p : list) channels += p.channels.size();
-        log(1, "PARTS_GUIDE parts_with_channels=%zu channels=%zu unreadable=%u", list.size(), channels, bad);
-    });
-    return list;
+// The list is the game's parts (AnyAPI's item catalog) plus the parts mods add, read from the definition files they
+// write under "AnyAPI and Modding" (the catalog's entries for those carry no channels). It is built at startup and
+// rebuilt when the catalog grows (a world load adds the mods' parts) or the Parts tab is opened.
+using PartList = std::shared_ptr<const std::vector<parts::Part>>;
+std::mutex g_parts_mu;
+PartList g_parts;
+uint32_t g_parts_catalog_count = ~0u;
+
+// The catalog's parts, parsed once per entry; entries added later are parsed when they appear.
+std::vector<parts::Part> catalog_parts(uint32_t& seen, uint32_t& bad) {
+    static std::vector<parts::Part> cache;
+    static uint32_t parsed = 0;
+    if (!catalog) return cache;
+    uint32_t n = std::min<uint32_t>(catalog->count(), 10000);
+    std::string json;
+    for (; parsed < n; ++parsed) {
+        AnyItemDefinitionV1 d;
+        if (!catalog->copy(parsed, &d) || !(d.valid_fields & ANY_ITEM_VEHICLE_COMPONENT)) continue;
+        uint32_t need = 0;
+        catalog->definition_json(parsed, nullptr, 0, &need);
+        if (!need || need > (1u << 20)) continue;
+        json.assign(need, '\0');
+        if (!catalog->definition_json(parsed, json.data(), need, &need)) continue;
+        json.resize(strnlen(json.data(), json.size()));
+        std::string id = d.id;
+        if (id.rfind("component:", 0) == 0) id = id.substr(10);   // the catalog's prefix; mod files use the bare id
+        parts::Part part{id, d.name[0] ? d.name : id, d.category, {}, {}};
+        if (parts::parse_part(json, part)) cache.push_back(std::move(part)); else ++bad;
+    }
+    seen = n;
+    return cache;
 }
-const parts::Channel* find_channel(const std::string& name) {
-    for (auto& p : all_parts())
+
+// Definition files in "AnyAPI and Modding" and its folders (GpsPart\gps_sensor.json, AnyEngineParts' turbo files...).
+std::vector<parts::Part> mod_parts(int& files) {
+    std::vector<parts::Part> out;
+    files = 0;
+    if (!host.game_directory) return out;
+    std::error_code ec;
+    std::filesystem::path root = std::filesystem::path(host.game_directory) / L"AnyAPI and Modding";
+    auto read_dir = [&](const std::filesystem::path& dir, const std::string& source) {
+        for (auto it = std::filesystem::directory_iterator(dir, ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
+            if (!it->is_regular_file(ec) || it->path().extension() != L".json") continue;
+            auto size = it->file_size(ec);
+            if (ec || size == 0 || size > (4u << 20)) continue;
+            std::ifstream in(it->path(), std::ios::binary);
+            std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            if (text.find("\"definitions\"") == std::string::npos) continue;
+            auto found = parts::parse_definition_file(text, source);
+            if (found.empty()) continue;
+            ++files;
+            for (auto& p : found) out.push_back(std::move(p));
+        }
+        ec.clear();
+    };
+    read_dir(root, "Mods");
+    for (auto it = std::filesystem::directory_iterator(root, ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec))
+        if (it->is_directory(ec) && it->path().filename() != L"mods") read_dir(it->path(), it->path().filename().string());
+    return out;
+}
+
+void rebuild_parts(const char* why) {
+    static std::mutex build_mu;   // one build at a time; readers keep the old list meanwhile
+    std::lock_guard<std::mutex> building(build_mu);
+    uint32_t seen = 0, bad = 0;
+    int files = 0;
+    auto list = catalog_parts(seen, bad);
+    std::vector<parts::Part> mods;
+    try { mods = mod_parts(files); } catch (...) { log(2, "PARTS_GUIDE could not read the mod part files"); }
+    size_t mod_count = 0;
+    for (auto& m : mods) if (!m.channels.empty()) ++mod_count;
+    parts::merge_mod_parts(list, std::move(mods));
+    parts::sort_parts(list);
+    size_t channels = 0;
+    for (auto& p : list) channels += p.channels.size();
+    log(1, "PARTS_GUIDE parts_with_channels=%zu channels=%zu mod_parts=%zu mod_files=%d unreadable=%u (%s)", list.size(), channels,
+        mod_count, files, bad, why);
+    std::lock_guard<std::mutex> lock(g_parts_mu);
+    g_parts = std::make_shared<const std::vector<parts::Part>>(std::move(list));
+    g_parts_catalog_count = seen;
+}
+PartList all_parts() {
+    uint32_t now = catalog ? std::min<uint32_t>(catalog->count(), 10000) : 0;
+    {
+        std::lock_guard<std::mutex> lock(g_parts_mu);
+        if (g_parts && now == g_parts_catalog_count) return g_parts;
+    }
+    rebuild_parts(g_parts ? "catalog grew" : "first use");
+    std::lock_guard<std::mutex> lock(g_parts_mu);
+    return g_parts;
+}
+const parts::Channel* find_channel(const std::vector<parts::Part>& list, const std::string& name) {
+    for (auto& p : list)
         for (auto& c : p.channels) if (c.name == name) return &c;
     return nullptr;
 }
@@ -892,18 +960,19 @@ void parts_rows(std::vector<SideRow>& rows) {
             rows.push_back({"   " + first, "click to insert", line.code, false, kCode});
         }
     }
+    PartList snapshot = all_parts();
+    const std::vector<parts::Part>& list = *snapshot;
     rows.push_back({"Wired to this MC", "", "", true});
     if (g.snap.part_ports.empty()) rows.push_back({"Nothing wired yet", "", "", false, kDimText});
     for (auto& pp : g.snap.part_ports) {
         if (pp.part.empty() || pp.channel.empty()) continue;
-        const parts::Channel* c = find_channel(pp.channel);
+        const parts::Channel* c = find_channel(list, pp.channel);
         std::string help = std::string(pp.input ? "read" : "set") + (c && !c->type.empty() ? ", " + c->type : "");
         rows.push_back({pp.part + "." + pp.channel, help, pp.part + "." + pp.channel, false, pp.input ? 0xff7cc8ff : 0xffffb86c});
         if (c && !c->doc.empty())
             for (auto& w : parts::wrap(c->doc, kWrap)) rows.push_back({"   " + w, "", "", false, kDimText});
     }
-    auto& list = all_parts();
-    if (!catalog || list.empty()) {
+    if (list.empty()) {
         rows.push_back({"Every part", "", "", true});
         rows.push_back({"The part list needs AnyAPI's item catalog, which didn't load.", "", "", false, kDimText});
         return;
@@ -915,13 +984,16 @@ void parts_rows(std::vector<SideRow>& rows) {
         auto& p = list[i];
         if (p.category != category) { category = p.category; if (!category.empty()) rows.push_back({category, "", "", false, 0xffc586c0}); }
         bool open = g.part_open == int(i);
-        rows.push_back({(open ? "- " : "+ ") + p.name, std::to_string(p.channels.size()) + (p.channels.size() == 1 ? " channel" : " channels"),
-                        "", false, 0xfff1d36b, SideAct::TogglePart, int(i)});
+        std::string count = std::to_string(p.channels.size()) + (p.channels.size() == 1 ? " channel" : " channels");
+        if (!p.source.empty()) count += " \xb7 " + p.source;
+        rows.push_back({(open ? "- " : "+ ") + p.name, count, "", false, 0xfff1d36b, SideAct::TogglePart, int(i)});
         if (!open) continue;
         std::string name = parts::code_name(p.name);
         for (auto& c : p.channels) {
             const char* hint = parts::type_hint(c.type);
-            rows.push_back({"   " + name + "." + c.name, c.type + (*hint ? std::string(": ") + hint : std::string()), name + "." + c.name, false, 0xffe8ecef});
+            std::string help = c.type + (*hint ? std::string(": ") + hint : std::string());
+            if (c.dir != parts::Dir::Unknown) help = (c.dir == parts::Dir::Read ? "read, " : "set, ") + help;
+            rows.push_back({"   " + name + "." + c.name, help, name + "." + c.name, false, c.dir == parts::Dir::Set ? 0xffffb86c : 0xff7cc8ff});
             for (auto& w : parts::wrap(c.doc, kWrap)) rows.push_back({"      " + w, "", "", false, kDimText});
         }
     }
@@ -1779,7 +1851,10 @@ uint32_t input(const AnyInputV1* e, void*) {
         if (g.nodes_mode && e->button == 2 && l.editor.contains(x, y)) { nodes_mouse_down(l, x, y, 2); return 1; }
         if (e->button != 1) return 1;
         for (int i = 0; i < kBtnCount; ++i) if (l.btn[i].contains(x, y)) { press(i); capture(g.open); return 1; }
-        for (int i = 0; i < kTabCount; ++i) if (l.tabs[i].contains(x, y)) { g.tab = i; g.side_scroll = 0; return 1; }
+        for (int i = 0; i < kTabCount; ++i) if (l.tabs[i].contains(x, y)) {
+            if (i == 3 && g.tab != 3) std::thread([] { rebuild_parts("tab opened"); }).detach();   // picks up parts mods wrote since
+            g.tab = i; g.side_scroll = 0; return 1;
+        }
         if (l.side_body.contains(x, y)) {
             auto rows = side_rows();
             int i = int((y - l.side_body.y + g.side_scroll) / (22 * l.s));
@@ -1893,6 +1968,7 @@ void install_hooks() {
         if (!ok) { log(2, "a hook cell was not writable; MCCode is off"); remove_hooks(); return; }
         g_ready = true;
         log(0, "Ready after %d s. Open a microcontroller and press </> Code (top right).", attempt);
+        rebuild_parts("startup");   // the game's parts and the ones mods wrote at load; a world load adds more
         return;
     }
 }
