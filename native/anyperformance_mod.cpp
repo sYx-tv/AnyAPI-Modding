@@ -159,6 +159,9 @@ constexpr StepSpec kSteps[] = {
     {&bind::tile_task_integrate_server, "terrain tile into the world", true},
     {&bind::tile_populate_loot_zones, "terrain loot zones", true},
     {&bind::vehicle_generate_loot, "wreck loot", true},
+    {&bind::loot_tables, "wreck loot tables", true},
+    {&bind::loot_required, "wreck required loot", true},
+    {&bind::loot_floor, "wreck floor loot", true},
     {&bind::tile_loaded_event, "tile loaded event", true},
     {&bind::tile_save_level_1, "terrain tile save (near)", true},
     {&bind::tile_save_level_2, "terrain tile save (mid)", true},
@@ -364,7 +367,7 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
             g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
         }
     [[maybe_unused]] void* outer_task = g_tile_task;
-    if constexpr (I == kTileStep) { ++g_tile_depth; g_tile_task = a; }
+    if constexpr (I == kTileStep) { ++g_tile_depth; g_tile_task = b; }   // (bool) integrate: a is the result
     double start = now_ms();
     original(a, b, c, d, e, f);
     double ms = now_ms() - start;
@@ -691,7 +694,8 @@ void update_local_player() {
     static AnySessionPlayersV1 players;
     if (g_frame_no % 4) return;
     g_local_ok = false;
-    if (!g_inventory_lod || !host.copy_players || !host.copy_players(&players, nullptr)) return;
+    uint32_t ui_flags = 0;   // copy_players fails without it
+    if (!g_inventory_lod || !host.copy_players || !host.copy_players(&players, &ui_flags)) return;
     for (uint32_t i = 0; i < players.count && i < ANYAPI_PLAYERS_CAPACITY; ++i) {
         const auto& p = players.players[i];
         if ((p.valid_fields & (PLAYER_LOCAL | PLAYER_POSITION)) != (PLAYER_LOCAL | PLAYER_POSITION)) continue;

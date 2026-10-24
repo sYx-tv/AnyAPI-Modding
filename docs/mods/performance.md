@@ -45,7 +45,7 @@ entrance load/create/physics, the bunker's static load (save file parse, objects
 navmesh, objects load, layers (load and populate with loot, creatures and vehicles), and the saves and unloads when a
 player leaves. Terrain streaming steps are the tile's objects and loot zones going into the world, the tile's terrain, path and
 tree bodies going into physics (with `physics bodies added` counting every body the server adds), creature spawn zones,
-sleeping creatures, keycards and dead-drop loot in wrecks, wreck loot, navmesh tiles, and the save and unload of tiles
+sleeping creatures, keycards and dead-drop loot in wrecks, wreck loot (with its loot tables, required loot and floor loot timed on their own; the rest is furniture), navmesh tiles, and the save and unload of tiles
 left behind.
 
 ## Wreck loot on new terrain
