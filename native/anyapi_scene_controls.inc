@@ -144,7 +144,10 @@ static Apply plan_apply(const Policy& policy,const scene_frame::Sample& s,const 
  moon=MoonState{};moon.frame=s.frame;
  const bool on=p.enabled&&x.moon_mode==1&&x.moonlight>0&&(s.valid&SAMPLE_LIGHTS)&&(s.valid&SAMPLE_SUN);
  if(!on)moon_w=0;else{float want=c.source==1?float(moon_weight(c.t)):c.source==2?1.f:0.f;moon_w+=std::clamp(want-moon_w,-MOON_SLEW,MOON_SLEW);}
- if(moon_w>0){double lit=std::max<double>(x.moon_phase_floor,c.lit_fraction),target=x.moonlight*lit*(1-.7*(w.source==1?w.cover:0));
+ // Storm cover dims the moonlight by the moon disc's rule: only while the sky's weather is on (scene effects v3
+ // weather 1, AnyGraphics Weather response). With it off neither the light nor the disc reacts to the weather.
+ scene_frame::SkyPolicy sky{};const bool storms=scene_frame::board.sky_policy.load(sky)&&sky.weather==1&&w.source==1;
+ if(moon_w>0){double lit=std::max<double>(x.moon_phase_floor,c.lit_fraction),target=x.moonlight*lit*(1-.7*(storms?w.cover:0));
   double current=luma(s.light_main)*p.sun*std::exp2(p.light_exposure);a.moon_add=moon_w*std::max(0.,target-current);
   if(a.moon_add>0){moon.active=1;moon.added_luminance=float(a.moon_add);celestial::toward(s.sun_dir,moon.direction);}}
  return a;}

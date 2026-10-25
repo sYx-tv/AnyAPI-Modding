@@ -124,6 +124,10 @@ int main(){using namespace scene_controls;AnySceneParametersV1 p;p.enabled=1;p.a
    // AG-9 storm part: fog scale 0 gives way to the game's fog in a thick storm; nothing without a weather source or the flag.
    pol.scene.fog=0;pol.extras.weather_fog_keep=1;w0.source=1;w0.fog_ratio=4;w0.rain_fx=1;assert(plan_apply(pol,s0,ck,w0,mw,m0).fog_scale==1);w0.fog_ratio=2.5f;assert(std::abs(plan_apply(pol,s0,ck,w0,mw,m0).fog_scale-.5)<1e-6);
    w0.rain_fx=0;assert(plan_apply(pol,s0,ck,w0,mw,m0).fog_scale==0);w0.rain_fx=1;w0.source=0;assert(plan_apply(pol,s0,ck,w0,mw,m0).fog_scale==0);w0.source=1;pol.extras.weather_fog_keep=0;assert(plan_apply(pol,s0,ck,w0,mw,m0).fog_scale==0);}
+  // K49: storm cover dims the moonlight by the moon disc's rule, only while the sky's weather (effects v3) is on.
+  {Policy pol;pol.scene=q;pol.extras.moon_mode=1;pol.extras.moonlight=.012f;Sample s{};s.valid=SAMPLE_LIGHTS|SAMPLE_SUN;Clock ck{};ck.source=1;ck.t=.9;ck.lit_fraction=1;Weather w{};w.source=1;w.cover=.6f;MoonState m{};
+   auto add=[&](uint32_t weather){board.sky_policy.store({1,1,weather,0});float mw=1;return plan_apply(pol,s,ck,w,mw,m).moon_add;};
+   double calm=add(0),storm=add(1);w.source=0;double none=add(1);assert(std::abs(calm-.012)<1e-9&&std::abs(storm-.012*.58)<1e-9&&std::abs(none-.012)<1e-9);board.sky_policy.store({0,0,0,0});}
   // K18 weather v1 ramps: tau 8 s, wet 40 s up / 480 s down, cover .6 max, epoch restart, fog_ratio clamp.
   {WeatherState ws;world_time::Observed o;o.weather_valid=1;o.epoch=7;Sample s0{};s0.valid=SAMPLE_FOG;s0.native_fog=.02;auto w=make_weather(s0,o,.1,ws);assert(w.source==1&&w.rain_fx==0&&w.fog_ratio==2);
    o.rain=1;for(int i=0;i<80;++i)w=make_weather(s0,o,.1,ws);assert(std::abs(w.rain_fx-(1-std::exp(-1.)))<1e-3&&std::abs(w.wet-(1-std::exp(-.2)))<1e-3&&std::abs(w.cover-.6f*w.rain_fx)<1e-6);

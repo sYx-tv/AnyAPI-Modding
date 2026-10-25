@@ -112,7 +112,8 @@ keeps your preset:
 - **Weather response** (Sky and weather): rain, snow and storms change
   AnyGraphics too. Fog and cloud thicken, stars, moon and sun dim, the sea gets
   rougher, lamp beams thicken in the wet air and lightning lights up the fog
-  without the exposure pumping. It costs almost no GPU time.
+  without the exposure pumping. With Game light, storms dim the moonlight
+  only while Weather response is on, like the moon disc. It costs almost no GPU time.
 
 Light colour now tints the sun and the sky lights it was meant for (before,
 the warm sun tint also landed on the sky straight above).

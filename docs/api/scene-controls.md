@@ -48,7 +48,8 @@ values in the first column below, which reproduce the version 3 output.
 The moonlight follows the game clock: it fades in over 0.03 of a day after the
 game parks its sun at 0.8 and fades out over 0.03 of a day before 0.2. The
 applied amount also moves by at most 0.03 per frame. Rain and snow lower it, by
-up to 42% in the heaviest storm. Its direction is the game's parked night
+up to 42% in the heaviest storm, only while [scene effects](scene-effects.md)
+version 3 `weather` is 1, the switch that also dims the moon disc. Its direction is the game's parked night
 direction, so the night shadows fall the way the game already casts them.
 
 `status_v2` returns `AnySceneStatusV2`: the version 1 status in `base`, plus
