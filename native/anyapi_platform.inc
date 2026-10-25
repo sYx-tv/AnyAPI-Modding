@@ -308,8 +308,10 @@ static void load(HMODULE module,const std::filesystem::path& path,AnyBundleParts
 }
 } // namespace bundles
 // Discover mod DLLs. Reject unsupported exports/ABI; retain accepted modules for process lifetime.
-static void load(){catalog_runtime::initialize();bundles::read();auto directory=g_game_dir/L"AnyAPI and Modding"/L"mods";if(!std::filesystem::exists(directory))return;
- std::vector<std::filesystem::path> paths;for(auto& entry:std::filesystem::directory_iterator(directory))if(entry.is_regular_file()&&entry.path().extension()==L".dll")paths.push_back(entry.path());std::sort(paths.begin(),paths.end());
+static void load(){catalog_runtime::initialize();bundles::read();auto directory=g_game_dir/L"AnyAPI and Modding"/L"mods";std::error_code error;if(!std::filesystem::exists(directory,error))return;
+ // error_code overloads: an unreadable mods folder or entry skips mods instead of throwing on the loader thread.
+ std::vector<std::filesystem::path> paths;for(std::filesystem::directory_iterator it(directory,error),end;!error&&it!=end;it.increment(error)){std::error_code entry;if(it->is_regular_file(entry)&&it->path().extension()==L".dll")paths.push_back(it->path());}
+ if(error)log_line(ANY_LOG_WARN,"framework",("MODS_FOLDER unreadable=1 error="+std::to_string(error.value())).c_str());std::sort(paths.begin(),paths.end());
  for(auto& path:paths){if(plugin_count.load()==plugins.size())break;HMODULE module=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);if(!module){log_line(ANY_LOG_ERROR,"framework",("Plugin DLL load failed: "+utf8(path.filename())).c_str());continue;}
   if(auto list=(AnyBundlePartsExportV1)GetProcAddress(module,"AnyAPI_BundleParts")){bundles::load(module,path,list);continue;}
   auto init=(AnyModInitV1)GetProcAddress(module,"AnyAPI_ModInit");if(!init){FreeLibrary(module);log_line(ANY_LOG_WARN,"framework",("Unsupported plugin export: "+utf8(path.filename())).c_str());continue;}

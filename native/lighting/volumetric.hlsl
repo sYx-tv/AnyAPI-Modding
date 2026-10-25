@@ -55,6 +55,20 @@ float shadow_sample(uint cascade,float2 uv) {
     default:return shadow11.SampleLevel(point_sampler,uv,0);
     }
 }
+// The four texels around uv: a 2x2 PCF footprint for one gather, so foliage
+// shadows give a coverage fraction instead of binary speckle.
+float4 shadow_gather(uint cascade,float2 uv) {
+    switch(cascade) {
+    case 0:return shadow_depth.Gather(point_sampler,uv);
+    case 1:return shadow1.Gather(point_sampler,uv);
+    case 2:return shadow2.Gather(point_sampler,uv);
+    case 3:return shadow3.Gather(point_sampler,uv);
+    case 4:return shadow4.Gather(point_sampler,uv);
+    case 5:return shadow5.Gather(point_sampler,uv);
+    case 6:return shadow6.Gather(point_sampler,uv);
+    default:return shadow7.Gather(point_sampler,uv);
+    }
+}
 
 // Matrix texture rows 20-21 carry per-frame data that no longer fits in the
 // 56 root constants. All zero means the original 0.29 behaviour.
@@ -86,29 +100,34 @@ float3 view_ray(float2 uv) {
     float2 ndc=uv*float2(2,-2)+float2(-1,1);
     return normalize(forward_axis.xyz+right_axis.xyz*ndc.x*right_axis.w+up_axis.xyz*ndc.y*up_axis.w);
 }
-float2 shadow_result(float3 position) {
-    if(sunlight.w<.5)return float2(1,0);
-    [loop]for(uint cascade=0;cascade<(uint)forward_axis.w;++cascade) {
+// x: lit fraction (1 where no cascade covers); y: covered; z: beam weight, which
+// fades to 0 over the last cascade's outer edge. Air past every cascade has no
+// shadow information; counted as lit it formed a wall and glowed behind hills.
+float3 shadow_result(float3 position) {
+    if(sunlight.w<.5)return float3(1,0,1);
+    uint cascades=(uint)forward_axis.w;
+    [loop]for(uint cascade=0;cascade<cascades;++cascade) {
         row_major float4x4 transform=float4x4(matrices.Load(int3(0,cascade,0)),matrices.Load(int3(1,cascade,0)),matrices.Load(int3(2,cascade,0)),matrices.Load(int3(3,cascade,0)));
         float4 clip=mul(float4(position,1),transform);
         if(abs(clip.w)<.000001)continue;
         float3 p=clip.xyz/clip.w;float2 uv=p.xy*float2(.5,-.5)+.5;
         // Leave an edge margin so a farther cascade takes over before clamping.
         if(any(uv<.002)||any(uv>.998)||p.z<0||p.z>1)continue;
-        float stored=shadow_sample(cascade,uv);
+        float4 stored=shadow_gather(cascade,uv);
         // Reversed orthographic depth spans kilometres: a large fixed bias
         // erases branch shadows. Use a small normalized-depth bias instead.
-        return float2(sunlight.w>1.5?(p.z>=stored-.00002?1:0):(p.z<=stored+.00002?1:0),1);
+        float4 lit=sunlight.w>1.5?step(stored-.00002,p.z):step(p.z,stored+.00002);
+        float2 edge=min(uv,1-uv);
+        return float3(dot(lit,.25),1,cascade+1<cascades?1:smoothstep(.002,.08,min(edge.x,edge.y)));
     }
-    return float2(1,0);
+    return float3(1,0,0);
 }
-float visibility(float3 position) {return shadow_result(position).x;}
 // One-shot low-resolution diagnostic, never composited into the scene.
 float4 Probe(Varying v) : SV_Target {
     float3 ray=view_ray(v.uv);
     float distance=min(view_distance(scene_depth.SampleLevel(point_sampler,v.uv,0))/max(abs(dot(ray,forward_axis.xyz)),.05),controls.y);
     float2 result=0;
-    [loop]for(uint i=0;i<32;++i){float a=float(i)/32,b=float(i+1)/32;result+=shadow_result(camera.xyz+ray*distance*(a*a+b*b)*.5);}
+    [loop]for(uint i=0;i<32;++i){float a=float(i)/32,b=float(i+1)/32;result+=shadow_result(camera.xyz+ray*distance*(a*a+b*b)*.5).xy;}
     return float4(result/32,distance/controls.y,1);
 }
 float3 local_illumination(float3 position,float3 ray) {
@@ -166,7 +185,9 @@ float4 Integrate(Varying v) : SV_Target {
     // Fog owns extinction and ambient haze. Beams use a fixed, clear-air
     // scattering medium so their brightness does not depend on the fog tier.
     float transmittance=1,beam_transmittance=1,local_transmittance=1;float3 scattered=0,lamps=0;
-    float beam_lit=0,beam_total=0;
+    // Clarity state: a sample's beam light waits one step so the next sample
+    // can tell whether it borders a lit/shadow change.
+    float clarity=saturate(shape.x),beams=0,pending_light=0,pending_edge=0,edge_memory=0,previous_lit=1;
     [loop]for(uint i=0;i<count;++i) {
         // Quadratic spacing resolves nearby branch shadows without more samples.
         float a=float(i)/count,b=float(i+1)/count;
@@ -184,26 +205,32 @@ float4 Integrate(Varying v) : SV_Target {
         // Clear air for lamp beams: denser air turned every lamp into a glowing fog ball.
         float local_segment=exp(-.006*step);
         float local_weight=transmittance*local_transmittance*(1-local_segment);
-        float lit=visibility(position);
-        beam_lit+=lit*beam_weight;beam_total+=beam_weight;
+        float3 shadow=shadow_result(position);float lit=shadow.x;
+        // Clarity weights each sample by the lit/shadow change around it (this
+        // step, the next, and a few decaying steps back), never above the
+        // un-gated light. The old whole-ray shadow fraction let one pole or
+        // jitter noise brighten an entire ray 4.7x and pump with camera motion.
+        float change=i>0?abs(lit-previous_lit):0;
+        beams+=pending_light*lerp(1-clarity,1,max(pending_edge,change));
+        edge_memory=max(edge_memory*.6,change);pending_light=lit*beam_weight*shadow.z;pending_edge=edge_memory;previous_lit=lit;
         // V3 lights the fog itself: shadowed air (under a canopy, behind a
         // hill) is darker and sunlit air brighter, at the same average level.
         // A flat fog colour read as an evenly milky wall.
-        float fog_light=shape.x>0?lerp(.45,1.35,lit):1;
+        // Without cascade cover it returns to the neutral level, not to sunlit.
+        float fog_light=shape.x>0?lerp(1,lerp(.45,1.35,lit),shadow.z):1;
         scattered+=fog_colour.rgb*fog_weight*fog_light;lamps+=local_illumination(position,ray)*local_weight;
         transmittance*=segment;beam_transmittance*=beam_segment;local_transmittance*=local_segment;
         if(transmittance<.001)break;
     }
     // Clarity keeps beams where the ray crosses shadow edges (gaps in trees,
-    // windows, terrain) and thins the glow of rays that are lit end to end,
+    // windows, terrain) and thins the glow of air that is lit all around,
     // which is what read as fog. 0 keeps the original uniform scattering.
+    beams+=pending_light*lerp(1-clarity,1,pending_edge);
     // Lamp glow rolls off softly instead of blowing out, and fades in daylight
     // the way real headlight beams do (the sun washes them out).
     float lamp_level=dot(lamps,float3(.2126,.7152,.0722));lamps/=1+lamp_level/.35;
     lamps*=1-.75*smoothstep(.02,.2,dot(sun_colour.rgb,float3(.2126,.7152,.0722)));
     scattered+=lamps;
-    float shadowed=1-beam_lit/max(beam_total,.000001);
-    float beams=beam_lit*lerp(1-saturate(shape.x),1,smoothstep(.02,.3,shadowed));
     // Sun-height response: full beams at sunrise and sunset, a third at noon,
     // none below the horizon, and a warm tint while the sun is low.
     float3 sun=sun_colour.rgb;
@@ -251,7 +278,9 @@ float4 IntegrateConstants(Varying v) : SV_Target {
     // Fog owns extinction and ambient haze. Beams use a fixed, clear-air
     // scattering medium so their brightness does not depend on the fog tier.
     float transmittance=1,beam_transmittance=1,local_transmittance=1;float3 scattered=0,lamps=0;
-    float beam_lit=0,beam_total=0;
+    // Clarity state: a sample's beam light waits one step so the next sample
+    // can tell whether it borders a lit/shadow change.
+    float clarity=saturate(shape.x),beams=0,pending_light=0,pending_edge=0,edge_memory=0,previous_lit=1;
     [loop]for(uint i=0;i<count;++i) {
         // Quadratic spacing resolves nearby branch shadows without more samples.
         float a=float(i)/count,b=float(i+1)/count;
@@ -269,26 +298,32 @@ float4 IntegrateConstants(Varying v) : SV_Target {
         // Clear air for lamp beams: denser air turned every lamp into a glowing fog ball.
         float local_segment=exp(-.006*step);
         float local_weight=transmittance*local_transmittance*(1-local_segment);
-        float lit=visibility(position);
-        beam_lit+=lit*beam_weight;beam_total+=beam_weight;
+        float3 shadow=shadow_result(position);float lit=shadow.x;
+        // Clarity weights each sample by the lit/shadow change around it (this
+        // step, the next, and a few decaying steps back), never above the
+        // un-gated light. The old whole-ray shadow fraction let one pole or
+        // jitter noise brighten an entire ray 4.7x and pump with camera motion.
+        float change=i>0?abs(lit-previous_lit):0;
+        beams+=pending_light*lerp(1-clarity,1,max(pending_edge,change));
+        edge_memory=max(edge_memory*.6,change);pending_light=lit*beam_weight*shadow.z;pending_edge=edge_memory;previous_lit=lit;
         // V3 lights the fog itself: shadowed air (under a canopy, behind a
         // hill) is darker and sunlit air brighter, at the same average level.
         // A flat fog colour read as an evenly milky wall.
-        float fog_light=shape.x>0?lerp(.45,1.35,lit):1;
+        // Without cascade cover it returns to the neutral level, not to sunlit.
+        float fog_light=shape.x>0?lerp(1,lerp(.45,1.35,lit),shadow.z):1;
         scattered+=fog_colour.rgb*fog_weight*fog_light;lamps+=local_illumination_constants(position,ray)*local_weight;
         transmittance*=segment;beam_transmittance*=beam_segment;local_transmittance*=local_segment;
         if(transmittance<.001)break;
     }
     // Clarity keeps beams where the ray crosses shadow edges (gaps in trees,
-    // windows, terrain) and thins the glow of rays that are lit end to end,
+    // windows, terrain) and thins the glow of air that is lit all around,
     // which is what read as fog. 0 keeps the original uniform scattering.
+    beams+=pending_light*lerp(1-clarity,1,pending_edge);
     // Lamp glow rolls off softly instead of blowing out, and fades in daylight
     // the way real headlight beams do (the sun washes them out).
     float lamp_level=dot(lamps,float3(.2126,.7152,.0722));lamps/=1+lamp_level/.35;
     lamps*=1-.75*smoothstep(.02,.2,dot(sun_colour.rgb,float3(.2126,.7152,.0722)));
     scattered+=lamps;
-    float shadowed=1-beam_lit/max(beam_total,.000001);
-    float beams=beam_lit*lerp(1-saturate(shape.x),1,smoothstep(.02,.3,shadowed));
     // Sun-height response: full beams at sunrise and sunset, a third at noon,
     // none below the horizon, and a warm tint while the sun is low.
     float3 sun=sun_colour.rgb;
@@ -325,12 +360,20 @@ float4 Composite(Varying v) : SV_Target {
     uint w,h;volume.GetDimensions(w,h);float2 pixel=v.uv*float2(w,h)-.5;
     float2 base=floor(pixel),fraction=frac(pixel);
     float center_distance=view_distance(scene_depth.SampleLevel(point_sampler,v.uv,0));
-    float4 accumulated=0;float total=0;
+    float4 accumulated=0;float total=0;float neighbour[4];
+    [unroll]for(uint n=0;n<4;++n)neighbour[n]=view_distance(scene_depth.SampleLevel(point_sampler,(base+float2(n&1,n>>1)+.5)/float2(w,h),0));
+    // Plane fit: on any flat surface 1/depth is affine in screen space, so the
+    // four texels have no bilinear twist and their interpolation predicts this
+    // pixel. Grazing ground then interpolates plainly; the 2% depth tolerance
+    // alone rejected it and the nearest-depth fallback made flickering blocks.
+    // Real edges miss the prediction and keep the depth-weighted filter.
+    float4 inverse=1/max(float4(neighbour[0],neighbour[1],neighbour[2],neighbour[3]),.01);
+    float planar=lerp(lerp(inverse.x,inverse.y,fraction.x),lerp(inverse.z,inverse.w,fraction.x),fraction.y);
+    float plane=saturate(2-max(abs(1-planar*center_distance),abs(inverse.x+inverse.w-inverse.y-inverse.z)*center_distance)/.01);
     [unroll]for(uint y=0;y<2;++y)[unroll]for(uint x=0;x<2;++x) {
         float2 uv=(base+float2(x,y)+.5)/float2(w,h);
-        float neighbour=view_distance(scene_depth.SampleLevel(point_sampler,uv,0));
         float bilinear=(x?fraction.x:1-fraction.x)*(y?fraction.y:1-fraction.y);
-        float weight=bilinear*exp(-abs(center_distance-neighbour)/max(.1,center_distance*.02));
+        float weight=bilinear*lerp(exp(-abs(center_distance-neighbour[y*2+x])/max(.1,center_distance*.02)),1,plane);
         accumulated+=resolved_lighting(uv)*weight;total+=weight;
     }
     float4 lighting=accumulated/max(total,.00001);

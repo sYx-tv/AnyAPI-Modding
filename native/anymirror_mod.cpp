@@ -8,7 +8,7 @@
 // validates and replicates it like any other. Only the player building needs the mod.
 //
 // EXPERIMENTAL. Hooks game functions directly through the experimental SDK (anymirror_bindings.h). They
-// resolve only on Anymaker 0.1.25 / Steam build 25904830. First runs are diagnostic: read anymaker_modding.log.
+// resolve only on Anymaker 0.1.27 / Steam build 26113663. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -19,6 +19,7 @@
 #include "anyapi_experimental.hpp"
 #include "anymirror_bindings.h"
 #include "anymirror_logic.h"
+#include "anymirror_split.h"
 #include "vehicle_reads.h"
 #include "cell_scan.h"
 #include <algorithm>
@@ -206,7 +207,174 @@ void hk_remove_edge(uint8_t* p, const int32_t* v, const int32_t* id) { on_remove
 void hk_remove_node(uint8_t* p, const int32_t* v, const int32_t* id) { on_remove(kRemoveNode, p, v, id); }
 void hk_remove_plate(uint8_t* p, const int32_t* v, const int32_t* id) { on_remove(kRemovePlate, p, v, id); }
 
+// ------------------------------------------------------------------ bent windows (auto-split)
+// The game draws, collides and saves every plate as one flat, convex panel, so a window loop that bends is refused.
+// With "Split bent windows" on, the window tool accepts such a loop (client_scene.vehicle.can_add_plate answers yes
+// when a split exists), and the request is replaced by: a strut along each cut (vetted with can_add_edge) and one
+// window per flat piece, each through the normal requests, so mirroring and the host's checks apply as usual. The cut
+// struts are then painted kHiddenColor, which AnyHelpers does not draw. The host needs AnyHelpers' "Any window shape"
+// on, since pieces are often shapes the stock window rule refuses.
+using can_add_plate_t = void (*)(bool* ret, const uint8_t* vehicle, const anymaker::gc_vector_raw* node_ids, const bool* is_reverse, const int32_t* type, const void* blocking);
+using can_add_edge_t = void (*)(bool* ret, const uint8_t* vehicle, const Grid* p0, const Grid* p1, const int32_t* size);
+using paint_edge_t = void (*)(uint8_t* peer_data, const int32_t* color, const int32_t* vehicle_id, const int32_t* edge_id);
+constexpr int32_t kWindowType = 1, kHiddenColor = 68;   // vehicle_plate_util.e_plate_type.window; paint tool C68
+anymaker::cell_hook h_can_plate, h_is_planar, h_is_convex;
+can_add_edge_t g_can_edge; paint_edge_t g_paint_edge;
+uint64_t g_split_token;
+std::atomic<int> g_split_logs{12};
+thread_local bool g_in_split = false;
+struct EdgeInfo { int32_t id, a, b, color, size; };
+template <class F> void for_each_edge_info(const uint8_t* vehicle, F&& visit) {
+    for_each_ref(vehicle + off::vehicle_edges, 1 << 20, [&](uint8_t* e) {
+        if (!anymaker::readable(e, 80)) return true;
+        return visit(EdgeInfo{rd<int32_t>(e, off::edge_id), rd<int32_t>(e, off::edge_node_id_0), rd<int32_t>(e, off::edge_node_id_1),
+                              rd<int32_t>(e, off::edge_color), rd<int32_t>(e, off::edge_size)});
+    });
+}
+struct Split { int32_t vehicle = -1; std::vector<int32_t> ids; uint64_t at = 0; bool ok = false; anymirror_split::Plan plan; std::vector<Grid> pos; std::vector<bool> exists; int32_t size = 0; };
+Split g_split;                                       // last plan, main thread only (tool checks run every frame)
+struct PendingPaint { int32_t vehicle; Grid p0, p1; uint64_t until; };
+std::vector<PendingPaint> g_paints;                  // cut struts to paint hidden once the host has added them (g_mutex)
+uint8_t* g_peer_data;
+
+bool split_on() {
+    if (!settings || !g_split_token) return true;
+    AnySettingValueV1 v; return !settings->get(g_split_token, &v) || v.number != 0;
+}
+// Plan for a window loop, cached per loop. False when the loop is flat and convex already, is not a closed ring of
+// struts, or cannot be cut.
+const Split* plan_split(const uint8_t* vehicle, int32_t vehicle_id, const int32_t* ids, int n) {
+    uint64_t now = GetTickCount64();
+    if (g_split.vehicle == vehicle_id && int(g_split.ids.size()) == n && std::equal(ids, ids + n, g_split.ids.begin()) && now - g_split.at < 1000)
+        return g_split.ok ? &g_split : nullptr;
+    Split s; s.vehicle = vehicle_id; s.ids.assign(ids, ids + n); s.at = now;
+    std::vector<anymirror_split::P> pts(n);
+    bool ok = n >= 4 && n <= 64 && g_can_edge;
+    for (int i = 0; i < n && ok; ++i) {
+        Vec3i v{};
+        ok = node_pos(vehicle, ids[i], v);
+        s.pos.push_back(Grid{{v.x, v.y, v.z}});
+        pts[i] = {v.x, v.y, v.z};
+    }
+    // Every side must already be a strut; the cut struts take the thinnest side's size.
+    std::vector<EdgeInfo> edges;
+    if (ok) for_each_edge_info(vehicle, [&](const EdgeInfo& e) { edges.push_back(e); return true; });
+    auto edge_between = [&](int32_t a, int32_t b) -> const EdgeInfo* {
+        for (auto& e : edges) if ((e.a == a && e.b == b) || (e.a == b && e.b == a)) return &e;
+        return nullptr;
+    };
+    s.size = INT32_MAX;
+    for (int i = 0; i < n && ok; ++i) {
+        const EdgeInfo* e = edge_between(ids[i], ids[(i + 1) % n]);
+        ok = e != nullptr;
+        if (e) s.size = std::min(s.size, e->size);
+    }
+    if (ok) {
+        s.plan = anymirror_split::split(pts, [&](int a, int b) {
+            if (edge_between(ids[a], ids[b])) return true;
+            bool can = false; g_can_edge(&can, vehicle, &s.pos[a], &s.pos[b], &s.size);
+            return can;
+        });
+        ok = !s.plan.pieces.empty();
+        for (auto& c : s.plan.cuts) s.exists.push_back(edge_between(ids[c.first], ids[c.second]) != nullptr);
+    }
+    s.ok = ok;
+    g_split = std::move(s);
+    return g_split.ok ? &g_split : nullptr;
+}
+
+void hk_can_plate(bool* ret, const uint8_t* vehicle, const anymaker::gc_vector_raw* node_ids, const bool* is_reverse, const int32_t* type, const void* blocking) {
+    reinterpret_cast<can_add_plate_t>(h_can_plate.original)(ret, vehicle, node_ids, is_reverse, type, blocking);
+    if (!ret || *ret || !type || *type != kWindowType || !vehicle || !node_ids || !split_on() || !anymaker::readable(node_ids, sizeof *node_ids)) return;
+    int n = node_ids->count; int32_t ids[64];
+    if (n < 4 || n > 64) return;
+    for (int i = 0; i < n; ++i) { const int32_t* c = node_ids->at<int32_t>(i); if (!c) return; ids[i] = *c; }
+    const Split* plan = plan_split(vehicle, rd<int32_t>(vehicle, off::vehicle_id), ids, n);
+    if (!plan) return;
+    *ret = true;
+    static bool logged;
+    if (!logged) { logged = true; log(0, "bent window loop of %d corners accepted: %zu flat pieces, %zu cuts", n, plan->plan.pieces.size(), plan->plan.cuts.size()); }
+}
+
+// While edges are picked, the plate tools refuse an edge that leaves the plane of the edges picked so far, or makes the
+// loop non-convex (state_add_plate_select_edges._get_is_planar / _get_is_convex). With splitting on both answer yes, so a
+// bent loop can be picked; can_add_plate then decides when it closes (a split exists for windows, the stock rule otherwise).
+using select_planar_t = void (*)(bool* ret, const void* state, const Grid* node_pos);
+using select_convex_t = void (*)(bool* ret, const void* state, const Grid* node_pos, const void* vehicle);
+void hk_is_planar(bool* ret, const void* state, const Grid* node_pos) {
+    reinterpret_cast<select_planar_t>(h_is_planar.original)(ret, state, node_pos);
+    if (ret && !*ret && split_on()) *ret = true;
+}
+void hk_is_convex(bool* ret, const void* state, const Grid* node_pos, const void* vehicle) {
+    reinterpret_cast<select_convex_t>(h_is_convex.original)(ret, state, node_pos, vehicle);
+    if (ret && !*ret && split_on()) *ret = true;
+}
+void hk_push_edge(uint8_t* peer_data, const int32_t* vehicle_id, const Grid* p0, const Grid* p1, const int32_t* size);
+void hk_add_plate(uint8_t* peer_data, const int32_t* vehicle_id, anymaker::gc_vector_raw* node_ids, const bool* is_reverse, const int32_t* type);
+// Sends a bent window as cut struts plus one window per piece. False when the request is not a bent window.
+bool send_split(uint8_t* peer_data, const int32_t* vehicle_id, anymaker::gc_vector_raw* node_ids, const bool* is_reverse, const int32_t* type) {
+    if (g_in_split || !type || *type != kWindowType || !vehicle_id || !node_ids || !split_on() || !anymaker::readable(node_ids, sizeof *node_ids)) return false;
+    int n = node_ids->count; int32_t ids[64];
+    if (n < 4 || n > 64) return false;
+    for (int i = 0; i < n; ++i) { const int32_t* c = node_ids->at<int32_t>(i); if (!c) return false; ids[i] = *c; }
+    Split plan;
+    std::vector<PendingPaint> paints;
+    {
+        std::lock_guard lock(g_mutex);
+        const uint8_t* vehicle = g_scene ? find_vehicle(g_scene, *vehicle_id) : nullptr;
+        const Split* p = vehicle ? plan_split(vehicle, *vehicle_id, ids, n) : nullptr;
+        if (!p) return false;
+        plan = *p;
+        g_peer_data = peer_data;
+        uint64_t until = GetTickCount64() + 15000;
+        Plane plane; bool mirrored = mirror_target(*vehicle_id, plane) != nullptr;
+        for (size_t c = 0; c < plan.plan.cuts.size(); ++c) {
+            if (plan.exists[c]) continue;
+            Grid a = plan.pos[plan.plan.cuts[c].first], b = plan.pos[plan.plan.cuts[c].second], m0, m1;
+            paints.push_back({*vehicle_id, a, b, until});
+            if (mirrored && mirrored_edge(a, b, plane, m0, m1)) paints.push_back({*vehicle_id, m0, m1, until});
+        }
+        g_paints.insert(g_paints.end(), paints.begin(), paints.end());
+    }
+    if (g_split_logs.fetch_sub(1) > 0) log(0, "bent window on vehicle %d: %d corners -> %zu flat pieces, %zu cut struts (size %d)", *vehicle_id, n,
+        plan.plan.pieces.size(), plan.plan.cuts.size(), plan.size);
+    g_in_split = true;
+    for (size_t c = 0; c < plan.plan.cuts.size(); ++c)
+        if (!plan.exists[c]) hk_push_edge(peer_data, vehicle_id, &plan.pos[plan.plan.cuts[c].first], &plan.pos[plan.plan.cuts[c].second], &plan.size);
+    // Each piece goes out through the game's own node list, cut down to the piece's corners and put back after.
+    int32_t count = node_ids->count;
+    for (auto& piece : plan.plan.pieces) {
+        node_ids->count = int32_t(piece.size());
+        for (size_t i = 0; i < piece.size(); ++i) *node_ids->at<int32_t>(int32_t(i)) = ids[piece[i]];
+        hk_add_plate(peer_data, vehicle_id, node_ids, is_reverse, type);
+    }
+    node_ids->count = count;
+    for (int i = 0; i < n; ++i) *node_ids->at<int32_t>(i) = ids[i];
+    g_in_split = false;
+    return true;
+}
+// Paints the cut struts hidden once they exist on this client. Call with g_mutex held, on the main thread.
+void paint_cut_struts(uint8_t* scene, uint64_t now) {
+    if (g_paints.empty() || !g_paint_edge || !g_peer_data || !scene) return;
+    for (size_t i = 0; i < g_paints.size();) {
+        auto& p = g_paints[i];
+        uint8_t* vehicle = find_vehicle(scene, p.vehicle);
+        int32_t a = vehicle ? node_at(vehicle, Vec3i{p.p0.v[0], p.p0.v[1], p.p0.v[2]}) : -1, b = vehicle ? node_at(vehicle, Vec3i{p.p1.v[0], p.p1.v[1], p.p1.v[2]}) : -1;
+        int32_t edge = -1, colour = -1;
+        if (a >= 0 && b >= 0) for_each_edge_info(vehicle, [&](const EdgeInfo& e) {
+            if ((e.a == a && e.b == b) || (e.a == b && e.b == a)) { edge = e.id; colour = e.color; return false; }
+            return true;
+        });
+        if (edge >= 0 && colour != kHiddenColor) g_paint_edge(g_peer_data, &kHiddenColor, &p.vehicle, &edge);
+        if (edge >= 0 || now > p.until) {
+            if (edge < 0 && g_split_logs.fetch_sub(1) > 0) log(1, "cut strut on vehicle %d never appeared; not painted hidden", p.vehicle);
+            g_paints.erase(g_paints.begin() + i);
+        } else ++i;
+    }
+}
+
 void hk_add_plate(uint8_t* peer_data, const int32_t* vehicle_id, anymaker::gc_vector_raw* node_ids, const bool* is_reverse, const int32_t* type) {
+    if (send_split(peer_data, vehicle_id, node_ids, is_reverse, type)) return;
     auto original = reinterpret_cast<add_plate_t>(h_add_plate.original);
     original(peer_data, vehicle_id, node_ids, is_reverse, type);
     if (!vehicle_id || !node_ids || !anymaker::readable(node_ids, sizeof *node_ids)) return;
@@ -282,6 +450,7 @@ void after_overlay(uint8_t* state, uint8_t* scene, uint8_t* overlay) {
     if (g_grid_size_ptr && anymaker::readable(g_grid_size_ptr, 8) && std::isfinite(*g_grid_size_ptr) && *g_grid_size_ptr > 0.001 && *g_grid_size_ptr < 10)
         g_grid_size = *g_grid_size_ptr;
     g_tool_seen = now;
+    paint_cut_struts(scene, now);
     if (hovered > 0) g_vehicle_id = hovered;
     if (g_vehicle_id <= 0) return;
     uint8_t* vehicle = find_vehicle(scene, g_vehicle_id);
@@ -363,6 +532,15 @@ void install_hooks() {
         if (remove_ok) for (int i = 0; i < kRemoveCount; ++i)
             if (!h_remove[i].install(remove_cells[i], kRemoveHooks[i])) log(1, "remove %s request could not be hooked; not mirrored", kRemoveNames[i]);
         if (plate_ok && !h_add_plate.install(plate_cell, (void*)&hk_add_plate)) log(1, "add plate request could not be hooked; plates are not mirrored");
+        // Bent windows: optional, needs the add plate request hook above.
+        void** can_plate = locate(bind::client_can_add_plate);
+        g_can_edge = reinterpret_cast<can_add_edge_t>(function(bind::client_can_add_edge));
+        g_paint_edge = reinterpret_cast<paint_edge_t>(function(bind::client_push_paint_edge));
+        void** is_planar = locate(bind::select_is_planar), ** is_convex = locate(bind::select_is_convex);
+        bool split_ok = plate_ok && can_plate && is_planar && is_convex && g_can_edge && g_paint_edge && h_can_plate.install(can_plate, (void*)&hk_can_plate) &&
+            h_is_planar.install(is_planar, (void*)&hk_is_planar) && h_is_convex.install(is_convex, (void*)&hk_is_convex);
+        log(split_ok ? 0 : 1, "bent window split %s (check %d, pick %d%d, strut check %d, paint %d)", split_ok ? "ready" : "unavailable", !!can_plate,
+            !!is_planar, !!is_convex, !!g_can_edge, !!g_paint_edge);
         g_ready = true;
         log(0, "Ready after %d s: grid size %s, wall %s. Equip an edge tool and press the mirror key.", attempt,
             g_grid_size_ptr ? "found" : "default 0.25 m", g_box_fn ? "available" : "unavailable");
@@ -370,6 +548,9 @@ void install_hooks() {
     }
 }
 void remove_hooks() {
+    h_is_convex.remove((void*)&hk_is_convex);
+    h_is_planar.remove((void*)&hk_is_planar);
+    h_can_plate.remove((void*)&hk_can_plate);
     h_add_plate.remove((void*)&hk_add_plate);
     for (int i = kRemoveCount - 1; i >= 0; --i) h_remove[i].remove(kRemoveHooks[i]);
     for (int i = kOverlayCount - 1; i >= 0; --i) h_overlay[i].remove(kOverlayHooks[i]);
@@ -493,6 +674,10 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
             if (i == 0) d.description = "Mirroring works with the edge, add plate and remove tools. Keys are in Controls under AnyMirror.";
             g_tokens[i] = settings->register_setting(&d);
         }
+        AnyModSettingV1 split; split.mod_id = kModId; split.mod_name = "AnyMirror"; split.setting_id = "split_bent_windows"; split.order = kSettingCount;
+        split.label = "Split bent windows"; split.default_number = 1;
+        split.description = "Lets the window tool take a loop of struts that bends: it is cut into flat windows joined by hidden struts (paint C68).";
+        g_split_token = settings->register_setting(&split);
     } else settings = nullptr;
     std::thread(install_hooks).detach();   // resolving scans game memory; keep it off the loader and frame threads
 }

@@ -1,7 +1,7 @@
 # Turbo (AnyEngineParts)
 
 > The turbo parts are part of [AnyEngineParts](engine-parts.md). They hook game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
 > AnyEngineParts 0.1.0 is a prototype: it needs AnyAPI 0.37.0 or newer on that build. **Single player only** for now.
 
 Turbo adds two exhaust-driven turbochargers, **Turbo 3x3** (3x3x2) and **Turbo 6x6** (6x6x2), the faces of the
@@ -304,7 +304,9 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 - **Survival:** world loot. The Turbo 3x3 and the small supercharger, wastegate, blow-off valve and air filter drop
   after the 2nd bunker (tech tier 3). The Turbo 6x6, the large supercharger, wastegate, blow-off valve and air filter,
   and the intercoolers drop after the 3rd bunker (tech tier 4). As with the stock parts, new loot carries
-  the tier the world has reached, so each tier drops until the next bunker is done.
+  the tier the world has reached, so each tier drops until the next bunker is done. They are mechanical loot
+  (industrial, construction, aircraft and bunker loot spots) and turn up about a quarter less often than the
+  game's own parts of the same tier.
 - **Sandbox and Creative:** with the gas parts.
 
 ## How it works

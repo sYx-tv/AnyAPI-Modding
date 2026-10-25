@@ -26,7 +26,7 @@ uses several services together, see the [mod tutorial](../development/mod-tutori
 | Shared inventory layout | [Screen layout](screen-layout.md) | `anyapi_screen_layout_v1.h` |
 | GPU UI drawing | [GPU drawing](gpu-drawing.md) | `anyapi_gpu_draw_v1.h` |
 | GPU effect passes | [Post-processing](post-processing.md) | `anyapi_post_process_v1.h` |
-| Native scene rendering controls (0.28.0) | [Scene controls](scene-controls.md) | `anyapi_scene_controls_v1.h`, `anyapi_scene_controls_v2.h` |
+| Native scene rendering controls (0.28.0) | [Scene controls](scene-controls.md) | `anyapi_scene_controls_v1.h`, `anyapi_scene_controls_v2.h`, `anyapi_scene_controls_v3.h` |
 | Scene SMAA before HUD (0.28.0), TAA and sharpening (0.36.0) | [Scene antialiasing](scene-antialiasing.md) | `anyapi_scene_antialiasing_v1.h`, `anyapi_scene_antialiasing_v2.h` |
 | HDR fog, sun shafts and local beams (0.29.0), beam shaping and temporal smoothing (0.36.0) | [Scene lighting](../scene-lighting.md) | `anyapi_scene_lighting_v1.h` through `anyapi_scene_lighting_v3.h` |
 | GPU cost of scene passes (0.36.0) | [Scene timing](scene-timing.md) | `anyapi_scene_timing_v1.h` |

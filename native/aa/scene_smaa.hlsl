@@ -97,19 +97,27 @@ float4 Temporal(Varying v) : SV_Target {
     if(smoothing.w<.5)return float4(current,distance);
     // 3x3 neighbourhood: min/max box and mean/variance in YCoCg, plus the
     // closest depth so silhouettes reproject with the foreground's motion.
-    float3 low=to_ycocg(current),high=low,m1=0,m2=0;float nearest=distance;float2 nearest_uv=v.uv;
-    [unroll]for(int y=-1;y<=1;++y)[unroll]for(int x=-1;x<=1;++x){float2 o=v.uv+float2(x,y)*render_metrics.xy;float3 s=to_ycocg(source_image.SampleLevel(PointSampler,o,0).rgb);low=min(low,s);high=max(high,s);m1+=s;m2+=s*s;float d=pixel_distance(o);if(d<nearest){nearest=d;nearest_uv=o;}}
+    float3 low=to_ycocg(current),high=low,m1=0,m2=0;float nearest=distance;float2 nearest_uv=v.uv;float around[9];
+    [unroll]for(int y=-1;y<=1;++y)[unroll]for(int x=-1;x<=1;++x){float2 o=v.uv+float2(x,y)*render_metrics.xy;float3 s=to_ycocg(source_image.SampleLevel(PointSampler,o,0).rgb);low=min(low,s);high=max(high,s);m1+=s;m2+=s*s;float d=pixel_distance(o);around[(y+1)*3+x+1]=d;if(d<nearest){nearest=d;nearest_uv=o;}}
     // Variance clipping (mean +/- 1.25 sigma) inside the min/max box. A plain
     // min/max box at a tree edge contains the sky, so sky history survived.
     float3 mean=m1/9,sigma=sqrt(max(m2/9-mean*mean,0));low=max(low,mean-1.25*sigma);high=min(high,mean+1.25*sigma);
     // World-static content: reproject through the previous camera.
-    float z,own_z;float2 motion=previous_uv(view_ray(nearest_uv)*nearest-previous_camera.xyz,z)-nearest_uv;
-    float3 own=view_ray(v.uv)*distance-previous_camera.xyz;previous_uv(own,own_z);float expected=length(own);
+    float z,own_z;float3 near_point=view_ray(nearest_uv)*nearest-previous_camera.xyz;float2 motion=previous_uv(near_point,z)-nearest_uv;
+    float3 own=view_ray(v.uv)*distance-previous_camera.xyz;previous_uv(own,own_z);float expected=length(near_point);
     float2 uv=v.uv+motion;
-    // All four bilinear taps must belong to the same surface; a filtered fetch
-    // across a depth edge blends foreground, sky and their distances.
-    float4 taps=area_or_weights.GatherAlpha(PointSampler,uv);float tolerance=max(.05*expected,.15);
-    bool moved_ok=z>.01&&own_z>.01&&all(uv>=0)&&all(uv<=1)&&all(abs(taps-expected)<tolerance);
+    // Closest-depth test: the nearest surface of this 3x3 footprint must appear
+    // somewhere in the reprojected 3x3 history footprint (four gathers). Jitter
+    // moves a silhouette across the centre pixel, and requiring every bilinear
+    // tap to match rejected history on almost every edge. Colour clipping
+    // below is the ghosting guard; this only rejects true disocclusion.
+    float2 half_pixel=.5*render_metrics.xy;float4 e=expected;
+    float4 taps=min(min(abs(area_or_weights.GatherAlpha(PointSampler,uv-half_pixel)-e),abs(area_or_weights.GatherAlpha(PointSampler,uv+half_pixel)-e)),min(abs(area_or_weights.GatherAlpha(PointSampler,uv+float2(half_pixel.x,-half_pixel.y))-e),abs(area_or_weights.GatherAlpha(PointSampler,uv+float2(-half_pixel.x,half_pixel.y))-e)));
+    // Slope-aware tolerance: the smaller one-sided distance step on each axis
+    // follows grazing ground (many % per pixel far away) but not a silhouette.
+    float slope=max(min(abs(around[3]-distance),abs(around[5]-distance)),min(abs(around[1]-distance),abs(around[7]-distance)));
+    float tolerance=max(.03*expected,.1)+2*slope;
+    bool moved_ok=z>.01&&own_z>.01&&all(uv>=0)&&all(uv<=1)&&min(min(taps.x,taps.y),min(taps.z,taps.w))<tolerance;
     float4 moved=area_or_weights.SampleLevel(LinearSampler,uv,0);
     // Camera-locked content (your own vehicle, held items) stays on the same
     // pixel. Only nearby surfaces qualify, so distant foliage cannot pick up
@@ -134,7 +142,7 @@ float4 Output(Varying v) : SV_Target {
     float3 d=source_image.SampleLevel(PointSampler,v.uv-float2(render_metrics.x,0),0).rgb;
     float3 f=source_image.SampleLevel(PointSampler,v.uv+float2(render_metrics.x,0),0).rgb;
     float3 low=min(min(min(b,h),min(d,f)),e),high=max(max(max(b,h),max(d,f)),e);
-    float3 amount=sqrt(saturate(min(low,2-high)/max(high,.0001)));
+    float3 amount=sqrt(saturate(min(low,1-high)/max(high,.0001)));
     float3 w=amount*(-1/lerp(8,5,saturate(smoothing.y)));
     return float4(saturate((b*w+d*w+f*w+h*w+e)/(1+4*w)),1);
 }

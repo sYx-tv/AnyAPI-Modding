@@ -21,8 +21,11 @@ static void record_sky(void* renderer,void* scene){auto p=copy();if(!p.enabled||
  if(!sky_gpu.ensure(device.Get(),platform::queue.Get(),target->GetDesc()))return sky_bypass(323,"gpu_resources");
  LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);float seconds=frequency.QuadPart?float(double(now.QuadPart%(frequency.QuadPart*3600))/double(frequency.QuadPart)):0.f;
  float on=p.night_sky?1.f:0.f;auto f=scene_sky_gpu::build(n.right,n.up,n.forward,n.sun,n.color.width,n.color.height,seconds,p.stars*on,p.moon*on,p.moonlight*on,n.sun_colour,sky_colour,p.sun_disc,p.clouds);if(!p.night_sky)f.sun[3]=0;
- // Cloud drift from the full counter so it only wraps every 14 hours, not hourly with the twinkle clock.
- if(frequency.QuadPart)f.clouds[2]=float(std::fmod(double(now.QuadPart)/double(frequency.QuadPart)*.02,1000.0));
+ // Clouds sit in the world: the camera's world position (graphics-relative plus the
+ // graphics origin) and the full counter for the wind, both in double. Without a
+ // position the clouds stay put over the origin rather than the pass stopping.
+ if(p.clouds>0){double rel[3]{},origin[3]{};if(safe_read_memory(uintptr_t(scene)+0x20+0x108,rel,sizeof(rel))&&safe_read_memory(uintptr_t(scene)+8,origin,sizeof(origin))){double world[3];bool ok=true;for(int i=0;i<3;++i){world[i]=rel[i]+origin[i];ok=ok&&std::isfinite(world[i])&&std::abs(world[i])<1e9;}
+  if(ok){auto c=scene_sky_gpu::cloud_position(world,frequency.QuadPart?double(now.QuadPart)/double(frequency.QuadPart):0.0);f.clouds[0]=c[0];f.clouds[1]=c[1];f.clouds[2]=c[2];}}}
  auto input=[](const volumetric::NativeTarget& t){return scene_sky_gpu::Gpu::Input{(ID3D12Resource*)t.resource,D3D12_RESOURCE_STATES(t.state)};};
  auto bindings=saved->second;scene_antialiasing::owned=true;bool rendered=sky_gpu.record(list,target,input(n.depth),input(g[0]),input(g[1]),input(g[2]),f);if(rendered)bindings.restore(list);scene_antialiasing::owned=false;
  if(!rendered)return sky_bypass(324,"gpu_record");

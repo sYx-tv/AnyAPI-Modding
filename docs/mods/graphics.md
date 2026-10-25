@@ -1,6 +1,6 @@
 # AnyGraphics
 
-AnyGraphics is a native graphics mod for Anymaker 0.1.25. The current release is
+AnyGraphics is a native graphics mod for Anymaker 0.1.27. The current release is
 **0.31.0**, which needs **AnyAPI 0.36.0** for TAA, sharpening, beam shaping,
 tone mapping and colour looks, and the GPU cost readout (older APIs keep the 0.29 feature set; TAA choices
 fall back to SMAA). Its controls live inside
@@ -17,8 +17,49 @@ when photo mode starts in ThirdPerson's third-person view. 0.31.2 hides the lamp
 settings on AMD graphics cards, where AnyAPI 0.39.1 switches lamp beams off; with AnyAPI 0.39.2
 they are back. 0.31.3 fixes your own head showing in first person after leaving photo mode (when F5 switched
 ThirdPerson to first person while the camera was flying), and the free camera staying at the last world's
-spot after loading another world with photo mode still on. See the
+spot after loading another world with photo mode still on. 0.32.0 (with AnyAPI 0.40.1) splits the
+section into sub-menus and fixes the AA, sun shaft, contact shadow and cloud bugs below. See the
 [release records](../releases/README.md).
+
+## Sub-menus (0.32.0)
+
+The top of the section holds the main choices: Enabled, the preset, Reset preset,
+Auto-pick and a few headline rows. Everything else sits in groups you open with
+**Show** and close with **Hide**: Lighting and sun shafts, Shadows and shading,
+Sky and weather, Anti-aliasing and sharpness, Camera and photo, Colour and
+finish, and Performance. Groups start closed with a preset and open with Custom.
+Changing anything inside a group switches the preset to Custom, starting from
+the preset you had. Without AnyAPI menu v4 the Show/Hide buttons are toggles.
+
+Fixes in AnyAPI 0.40.1:
+
+- **Sun shafts**: a partly shadowed ray is no longer up to about 4.7x brighter
+  than a lit one, so beams stop pumping as the camera moves; air past the last
+  shadow cascade no longer glows as a lit wall; distant ground no longer looks
+  blocky; sun shadows in the beams are filtered (2x2), so foliage no longer
+  speckles.
+- **Contact shadows**: no more self-shadowing at grazing angles, no double
+  darkening on top of the game's own shadows, nothing on the ocean, softer
+  edges and no offset shadows from thin objects.
+- **Clouds**: fixed in the world and crisper (see Sky below).
+
+New looks in 0.32.0 (AnyAPI 0.40.1):
+
+- **Soft & warm** preset: a Complementary-style look built from the High tier.
+  It uses the **Soft film** tone curve (a long straight middle and a slow
+  roll-off, so bright skies stay soft), the **Soft & warm** colour look (golden
+  highlights, cool blue shade, rich but not neon colour) and Light colour
+  Normal. Detailed shading (GTAO) stays off.
+- **Light colour** (Lighting group: Game, Subtle, Normal, Strong) tints the
+  game's own lights: the sun side goes golden and the shade goes cool blue.
+  Each light keeps its brightness, and shadows pick the tint up naturally
+  because it is in the lighting, not a filter over the screen. Moody uses Subtle.
+- **Wind in trees** (Sky group: Calm, Game, Breezy, Stormy) sets how hard trees
+  and grass sway. Only the look changes; vehicles, physics and other players
+  are not affected.
+
+With an older AnyAPI, Soft film falls back to Clean, Soft & warm to Vivid, and
+the Light colour and Wind rows are hidden.
 
 ## Tone mapping and colour (0.30.0)
 
@@ -65,8 +106,10 @@ Terrain and trees follow the game's own render distance. High and Ultra use
 Far and Cinematic uses Very far.
 
 **Sun** (Off, Soft, Normal or Bright) draws a round sun with a soft halo, and
-**Cloud layer** (Off, Few, Some or Many) adds high drifting clouds above the
-game's own. Both follow the time of day: the sun and clouds turn orange at
+**Cloud layer** (Off, Few, Some or Many) adds a cloud deck about 1.5 km up,
+above the game's own clouds. Since 0.32.0 it is fixed in the world: it drifts
+slowly with the wind and passes overhead as you drive, instead of following the
+camera. Both follow the time of day: the sun and clouds turn orange at
 sunrise and sunset, and the clouds are moonlit at night. Presets use the sun
 from Low up and clouds from Balanced up.
 
@@ -137,7 +180,7 @@ point, because the world is only loaded around you. While it flies, your
 character stays where it is and mouse clicks do nothing, so you cannot shoot
 or build from the camera. Photo controls last until the game closes and are
 never saved into your preset. The free camera hooks the game directly and
-works on Anymaker 0.1.25 only; on another game build photo mode still hides
+works on Anymaker 0.1.27 only; on another game build photo mode still hides
 the HUD and the photo controls still work.
 
 **Local light beams** (headlights, torches, lamps) light the air in clear,
@@ -155,10 +198,10 @@ washes out the whole scene. More fog is available in Custom.
 | Low | Shadows on, low bloom/base fog; SSAO, fog blur and grass off | SMAA Medium |
 | Balanced | Native effects on; medium bloom/base fog, contact shadows Low | TAA High |
 | High | Native effects on; high bloom, medium base fog; subtle Vivid look, Medium detailed shading, bounce light and contact shadows, local light beams | TAA High, sharpening Low |
-| Ultra | As High with a Vivid look, strong bloom and glare, High detailed shading, bounce light and contact shadows, bright sun, many clouds, very far objects and clear sun beams | TAA + jitter Ultra, sharpening Low |
-| Cinematic | As Ultra, with a strong teal & orange film grade, a medium vignette, stronger beams, extreme object distance, stronger sun beams, Medium depth of field and Low motion blur | TAA + jitter Ultra, sharpening Medium |
+| Ultra | As High with a Vivid look, strong bloom and glare, High detailed shading, bounce light and contact shadows, bright sun, many clouds, very far objects and clear sun beams | TAA extra smooth Ultra, sharpening Low |
+| Cinematic | As Ultra, with a strong teal & orange film grade, a medium vignette, stronger beams, extreme object distance, stronger sun beams, Medium depth of field and Low motion blur | TAA extra smooth Ultra, sharpening Medium |
 | Natural | High, with Clean tone mapping, no colour look or vignette, softer bloom and glare, no volumetric fog | TAA High, sharpening Low |
-| Vibrant | Ultra, with a strong Vivid look, many clouds, a bright sun and stars, strong clear sun beams and low base fog | TAA + jitter Ultra, sharpening Low |
+| Vibrant | Ultra, with a strong Vivid look, many clouds, a bright sun and stars, strong clear sun beams and low base fog | TAA extra smooth Ultra, sharpening Low |
 | Moody | High, with a strong warm golden-hour grade, a medium vignette, strong sun beams, light haze and many clouds | TAA High, sharpening Low |
 | Clear Day | High, with Clean tone mapping, no colour look or vignette, low base fog, no volumetric fog, short clear beams | TAA High, sharpening Medium |
 | Custom | Every setting shown, starting from the last preset | As set |
@@ -171,7 +214,7 @@ no finished-screen filter passes. SMAA copies scene colour before HUD drawing
 for its AA passes.
 Colour filters, tone curves, grain, vignette, chromatic separation and split
 comparison have been removed. Antialiasing choices are native FXAA, SMAA 1x,
-Enhanced SMAA, TAA and TAA + jitter. MSAA and DLSS are not implemented.
+Enhanced SMAA, TAA and TAA extra smooth. MSAA and DLSS are not implemented.
 
 ## Apply and persistence
 
@@ -212,9 +255,14 @@ Since 0.30.0 (AnyAPI 0.36.0) two more choices appear:
   foliage, wires and thin edges. Pixels that moved relative to the camera fall
   back to the current frame, so fast objects do not smear. Your own vehicle,
   which moves with the camera, stays stable.
-- **TAA + jitter (scene, smoothest)** also moves the camera by a fraction of a
-  pixel each frame, so edges settle into a supersampled look. It can trail
-  slightly behind fast motion.
+- **TAA extra smooth (scene)** keeps one quality level more of the previous
+  frames, so edges settle further. It can trail slightly behind fast motion.
+
+Since 0.32.0 both TAA choices move the camera by a fraction of a pixel each
+frame (before, plain TAA blended identical frames and smoothed almost nothing),
+and edges keep their history instead of falling back to raw SMAA, so jagged and
+crawling edges actually settle. Native FXAA no longer flickers on for a frame
+when scene AA misses one.
 
 **AA quality** sets SMAA's edge search and, with TAA, how much of the previous
 frames is kept. **Sharpening** (Off / Low / Medium / High) restores detail

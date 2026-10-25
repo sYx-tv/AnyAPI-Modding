@@ -1,7 +1,7 @@
 // Host admin actions (heal, teleport, time of day, weather, clear zombies and creatures), through the experimental SDK.
 // Only the host runs server_scene, so every action is queued here and carried out at the start of the next server
 // tick, on the server thread. The panel only reads the copied player list and posts commands.
-// Not reviewed as AnyAPI services: offsets are from the 0.1.25 reference (types.json) and stay off on another build.
+// Not reviewed as AnyAPI services: offsets are from the 0.1.27 reference (types.json, unchanged since 0.1.25) and stay off on another build.
 #include "anymaker_sdk_runtime.hpp"
 #include "route_cell.h"
 #include "anyhelpers_bindings.h"
@@ -66,9 +66,10 @@ static void refresh_players(uint8_t* scene){std::vector<Player> list;
  std::lock_guard<std::mutex> lock(mutex);players=std::move(list);}
 
 static void heal(uint8_t* character){double one=1,zero=0;bool no=false;
- // Inferred directions: hunger, thirst, heat, cold, infection and wetness build up from 0; oxygen and blood are full at 1.
- set_blood(character,&one);set_hunger(character,&zero);set_thirst(character,&zero);set_oxygen(character,&one);set_hot(character,&zero);
- set_cold(character,&zero);set_infection(character,&zero);set_wetness(character,&zero);bleeding(character,&no);broken_leg(character,&no);}
+ // Every meter is full (healthy) at 1 and shows its warning icon as it drains; tested in game, where 0 lit hunger, thirst,
+ // heat, cold and infection. Wetness is the exception: 0 is dry.
+ set_blood(character,&one);set_hunger(character,&one);set_thirst(character,&one);set_oxygen(character,&one);set_hot(character,&one);
+ set_cold(character,&one);set_infection(character,&one);set_wetness(character,&zero);bleeding(character,&no);broken_leg(character,&no);}
 
 // The game's own debug teleport: it moves the peer's authority actor and makes that client reload into place.
 static bool teleport(uint8_t* server,uint8_t* who,Vec3 to){auto data=*(void**)(who+kPeerData);if(!data)return false;TeleportEvent e{};e.position=to;teleport_event(server,data,&e);return true;}
@@ -123,10 +124,11 @@ static void hk_weather(WeatherData* out,void* manager,const double* position,con
  switch(w){
  case kClear:d.cloud=0;d.precipitation=0;d.fog=0;break;
  case kCloudy:d.cloud=0.85;d.precipitation=0;d.fog=std::min(d.fog,0.15);break;
- case kRain:d.cloud=1;d.precipitation=0.7;d.fog=std::max(d.fog,0.2);break;
+ // 0.1.27 maps precipitation through invlerp(0.2, 1) (g_precipitation_threshold): 0.76 keeps the 0.1.25 rain of 0.7.
+ case kRain:d.cloud=1;d.precipitation=0.76;d.fog=std::max(d.fog,0.2);break;
  case kStorm:d.cloud=1;d.precipitation=1;d.fog=std::max(d.fog,0.3);d.wind_x*=2;d.wind_y*=2;break;
  case kFog:d.cloud=std::max(d.cloud,0.5);d.precipitation=0;d.fog=1;break;
- case kSnow:d.cloud=1;d.precipitation=0.7;d.temperature=0;break;   // unproven: snow is assumed to follow a low temperature
+ case kSnow:d.cloud=1;d.precipitation=0.76;d.temperature=0;break;   // unproven: snow is assumed to follow a low temperature
  }}
 static void set_weather(int w){weather=w;report(w<0?"weather back to natural":std::string("weather locked to ")+kWeatherNames[w]);}
 

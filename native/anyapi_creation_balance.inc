@@ -158,8 +158,9 @@ static void tick_inner(void* scene,void* actor){uintptr_t local{};
 }
 static void tick(void* scene,void* actor){__try{tick_inner(scene,actor);}__except(EXCEPTION_EXECUTE_HANDLER){if(!faulted.exchange(true))log_line(ANY_LOG_WARN,"framework","BALANCE faulted=1 in=tick");allowed_item=0;store.clear();}}
 static bool prepare(){auto hits=scan_exact(HOVER_OVERLAY,sizeof(HOVER_OVERLAY)),mass=scan_exact(MASS_OWNER,sizeof(MASS_OWNER));
- // Only the dependency slots are read here. Since 0.1.25 the microcontroller tool's
- // overlay is a byte-identical twin, so accept several hits that agree on both slots.
+ // Only the dependency slots are read here. In 0.1.25 the microcontroller tool's overlay was a byte-identical
+ // twin; 0.1.27 changed the Properties tool so HOVER_OVERLAY is unique again, but several hits that agree on both
+ // slots stay accepted in case a later build brings the twin back.
  if(hits.empty())return false;uintptr_t slots[2]{};
  for(size_t i=0;i<hits.size();++i){uintptr_t v{},t{};
   if(!safe_read_memory(hits[i]+HOVER_OVERLAY_END,&v,8)||v%8||v>0x10000||!safe_read_memory(hits[i]+HOVER_OVERLAY_END+9*8,&t,8)||t%8||t>0x10000)return false;

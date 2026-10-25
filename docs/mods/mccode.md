@@ -1,7 +1,7 @@
 # MCCode
 
 > MCCode hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
 > [Release notes](../releases/mccode-0.2.0.md). Needs AnyAPI 0.38.0 or newer.
 
 MCCode adds a **Code view** to the microcontroller editor, so you can type the program instead of dragging
@@ -45,7 +45,7 @@ on_tick {
 
 | What | Write | Notes |
 | --- | --- | --- |
-| Blocks | `on_tick { }`, `on_render { }` | `on_tick` runs every game tick |
+| Blocks | `on_tick { }` | Runs every game tick. The game has an `on_render` word but never runs it and won't load it, so MCCode rejects it |
 | Variables | `define var integer speed` | Types: `bool`, `integer`, `fractional`, `string`, `analogue`, or a `define type` |
 | Lists | `define list fractional samples` | `samples.append(x)`, `samples.insert(i, x)`, `samples.erase(i)`, `samples.clear()`, `samples[i]`, `len(samples)` |
 | Parts | `RearLeft.rps`, `RearLeft.brake_factor = 1.0` | A part wired to the microcontroller needs no define: read or set its channels with a dot, using the names the game shows |
@@ -120,6 +120,15 @@ the nodes again replaces the hand-made changes (Ctrl+Z in the Code view brings t
 - **This MC**: this microcontroller's inputs, outputs, variables, lists, functions and types, read from your code
   as you type, plus the ports the game reports. Click a name to insert it.
 - **Watch**: live variable and port values from the game's debugger, while the program runs or is paused.
+- **Parts**: a guide to setting up a microcontroller. It covers wiring and naming parts, reading and setting a
+  channel, and on_tick, with examples you can click to insert. Below the guide are the channels of the parts wired
+  to this microcontroller, then every part in the game that has channels, grouped by category. Click a part to see
+  each channel's type and the game's own description of it, and click a channel to insert `Part_Name.channel`.
+  The list is read at run time from your game's part definitions through AnyAPI's item catalog, plus the part
+  definition files mods write under `AnyAPI and Modding` (GPS Sensor, turbos, the Dyno and so on, marked with the
+  mod's folder name). It is built at startup and rebuilt when a world loads new parts or you open the tab, so it
+  follows game updates and new mods. Each channel says whether code reads it (the part's output) or sets it (its input). Parts that aren't listed, like gas and liquid
+  valves, have no channels: wire their input to a part that has a channel and an output, such as the stepper motor.
 
 ## Debugging
 
@@ -169,5 +178,6 @@ changes, Enter opens its settings, Home recentres, Esc goes back to the blocks.
 ## Log
 
 MCCode writes to `anymaker_modding.log` beside `game.exe`: `Ready after N s` once it found the game functions,
-then a line for each program it reads or loads. `line map off` means breakpoints and the running line were
+then a line for each program it reads or loads. `PARTS_GUIDE parts_with_channels=N channels=N mod_parts=N
+mod_files=N (why)` counts the parts the Parts tab found each time it builds its list. `line map off` means breakpoints and the running line were
 turned off for that script.

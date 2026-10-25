@@ -152,7 +152,7 @@ int main() {
     // Definition: the altitude sensor class, every channel, the mesh it was given.
     std::string json = definition_json(kDynoMeshPath);
     assert(json.find("\"class\": \"altitude_sensor\"") != std::string::npos && json.find("\"id\": \"dyno_sensor\"") != std::string::npos);
-    assert(json.find("\"tech_tier\": 4,") != std::string::npos);   // world loot after the 3rd bunker
+    assert(json.find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);   // world loot after the 3rd bunker
     assert(json.find(kDynoMeshPath) != std::string::npos && definition_json().find(kStockMeshPath) != std::string::npos);
     for (auto& ch : kChannels) assert(json.find(std::string("\"name\": \"") + ch.name + "\"") != std::string::npos);
     assert(json.find("type_f64_input\", \"name\": \"clear_runs\"") != std::string::npos);

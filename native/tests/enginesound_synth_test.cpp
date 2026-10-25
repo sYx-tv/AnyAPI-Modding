@@ -106,6 +106,42 @@ int main(int argc, char** argv) {
         assert(fired >= 98 && fired <= 102);
     }
 
+    // Key off: the engine winds down from 4,000 rpm with no combustion. The starter is never heard (its whine used to
+    // sweep down the whole rev range); cranking a stopped engine still brings it in.
+    {
+        Synth s;
+        Input in;
+        in.layout = kInline; in.cylinders = 4; in.tune = kPresets[kInline][0].tune;
+        std::vector<int16_t> block(480);
+        in.running = true; in.load = 0.3; in.rps = sound_rps(4000.0 / 60.0);
+        for (int i = 0; i < 100; ++i) render(s, in, block.data(), 480);
+        in.running = false; in.load = 0;
+        double starter = 0;
+        for (int i = 0; i < 400; ++i) {
+            in.rps = sound_rps(4000.0 / 60.0 * (1.0 - i / 380.0));
+            render(s, in, block.data(), 480);
+            starter = std::fmax(starter, s.starter_env);
+            if (i == 200 || i == 370) assert(s.coasting);
+        }
+        assert(starter < 0.01 && !s.coasting && s.rps < 0.5);
+        for (int i = 0; i < 60; ++i) {
+            in.rps = sound_rps(ramp(i * 0.01, 0.0, 0.3, 0.0, 3.5));
+            render(s, in, block.data(), 480);
+            starter = std::fmax(starter, s.starter_env);
+        }
+        assert(starter > 0.9 && !s.coasting);
+        // ... and a starter turning an engine that is still winding down is heard too.
+        Synth w;
+        in.running = true; in.rps = kIdleRps;
+        for (int i = 0; i < 50; ++i) render(w, in, block.data(), 480);
+        in.running = false; in.rps = kIdleRps * 0.4;
+        for (int i = 0; i < 20; ++i) render(w, in, block.data(), 480);
+        assert(w.coasting && w.starter_env < 0.01);
+        in.rps = kIdleRps * 0.7;
+        for (int i = 0; i < 20; ++i) render(w, in, block.data(), 480);
+        assert(!w.coasting && w.starter_env > 0.9);
+    }
+
     // Every layout, count and preset renders clean, loud enough and never clipping hard.
     for (int l = 0; l < kLayoutCount; ++l)
         for (int n : {1, 2, 3, 4, 6, 8, 12}) {

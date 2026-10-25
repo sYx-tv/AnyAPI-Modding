@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     // The definition is the small engine's, as a rotary, stretchable to 4 rotors.
     std::string json = definition_json(mesh_path());
     assert(json.find("\"class\": \"engine\"") != std::string::npos && json.find("\"id\": \"rotary_engine\"") != std::string::npos);
-    assert(json.find("\"tech_tier\": 4,") != std::string::npos);   // world loot after the 3rd bunker
+    assert(json.find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);   // world loot after the 3rd bunker
     assert(json.find("\"mode_z\": \"tile\"") != std::string::npos && json.find("\"interval\": [0, 0, 2]") != std::string::npos);
     assert(json.find("\"ext_max\": [0, 0, 6]") != std::string::npos && json.find("rotary_engine_0_0_0.mesh") != std::string::npos);
     assert(json.find("\"torque_engine\"") != std::string::npos && json.find("\"mateable_port_types\": 498") != std::string::npos);

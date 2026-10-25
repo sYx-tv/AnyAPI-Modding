@@ -140,6 +140,7 @@ def main():
 
     step('audit native byte patterns')
     run([HERE / 'game_update_audit.py', '--game-dir', a.game_dir, '--previous-json', previous_json, '--out', work / 'audit']
+        + (['--current-json', sdk / 'json'] if (sdk / 'json' / 'natives.json').is_file() else [])
         + (['--apply'] if a.apply else []))
 
     step('refresh legacy event routes')

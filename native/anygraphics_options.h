@@ -4,14 +4,14 @@
 #include <array>
 #include <cmath>
 namespace graphics_options {
-enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,ShaftClarity,BeamReach,SunResponse,TemporalLighting,Sharpening,CostReadout,ToneMapping,ColourLook,LookStrength,EyeAdaptation,Brightness,SceneBloom,SunGlare,Vignette,DetailedAO,NightSky,Moonlight,ContactShadows,BounceLight,DepthOfField,MotionBlur,DrawDistance,SunDisc,CloudLayer,FocusBlur,Count};
+enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,ShaftClarity,BeamReach,SunResponse,TemporalLighting,Sharpening,CostReadout,ToneMapping,ColourLook,LookStrength,EyeAdaptation,Brightness,SceneBloom,SunGlare,Vignette,DetailedAO,NightSky,Moonlight,ContactShadows,BounceLight,DepthOfField,MotionBlur,DrawDistance,SunDisc,CloudLayer,FocusBlur,LightColour,WindStrength,Count};
 struct Option {const char* id;const char* group;const char* label;const char* description;uint32_t kind;float initial,minimum,maximum,step;};
 static constexpr Option definitions[]={
  {"enabled","General","Enable AnyGraphics","Use the selected native graphics settings. Off restores the game's own settings.",ANY_SETTING_BOOL,1,0,1,1},
  {"gameplay_only","General","Gameplay only","Apply native overrides during gameplay; bypass them in menus and inventories.",ANY_SETTING_BOOL,1,0,1,1},
- {"quality_profile","General","Preset","Off keeps the game's look. Performance to Cinematic trade frame rate for looks; Natural, Clear Day, Vibrant and Moody are styles. Presets show a few common settings; Custom shows them all, starting from your last preset.",ANY_SETTING_CHOICE,3,0,11,1},
+ {"quality_profile","General","Preset","Off keeps the game's look. Performance to Cinematic trade frame rate for looks; Natural, Clear Day, Vibrant, Moody and Soft & warm are styles. Changing anything in the groups below switches to Custom, starting from your last preset.",ANY_SETTING_CHOICE,3,0,12,1},
  {"advanced","General","Advanced options","Show lighting strength and scene-detail choices.",ANY_SETTING_BOOL,0,0,1,1},
- {"native_aa","Scene","Antialiasing","Choose native FXAA or scene AA before the HUD. SMAA replaces FXAA; Enhanced SMAA adds subpixel smoothing. TAA blends recent frames to stop shimmer; TAA + jitter is the smoothest and can trail slightly behind fast motion.",ANY_SETTING_CHOICE,2,0,6,1},
+ {"native_aa","Scene","Antialiasing","Choose native FXAA or scene AA before the HUD. SMAA replaces FXAA; Enhanced SMAA adds subpixel smoothing. TAA blends recent frames to stop shimmer and jagged edges; Extra smooth keeps more of them and can trail slightly behind fast motion.",ANY_SETTING_CHOICE,2,0,6,1},
  {"native_bloom","Scene","Bloom","Use the game setting, turn bloom off, or choose the strength of native bloom.",ANY_SETTING_CHOICE,2,0,2,1},
  {"bloom_amount","Bloom","Bloom intensity","Native bloom intensity when Bloom is Custom.",ANY_SETTING_NUMBER,.1f,0,2,.05f},
  {"bloom_threshold","Bloom","Bloom threshold","Native brightness threshold when Bloom is Custom.",ANY_SETTING_NUMBER,.75f,0,4,.025f},
@@ -42,8 +42,8 @@ static constexpr Option definitions[]={
  {"temporal_lighting","Lighting","Smooth beams and fog","Blend recent frames to remove banding and noise in volumetric lighting.",ANY_SETTING_BOOL,1,0,1,1},
  {"crispness","Scene","Sharpening","Contrast-adaptive sharpening after scene AA, before the HUD. Restores detail softened by TAA or SMAA.",ANY_SETTING_CHOICE,0,0,3,1},
  {"cost_readout","General","Show GPU cost","Show how long volumetric lighting, scene effects and scene AA take on the GPU, and the frame rate.",ANY_SETTING_BOOL,1,0,1,1},
- {"tone_mapping","Finish","Tone mapping","Off keeps the game's look. Filmic keeps colour and detail in bright light like a film camera; Clean stays bright and true to the game's colours. Any choice other than Off also replaces the game's bloom.",ANY_SETTING_CHOICE,0,0,3,1},
- {"colour_look","Finish","Colour look","A colour grade on top of tone mapping. Vivid is the shader-pack look.",ANY_SETTING_CHOICE,0,0,5,1},
+ {"tone_mapping","Finish","Tone mapping","Off keeps the game's look. Filmic keeps colour and detail in bright light like a film camera; Clean stays bright and true to the game's colours; Soft film rolls bright skies off gently. Any choice other than Off also replaces the game's bloom.",ANY_SETTING_CHOICE,0,0,4,1},
+ {"colour_look","Finish","Colour look","A colour grade on top of tone mapping. Vivid is the bright shader-pack look; Soft & warm has golden light and cool blue shade.",ANY_SETTING_CHOICE,0,0,6,1},
  {"look_strength","Finish","Look strength","How strongly the colour look is applied.",ANY_SETTING_CHOICE,1,0,2,1},
  {"eye_adaptation","Finish","Eye adaptation","Briefly brightens dark places and dims bright ones, like your eyes adjusting, then settles back to the game's own day and night brightness.",ANY_SETTING_BOOL,1,0,1,1},
  {"brightness","Finish","Brightness (stops)","Overall exposure before tone mapping. 0 keeps the game's brightness.",ANY_SETTING_NUMBER,0,-2,2,.25f},
@@ -60,7 +60,9 @@ static constexpr Option definitions[]={
  {"draw_distance","Scene","Object draw distance","How far away characters, props, dropped items and vehicle parts keep being drawn. Terrain and trees follow the game's own render distance. Farther costs more GPU time in busy areas.",ANY_SETTING_CHOICE,0,0,3,1},
  {"sun_disc","Sky","Sun","A bright, round sun in the sky with a soft halo, coloured by the time of day.",ANY_SETTING_CHOICE,0,0,3,1},
  {"cloud_layer","Sky","Cloud layer","A high layer of drifting clouds above the game's own. Lit by the sun by day, glowing at sunrise and sunset, and moonlit at night.",ANY_SETTING_CHOICE,0,0,3,1},
- {"focus_blur","Scene","Blur strength","How strongly depth of field blurs what is out of focus. 1 is the level's normal blur; higher blurs more and farther.",ANY_SETTING_NUMBER,1,.25f,3,.05f}
+ {"focus_blur","Scene","Blur strength","How strongly depth of field blurs what is out of focus. 1 is the level's normal blur; higher blurs more and farther.",ANY_SETTING_NUMBER,1,.25f,3,.05f},
+ {"light_colour","Lighting","Light colour","Golden sunlight and cool blue shade, put into the game's own lights rather than over the screen. Brightness stays the same.",ANY_SETTING_CHOICE,0,0,3,1},
+ {"wind_strength","Sky","Wind in trees","How hard trees and grass sway. Only the look changes: vehicles, physics and other players are not affected.",ANY_SETTING_CHOICE,1,0,3,1}
 };
 static_assert(std::size(definitions)==Count);
 using Values=std::array<float,Count>;
@@ -75,19 +77,36 @@ inline constexpr float bounce_levels[]={0,.5f,1,1.5f};
 inline constexpr float focus_blur_levels[]={0,.5f,1,1.6f},motion_blur_levels[]={0,.4f,.8f,1.2f},draw_distance_levels[]={1,1.5f,2,3},sun_disc_levels[]={0,.6f,1,1.5f},cloud_levels[]={0,.6f,1,1.5f};
 inline constexpr float contact_levels[]={.6f,.3f,.6f,1};
 inline constexpr float star_levels[]={0,.6f,1,1.5f},moon_levels[]={0,.7f,1,1.3f},moonlight_levels[]={0,.6f,1,1.6f};
+// Light colour: key (sun side) and shade tints per level; AnyAPI keeps each light's brightness.
+inline constexpr float key_tints[4][3]={{1,1,1},{1.04f,1,.94f},{1.08f,1,.88f},{1.12f,1,.82f}},shade_tints[4][3]={{1,1,1},{.96f,.99f,1.05f},{.92f,.98f,1.1f},{.88f,.97f,1.15f}};
+inline constexpr float wind_levels[]={.5f,1,1.6f,2.5f};
 inline constexpr float ao_radius_levels[]={1,.75f,1,1.4f},ao_strength_levels[]={.8f,.6f,.8f,1};
-// Native AA choice -> scene AA method: 3 SMAA, 4 Enhanced SMAA, 5 TAA, 6 TAA + jitter.
-inline uint32_t aa_method(float choice){return choice>=6?4:choice>=5?3:choice>=4?2:1;}
+// Native AA choice -> scene AA method: 3 SMAA, 4 Enhanced SMAA, 5 TAA and 6 TAA (extra smooth) both jitter the camera,
+// since TAA without jitter blends identical frames and smooths nothing. Extra smooth keeps one quality level more history.
+inline uint32_t aa_method(float choice){return choice>=5?4:choice>=4?2:1;}
+inline uint32_t aa_quality(float choice,float quality){return uint32_t(std::min(3.f,quality+(choice>=6?1.f:0.f)));}
 // Menu order: new rows sit next to the controls they modify.
-inline constexpr Index order[]={Enabled,GameplayOnly,Preset,Advanced,NativeAA,AAQuality,Sharpening,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,DetailedAO,NativeShadows,ContactShadows,BounceLight,DrawDistance,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,Clouds,Grass,Foliage,
+inline constexpr Index order[]={Enabled,GameplayOnly,Preset,Advanced,NativeAA,AAQuality,Sharpening,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,DetailedAO,NativeShadows,ContactShadows,BounceLight,DrawDistance,NativeFogBlur,SunLight,SkyLight,AmbientLight,LightColour,FogDensity,SceneExposure,Clouds,Grass,Foliage,WindStrength,
  ToneMapping,ColourLook,LookStrength,Brightness,EyeAdaptation,SceneBloom,SunGlare,Vignette,DepthOfField,FocusBlur,MotionBlur,SunDisc,CloudLayer,NightSky,Moonlight,
  Atmosphere,SunShafts,ShaftIntensity,ShaftClarity,BeamReach,SunResponse,BeamFocus,LightingQuality,TemporalLighting,GroundFog,LocalBeams,LocalIntensity,LocalBudget,CostReadout};
 static_assert(std::size(order)==Count);
 template<size_t N> inline uint32_t nearest(float value,const float(&levels)[N]){uint32_t best=0;for(uint32_t i=1;i<N;++i)if(std::abs(value-levels[i])<std::abs(value-levels[best]))best=i;return best;}
-// Preset choices: 0 Off, 1-6 Performance..Cinematic, then the looks and Custom.
-inline constexpr int NaturalProfile=7,VibrantProfile=8,MoodyProfile=9,ClearDayProfile=10,CustomProfile=11;
-// Presets show only these rows; Custom shows every row.
-inline bool common(size_t i){return i==Enabled||i==GameplayOnly||i==Preset||i==NativeAA||i==Brightness||i==ColourLook||i==FogDensity||i==DepthOfField||i==FocusBlur||i==MotionBlur||i==DrawDistance||i==CostReadout;}
+// Menu groups: the top level holds the preset and a few main choices; the rest sit in fine-tuning groups that open
+// and close.
+enum Group {Top,Lighting,Shadows,Sky,AntiAliasing,Camera,Finish,Performance,GroupCount};
+inline constexpr const char* group_names[GroupCount]={"","Lighting and sun shafts","Shadows and shading","Sky and weather","Anti-aliasing and sharpness","Camera and photo","Colour and finish","Performance"};
+inline constexpr Group group_of(Index i){
+ switch(i){
+ case Atmosphere:case SunShafts:case ShaftIntensity:case ShaftClarity:case BeamReach:case SunResponse:case BeamFocus:case LightingQuality:case TemporalLighting:case GroundFog:case LocalBeams:case LocalIntensity:case LocalBudget:case SunLight:case SkyLight:case AmbientLight:case LightColour:return Lighting;
+ case NativeShadows:case ContactShadows:case NativeSSAO:case DetailedAO:case BounceLight:return Shadows;
+ case SunDisc:case CloudLayer:case NightSky:case Moonlight:case Clouds:case NativeFogBlur:case WindStrength:return Sky;
+ case AAQuality:case Sharpening:return AntiAliasing;
+ case DepthOfField:case FocusBlur:case MotionBlur:return Camera;
+ case ToneMapping:case LookStrength:case EyeAdaptation:case SceneBloom:case SunGlare:case Vignette:case NativeBloom:case BloomAmount:case BloomThreshold:case SceneExposure:return Finish;
+ case Grass:case Foliage:return Performance;
+ default:return Top;}}
+// Preset choices: 0 Off, 1-6 Performance..Cinematic, then the looks, Custom (11) and Soft & warm (12, added after Custom so saved choices keep their meaning).
+inline constexpr int NaturalProfile=7,VibrantProfile=8,MoodyProfile=9,ClearDayProfile=10,CustomProfile=11,SoftWarmProfile=12;
 inline Values profile(const Values& current,int level){
  if(!level)return current; // Off bypasses overrides and keeps the previous individual choices.
  // Custom starts from the current values so tweaks begin where the last preset left off.
@@ -118,9 +137,11 @@ inline Values profile(const Values& current,int level){
  else if(level==VibrantProfile){ // The bright shader-pack look: rich colour, big skies, clear beams.
   v[ColourLook]=5;v[LookStrength]=2;v[SceneBloom]=2;v[SunGlare]=2;v[SunShafts]=3;v[ShaftIntensity]=1.2f;v[ShaftClarity]=0;v[FogDensity]=.35f;v[SunDisc]=3;v[CloudLayer]=3;v[NightSky]=3;v[Moonlight]=2;v[BounceLight]=2;v[ContactShadows]=2;}
  else if(level==MoodyProfile){ // Golden-hour colour, strong beams and a little haze.
-  v[ColourLook]=1;v[LookStrength]=2;v[Vignette]=2;v[SunShafts]=3;v[SceneBloom]=2;v[SunGlare]=2;v[CloudLayer]=3;v[SunDisc]=1;v[NightSky]=2;v[Moonlight]=1;}
+  v[ColourLook]=1;v[LookStrength]=2;v[LightColour]=1;v[Vignette]=2;v[SunShafts]=3;v[SceneBloom]=2;v[SunGlare]=2;v[CloudLayer]=3;v[SunDisc]=1;v[NightSky]=2;v[Moonlight]=1;}
  else if(level==ClearDayProfile){ // Crisp and clear: neutral colour, low haze, extra sharpness.
   v[ToneMapping]=3;v[ColourLook]=0;v[Vignette]=0;v[FogDensity]=.35f;v[Atmosphere]=0;v[SunShafts]=1;v[ShaftClarity]=0;v[BeamReach]=0;v[Sharpening]=2;v[SunDisc]=2;v[CloudLayer]=1;}
+ else if(level==SoftWarmProfile){ // Complementary-style: soft film curve, golden light, cool shade, soft glow; no detailed (GTAO) shading.
+  v[ToneMapping]=4;v[ColourLook]=6;v[LookStrength]=1;v[LightColour]=2;v[SceneBloom]=2;v[SunGlare]=2;v[Vignette]=1;v[DetailedAO]=0;v[SunShafts]=2;v[ShaftClarity]=0;v[CloudLayer]=2;v[SunDisc]=2;v[NightSky]=2;v[Moonlight]=2;}
  return v;
 }
 inline Values effective(const Values& custom){return custom;}
