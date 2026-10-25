@@ -25,7 +25,7 @@ template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,Capture& ou
 // K05 and AA-6 inputs, read after a successful capture() and never failing it:
 // gbuffer_ocean (renderer+0x208; y > 0 = ocean, used as a flag only) while
 // scene+0xb71 m_is_ocean is 1, and gbuffer_0 (renderer+0x1e8; w = rim flag).
-// Both RGBA16F (DXGI 10), at the depth size (renderer-research-0.1.24 §2).
+// Both RGBA16F (DXGI 10), at the depth size (0.1.24 game code).
 template<class Read> void capture_surfaces(uintptr_t renderer,uintptr_t scene,Capture& out,Read read){
  auto surface=[&](uintptr_t at,volumetric::NativeTarget& t){uintptr_t object{};return read(renderer+at,&object,8)&&volumetric::target(object,t,read)&&t.width==out.depth.width&&t.height==out.depth.height&&t.srv_format==10;};
  unsigned char ocean=2;out.ocean_ok=read(scene+0xb71,&ocean,1)&&ocean==1&&surface(0x208,out.ocean);

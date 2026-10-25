@@ -4,7 +4,7 @@
 // memory in tests. Header-only and free of Windows types.
 //   scene_renderer.m_gpu_omni_lights +0xc48: ring of gpu_omni_light, 56 B (pos xyz, radius, rgb, volume, box min/max)
 //   scene_renderer.m_gpu_spot_lights +0xc70: ring of gpu_spot_light, 120 B (m_mat_vp, pos, radius, dir, tan, rgb,
-//   volume, cos, s32 m_spotlight_shadow_index @0x74 = raw[29], -1 = none)          (render_scene.gc)
+//   volume, cos, s32 m_spotlight_shadow_index @0x74 = raw[29], -1 = none)          (render_scene, 0.1.27 game code)
 #include <algorithm>
 #include <array>
 #include <cmath>

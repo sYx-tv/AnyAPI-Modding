@@ -16,7 +16,7 @@ struct AnySceneLightingParametersV4 {
  float ambient_washout{0};    // 0..1, for lamp_model 1 (future)
  uint32_t flags{ANY_LAMP_UNDERGROUND|ANY_LAMP_TRACKING|ANY_LAMP_FLASHES|ANY_LAMP_OCEAN};
  uint32_t native_halos{0};    // must be 0 in 0.40.2
- uint32_t amd_path{0};        // 0 auto (= 1); 1 constant-buffer path with per-count permutations; 2 same with a uniform branch per slot (experiment). Ignored off AMD
+ uint32_t amd_path{0};        // 0 auto (= 1); 1 constant-buffer path with per-count permutations; 2 same with a uniform branch per slot (experiment); 3 constant-buffer path, one 8-slot shader (0.40.1). Ignored off AMD
  uint32_t atmosphere_flags{0};// ANY_ATMOS_*; bits outside status_v2.atmosphere_flags_supported are rejected
  float sky_inscatter{1};      // 0..2, for ANY_ATMOS_SKY_INSCATTER (future)
  uint32_t reserved[4]{};      // must be 0

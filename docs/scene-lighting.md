@@ -144,7 +144,7 @@ amd_path 0, weather_response 0), so older callers keep the 0.40.1 output.
 | `ambient_washout` | 0–1 | Validated and stored; no effect yet |
 | `flags` | `ANY_LAMP_*` | `UNDERGROUND`: lamps-only underground. `TRACKING`: stable lamp selection. `FLASHES`: lightning may glow (with `ANY_ATMOS_FLASH_GLOW`). `OCEAN`: lamp light stops at the sea surface |
 | `native_halos` | 0 | Must be 0 |
-| `amd_path` | 0–2 | AMD only: 0 auto (= 1); 1 constant-buffer lamps with per-count shader builds; 2 the same with a uniform branch per lamp (experiment) |
+| `amd_path` | 0–3 | AMD only: 0 auto (= 1); 1 constant-buffer lamps with per-count shader builds; 2 the same with a uniform branch per lamp (experiment); 3 constant-buffer lamps with the single 8-lamp shader of 0.40.1 |
 | `atmosphere_flags` | `SEA_PLANE`, `WEATHER_DENSITY`, `PHASE_CAP`, `FLASH_GLOW` | Other bits are rejected (`status_v2.atmosphere_flags_supported` = 120) |
 | `sky_inscatter` | 0–2 | Validated and stored; no effect yet |
 | `reserved` | 0 | Must be 0 |
@@ -171,7 +171,7 @@ amd_path 0, weather_response 0), so older callers keep the 0.40.1 output.
 
 `status_v2(AnySceneLightingStatusV2*)` fills the V1 status in `base` and adds,
 for the last frame: lamps drawn and shadowed, candidate point and spot lights,
-game spot shadow maps, whether lamp shadows, the AMD path (1 or 2) and the
+game spot shadow maps, whether lamp shadows, the AMD path (1, 2 or 3) and the
 underground mode were in use, and the atmosphere flags in effect. Totals:
 lightning flashes seen, `raw29_hits`/`raw29_misses` (spot shadow index confirmed
 or not) and `ring_waits`. `bypass_reason` is the last non-zero bypass reason;
@@ -219,7 +219,8 @@ AnyAPI 0.39.1 switched them off there. From 0.39.2 AMD GPUs use their own lamp s
 lights come from a constant buffer read in an unrolled loop instead of a texture `Load` inside a dynamic loop, and
 lamps cast no shadow maps. That fixed the RX 6800. Other GPUs keep the original `Integrate` shader, byte for byte.
 Since 0.40.2 the AMD shader is built for 0, 2, 4 and 8 lamps and each frame uses the smallest build that holds its
-lamps, with the same result. V4 `amd_path` 2 is an experiment with a uniform branch per lamp instead.
+lamps, with the same result. V4 `amd_path` 2 is an experiment with a uniform branch per lamp instead, and
+`amd_path` 3 goes back to the single 8-lamp build.
 
 Descriptor tables live in a 4-entry ring fenced by the frame's own submission, so a change of game targets no longer
 waits for the whole GPU queue; only a resize, a device change or an AMD path change does.

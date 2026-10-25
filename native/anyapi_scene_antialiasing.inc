@@ -56,7 +56,7 @@ static History history;static scene_jitter::State jitter;static uint32_t jitter_
 static constexpr float history_weights[]={.85f,.88f,.9f,.92f,.94f};
 // AA-1: renderer and scene_renderer of the frame being rendered on this thread.
 // renderer.render builds and records one stack scene_render on one thread
-// (renderer.gc:565-568), so the scene hook's pair is the postprocess's pair.
+// (0.1.27 game code), so the scene hook's pair is the postprocess's pair.
 // Cleared after the frame's postprocess (record()).
 static thread_local void* frame_renderer{};static thread_local void* frame_scene{};static thread_local bool inner_recorded{};
 static scene_jitter::OverlayGate overlay;
@@ -141,6 +141,8 @@ static void record_scene(void* renderer,void* scene,bool inner,bool overlay_now)
  scene_smaa::Extra extra;extra.sharpen=p.sharpening;extra.history_weight=history_weights[std::min(p.quality+policy.extras.history_bias,4u)];extra.flags=policy.extras.taa_flags;extra.dither=float(policy.extras.dither);
  uint32_t reason=ANY_AA_FALLBACK_NONE;
  if(p.method>=3){if(!inner&&overlay_now){history.valid=false;reason=ANY_AA_FALLBACK_EDITOR_OVERLAY;}else reason=temporal_extra(renderer,scene,UINT(desc.Width),desc.Height,extra,device.Get());}
+ // ANY_AA_OCEAN_DEPTH (testing switch): no sea plane, so ocean pixels reproject with the depth buffer as in 0.40.1.
+ if(policy.extras.flags&ANY_AA_OCEAN_DEPTH)extra.ocean=nullptr;
  const auto& saved=found->second;owned=true;bool depth_ok=gpu.record(list,back.Get(),p.quality,p.method==2,&extra);if(!depth_ok){history.valid=false;if(extra.temporal)reason=ANY_AA_FALLBACK_DEPTH;}temporal_active=extra.temporal&&depth_ok;saved.restore(list);owned=false;
  if(p.method>=3&&!temporal_active&&reason!=ANY_AA_FALLBACK_HISTORY_RESET){
   // Inactive by design: quiet. Contract failures count as rejected and warn every 600.
@@ -155,19 +157,22 @@ static void record_scene(void* renderer,void* scene,bool inner,bool overlay_now)
 // renderer._record_commands_postprocess (code end 5944, call cell 15; self is
 // scene_render.m_renderer_postprocess = scene+0x2450). It returns before the
 // editor, placement and inspection overlays are drawn into m_target_overlay and
-// composited into the swapchain (renderer.gc:4608-4671).
+// composited into the swapchain (0.1.27 game code).
 static anyapi_runtime::CallCellHook postprocess_cell;
 static std::atomic<bool> inner_available{};
-using PostprocessRender=uintptr_t(*)(void*,void*);
+// All four integer argument registers (rcx, rdx, r8, r9) and rax are forwarded: the prologue stores only rcx and
+// rdx, so two arguments is likely, and forwarding r8 and r9 as well is harmless either way.
+using PostprocessRender=uintptr_t(*)(void*,void*,void*,void*);
 static const unsigned char POSTPROCESS_BODY[32]={0x53,0x55,0x56,0x48,0x81,0xec,0x80,0x04,0,0,0x48,0x89,0x8c,0x24,0x28,0x04,0,0,0x48,0x89,0x94,0x24,0x30,0x04,0,0,0x48,0x8b,0x05,0x17,0x17,0}; // = scene_controls::POST_COMPOSITE
 static const unsigned char POSTPROCESS_RENDER[32]={0x53,0x55,0x48,0x81,0xec,0xb8,0,0,0,0x48,0x89,0x4c,0x24,0x58,0x48,0x89,0x54,0x24,0x60,0x48,0x8d,0x44,0x24,0x68,0x48,0x8d,0x19,0x48,0x8b,0x2d,0xb6,0x01};
 static constexpr size_t RECORD_COMMANDS_END=2600,RECORD_POSTPROCESS_SLOT=37,POSTPROCESS_END=5944,POSTPROCESS_RENDER_SLOT=15;
 static constexpr uintptr_t RENDERER_POSTPROCESS=0x2450;
 static std::atomic<uint32_t> inner_mismatch{};
-static uintptr_t postprocess_hook(void* self,void* resources){
- auto result=((PostprocessRender)postprocess_cell.original())(self,resources);
+static uintptr_t postprocess_hook(void* self,void* resources,void* third,void* fourth){
+ auto result=((PostprocessRender)postprocess_cell.original())(self,resources,third,fourth);
  void* scene=frame_scene;
- if(scene&&!inner_recorded&&uintptr_t(self)==uintptr_t(scene)+RENDERER_POSTPROCESS){scene_frame::CpuScope cpu;inner_recorded=true;bool present=observe_overlay(scene);record_scene(frame_renderer,scene,true,present);}
+ // ANY_AA_AFTER_OVERLAYS (testing switch): the hook stays installed but leaves the frame to the slot-37 record.
+ if(scene&&!inner_recorded&&uintptr_t(self)==uintptr_t(scene)+RENDERER_POSTPROCESS){if(copy_v3().extras.flags&ANY_AA_AFTER_OVERLAYS)return result;scene_frame::CpuScope cpu;inner_recorded=true;bool present=observe_overlay(scene);record_scene(frame_renderer,scene,true,present);}
  else if(scene&&uintptr_t(self)!=uintptr_t(scene)+RENDERER_POSTPROCESS){auto n=++inner_mismatch;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework","SCENE_AA_STAGE inner_scene_mismatch=1 fallback=slot37");}
  return result;
 }

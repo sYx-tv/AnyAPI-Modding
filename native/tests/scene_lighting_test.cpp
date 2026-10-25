@@ -133,7 +133,7 @@ int main(){
   v4.atmosphere_flags=ANY_ATMOS_SEA_PLANE|ANY_ATMOS_WEATHER_DENSITY|ANY_ATMOS_PHASE_CAP|ANY_ATMOS_FLASH_GLOW;v4.weather_response=1;v4.amd_path=2;assert(set_v4(&v4)&&copy_policy().extras.atmosphere_flags==120&&copy_policy().extras.amd_path==2);
   auto no=[&](auto change){auto w=v4;change(w);return !set_v4(&w);};
   assert(no([](auto& w){w.lamp_model=1;})&&no([](auto& w){w.lamp_quality=4;})&&no([](auto& w){w.lamp_budget=0;})&&no([](auto& w){w.lamp_budget=17;})&&no([](auto& w){w.lamp_shadows=3;})&&no([](auto& w){w.lamp_shape=4;}));
-  assert(no([](auto& w){w.weather_response=1.5f;})&&no([](auto& w){w.weather_response=std::numeric_limits<float>::quiet_NaN();})&&no([](auto& w){w.ambient_washout=-.1f;})&&no([](auto& w){w.flags=16;})&&no([](auto& w){w.native_halos=1;})&&no([](auto& w){w.amd_path=3;}));
+  assert(no([](auto& w){w.weather_response=1.5f;})&&no([](auto& w){w.weather_response=std::numeric_limits<float>::quiet_NaN();})&&no([](auto& w){w.ambient_washout=-.1f;})&&no([](auto& w){w.flags=16;})&&no([](auto& w){w.native_halos=1;})&&no([](auto& w){w.amd_path=4;}));{auto legacy=v4;legacy.amd_path=3;assert(set_v4(&legacy)&&copy_policy().extras.amd_path==3);assert(set_v4(&v4));}
   assert(no([](auto& w){w.atmosphere_flags=ANY_ATMOS_SKY_FOG;})&&no([](auto& w){w.atmosphere_flags=ANY_ATMOS_SKY_INSCATTER;})&&no([](auto& w){w.atmosphere_flags=ANY_ATMOS_CLARITY_METRES;})&&no([](auto& w){w.sky_inscatter=2.5f;})&&no([](auto& w){w.reserved[3]=1;}));
   assert(no([](auto& w){w.struct_size=8;})&&no([](auto& w){w.version=3;})&&no([](auto& w){w.shaped.version=2;})&&no([](auto& w){w.shaped.lighting.local_budget=9;})&&no([](auto& w){w.shaped.clarity=2;}));
   platform::current_plugin=1;assert(!set_v4(&v4));platform::current_plugin=0;

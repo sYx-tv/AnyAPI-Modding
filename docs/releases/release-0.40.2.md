@@ -42,12 +42,14 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 ## Anti-aliasing
 
 - TAA and SMAA record before the editor, placement and inspection overlays, so building no
-  longer smears or turns AA off.
-- Ocean pixels reproject on the sea surface, so the water no longer ghosts under TAA.
+  longer smears or turns AA off (`aa_before_overlays` reverts).
+- Ocean pixels reproject on the sea surface, so the water no longer ghosts under TAA
+  (`taa_ocean` reverts).
 - Sharper TAA in motion (Catmull-Rom history) and a better rule for still and moving pixels.
   Both can be reverted (`taa_still_v2`; the history filter has no switch).
 - Looking through a scope resets the history instead of smearing.
-- A one-step dither removes banding in dark gradients.
+- A one-step dither removes banding in dark gradients (`output_dither` turns it off, also in
+  the finish pass).
 - Cheaper TAA input pass, and AA reads the game without system calls.
 - For mod authors: scene antialiasing 3 with `history_bias` (TAA extra smooth) and a status
   with the last fallback reason.
@@ -82,7 +84,7 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 ## Volumetric lighting and lamps
 
 - AMD graphics: lamp beams use builds sized to the lamps in view, which is faster, and no
-  longer go negative.
+  longer go negative (`amd_lamp_path` 3 goes back to the single shader).
 - Lamps are tracked between frames, so beams stop popping as lamps compete for the budget and
   fade in and out instead.
 - In bunkers the lamps light the air (the sun does not); lamp light stops at the sea surface.
@@ -95,7 +97,7 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 ## Sky and water
 
 - The night sky follows the game's clock: stars all night (before, about a tenth of it), moon
-  phases, a dawn fade and a sparser, more natural star field.
+  phases, a dawn fade and a sparser, more natural star field (`sky_model` reverts).
 - Clouds v2: cloud cover no longer changes with zoom or resolution, thick cloud hides the sun,
   the moon lights the clouds and the clouds drift with the game's wind (`cloud_model` reverts).
 - The moonlight glow no longer lands on the ocean surface.
@@ -113,7 +115,8 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 - **Weather response**: rain, snow and storms change fog, clouds, sky, sea and lamp beams. Off
   by default.
 - **Auto-pick** measures typical and worst frame times and how much AnyAPI's passes cost,
-  stops when the CPU or game is the limit (never below Balanced that way), notices a frame-rate
+  stops when the CPU or game is the limit (never below Balanced that way; a game waiting for
+  the graphics card still steps down), notices a frame-rate
   cap, keeps a look's style, and stops if the settings cannot be saved.
 - **Show GPU cost** lists every pass, and a second line shows frame times, AnyAPI's CPU time
   and the lamps drawn. In menus it shows the last gameplay numbers.

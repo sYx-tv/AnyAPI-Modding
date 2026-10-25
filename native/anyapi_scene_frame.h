@@ -81,7 +81,7 @@ inline auto reader = [](uintptr_t a, void* o, size_t n) { return read(a, o, n); 
 
 // ---------------------------------------------------------------- K03 view
 // scene+0x668..0x66b: m_is_underground, m_is_underwater, m_is_nightvision,
-// m_is_thermal (render_scene.gc). Any byte >1 or a failed read: unreadable.
+// m_is_thermal (render_scene, 0.1.27 game code). Any byte >1 or a failed read: unreadable.
 enum : uint32_t { VIEW_UNDERGROUND = 1, VIEW_UNDERWATER = 2, VIEW_NIGHT_VISION = 4, VIEW_THERMAL = 8,
                   VIEW_SPECIAL_VISION = VIEW_NIGHT_VISION | VIEW_THERMAL, VIEW_UNREADABLE = 0x80000000u };
 inline uint32_t view_flags(uintptr_t scene) {

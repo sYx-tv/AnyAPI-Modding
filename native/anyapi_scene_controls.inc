@@ -76,7 +76,7 @@ using SceneFn=void(*)(void*,void*);
 static bool wind_scale(void* scene,bool scene_writable,float scale,double* saved){if(scale==1||!scene_writable)return false;auto b=(unsigned char*)scene+0xb78;memcpy(saved,b,16);
  if(!std::isfinite(saved[0])||!std::isfinite(saved[1])||std::abs(saved[0])>200||std::abs(saved[1])>200)return false;double scaled[2]{saved[0]*scale,saved[1]*scale};memcpy(b,scaled,16);return true;}
 // ---- Frame publishing: board.sample, clock, weather (before scene_apply) and moon (after it), once per scene_hook.
-// scene_renderer (render_scene.gc, 0.1.27): +0xa78 m_main_light_direction (points away from the sun; parked at the noon
+// scene_renderer (render_scene, 0.1.27 game code): +0xa78 m_main_light_direction (points away from the sun; parked at the noon
 // direction while t<0.2||t>0.8), +0xa90..+0xb37 the seven colours, +0xb38 m_planet_shadow_height, +0xb60 m_base_fog_factor,
 // +0xb70 m_is_weather_particles, +0xb71 m_is_ocean, +0xb78 m_wind_vector, +0xb88 m_weather_texture_a_offset,
 // +0xba8 m_time_of_day_factor (written by client_scene.build_scene_render). One in-process read of [0xa78,0xbb0).
@@ -144,7 +144,10 @@ static Apply plan_apply(const Policy& policy,const scene_frame::Sample& s,const 
  moon=MoonState{};moon.frame=s.frame;
  const bool on=p.enabled&&x.moon_mode==1&&x.moonlight>0&&(s.valid&SAMPLE_LIGHTS)&&(s.valid&SAMPLE_SUN);
  if(!on)moon_w=0;else{float want=c.source==1?float(moon_weight(c.t)):c.source==2?1.f:0.f;moon_w+=std::clamp(want-moon_w,-MOON_SLEW,MOON_SLEW);}
- if(moon_w>0){double lit=std::max<double>(x.moon_phase_floor,c.lit_fraction),target=x.moonlight*lit*(1-.7*(w.source==1?w.cover:0));
+ // Storm cover dims the moonlight by the moon disc's rule: only while the sky's weather is on (scene effects v3
+ // weather 1, AnyGraphics Weather response). With it off neither the light nor the disc reacts to the weather.
+ scene_frame::SkyPolicy sky{};const bool storms=scene_frame::board.sky_policy.load(sky)&&sky.weather==1&&w.source==1;
+ if(moon_w>0){double lit=std::max<double>(x.moon_phase_floor,c.lit_fraction),target=x.moonlight*lit*(1-.7*(storms?w.cover:0));
   double current=luma(s.light_main)*p.sun*std::exp2(p.light_exposure);a.moon_add=moon_w*std::max(0.,target-current);
   if(a.moon_add>0){moon.active=1;moon.added_luminance=float(a.moon_add);celestial::toward(s.sun_dir,moon.direction);}}
  return a;}
@@ -275,7 +278,7 @@ static void** resolve_unique_cell(const std::vector<uintptr_t>& callers,size_t e
  for(auto caller:callers){auto cell=resolve_cell(caller,end,slot,target,bytes);if(!cell)continue;if(selected&&selected!=cell)return nullptr;selected=cell;}return selected;
 }
 // P0 LITERAL_PROBE (K44/K45): verify the game literals a later release may patch. Worker thread, once; read only.
-// Offsets from the 0.1.27 listings (decomp full render_util.gc and client_scene_tile.gc): each user site is a
+// Offsets from the 0.1.27 game code (render_util and client_scene_tile): each user site is a
 // RIP-relative load whose displacement lands on the literal (user + size + disp == literal).
 struct LiteralSite{const char* name;uint32_t user;unsigned char bytes[8];uint32_t size;uint32_t literal;double expected;};
 static const unsigned char SHADOWS_PROLOGUE[]={0x53,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x81,0xec,0x78,0x0f,0,0}; // render_util.build_camera_shadows

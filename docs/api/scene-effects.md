@@ -279,7 +279,8 @@ the moon goes through its phases, the sky fades out at dawn, and the star
 field is sparser. `moon_disc_follows_light` 1 puts the moon disc where the
 game's night light comes from (with `anyapi.scene_controls` v4 `moon_mode` 1).
 With `weather` 1, rain, snow and storms dim the stars, moon and sun disc,
-thicken the clouds and roughen the sea. `sky_model_active`, `cloud_model_active`,
+thicken the clouds and roughen the sea; it also lets storms dim the scene
+controls v4 moonlight, so the moon and its light dim together or not at all. `sky_model_active`, `cloud_model_active`,
 `weather_active` and `clock_valid` in the version 3 status say what is in use.
 
 ## Status

@@ -94,10 +94,11 @@ above) plus:
 | `history_bias` | 0–1 | 0 | One more level of TAA history weight (0.94 at Ultra). |
 | `taa_flags` | bits of `ANY_TAA_*` | `CATMULL_ROM \| STILL_V2` | `ANY_TAA_CATMULL_ROM` (1): sharper history resampling in motion. `ANY_TAA_STILL_V2` (2): the camera-locked candidate wins only on a tight match that is closer to the current image, up to 80 m on vehicles, tracks, vegetation and clothing, never at screen-entry edges. `ANY_TAA_THIN_RESCUE` (4): thin bright moving features (rain, sparks, tracers) keep at least half their brightness. |
 | `dither` | 0–1 | 1 | Output dither (see above). |
+| `flags` | bits of `ANY_AA_*` | 0 | Testing switches that turn off a 0.40.2 change made for every version. `ANY_AA_AFTER_OVERLAYS` (1): record after the whole postprocess as in 0.40.1, so TAA pauses while an editor overlay shows. `ANY_AA_OCEAN_DEPTH` (2): TAA reprojects ocean pixels with the depth buffer as in 0.40.1 instead of the sea plane. Other bits are rejected. |
 | `reserved` | 0 | 0 | Must be zero. |
 
 Version 1 and 2 setters store `history_bias` 0, `taa_flags` 0 (the 0.36 TAA
-candidate rules) and `dither` 1. Re-centred rejected pixels, scope resets, the
+candidate rules), `dither` 1 and `flags` 0. Re-centred rejected pixels, scope resets, the
 sea-plane ocean distance, the overlay placement and the dither apply to every
 version. Ownership is shared across versions.
 

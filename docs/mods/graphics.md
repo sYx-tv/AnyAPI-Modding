@@ -112,7 +112,8 @@ keeps your preset:
 - **Weather response** (Sky and weather): rain, snow and storms change
   AnyGraphics too. Fog and cloud thicken, stars, moon and sun dim, the sea gets
   rougher, lamp beams thicken in the wet air and lightning lights up the fog
-  without the exposure pumping. It costs almost no GPU time.
+  without the exposure pumping. With Game light, storms dim the moonlight
+  only while Weather response is on, like the moon disc. It costs almost no GPU time.
 
 Light colour now tints the sun and the sky lights it was meant for (before,
 the warm sun tint also landed on the sky straight above).
@@ -120,7 +121,9 @@ the warm sun tint also landed on the sky straight above).
 **Auto-pick** measures typical and worst frame times, not an average, and how
 much of each frame AnyAPI's passes take. When they take little of it, the game
 or the CPU sets the frame rate, so it stops there instead of dropping presets
-that would not help, and it never ends below Balanced that way. It notices a
+that would not help, and it never ends below Balanced that way. With AnyAPI
+0.40.2 it also checks that the game is not waiting for the graphics card (time
+spent in Present), so a slow integrated GPU still steps down. It notices a
 frame-rate cap (vsync or a limiter) and only climbs while the passes leave
 room. A slow result is measured twice before it steps down. It runs only while
 AnyGraphics is on and connected to the game's renderer, and stops if the
@@ -178,8 +181,12 @@ them back.
 | `taa_still_v2` | 1, the 0.40.2 rule for still and moving pixels | 0: the 0.40.1 rule |
 | `taa_thin_rescue` | 0 | 1: keep thin wires and grass in the TAA history (experiment) |
 | `keep_native_ssao` | 0, the game's ambient occlusion is skipped when Detailed shading replaces it | 1: run it anyway |
-| `amd_lamp_path` | 0, automatic | 1: constant-buffer lamps; 2: the uniform-branch experiment (AMD only) |
+| `amd_lamp_path` | 0, automatic (constant-buffer lamps with shaders sized to the lamps in view) | 1: the same; 2: the uniform-branch experiment; 3: the 0.40.1 single 8-lamp shader (AMD only) |
 | `preset_revision` | 1 | internal: the preset tables the settings were saved with |
+| `sky_model` | 1, the night sky on the game clock | 0: the AnyAPI 0.40.1 night sky |
+| `aa_before_overlays` | 1, scene AA before the editor, placement and inspection overlays | 0: the 0.40.1 placement after them (TAA pauses while an overlay shows) |
+| `taa_ocean` | 1, TAA moves ocean pixels on the sea surface | 0: the 0.40.1 depth buffer rule |
+| `output_dither` | 1, about one step of dither in the finish and scene AA output | 0: no dither |
 
 ## Tone mapping and colour (0.30.0)
 

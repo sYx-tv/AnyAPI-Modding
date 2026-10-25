@@ -80,6 +80,8 @@ static void record(void* renderer,void* scene){
  publish_flash(uintptr_t(scene));
  auto policy=copy_policy();auto& p=policy.v2.scene;auto& x=policy.extras;if(!p.enabled){pass(-1,0);release_when_off();return;}off_frames=0;
  auto list=scene_antialiasing::command_list();Microsoft::WRL::ComPtr<ID3D12Device> device;if(list)list->GetDevice(IID_PPV_ARGS(&device));
+ // AMD: the constants path with the per-count LAMP_SLOTS builds (amd_path 0/1), the uniform branch (2) or the single
+ // 8-slot 0.40.1 shader (3). Other vendors march.
  bool amd=amd_gpu(device.Get());uint32_t path=amd?(x.amd_path==2?volumetric::PATH_BRANCH:volumetric::PATH_CONSTANTS):volumetric::PATH_MARCHED;
  volumetric::CaptureOptions o;if(x.v4&&(x.flags&ANY_LAMP_UNDERGROUND)){o.view_mask=0xfe;o.underground_lamps=true;}o.ocean=x.v4&&((x.atmosphere_flags&ANY_ATMOS_SEA_PLANE)||(x.flags&ANY_LAMP_OCEAN));
  bool track=x.v4&&(x.flags&ANY_LAMP_TRACKING);if(track!=tracking){tracker.reset();tracking=track;}if(track){o.tracker=&tracker;o.now=seconds();}
@@ -87,7 +89,7 @@ static void record(void* renderer,void* scene){
  volumetric::NativeFrame f;static LARGE_INTEGER qf{};if(!qf.QuadPart)QueryPerformanceFrequency(&qf);LARGE_INTEGER t0,t1;QueryPerformanceCounter(&t0);
  bool valid=volumetric::capture(uintptr_t(renderer),uintptr_t(scene),p,f,scene_frame::reader,policy.v2.local_strength,budget,shadows,o);
  QueryPerformanceCounter(&t1);float us=float(double(t1.QuadPart-t0.QuadPart)*1e6/double(qf.QuadPart)),old=capture_us.load();capture_us.store(old<0?us:old*.9f+us*.1f);
- frame_valid=valid;candidates_omni=f.lamps.omni;candidates_spot=f.lamps.spot;game_spot_maps=f.spot_maps;raw29_hits+=f.lamps.raw29_hits;raw29_misses+=f.lamps.raw29_misses;underground_active=f.underground;amd_path_active=amd?path:0;lamp_shadows_active=shadows;
+ frame_valid=valid;candidates_omni=f.lamps.omni;candidates_spot=f.lamps.spot;game_spot_maps=f.spot_maps;raw29_hits+=f.lamps.raw29_hits;raw29_misses+=f.lamps.raw29_misses;underground_active=f.underground;amd_path_active=amd?(x.amd_path==3?3u:path):0;lamp_shadows_active=shadows;
  // K03: underwater, night vision and thermal (and underground without ANY_LAMP_UNDERGROUND) are inactive by design.
  if(!valid&&f.failure==2&&f.view!=scene_frame::VIEW_UNREADABLE){gpu_ready=false;reason=7;history.valid=false;lamps_drawn=lamps_shadowed=0;pass(-1,-1);return;}
  if(valid)temporal_rows(f,p,policy.shaping);
@@ -111,6 +113,7 @@ static void record(void* renderer,void* scene){
  if(FAILED(target->GetDevice(IID_PPV_ARGS(&td)))||FAILED(depth->GetDevice(IID_PPV_ARGS(&dd)))||FAILED(shadow->GetDevice(IID_PPV_ARGS(&sd)))||td.Get()!=device.Get()||dd.Get()!=device.Get()||sd.Get()!=device.Get())return bypass(4,"gpu_resource_contract");
  uint64_t now_ms=GetTickCount64();if(device.Get()!=retry_device){retry.reset();retry_device=device.Get();}if(!retry.ready(now_ms))return bypass(4,"gpu_retry",retry.failures);
  if(!gpu.ensure(device.Get(),platform::queue.Get(),target->GetDesc(),path)){retry.failed(now_ms);error=gpu.error();return bypass(4,"gpu_resource_contract",error.load());}retry.succeeded();
+ gpu.use_permutations(x.amd_path!=3);   // a rebuild resets it to on, so it is set every frame
  if(before&&before!=device.Get()){scene_frame::reset_resource_cache();tracker.reset();history.valid=false;}
  std::array<ID3D12Resource*,12> shadow_list{};std::array<D3D12_RESOURCE_STATES,12> shadow_states{};
  uint32_t bound_shadows=f.gpu.local_shadow_count>0?8+uint32_t(f.gpu.local_shadow_count):f.shadow_count;for(uint32_t i=0;i<bound_shadows;++i){if(i>=f.shadow_count&&i<8)f.cascades[i]=f.cascades[0];if(!scene_frame::resource_valid(f.cascades[i].resource))return bypass(4,"shadow_resource",i);shadow_list[i]=(ID3D12Resource*)f.cascades[i].resource;shadow_states[i]=D3D12_RESOURCE_STATES(f.cascades[i].state);Microsoft::WRL::ComPtr<ID3D12Device> owner;if(FAILED(shadow_list[i]->GetDevice(IID_PPV_ARGS(&owner)))||owner.Get()!=device.Get())return bypass(4,"shadow_device",i);}
