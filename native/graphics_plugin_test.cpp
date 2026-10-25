@@ -179,7 +179,8 @@ static void pure_tests(){using namespace graphics_options;
  // K37: only the changed rows a committed preset owns move; Top rows, Custom and current settings stay.
  auto old=profile(defaults(),3);old[Sharpening]=0;old[FogDensity]=0;auto c=old;assert(restage(c,0)==1&&c[Sharpening]==1&&c[FogDensity]==0);
  c=old;assert(restage(c,1)==0&&c==old);c=old;c[Preset]=CustomProfile;auto before=c;assert(restage(c,0)==0&&c==before);c=old;c[Preset]=0;assert(restage(c,0)==0);
- old=profile(defaults(),4);old[LightingQuality]=3;old[LocalBudget]=3;old[WaterReflections]=0;old[SunGlint]=0;c=old;assert(restage(c,0)==4&&c[LightingQuality]==2&&c[LocalBudget]==2&&c[WaterReflections]==2&&c[SunGlint]==1);
+ // New rows (water and glint) stay off for a saved preset: an update never switches on a new pass by itself.
+ old=profile(defaults(),4);old[LightingQuality]=3;old[LocalBudget]=3;old[WaterReflections]=0;old[SunGlint]=0;c=old;assert(restage(c,0)==2&&c[LightingQuality]==2&&c[LocalBudget]==2&&c[WaterReflections]==0&&c[SunGlint]==0);
  old=profile(defaults(),NaturalProfile);old[DetailedAO]=2;c=old;assert(restage(c,0)==1&&c[DetailedAO]==0);
  // AG-7, K47, Natural: the 0.33.0 tables.
  const float quality[]={0,0,1,2,2,3},budget[]={0,0,1,2,3,3},crisp[]={0,0,1,1,1,2};
@@ -338,13 +339,13 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  gpu_beams=0;event(ANY_MENU_OPEN);stage(0,0);assert(rows()<plain);event(ANY_MENU_CANCEL);gpu_beams=1;gpu_vendor=0x10de;
  apply(LocalBudget,2);assert(local_policy.local_budget==6&&shaped_policy.lighting.local_budget==6);
  }else if(revision){
- // K37: the committed High moves to the 0.33.0 tables once; the user's fog stays.
- assert(has("PRESET_REVISION from=0 to=1 preset=4 rows_changed=4 saved=1"));
- assert(lighting_policy.quality==2&&lamps_policy.lamp_budget==6&&water_policy.water_reflections==1&&water_policy.reflection_quality==1&&water_policy.sun_glint==1&&policy.fog==.35f&&aa3_policy.base.sharpening==.3f);
+ // K37: the committed High moves to the 0.33.0 tables once; the user's fog stays, and the new water rows stay off.
+ assert(has("PRESET_REVISION from=0 to=1 preset=4 rows_changed=2 saved=1"));
+ assert(lighting_policy.quality==2&&lamps_policy.lamp_budget==6&&water_policy.water_reflections==0&&water_policy.sun_glint==0&&policy.fog==.35f&&aa3_policy.base.sharpening==.3f);
  // Hidden rows reach the services.
  assert(fx3_policy.tone_revision==1&&std::abs(fx3_policy.bloom_falloff-.7f)<1e-6f&&fx3_policy.cloud_model==0&&fx3_policy.flags==ANY_FX_KEEP_NATIVE_SSAO&&aa3_policy.taa_flags==7&&lamps_policy.amd_path==3);
  assert(fx3_policy.sky_model==0&&fx3_policy.dither==0&&aa3_policy.flags==(ANY_AA_AFTER_OVERLAYS|ANY_AA_OCEAN_DEPTH)&&aa3_policy.dither==0);
- auto text=read_file(root/L"AnyGraphics"/L"settings.tsv");assert(text.find("anygraphics.hidden\tpreset_revision\t2\t31\n")!=std::string::npos&&text.find("anygraphics.sky\twater_reflections\t4\t32\n")!=std::string::npos&&text.find("anygraphics.scene\tfog_density\t3\t"+hex("0.34999999403953552"))!=std::string::npos);
+ auto text=read_file(root/L"AnyGraphics"/L"settings.tsv");assert(text.find("anygraphics.hidden\tpreset_revision\t2\t31\n")!=std::string::npos&&text.find("anygraphics.sky\twater_reflections\t4\t30\n")!=std::string::npos&&text.find("anygraphics.scene\tfog_density\t3\t"+hex("0.34999999403953552"))!=std::string::npos);
  // A second start finds the revision and changes nothing.
  FreeLibrary(graphics);logs.clear();graphics=LoadLibraryW(argv[3]);assert(graphics);assert(((AnyModInitV1)GetProcAddress(graphics,"AnyAPI_ModInit"))(&host,&g));((void(*)())GetProcAddress(graphics,"AnyAPI_ModReady"))();
  assert(has("SERVICES")&&!has("PRESET_REVISION")&&read_file(root/L"AnyGraphics"/L"settings.tsv")==text);

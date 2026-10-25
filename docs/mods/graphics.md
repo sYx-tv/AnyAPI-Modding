@@ -151,7 +151,9 @@ as Antialiasing and Fog are left alone):
   Soft & warm.
 - Performance and Low keep the game's base fog at Reduced like every other
   tier: removing it saved no GPU time and also removed the weather fog.
-- A preset saved before 0.33.0 also gets the water rows of its tier.
+- A preset saved before 0.33.0 keeps **Water reflections** and **Sun glint**
+  off, so the update does not switch the new pass on by itself. Choose the
+  preset again or select **Reset preset** to get its water rows.
 
 Fixes:
 

@@ -201,15 +201,17 @@ inline Values profile(const Values& current,int level){
 // AG-2: what a fresh install and the menu's Reset get. Preset's own initial value is Balanced.
 inline Values balanced(){return profile(defaults(),3);}
 // K37: preset tables changed after settings were saved. Revision 1 (AnyGraphics 0.33.0): AG-7 sampling and lamp tables,
-// K47 Balanced sharpening, Natural without detailed shading, water rows (WATER-13), Performance and Low fog (AG-9).
+// K47 Balanced sharpening, Natural without detailed shading, Performance and Low fog (AG-9).
 inline constexpr int preset_revision=1;
 // Re-stages, on a committed preset (1-10, 12), only the rows the preset owns whose table changed since `from`. These are
 // all group rows, which cannot differ from the table without the preset turning Custom, so they follow the new table. Top
 // rows (Antialiasing, Fog and the other main choices) are the user's and stay. Returns how many rows changed.
+// Rows that are new in a revision are not taken: they start off for a saved preset (the water rows, WATER-13, stay off
+// until the preset is chosen again or reset), so an update never switches on a new pass by itself.
 inline uint32_t restage(Values& committed,int from){
  const int level=int(committed[Preset]);if(level<1||level>SoftWarmProfile||level==CustomProfile||from>=preset_revision)return 0;
  const auto next=profile(committed,level);uint32_t changed=0;auto take=[&](Index i){if(committed[i]!=next[i]){committed[i]=next[i];++changed;}};
- if(from<1)for(auto i:{LightingQuality,LocalBudget,Sharpening,DetailedAO,WaterReflections,SunGlint})take(i);
+ if(from<1)for(auto i:{LightingQuality,LocalBudget,Sharpening,DetailedAO})take(i);
  return changed;
 }
 // K35 auto-pick: one measured window of gameplay at a tier (1 Performance .. 5 Ultra).

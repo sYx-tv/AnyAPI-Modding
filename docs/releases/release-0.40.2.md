@@ -122,7 +122,10 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
   and the lamps drawn. In menus it shows the last gameplay numbers.
 - Presets: High is no longer as costly as Ultra (32 samples and 6 lamps), Balanced sharpens TAA,
   Natural keeps the game's ambient occlusion, Performance and Low keep the game's weather fog.
-  A preset saved with an earlier version moves to these values once; Custom is not touched.
+  The looks use 32 volumetric samples, Natural and Clear Day 24 (fewer than before, so their
+  sun shafts are a little softer). A preset saved with an earlier version moves to these
+  values once; Custom is not touched. A saved preset keeps the new Water reflections and Sun
+  glint off: choose the preset again or select Reset preset to turn them on.
 - Fixes: a fresh install and Reset give the real Balanced preset; quick photo-key taps work at
   low frame rates; photo mode returns the camera if AnyGraphics stops updating it; photo
   controls no longer add sun glare or swap the bloom; the Lighting group shows without scene
