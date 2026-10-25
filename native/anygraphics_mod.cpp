@@ -112,9 +112,9 @@ static void auto_pick(bool gameplay,bool active,bool configured_now){if(!pick.on
   if(pick.seconds>=pick.next_sample){pick.next_sample=pick.seconds+.25;float ms=pass_ms_now();if(ms>=0){pick.pass_sum+=ms;++pick.pass_samples;}float block=present_block_now();if(block>=0){pick.block_sum+=block;++pick.block_samples;}}}}}
  pick.last=now.QuadPart;
  if(pick.seconds<5.5||pick.count<8)return;
- PickWindow w;std::sort(pick.dts.begin(),pick.dts.begin()+pick.count);w.median_ms=pick.dts[pick.count/2];w.p95_ms=pick.dts[std::min(pick.count-1,uint32_t(pick.count*.95f))];w.pass_ms=pick.pass_samples?float(pick.pass_sum/pick.pass_samples):-1;w.present_block_ms=pick.block_samples?float(pick.block_sum/pick.block_samples):-1;
+ PickWindow w;std::sort(pick.dts.begin(),pick.dts.begin()+pick.count);w.median_ms=pick.dts[pick.count/2];w.p95_ms=pick.dts[std::min(pick.count-1,uint32_t(pick.count*.95f))];w.pass_ms=pick.pass_samples?float(pick.pass_sum/pick.pass_samples):-1;w.present_block_ms=pick.block_samples?float(pick.block_sum/pick.block_samples):-1;w.p05_ms=pick.dts[uint32_t(pick.count*.05f)];
  const auto d=pick_decide(pick.tier,pick.start,pick.went_down,pick.confirming,w);const float fps=1000/w.median_ms;char text[320];
- snprintf(text,sizeof(text),"AUTO_PICK tier=%s look=%d median_ms=%.2f p95_ms=%.2f pass_ms=%.2f present_block_ms=%.2f cap_ms=%.2f next=%s done=%d reason=%u",tier_name(pick.tier),pick.look,w.median_ms,w.p95_ms,w.pass_ms,w.present_block_ms,pick_cap(w),tier_name(d.tier),int(d.done),unsigned(d.reason));log(text);
+ snprintf(text,sizeof(text),"AUTO_PICK tier=%s look=%d median_ms=%.2f p95_ms=%.2f p05_ms=%.2f pass_ms=%.2f present_block_ms=%.2f cap_ms=%.2f next=%s done=%d reason=%u",tier_name(pick.tier),pick.look,w.median_ms,w.p95_ms,w.p05_ms,w.pass_ms,w.present_block_ms,pick_cap(w),tier_name(d.tier),int(d.done),unsigned(d.reason));log(text);
  pick.confirming=d.reason==PickConfirm;
  if(!d.done){
   if(d.tier==pick.tier){pick_window();return;} // slow once: measure again before stepping down
@@ -122,7 +122,7 @@ static void auto_pick(bool gameplay,bool active,bool configured_now){if(!pick.on
   snprintf(text,sizeof(text),"Auto-pick: %s ran at %.0f fps, trying %s.",tier_name(pick.tier),fps,tier_name(d.tier));pick_result=text;pick.tier=d.tier;pick_commit(d.tier);return;}
  if(d.tier!=pick.tier){pick.tier=d.tier;if(!pick_commit(d.tier))return;}
  std::string chosen=pick.look?std::string(look_name(pick.look))+" at "+tier_name(pick.tier)+" cost":tier_name(pick.tier);
- const char* why=d.reason==PickCpuBound?" The game or CPU sets the frame rate here, so presets barely change it.":d.reason==PickCapFull?" The frame rate is capped, and more would leave too little of each frame.":"";
+ const char* why=d.reason==PickCpuBound?" The game, the CPU or a frame-rate limit sets the frame rate here, so presets barely change it.":d.reason==PickCapFull?" The frame rate is capped, and more would leave too little of each frame.":"";
  snprintf(text,sizeof(text),"Auto-pick chose %s (%.0f fps).%s%s",chosen.c_str(),fps,why,pick.look?"":" Natural, Clear Day, Vibrant, Moody and Soft & warm cost about the same as High or Ultra.");
  pick_result=text;log(std::string("AUTO_PICK ")+text);pick.on=false;}
 static const AnyMenuV4* buttons;

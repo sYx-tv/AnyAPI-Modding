@@ -117,7 +117,8 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 - **Auto-pick** measures typical and worst frame times and how much AnyAPI's passes cost,
   stops when the CPU or game is the limit (never below Balanced that way; a game waiting for
   the graphics card still steps down), notices a frame-rate
-  cap, keeps a look's style, and stops if the settings cannot be saved.
+  cap (a 30 or 40 fps limit stops it instead of dropping presets), keeps a look's style, and
+  stops if the settings cannot be saved.
 - **Show GPU cost** lists every pass, and a second line shows frame times, AnyAPI's CPU time
   and the lamps drawn. In menus it shows the last gameplay numbers.
 - Presets: High is no longer as costly as Ultra (32 samples and 6 lamps), Balanced sharpens TAA,

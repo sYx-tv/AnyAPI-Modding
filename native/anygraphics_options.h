@@ -215,21 +215,27 @@ inline uint32_t restage(Values& committed,int from){
  return changed;
 }
 // K35 auto-pick: one measured window of gameplay at a tier (1 Performance .. 5 Ultra).
-// pass_ms: AnyAPI GPU pass sum; present_block_ms: time inside the game's Present (scene timing v2). -1 when unknown.
-struct PickWindow {float median_ms{-1},p95_ms{-1},pass_ms{-1},present_block_ms{-1};};
+// pass_ms: AnyAPI GPU pass sum; present_block_ms: time inside the game's Present (scene timing v2); p05_ms: the fastest
+// 5% of frames. -1 when unknown.
+struct PickWindow {float median_ms{-1},p95_ms{-1},pass_ms{-1},present_block_ms{-1},p05_ms{-1};};
 enum PickReason:uint32_t{PickHolds,PickSlow,PickConfirm,PickFast,PickRoom,PickCapFull,PickCpuBound,PickTop,PickBottom};
 struct PickDecision {int tier;bool done;PickReason reason;};
 // A refresh cap: frame times this steady, at a common refresh period, mean vsync or a limiter decides the frame rate.
-inline float pick_cap(const PickWindow& w){static constexpr float periods[]={6.944f,8.333f,11.111f,13.333f,16.667f,33.333f};if(!(w.median_ms>0)||w.p95_ms>w.median_ms*1.03f)return 0;for(float p:periods)if(std::abs(w.median_ms-p)<=p*.02f)return p;return 0;}
+// 50, 45 and 40 Hz are Steam Deck limits; the climb path never sees them (it only runs at 55 fps and up).
+inline float pick_cap(const PickWindow& w){static constexpr float periods[]={6.944f,8.333f,11.111f,13.333f,16.667f,20.f,22.222f,25.f,33.333f};if(!(w.median_ms>0)||w.p95_ms>w.median_ms*1.03f)return 0;for(float p:periods)if(std::abs(w.median_ms-p)<=p*.02f)return p;return 0;}
 // Slow is under 55 fps typical or under 40 fps for the slowest 5% of frames. A slow tier steps down only after a second
 // slow window. When AnyAPI's passes are under 15% of the frame the game or CPU sets the frame rate: it stops there and
 // never ends below Balanced from a start at Balanced or above. Under a cap it climbs while the passes stay under 30% of
 // the frame; otherwise it climbs at 80 fps. With scene timing v2 the CPU-bound call also needs the game to wait in
 // Present for under 15% of the frame: a GPU-bound frame (a low-end integrated GPU busy with the game's own drawing)
-// waits there, and stepping down helps it. Without that reading the pass share decides alone.
+// waits there, and stepping down helps it. Without that reading the pass share decides alone. A frame-rate limit under
+// 55 fps (a Steam Deck 30 or 40 Hz limit, Battery Boost, half-rate vsync) also waits in Present, so it does not count as
+// GPU-bound: a limit holds the fastest frames at the period too, while vsync rounding a GPU-bound frame mixes in faster
+// frames. Without the fastest-5% reading nothing counts as a limit.
 inline PickDecision pick_decide(int tier,int start,bool went_down,bool confirming,const PickWindow& w){
  const bool known=w.pass_ms>0,slow=w.median_ms>1000/55.f||w.p95_ms>1000/40.f;const float share=known?w.pass_ms/w.median_ms:1;
- const bool gpu_waits=w.present_block_ms>=0&&w.present_block_ms>=.15f*w.median_ms;
+ const float cap=pick_cap(w);const bool limited=cap>0&&w.p05_ms>0&&w.p05_ms>=.97f*cap;
+ const bool gpu_waits=!limited&&w.present_block_ms>=0&&w.present_block_ms>=.15f*w.median_ms;
  if(slow){
   if(known&&share<.15f&&!gpu_waits)return {std::max(tier,std::min(start,3)),true,PickCpuBound};
   if(tier<=1)return {tier,true,PickBottom};
@@ -237,7 +243,7 @@ inline PickDecision pick_decide(int tier,int start,bool went_down,bool confirmin
   return {tier-1,false,PickSlow};}
  if(went_down)return {tier,true,PickHolds};
  if(tier>=5)return {tier,true,PickTop};
- if(float cap=pick_cap(w)){if(known&&w.pass_ms<=.3f*cap)return {tier+1,false,PickRoom};return {tier,true,PickCapFull};}
+ if(cap){if(known&&w.pass_ms<=.3f*cap)return {tier+1,false,PickRoom};return {tier,true,PickCapFull};}
  if(w.median_ms<=1000/80.f&&w.p95_ms<=1000/60.f)return {tier+1,false,PickFast};
  return {tier,true,PickHolds};
 }

@@ -167,6 +167,17 @@ static void pure_tests(){using namespace graphics_options;
  {auto w=window(30,40,1);w.present_block_ms=.5f;d=pick_decide(3,3,false,false,w);assert(d.done&&d.reason==PickCpuBound); // timing v2: the game hardly waits in Present
   w.present_block_ms=12;d=pick_decide(3,3,false,false,w);assert(!d.done&&d.tier==3&&d.reason==PickConfirm); // GPU-bound (low-end iGPU): it waits for the GPU
   d=pick_decide(3,3,false,true,w);assert(!d.done&&d.tier==2&&d.reason==PickSlow);w.present_block_ms=-1;assert(pick_decide(3,3,false,false,w).reason==PickCpuBound);}
+ // A frame-rate limit under 55 fps waits in Present too, but holds even the fastest frames at the period: it stops as
+ // CPU-bound and never ends below Balanced. Vsync rounding a GPU-bound frame mixes in faster frames and still steps down.
+ {auto limit=[](float median,float p95,float p05,float pass,float block){PickWindow w;w.median_ms=median;w.p95_ms=p95;w.p05_ms=p05;w.pass_ms=pass;w.present_block_ms=block;return w;};
+  assert(pick_cap(limit(33.33f,33.6f,33.1f,3,20))>33&&pick_cap(limit(25,25.3f,24.8f,3,15))==25&&std::abs(pick_cap(limit(22.2f,22.4f,22,3,15))-22.222f)<.01f&&pick_cap(limit(20,20.3f,19.8f,3,10))==20);
+  d=pick_decide(3,3,false,false,limit(33.33f,33.6f,33.1f,3,20));assert(d.done&&d.tier==3&&d.reason==PickCpuBound); // 30 Hz
+  d=pick_decide(5,5,false,false,limit(33.33f,33.6f,33.1f,3,20));assert(d.done&&d.tier==5&&d.reason==PickCpuBound);
+  d=pick_decide(3,3,false,false,limit(25,25.3f,24.8f,3,15));assert(d.done&&d.tier==3&&d.reason==PickCpuBound); // 40 Hz
+  d=pick_decide(3,3,false,false,limit(33.33f,33.33f,16.7f,3,25));assert(!d.done&&d.tier==3&&d.reason==PickConfirm); // vsync rounding
+  d=pick_decide(3,3,false,true,limit(33.33f,33.33f,16.7f,3,25));assert(!d.done&&d.tier==2&&d.reason==PickSlow);
+  d=pick_decide(3,3,false,false,limit(33.33f,33.6f,-1,3,20));assert(!d.done&&d.reason==PickConfirm); // no fastest-5% reading: unchanged
+  d=pick_decide(3,3,false,false,limit(16.667f,16.8f,16.5f,3,8));assert(!d.done&&d.tier==4&&d.reason==PickRoom);} // 60 Hz climbs as before
  // Fast: climb at 80 fps, hold below it, hold after stepping down, stop at Ultra.
  d=pick_decide(3,3,false,false,window(10,12,3));assert(!d.done&&d.tier==4&&d.reason==PickFast);
  d=pick_decide(3,3,false,false,window(14,16,3));assert(d.done&&d.tier==3&&d.reason==PickHolds);

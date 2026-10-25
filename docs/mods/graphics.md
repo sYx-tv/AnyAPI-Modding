@@ -125,7 +125,10 @@ that would not help, and it never ends below Balanced that way. With AnyAPI
 0.40.2 it also checks that the game is not waiting for the graphics card (time
 spent in Present), so a slow integrated GPU still steps down. It notices a
 frame-rate cap (vsync or a limiter) and only climbs while the passes leave
-room. A slow result is measured twice before it steps down. It runs only while
+room. A limit below 55 fps (a Steam Deck 30 or 40 fps limit, Battery Boost or
+half-rate vsync) holds every frame at the same time, so it counts like the game
+setting the frame rate: Auto-pick stops instead of dropping presets that could
+not raise it. A slow result is measured twice before it steps down. It runs only while
 AnyGraphics is on and connected to the game's renderer, and stops if the
 settings cannot be saved or you choose a preset yourself. Started from
 Natural, Vibrant, Moody, Clear Day or Soft & warm it keeps that look and only
