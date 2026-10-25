@@ -13,11 +13,14 @@ cbuffer Frame : register(b0) {
     float4 previous_forward;
     float4 camera_move;      // camera position now minus last frame (m); w: focus blend (1 = snap)
     float4 params;           // depth of field, motion blur, maximum blur (px), frame index
+    float4 sea;              // x: camera height above sea level (m), y: 1 = ocean mask bound, zw unused
 };
 Texture2D colour : register(t0);  // copy of the HDR scene
 Texture2D depth : register(t1);
 Texture2D previous_focus : register(t2);  // 1x1 R32F: last frame's focus distance
 Texture2D focus_distance : register(t3);  // 1x1 R32F: this frame's (written by Focus)
+Texture2D ocean : register(t4);   // gbuffer_ocean: x or y > 0 = ocean (writes no depth); null view reads 0
+Texture2D albedo : register(t5);  // gbuffer_0: w = rim flag (vehicles, parts, characters); null view reads 0
 SamplerState linear_sampler : register(s0);
 SamplerState point_sampler : register(s1);
 
@@ -32,7 +35,19 @@ float view_z(float d) {
     float z = abs(denominator) > .000001 ? (projection.y - d * projection.w) / denominator : forward_axis.w;
     return clamp(abs(z), 0, forward_axis.w);
 }
-float scene_z(float2 uv) { return view_z(depth.SampleLevel(point_sampler, uv, 0).r); }
+// FIN-8: the ocean writes no depth, so ocean pixels take the sea plane (y = 0) along their view ray.
+// r has forward component 1, so -height / r.y is the plane's view distance.
+float scene_z(float2 uv) {
+    float z = view_z(depth.SampleLevel(point_sampler, uv, 0).r);
+    if (sea.y > .5) {
+        float2 s = ocean.SampleLevel(point_sampler, uv, 0).xy;
+        float2 ndc = uv * float2(2, -2) + float2(-1, 1);
+        float ry = forward_axis.y + right_axis.y * ndc.x * right_axis.w + up_axis.y * ndc.y * up_axis.w;
+        if ((s.x > 0 || s.y > 0) && ry < -.0001 && sea.x > 0) z = min(z, sea.x / -ry);
+    }
+    return z;
+}
+float karis(float3 c) { return 1 / (1 + dot(c, float3(.2126, .7152, .0722)) * .25); }
 float noise(float2 p) { return frac(52.9829189 * frac(dot(p, float2(.06711056, .00583715)))); }
 // Blur radius in pixels for a pixel at distance z.
 float circle(float z, float focus) { return min(params.x * abs(1 / max(focus, .5) - 1 / max(z, .5)) * metrics.w * .02, params.z); }
@@ -57,7 +72,8 @@ float4 Lens(Varying v) : SV_Target {
     float4 scene = colour.SampleLevel(point_sampler, v.uv, 0);
     float z = scene_z(v.uv);
     float focus = clamp(focus_distance.Load(int3(0, 0, 0)).r, 1, 300);
-    float coc = params.x > 0 ? circle(z, focus) : 0;
+    // FIN-5: nothing within 1.5 m gets a blur circle (held items, hands, cockpits), ramping in to 2.5 m.
+    float coc = params.x > 0 ? circle(z, focus) * saturate((z - 1.5) / 1.0) : 0;
     float2 velocity = 0;
     if (params.y > 0 && previous_right.w > 0 && z > 1) {
         float2 ndc = v.uv * float2(2, -2) + float2(-1, 1);
@@ -69,13 +85,17 @@ float4 Lens(Varying v) : SV_Target {
             float pixels = length(velocity * metrics.zw);
             if (pixels > params.z) velocity *= params.z / pixels;
             // Fade out close to the camera, where cockpits and vehicles ride along.
-            velocity *= saturate((z - 1.5) / 4.5);
-            if (pixels * saturate((z - 1.5) / 4.5) < .5) velocity = 0;
+            // K29 interim: rim-flagged pixels (vehicles, parts, characters) ride with the camera
+            // within 25 m, fading back to full blur by 40 m.
+            float keep = saturate((z - 1.5) / 4.5) * (1 - saturate(albedo.SampleLevel(point_sampler, v.uv, 0).w) * (1 - smoothstep(25, 40, z)));
+            velocity *= keep;
+            if (pixels * keep < .5) velocity = 0;
         }
     }
     if (coc < .5 && all(velocity == 0)) return scene;
     float jitter = noise(v.position.xy + params.w * 5.588238), angle = jitter * 6.2831853;
-    float4 sum = float4(scene.rgb, 1); const int taps = 16;
+    // FIN-6: Karis weights on the centre and every tap, so one bright tap (sun disc, lamp) cannot dominate.
+    float k0 = karis(scene.rgb); float4 sum = float4(scene.rgb * k0, k0); const int taps = 16;
     [loop] for (int i = 0; i < taps; ++i) {
         float t = (i + jitter) / taps, a = angle + i * 2.39996323;
         float2 offset = float2(cos(a), sin(a)) * sqrt(t) * coc * metrics.xy + velocity * (t - .5);
@@ -83,7 +103,8 @@ float4 Lens(Varying v) : SV_Target {
         float sz = scene_z(uv);
         // A sharp foreground sample must not smear over the pixel; held items never blur in.
         float w = sz < 1.5 ? 0 : sz + .5 >= z ? 1 : saturate(circle(sz, focus) / max(length(offset * metrics.zw), .5));
-        sum += float4(colour.SampleLevel(linear_sampler, uv, 0).rgb, 1) * w;
+        float3 c = colour.SampleLevel(linear_sampler, uv, 0).rgb;
+        sum += float4(c, 1) * (w * karis(c));
     }
     return float4(sum.rgb / sum.w, scene.a);
 }

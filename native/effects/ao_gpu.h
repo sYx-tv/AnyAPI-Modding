@@ -11,10 +11,11 @@
 // game's own SSAO and before the composite that consumes it.
 namespace scene_ao_gpu {
 using Microsoft::WRL::ComPtr;
+struct Input {ID3D12Resource* resource{};D3D12_RESOURCE_STATES state{};};
 inline D3D12_RESOURCE_BARRIER barrier(ID3D12Resource* resource,D3D12_RESOURCE_STATES from,D3D12_RESOURCE_STATES to){D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,from,to};return b;}
 class Gpu {
  ComPtr<ID3D12Device> device;ComPtr<ID3D12CommandQueue> queue;ComPtr<ID3D12RootSignature> root;ComPtr<ID3D12PipelineState> occlusion_pso,resolve_pso;
- ComPtr<ID3D12Resource> raw;D3D12_RESOURCE_STATES raw_state{D3D12_RESOURCE_STATE_COMMON};std::array<ID3D12Resource*,3> inputs{};
+ ComPtr<ID3D12Resource> raw;D3D12_RESOURCE_STATES raw_state{D3D12_RESOURCE_STATE_COMMON};std::array<ComPtr<ID3D12Resource>,3> inputs{};bool used{};
  ComPtr<ID3D12DescriptorHeap> srv,rtv;UINT width{},height{},srv_stride{},rtv_stride{};DXGI_FORMAT target_format{};HRESULT last_error{};gpu_timer::Timer timer;
  bool checked(HRESULT h){last_error=h;return SUCCEEDED(h);}
  D3D12_CPU_DESCRIPTOR_HANDLE cpu(UINT i){auto h=srv->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(i)*srv_stride;return h;}
@@ -26,7 +27,7 @@ class Gpu {
   D3D12_DESCRIPTOR_RANGE range{};range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;range.NumDescriptors=4;
   D3D12_ROOT_PARAMETER params[2]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants={0,0,24};params[0].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[1].DescriptorTable={1,&range};params[1].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
   D3D12_STATIC_SAMPLER_DESC samplers[2]{};for(UINT i=0;i<2;++i){auto& s=samplers[i];s.Filter=i?D3D12_FILTER_MIN_MAG_MIP_POINT:D3D12_FILTER_MIN_MAG_MIP_LINEAR;s.AddressU=s.AddressV=s.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;s.MaxLOD=D3D12_FLOAT32_MAX;s.ShaderRegister=i;s.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
-  D3D12_ROOT_SIGNATURE_DESC rd{2,params,2,samplers,D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};ComPtr<ID3DBlob> code,error;if(!checked(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&code,&error))||!checked(device->CreateRootSignature(0,code->GetBufferPointer(),code->GetBufferSize(),IID_PPV_ARGS(&root))))return false;
+  D3D12_ROOT_SIGNATURE_DESC rd{2,params,2,samplers,D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS|D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS|D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS|D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS};ComPtr<ID3DBlob> code,error;if(!checked(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&code,&error))||!checked(device->CreateRootSignature(0,code->GetBufferPointer(),code->GetBufferSize(),IID_PPV_ARGS(&root))))return false;
   if(!pipeline(occlusion_pso,ao_bytecode::Occlusion,DXGI_FORMAT_R16G16_FLOAT)||!pipeline(resolve_pso,ao_bytecode::Resolve,target))return false;
   D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=4;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;if(!checked(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&srv))))return false;
   hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=2;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_NONE;if(!checked(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&rtv))))return false;
@@ -36,18 +37,20 @@ class Gpu {
   view(3,raw.Get(),DXGI_FORMAT_R16G16_FLOAT);device->CreateRenderTargetView(raw.Get(),nullptr,output(0));timer.create(device.Get(),queue.Get());return true;
  }
 public:
- struct Input {ID3D12Resource* resource{};D3D12_RESOURCE_STATES state{};};
+ using Input=scene_ao_gpu::Input;
  HRESULT error()const{return last_error;}
  double gpu_milliseconds()const{return timer.milliseconds();}
+ bool loaded()const{return bool(raw);}
+ bool current(ID3D12Device* d,ID3D12CommandQueue* q,const D3D12_RESOURCE_DESC& target)const{return raw&&device.Get()==d&&queue.Get()==q&&width==target.Width&&height==target.Height;}
+ void release(){if(device)idle();*this=Gpu{};}
  // target: the game's R8 SSAO target; inputs: depth (D32), normals and albedo (RGBA16F).
  bool ensure(ID3D12Device* d,ID3D12CommandQueue* q,const D3D12_RESOURCE_DESC& target){if(!d||!q||target.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||target.SampleDesc.Count!=1||target.Width<16||target.Height<16||target.Width>8192||target.Height>8192||!(target.Flags&D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)||(target.Format!=DXGI_FORMAT_R8_UNORM&&target.Format!=DXGI_FORMAT_R8_TYPELESS))return false;
-  if(raw&&device.Get()==d&&queue.Get()==q&&width==target.Width&&height==target.Height)return true;if(device&&!idle())return false;Gpu next;if(!next.initialize(d,q,UINT(target.Width),target.Height,DXGI_FORMAT_R8_UNORM)){last_error=next.error();return false;}*this=std::move(next);return true;}
+  if(current(d,q,target))return true;if(device&&!idle()&&device.Get()==d)return false;Gpu next;if(!next.initialize(d,q,UINT(target.Width),target.Height,DXGI_FORMAT_R8_UNORM)){last_error=next.error();return false;}*this=std::move(next);return true;}
  bool record(ID3D12GraphicsCommandList* list,Input target,Input depth,Input normals,Input albedo,const Frame& f){
   if(!raw||!list||!target.resource||!depth.resource||!normals.resource||!albedo.resource||!valid(f))return false;
   auto same=[&](ID3D12Resource* r,DXGI_FORMAT a,DXGI_FORMAT b){auto d=r->GetDesc();return d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&d.Width==width&&d.Height==height&&d.SampleDesc.Count==1&&!(d.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)&&(d.Format==a||d.Format==b);};
   if(!same(target.resource,DXGI_FORMAT_R8_UNORM,DXGI_FORMAT_R8_TYPELESS)||!same(depth.resource,DXGI_FORMAT_R32_TYPELESS,DXGI_FORMAT_R32_FLOAT)||!same(normals.resource,DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_R16G16B16A16_TYPELESS)||!same(albedo.resource,DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_R16G16B16A16_TYPELESS))return false;
-  std::array<ID3D12Resource*,3> now{depth.resource,normals.resource,albedo.resource};
-  if(now!=inputs){if(inputs[0]&&!idle())return false;inputs=now;view(0,depth.resource,DXGI_FORMAT_R32_FLOAT);view(1,normals.resource,DXGI_FORMAT_R16G16B16A16_FLOAT);view(2,albedo.resource,DXGI_FORMAT_R16G16B16A16_FLOAT);}
+  if(inputs[0].Get()!=depth.resource||inputs[1].Get()!=normals.resource||inputs[2].Get()!=albedo.resource){if(used&&!idle())return false;inputs[0]=depth.resource;inputs[1]=normals.resource;inputs[2]=albedo.resource;view(0,depth.resource,DXGI_FORMAT_R32_FLOAT);view(1,normals.resource,DXGI_FORMAT_R16G16B16A16_FLOAT);view(2,albedo.resource,DXGI_FORMAT_R16G16B16A16_FLOAT);}
   timer.begin(list);
   // Borrow the inputs as shader resources and the SSAO target as a render target.
   D3D12_RESOURCE_BARRIER begin[5];UINT n=0;const auto read=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -63,7 +66,7 @@ public:
   timer.end(list);
   n=0;for(auto* i:{&depth,&normals,&albedo})if(i->state!=read)begin[n++]=barrier(i->resource,read,i->state);
   if(target.state!=D3D12_RESOURCE_STATE_RENDER_TARGET)begin[n++]=barrier(target.resource,D3D12_RESOURCE_STATE_RENDER_TARGET,target.state);
-  if(n)list->ResourceBarrier(n,begin);return true;
+  if(n)list->ResourceBarrier(n,begin);used=true;return true;
  }
 };
 }

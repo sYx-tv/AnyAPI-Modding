@@ -12,12 +12,15 @@ cbuffer Frame : register(b0) {
     float4 sun_colour; // rgb light colour, glare strength
     float4 grading;    // tonemap (0 game, 1 filmic, 2 clean, 3 soft film), look 0..6, look strength, manual stops
     float4 exposure;   // eye adaptation (1/0), fast blend, slow blend, max stops
-    float4 extras;     // bloom mix, vignette, pass texel size x, y
+    float4 extras;     // bloom mix (Up: level weight r), vignette, pass texel size x, y
+    float4 tuning;     // bloom falloff r (1 = V2), tone revision, dither (1/0), sun visibility blend per frame
 };
 Texture2D image : register(t0);
 Texture2D second : register(t1);
 Texture2D adapted : register(t2); // 1x1: fast log2 luma, slow log2 luma, sun visibility, valid
 Texture2D depth : register(t3);
+Texture2D normals : register(t4); // Adapt only: gbuffer_1, w > .5 = game clouds (null view: 0)
+Texture2D ocean : register(t5);   // Adapt only: gbuffer_ocean, x or y > 0 = ocean (null view: 0)
 SamplerState linear_sampler : register(s0);
 SamplerState point_sampler : register(s1);
 
@@ -43,21 +46,29 @@ float4 Luma(Varying v) : SV_Target {
 // One pixel: averages the grid, blends a fast and a slow adapted value and
 // measures how much of the sun's disc is open sky (reversed depth: sky is 0).
 float4 Adapt(Varying v) : SV_Target {
+    // 32x18 bilinear taps on texel corners: each tap averages a 2x2 block, so the ratio is unchanged.
     float2 sum = 0;
-    [loop] for (int y = 0; y < 36; ++y) [loop] for (int x = 0; x < 64; ++x) sum += image.Load(int3(x, y, 0)).rg;
+    [loop] for (int y = 0; y < 18; ++y) [unroll] for (int x = 0; x < 32; ++x)
+        sum += image.SampleLevel(linear_sampler, float2(2 * x + 1, 2 * y + 1) / float2(64, 36), 0).rg;
     float l = sum.x / max(sum.y, .0001);
     float4 previous = second.Load(int3(0, 0, 0));
-    float visibility = 0;
+    float open = 0, inside = 0;
     if (sun_screen.z > .5) {
         [unroll] for (int i = 0; i < 16; ++i) {
             float a = i * 2.39996323, r = .004 + .012 * sqrt((i + .5) / 16);
             float2 uv = sun_screen.xy + float2(cos(a), sin(a)) * r * float2(metrics.w * metrics.x, 1);
-            bool inside = all(uv >= 0) && all(uv <= 1);
-            visibility += inside && depth.SampleLevel(point_sampler, uv, 0).r <= 0 ? 1. / 16 : 0;
+            if (all(uv >= 0) && all(uv <= 1)) {
+                float2 sea = ocean.SampleLevel(point_sampler, uv, 0).xy;
+                bool sky = depth.SampleLevel(point_sampler, uv, 0).r <= 0 && sea.x <= 0 && sea.y <= 0
+                    && normals.SampleLevel(point_sampler, uv, 0).w <= .5;   // sky.hlsl:144 plus game clouds
+                inside += 1; open += sky ? 1 : 0;
+            }
         }
     }
-    if (previous.w < .5) return float4(l, l, visibility, 1);
-    return float4(lerp(previous.x, l, exposure.y), lerp(previous.y, l, exposure.z), lerp(previous.z, visibility, .35), 1);
+    // Off screen (no tap inside) the last value is held, so the halo does not pop at the edge.
+    if (previous.w < .5) return float4(l, l, inside > 0 ? open / inside : 0, 1);
+    float visibility = inside > 0 ? open / inside : previous.z;
+    return float4(lerp(previous.x, l, exposure.y), lerp(previous.y, l, exposure.z), lerp(previous.z, visibility, tuning.w), 1);
 }
 
 // --- Bloom -------------------------------------------------------------------
@@ -87,7 +98,7 @@ float4 Up(Varying v) : SV_Target {
         + image.SampleLevel(linear_sampler, uv + float2(0, -t.y), 0).rgb + image.SampleLevel(linear_sampler, uv + float2(0, t.y), 0).rgb) * 2;
     s += image.SampleLevel(linear_sampler, uv + float2(-t.x, -t.y), 0).rgb + image.SampleLevel(linear_sampler, uv + float2(t.x, -t.y), 0).rgb
         + image.SampleLevel(linear_sampler, uv + float2(-t.x, t.y), 0).rgb + image.SampleLevel(linear_sampler, uv + float2(t.x, t.y), 0).rgb;
-    return float4(s / 16, 1);
+    return float4(s / 16 * extras.x, 1);   // extras.x: level weight r (1 = V2)
 }
 
 // --- Tone curves ---------------------------------------------------------------
@@ -100,7 +111,7 @@ float3 aces_inverse(float3 y) {
 }
 // AgX (Troy Sobotka), polynomial fit by Benjamin Wrensch; returns display-
 // encoded values. A gentle "punchy" look keeps the game's saturated palette.
-float3 agx(float3 c) {
+float3 agx(float3 c, bool contrast) {
     const float3x3 inset = float3x3(.842479062253094, .0423282422610123, .0423756549057051,
                                     .0784335999999992, .878468636469772, .0784336,
                                     .0792237451477643, .0791661274605434, .879142973793104);
@@ -109,6 +120,8 @@ float3 agx(float3 c) {
                                      -.0990297440797205, -.0989611768448433, 1.15107367264116);
     const float low = -12.47393, high = 4.026069;
     float3 x = saturate((clamp(log2(max(mul(c, inset), 1e-10)), low, high) - low) / (high - low));
+    // tone_revision 1: log-space contrast 1.3 around mid grey (log2(.18) encodes to 10 / 16.5).
+    if (contrast) x = saturate(.6060606 + (x - .6060606) * 1.3);
     float3 x2 = x * x, x4 = x2 * x2;
     x = 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + .4298 * x2 + .1191 * x - .00232;
     x = pow(saturate(x), 1.1); float l = dot(x, luma709); x = l + 1.18 * (x - l);
@@ -135,7 +148,11 @@ float3 uchimura(float3 x) {
 }
 float3 soft_film(float3 x) {
     float y = dot(x, luma709), t = dot(uchimura(y.xxx), luma709) / max(y, 1e-5);
-    return pow(saturate(lerp(uchimura(x), x * t, .5)), 1 / 2.2);
+    // FIN-9: limit the luminance-preserving half to the curve of the brightest input channel,
+    // so saturated highlights roll off instead of clipping. Greys are unchanged (ml == uchimura(mx)).
+    float3 lp = x * t; float mx = max(x.r, max(x.g, x.b)), ml = max(lp.r, max(lp.g, lp.b));
+    if (ml > 0) lp *= min(1, uchimura(mx.xxx).x / ml);
+    return pow(saturate(lerp(uchimura(x), lp, .5)), 1 / 2.2);
 }
 // The game's post-ACES display steps (luma weights assumed Rec.709).
 float3 game_display(float3 l) {
@@ -159,10 +176,18 @@ static const float3 shadow_tint[7] = {float3(0, 0, 0), float3(.012, .004, -.008)
 static const float3 highlight_tint[7] = {float3(0, 0, 0), float3(.02, .008, -.015), float3(-.012, 0, .015), float3(.04, .012, -.03), float3(.01, 0, -.01), float3(.01, .005, -.005), float3(.024, .012, -.018)};
 static const float lift[7] = {0, 0, 0, 0, -.012, 0, .01};
 
+// Static triangular dither of about 1 LSB of the 8-bit output (not frame-indexed).
+float noise(float2 p) { return frac(52.9829189 * frac(dot(p, float2(.06711056, .00583715)))); }
 float4 Composite(Varying v) : SV_Target {
     float4 source = image.Load(int3(v.position.xy, 0));
     float3 x = source.rgb;
-    if (extras.x > 0) x = lerp(x, second.SampleLevel(linear_sampler, v.uv, 0).rgb / 6, extras.x);
+    if (extras.x > 0) {
+        float3 b = second.SampleLevel(linear_sampler, v.uv, 0).rgb;
+        // bloom[0] = sum of r^n * level n, so normalise by sum r^n (6 when r = 1, as in V2).
+        float r = tuning.x;
+        b = r >= 1 ? b / 6 : b * (1 - r) / (1 - r * r * r * r * r * r);
+        x = lerp(x, b, extras.x);
+    }
     float4 a = adapted.Load(int3(0, 0, 0));
     // Sun glare: a soft halo, a bright core and six faint streaks, scaled by
     // how much of the sun is unobstructed sky.
@@ -181,7 +206,7 @@ float4 Composite(Varying v) : SV_Target {
     x *= lerp(1, white_balance[look], strength);
     float3 d;
     if (grading.x < .5) d = game_display(aces(.85 * x));
-    else if (grading.x < 1.5) d = agx(x * 1.1);
+    else if (grading.x < 1.5) { bool r1 = tuning.y > .5; d = agx(x * (r1 ? 1.2 : 1.1), r1); }
     else d = grading.x < 2.5 ? pow(saturate(neutral(x * 1.2)), 1 / 2.2) : soft_film(x * 1.25);
     // Display-domain grading.
     float y = dot(d, luma709);
@@ -192,6 +217,10 @@ float4 Composite(Varying v) : SV_Target {
     float shadows = 1 - smoothstep(0, .5, y), highlights = smoothstep(.5, 1, y);
     d += (shadow_tint[look] * shadows + highlight_tint[look] * highlights) * strength;
     if (extras.y > 0) { float2 c = v.uv - .5; d *= 1 - extras.y * .5 * smoothstep(.15, .75, dot(c, c) * 2); }
+    if (tuning.z > .5) {
+        float n = noise(v.position.xy) + noise(v.position.xy + float2(37.3, 17.1)) - 1;   // triangular, -1..1
+        d += n / 255 * saturate(d * 255) * saturate((1 - d) * 255);   // never lifts black or clips white
+    }
     // Write the HDR value the game's own tone mapping turns into d.
     return float4(aces_inverse(game_display_inverse(max(d, 0))) / .85, source.a);
 }

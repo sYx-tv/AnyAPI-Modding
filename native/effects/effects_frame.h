@@ -3,22 +3,29 @@
 #include <cmath>
 #include <cstdint>
 #include "../lighting/native_frame.h"
+#include "../anyapi_scene_frame.h"
 // Root constants of the scene effects pass; layout matches cbuffer Frame in
-// effects.hlsl. extras.zw are rewritten per draw with that pass's texel size.
+// effects.hlsl. extras are rewritten per draw (Up: level weight; zw: texel size).
+// tuning: bloom falloff r (1 = V2), tone revision (0/1), dither (0/1), sun
+// visibility blend per frame (V2: .35). The defaults give V2's output.
 namespace scene_effects_gpu {
-struct Frame {std::array<float,4> metrics{},sun_screen{},sun_colour{},grading{},exposure{},extras{};};
-static_assert(sizeof(Frame)==24*4);
+struct Frame {std::array<float,4> metrics{},sun_screen{},sun_colour{},grading{},exposure{},extras{},tuning{1,0,0,.35f};};
+static_assert(sizeof(Frame)==28*4);
 inline bool finite(const std::array<float,4>& a){for(auto v:a)if(!std::isfinite(v))return false;return true;}
 inline bool valid(const Frame& f){
- return finite(f.metrics)&&finite(f.sun_screen)&&finite(f.sun_colour)&&finite(f.grading)&&finite(f.exposure)&&finite(f.extras)&&f.metrics[2]>=16&&f.metrics[3]>=16
+ return finite(f.metrics)&&finite(f.sun_screen)&&finite(f.sun_colour)&&finite(f.grading)&&finite(f.exposure)&&finite(f.extras)&&finite(f.tuning)&&f.metrics[2]>=16&&f.metrics[3]>=16
+  &&f.tuning[0]>=.5f&&f.tuning[0]<=1&&(f.tuning[1]==0||f.tuning[1]==1)&&(f.tuning[2]==0||f.tuning[2]==1)&&f.tuning[3]>=0&&f.tuning[3]<=1
   &&f.grading[0]>=0&&f.grading[0]<=3&&f.grading[1]>=0&&f.grading[1]<=6&&f.grading[2]>=0&&f.grading[2]<=1&&std::abs(f.grading[3])<=3
   &&f.exposure[1]>=0&&f.exposure[1]<=1&&f.exposure[2]>=0&&f.exposure[2]<=1&&f.exposure[3]>=0&&f.exposure[3]<=4&&f.extras[0]>=0&&f.extras[0]<=1&&f.extras[1]>=0&&f.extras[1]<=1
   &&f.sun_colour[0]>=0&&f.sun_colour[1]>=0&&f.sun_colour[2]>=0&&f.sun_colour[0]<=10000&&f.sun_colour[1]<=10000&&f.sun_colour[2]<=10000&&f.sun_colour[3]>=0&&f.sun_colour[3]<=2;
 }
 // Native inputs: HDR target, depth, main camera, sun direction and colour.
 struct Native {volumetric::NativeTarget color,depth;float right[4]{},up[4]{},forward[4]{},sun[3]{},sun_colour[3]{};uint32_t failure{};};
-template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,Native& out,Read read){
- out.failure=1;unsigned char special[4]{};if(!read(scene+0x668,special,4)||special[0]||special[1]||special[2]||special[3])return false;
+// K25: the metering chain (Luma, Adapt, readback) runs only when something reads it. The runtime uses the same test.
+inline bool meters(const Frame& f){return f.exposure[0]>.5f||f.sun_colour[3]>0;}
+namespace detail {
+// Everything after the view flags: failure 2 targets, 3 camera vectors and matrix, 4 projection, 5 sun.
+template<class Read> bool capture_body(uintptr_t renderer,uintptr_t scene,Native& out,Read read){
  out.failure=2;uintptr_t color{},depth{};if(!read(renderer+0x3c0,&color,8)||!read(renderer+0x218,&depth,8)||!volumetric::target(color,out.color,read)||!volumetric::target(depth,out.depth,read)||out.color.srv_format!=10||out.depth.srv_format!=41||out.color.width!=out.depth.width||out.color.height!=out.depth.height)return false;
  out.failure=3;uintptr_t main=scene+0x20;double v[3]{},matrix[16]{};
  auto vector=[&](uintptr_t address,float* destination){if(!read(address,v,sizeof(v)))return false;for(int i=0;i<3;++i){if(!std::isfinite(v[i])||std::abs(v[i])>1e8)return false;destination[i]=float(v[i]);}return true;};
@@ -27,6 +34,19 @@ template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,Native& out
  out.failure=5;float m=0;for(auto s:out.sun)m+=s*s;if(m<.01f)return false;for(auto& s:out.sun)s=-s/std::sqrt(m);
  for(auto c:out.sun_colour)if(c<0||c>10000)return false;
  out.failure=0;return true;
+}
+}
+// Legacy contract (sky and water still use it): any non-zero byte at scene+0x668..0x66b fails with failure 1.
+template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,Native& out,Read read){
+ out.failure=1;unsigned char special[4]{};if(!read(scene+0x668,special,4)||special[0]||special[1]||special[2]||special[3])return false;
+ return detail::capture_body(renderer,scene,out,read);
+}
+// K03: reports the view flags (scene_frame::VIEW_*) instead of failing on them; each pass decides.
+// Unreadable flags (a failed read or any byte above 1) fail with failure 1, as today.
+template<class Read> bool capture_view(uintptr_t renderer,uintptr_t scene,Native& out,Read read,uint32_t& view){
+ out.failure=1;view=scene_frame::VIEW_UNREADABLE;unsigned char b[4]{};if(!read(scene+0x668,b,4))return false;
+ uint32_t v=0;for(uint32_t i=0;i<4;++i){if(b[i]>1)return false;if(b[i])v|=1u<<i;}
+ view=v;return detail::capture_body(renderer,scene,out,read);
 }
 // Sun position on screen: uv, whether glare can show, and the sun's height.
 inline std::array<float,4> sun_screen(const Native& n){
