@@ -56,7 +56,7 @@ static History history;static scene_jitter::State jitter;static uint32_t jitter_
 static constexpr float history_weights[]={.85f,.88f,.9f,.92f,.94f};
 // AA-1: renderer and scene_renderer of the frame being rendered on this thread.
 // renderer.render builds and records one stack scene_render on one thread
-// (renderer.gc:565-568), so the scene hook's pair is the postprocess's pair.
+// (0.1.27 game code), so the scene hook's pair is the postprocess's pair.
 // Cleared after the frame's postprocess (record()).
 static thread_local void* frame_renderer{};static thread_local void* frame_scene{};static thread_local bool inner_recorded{};
 static scene_jitter::OverlayGate overlay;
@@ -155,7 +155,7 @@ static void record_scene(void* renderer,void* scene,bool inner,bool overlay_now)
 // renderer._record_commands_postprocess (code end 5944, call cell 15; self is
 // scene_render.m_renderer_postprocess = scene+0x2450). It returns before the
 // editor, placement and inspection overlays are drawn into m_target_overlay and
-// composited into the swapchain (renderer.gc:4608-4671).
+// composited into the swapchain (0.1.27 game code).
 static anyapi_runtime::CallCellHook postprocess_cell;
 static std::atomic<bool> inner_available{};
 using PostprocessRender=uintptr_t(*)(void*,void*);

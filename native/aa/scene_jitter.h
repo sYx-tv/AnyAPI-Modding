@@ -14,7 +14,7 @@ struct State {double written[2][16]{};double applied[2]{};bool active{};};
 // copy from last frame can be detected exactly and un-jittered first.
 inline void shift(double* m,double x,double y){for(int c=0;c<4;++c){m[c*4]+=x*m[c*4+3];m[c*4+1]+=y*m[c*4+3];}}
 // K03: scene+0x668..0x66b are m_is_underground, m_is_underwater, m_is_nightvision
-// and m_is_thermal (render_scene.gc), not preview flags. Bit i of bypass_mask
+// and m_is_thermal (render_scene, 0.1.27 game code), not preview flags. Bit i of bypass_mask
 // refuses the frame while byte i is set; a byte above 1 always refuses. 0xff is
 // the 0.40.1 rule (any flag); the AA runtime passes scene_frame::VIEW_SPECIAL_VISION.
 inline bool view_refused(const unsigned char* flags,uint32_t bypass_mask){for(uint32_t i=0;i<4;++i){if(flags[i]>1)return true;if(flags[i]&&(bypass_mask>>i&1))return true;}return false;}
@@ -42,7 +42,7 @@ inline bool unjitter_view_projection(double* vp){auto s=current;if(!s||!s->activ
 // AA-1: the editor, placement and inspection overlays are drawn after the
 // postprocess with this camera. scene_renderer.m_renderer_editor_overlay,
 // _unclipped, _text, _text_background, _fluid_gradient, _fluid_gradient_volume
-// and _grid (render_scene.gc, +0x25b8 step 0x28) are vector<element>s, whose
+// and _grid (render_scene, +0x25b8 step 0x28) are vector<element>s, whose
 // count is at +0xc (atlas core-runtime: buffer +0, offset +8, count +0xc).
 constexpr uintptr_t overlay_first=0x25b8,overlay_stride=0x28,overlay_count_at=0xc;
 constexpr uint32_t overlay_renderers=7,overlay_hold_frames=30;
