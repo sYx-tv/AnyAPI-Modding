@@ -30,15 +30,16 @@ static void STDMETHODCALLTYPE constant(ID3D12GraphicsCommandList* l,UINT i,UINT 
 static void STDMETHODCALLTYPE constants(ID3D12GraphicsCommandList* l,UINT i,UINT n,const void* p,UINT offset){if(auto s=capture(l))s->constants(i,n,p,offset);chained<void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,const void*,UINT)>(l,36)(l,i,n,p,offset);}
 // 0.1.27: the graphics context getter returns RVA 0x5e23d0 and the current command list is at +0x2650
 // (0.1.25: 0x5e5340 and +0x2648). See docs/development/scene-antialiasing.md. The vtable check only proves the
-// pointer is a COM object from a system DLL, so a stale offset cannot hook game memory; a neighbouring D3D12 object
-// would still pass, so recheck the offset on every game update.
+// pointer is a COM object from a module other than the exe, so a stale offset cannot hook game memory; a neighbouring
+// D3D12 object would still pass, so recheck the offset on every game update.
 // K01: two in-process reads per call (the pointer is never cached across hooks); the
 // VirtualQuery check runs only when the pointer or its vtable changes.
 static thread_local uintptr_t checked_list{},checked_vtable{};
 static ID3D12GraphicsCommandList* command_list(){static const uintptr_t exe=uintptr_t(GetModuleHandleW(nullptr));uintptr_t p{},vt{};
  if(!scene_frame::read_value(exe+0x5e23d0+0x2650,p)||!p||!scene_frame::read_value(p,vt)||!vt)return nullptr;if(p==checked_list&&vt==checked_vtable)return (ID3D12GraphicsCommandList*)p;
  uintptr_t method{};MEMORY_BASIC_INFORMATION region{};if(!scene_frame::read_value(vt,method)||!method||!VirtualQuery((void*)method,&region,sizeof(region))||region.State!=MEM_COMMIT||region.Type!=MEM_IMAGE||uintptr_t(region.AllocationBase)==exe)return nullptr;
- checked_list=p;checked_vtable=vt;return (ID3D12GraphicsCommandList*)p;}
+ // native-1: the list's module (D3D12Core, or a wrapper layer that also wraps the resources) is where resources may come from.
+ scene_frame::trust_module(method);checked_list=p;checked_vtable=vt;return (ID3D12GraphicsCommandList*)p;}
 // K23: platform::hook_slot returns at once for a slot it already hooked and never
 // re-patches it, so the 13 calls are skipped while the list's vtable is the one hooked.
 static uintptr_t hooked_vtable{};

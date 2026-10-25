@@ -94,15 +94,46 @@ inline uint32_t view_flags(uintptr_t scene) {
 
 // ---------------------------------------------------------------- K02 resources
 // True if *resource's vtable method 10 (ID3D12Resource::GetDesc) lies in
-// committed, executable MEM_IMAGE memory of a module that is not the game exe.
-// D3D12Core.dll, d3d12.dll (Wine/vkd3d) and wrapper layers (ReShade, RenderDoc,
-// PIX) all pass. Validated vtables are kept in an 8-entry cache, so the common
-// case is one read and 8 compares. No named-module lookup on this path.
+// committed, executable MEM_IMAGE memory of a trusted module that is not the game
+// exe: D3D12Core.dll, d3d12.dll (Wine/vkd3d), or a module trust_module() added,
+// which is the module of the game's command list (a wrapper layer such as
+// RenderDoc, PIX or the debug layer wraps lists and resources together). Any
+// other DLL (a driver, DXGI, another plugin) is rejected, so a stale pointer is
+// never called through slot 7 (GetDevice). Validated vtables are kept in an
+// 8-entry cache, so the common case is one read and 8 compares. On a miss the
+// named-module lookup runs at most once every 2 s, only while a base is unknown.
 namespace detail {
 inline std::atomic<uintptr_t> vtables[8]{};
 inline std::atomic<uint32_t> vtable_next{0};
 inline std::atomic<uintptr_t> exe_base{0};
 inline std::atomic<uintptr_t> modules_logged[8]{};
+// Modules whose objects may be D3D12 resources. Bases stay fixed while a module is
+// loaded, so reset_resource_cache() keeps them.
+inline std::atomic<uintptr_t> trusted[8]{};
+inline std::atomic<uintptr_t> runtime_bases[2]{};    // D3D12Core.dll, d3d12.dll
+inline std::atomic<uint64_t> runtime_query_at{0};    // GetTickCount64 of the next lookup while a base is unknown
+inline bool add_trusted(uintptr_t base) {
+ for (auto& t : trusted) {
+  uintptr_t seen = t.load(std::memory_order_relaxed);
+  if (seen == base) return true;
+  if (!seen && t.compare_exchange_strong(seen, base)) return true;
+  if (seen == base) return true;
+ }
+ return false;  // full: 8 distinct wrapper modules
+}
+inline bool trusted_base(uintptr_t base) {
+ if (!base) return false;
+ for (auto& t : trusted) if (t.load(std::memory_order_relaxed) == base) return true;
+ if (!runtime_bases[0].load(std::memory_order_relaxed) || !runtime_bases[1].load(std::memory_order_relaxed)) {
+  uint64_t now = GetTickCount64();
+  if (now >= runtime_query_at.load(std::memory_order_relaxed)) {
+   runtime_query_at.store(now + 2000, std::memory_order_relaxed);
+   runtime_bases[0].store(uintptr_t(GetModuleHandleW(L"D3D12Core.dll")), std::memory_order_relaxed);
+   runtime_bases[1].store(uintptr_t(GetModuleHandleW(L"d3d12.dll")), std::memory_order_relaxed);
+  }
+ }
+ return base == runtime_bases[0].load(std::memory_order_relaxed) || base == runtime_bases[1].load(std::memory_order_relaxed);
+}
 inline bool executable(DWORD p) {
  return (p & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) && !(p & (PAGE_GUARD | PAGE_NOACCESS));
 }
@@ -123,6 +154,16 @@ inline void note_module(uintptr_t base) {  // one log line per new module that v
  }
 }
 }  // namespace detail
+// Trusts the module holding code (the game command list's method 0): its objects may be D3D12 resources. The game exe
+// and non-image memory are never trusted. Returns false when the code is not in a module or the list is full.
+inline bool trust_module(uintptr_t code) {
+ MEMORY_BASIC_INFORMATION m{};
+ if (!code || !VirtualQuery((void*)code, &m, sizeof(m)) || m.State != MEM_COMMIT || m.Type != MEM_IMAGE || !m.AllocationBase) return false;
+ uintptr_t exe = detail::exe_base.load(std::memory_order_relaxed);
+ if (!exe) { exe = uintptr_t(GetModuleHandleW(nullptr)); detail::exe_base.store(exe, std::memory_order_relaxed); }
+ if (uintptr_t(m.AllocationBase) == exe) return false;
+ return detail::add_trusted(uintptr_t(m.AllocationBase));
+}
 inline bool resource_valid(uintptr_t resource) {
  uintptr_t vtable{};
  if (!read_value(resource, vtable) || !vtable) return false;
@@ -132,7 +173,7 @@ inline bool resource_valid(uintptr_t resource) {
      m.Type != MEM_IMAGE || !detail::executable(m.Protect)) return false;
  uintptr_t exe = detail::exe_base.load(std::memory_order_relaxed);
  if (!exe) { exe = uintptr_t(GetModuleHandleW(nullptr)); detail::exe_base.store(exe, std::memory_order_relaxed); }
- if (uintptr_t(m.AllocationBase) == exe) return false;
+ if (uintptr_t(m.AllocationBase) == exe || !detail::trusted_base(uintptr_t(m.AllocationBase))) return false;
  detail::vtables[detail::vtable_next.fetch_add(1, std::memory_order_relaxed) % 8].store(vtable, std::memory_order_relaxed);
  detail::note_module(uintptr_t(m.AllocationBase));
  return true;

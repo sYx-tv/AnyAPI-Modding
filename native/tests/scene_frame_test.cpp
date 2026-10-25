@@ -75,8 +75,16 @@ static void resources(){
  static uintptr_t good[16]{},exe[16]{},heap[16]{},header[16]{};
  good[10]=code;exe[10]=(uintptr_t)&resources;heap[10]=(uintptr_t)new int(1);header[10]=(uintptr_t)kernel;
  uintptr_t object_good=(uintptr_t)good,object_exe=(uintptr_t)exe,object_heap=(uintptr_t)heap,object_header=(uintptr_t)header;
+ // native-1: code in a non-exe image that is not trusted (not D3D12Core/d3d12 and not the command list's module) fails.
+ auto base_of=[](uintptr_t a){MEMORY_BASIC_INFORMATION m{};return VirtualQuery((void*)a,&m,sizeof(m))?uintptr_t(m.AllocationBase):uintptr_t(0);};
+ uintptr_t other{};for(auto [module,proc]:{std::pair<const wchar_t*,const char*>{L"ntdll.dll","RtlZeroMemory"},{L"ntdll.dll","NtClose"},{L"user32.dll","GetDesktopWindow"},{L"advapi32.dll","RegCloseKey"}}){
+  HMODULE h=GetModuleHandleW(module);if(!h)h=LoadLibraryW(module);uintptr_t f=h?(uintptr_t)GetProcAddress(h,proc):0;if(f&&base_of(f)!=base_of(code)){other=f;break;}}
+ CHECK(other);static uintptr_t untrusted[16]{};untrusted[10]=other;uintptr_t object_untrusted=(uintptr_t)untrusted;
+ CHECK(!resource_valid((uintptr_t)&object_untrusted));             // another DLL's object (a driver, DXGI or a plugin)
+ CHECK(!trust_module((uintptr_t)&resources)&&!trust_module((uintptr_t)heap[10]));  // the exe and the heap are never trusted
+ CHECK(trust_module(code)&&trust_module(code));                    // the command list's module (here kernel32's code)
  int before=logs;
- CHECK(resource_valid((uintptr_t)&object_good));                   // code in a non-exe image (a D3D runtime or a wrapper layer)
+ CHECK(resource_valid((uintptr_t)&object_good));                   // code in a trusted non-exe image (a D3D runtime or a wrapper layer)
  CHECK(logs==before+1&&warnings==1&&strstr(last_log,"resource_module="));
  CHECK(!resource_valid((uintptr_t)&object_exe));                   // the game exe's own code
  CHECK(!resource_valid((uintptr_t)&object_heap));                  // not an image
@@ -85,7 +93,8 @@ static void resources(){
  uintptr_t zero=0;CHECK(!resource_valid((uintptr_t)&zero));
  good[10]=(uintptr_t)heap;CHECK(resource_valid((uintptr_t)&object_good));  // cached vtable: one read and compares
  reset_resource_cache();CHECK(!resource_valid((uintptr_t)&object_good));    // re-validated after a device change
- good[10]=code;CHECK(resource_valid((uintptr_t)&object_good));CHECK(logs==before+1); // module logged once
+ good[10]=code;CHECK(resource_valid((uintptr_t)&object_good));CHECK(logs==before+1); // module logged once; trust survives the reset
+ CHECK(!resource_valid((uintptr_t)&object_untrusted));
  std::cout<<"PASS resource_valid\n";
 }
 
