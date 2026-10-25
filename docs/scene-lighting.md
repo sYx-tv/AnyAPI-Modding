@@ -144,7 +144,7 @@ amd_path 0, weather_response 0), so older callers keep the 0.40.1 output.
 | `ambient_washout` | 0–1 | Validated and stored; no effect yet |
 | `flags` | `ANY_LAMP_*` | `UNDERGROUND`: lamps-only underground. `TRACKING`: stable lamp selection. `FLASHES`: lightning may glow (with `ANY_ATMOS_FLASH_GLOW`). `OCEAN`: lamp light stops at the sea surface |
 | `native_halos` | 0 | Must be 0 |
-| `amd_path` | 0–3 | AMD only: 0 auto (= 1); 1 constant-buffer lamps with per-count shader builds; 2 the same with a uniform branch per lamp (experiment); 3 constant-buffer lamps with the single 8-lamp shader of 0.40.1 |
+| `amd_path` | 0–3 | AMD only: 0 auto (= 3 in 0.40.2, until the per-count builds are confirmed on AMD hardware); 1 constant-buffer lamps with per-count shader builds; 2 the same with a uniform branch per lamp (experiment); 3 constant-buffer lamps with the single 8-lamp shader of 0.40.1 |
 | `atmosphere_flags` | `SEA_PLANE`, `WEATHER_DENSITY`, `PHASE_CAP`, `FLASH_GLOW` | Other bits are rejected (`status_v2.atmosphere_flags_supported` = 120) |
 | `sky_inscatter` | 0–2 | Validated and stored; no effect yet |
 | `reserved` | 0 | Must be 0 |
@@ -221,9 +221,10 @@ AMD GPUs: local lamp beams turned the whole frame into flat magenta, green and y
 AnyAPI 0.39.1 switched them off there. From 0.39.2 AMD GPUs use their own lamp shader, `IntegrateConstants`: the
 lights come from a constant buffer read in an unrolled loop instead of a texture `Load` inside a dynamic loop, and
 lamps cast no shadow maps. That fixed the RX 6800. Other GPUs keep the original `Integrate` shader, byte for byte.
-Since 0.40.2 the AMD shader is built for 0, 2, 4 and 8 lamps and each frame uses the smallest build that holds its
-lamps, with the same result. V4 `amd_path` 2 is an experiment with a uniform branch per lamp instead, and
-`amd_path` 3 goes back to the single 8-lamp build.
+Since 0.40.2 the AMD shader is also built for 0, 2, 4 and 8 lamps; with V4 `amd_path` 1 each frame uses the smallest
+build that holds its lamps, with the same result. Those builds have not run on AMD hardware yet, so `amd_path` 0
+(auto) stays on the single 8-lamp build (`amd_path` 3) that fixed the RX 6800. V4 `amd_path` 2 is an experiment with
+a uniform branch per lamp instead.
 
 Descriptor tables live in a 4-entry ring fenced by the frame's own submission, so a change of game targets no longer
 waits for the whole GPU queue; only a resize, a device change or an AMD path change does.

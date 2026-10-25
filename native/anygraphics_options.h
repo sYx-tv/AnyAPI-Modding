@@ -73,7 +73,7 @@ static constexpr Option definitions[]={
  {"light_follows_time","Lighting","Light colour follows time","Golden light at sunrise and sunset, neutral at noon, cool blue at dusk and blue moonlight at night, following the game's clock. Off keeps one colour all day.",ANY_SETTING_BOOL,0,0,1,1},
  {"weather_response","Sky","Weather response","Lets rain, snow and storms change AnyGraphics too: thicker fog and cloud, dimmer stars and sun, a rougher sea, and lightning that lights up the fog without the exposure pumping. Almost no GPU cost.",ANY_SETTING_BOOL,0,0,1,1},
  // Hidden tuning (defaults are the AnyAPI 0.40.2 service defaults; docs/mods/graphics.md explains how to edit them).
- {"amd_lamp_path","Hidden","AMD lamp path","Testing only: 0 automatic (= 1), 1 constant-buffer lamps with shaders sized to the lamps in view, 2 the uniform-branch experiment, 3 the 0.40.1 single 8-lamp shader. Other graphics cards ignore it.",ANY_SETTING_CHOICE,0,0,3,1},
+ {"amd_lamp_path","Hidden","AMD lamp path","Testing only: 0 automatic (= 3 until the sized shaders are confirmed on AMD), 1 constant-buffer lamps with shaders sized to the lamps in view, 2 the uniform-branch experiment, 3 the 0.40.1 single 8-lamp shader. Other graphics cards ignore it.",ANY_SETTING_CHOICE,0,0,3,1},
  {"cloud_model","Hidden","Cloud model","Testing only: 1 clouds v2 (default), 0 the AnyAPI 0.40.1 clouds.",ANY_SETTING_BOOL,1,0,1,1},
  {"shading_revision","Hidden","Shading revision","Testing only: 1 the 0.40.2 detailed shading and bounce light (default), 0 the 0.40.1 versions.",ANY_SETTING_BOOL,1,0,1,1},
  {"tone_revision","Hidden","Filmic revision","Testing only: 1 Filmic with more midtone contrast, 0 the 0.40.1 Filmic (default).",ANY_SETTING_BOOL,0,0,1,1},

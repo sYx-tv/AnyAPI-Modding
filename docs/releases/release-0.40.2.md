@@ -83,8 +83,9 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 
 ## Volumetric lighting and lamps
 
-- AMD graphics: lamp beams use builds sized to the lamps in view, which is faster, and no
-  longer go negative (`amd_lamp_path` 3 goes back to the single shader).
+- AMD graphics: lamp beams no longer go negative. Faster builds sized to the lamps in view are
+  ready for testing (`amd_lamp_path` 1); until they are confirmed on AMD hardware the default
+  stays on the single shader that fixed the Radeon RX 6800.
 - Lamps are tracked between frames, so beams stop popping as lamps compete for the budget and
   fade in and out instead.
 - In bunkers the lamps light the air (the sun does not); lamp light stops at the sea surface.
