@@ -78,7 +78,7 @@ static constexpr Option definitions[]={
  {"shading_revision","Hidden","Shading revision","Testing only: 1 the 0.40.2 detailed shading and bounce light (default), 0 the 0.40.1 versions.",ANY_SETTING_BOOL,1,0,1,1},
  {"tone_revision","Hidden","Filmic revision","Testing only: 1 Filmic with more midtone contrast, 0 the 0.40.1 Filmic (default).",ANY_SETTING_BOOL,0,0,1,1},
  {"bloom_falloff","Hidden","Bloom falloff","Testing only: 1 weights every bloom level the same (default); lower values weaken the widest glow.",ANY_SETTING_NUMBER,1,.5f,1,.05f},
- {"taa_still_v2","Hidden","TAA still pixels v2","Testing only: 1 the 0.40.2 rule for still and moving pixels (default), 0 the 0.40.1 rule.",ANY_SETTING_BOOL,1,0,1,1},
+ {"taa_still_v2","Hidden","TAA history v2","Testing only: 1 the 0.40.2 TAA history (Catmull-Rom resampling and the still/moving pixel rule, default), 0 the 0.40.1 history.",ANY_SETTING_BOOL,1,0,1,1},
  {"taa_thin_rescue","Hidden","TAA thin rescue","Testing only: 1 keeps thin wires and grass in the TAA history (experiment), 0 off (default).",ANY_SETTING_BOOL,0,0,1,1},
  {"keep_native_ssao","Hidden","Keep game SSAO","Testing only: 1 runs the game's ambient occlusion even when Detailed shading replaces it, 0 skips it (default).",ANY_SETTING_BOOL,0,0,1,1},
  {"preset_revision","Hidden","Preset revision","Internal: the preset tables these settings were saved with. Do not edit.",ANY_SETTING_INTEGER,1,0,1000,1}

@@ -10,7 +10,7 @@ static Pass sky_pass{"SCENE_SKY",ANY_PASS_SKY,&sky_ready},water_pass{"SCENE_WATE
 static void mark(const Pass& s,float ms,int32_t code){scene_frame::board.pass_ms[s.index].store(ms,std::memory_order_relaxed);scene_frame::board.pass_error[s.index].store(code,std::memory_order_relaxed);}
 // Not recording this frame by design: off (pass_ms -1, error 0) or quiet (0, -1; no WARN, no rejected count).
 // After 120 such frames in a row the GPU objects are released (K09); they are re-created when the pass is next needed.
-template<class G> static void rest(Pass& s,G& gpu,bool quiet){mark(s,quiet?0.f:-1.f,quiet?-1:0);
+template<class G> static void rest(Pass& s,G& gpu,bool quiet){mark(s,quiet?0.f:-1.f,quiet?-1:0);if(quiet){s.rested=0;return;}
  if(++s.rested==120&&gpu.loaded()){{std::lock_guard lock(platform::render_mutex);gpu.release();}s.retry.reset();
   log_line(ANY_LOG_INFO,"framework",(std::string(s.tag)+" released=1 idle_frames=120").c_str());}}
 static void done(Pass& s,float ms){s.rested=0;*s.ready=true;mark(s,ms,0);}

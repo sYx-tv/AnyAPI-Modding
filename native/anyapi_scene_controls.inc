@@ -208,7 +208,7 @@ static void scene_hook(void* renderer,void* scene){double wind[2]{};bool windy=f
   if(!applied){moon.active=0;moon.added_luminance=0;}scene_frame::board.moon.store(moon);
   tint_targets_active.store(p.enabled?policy.extras.tint_targets:0,std::memory_order_relaxed);
   windy=p.enabled&&wind_scale(scene,scene_ok,policy.look.wind,wind);
-  rebuild_cloud_lighting(renderer,n.sample);
+  if(p.enabled)rebuild_cloud_lighting(renderer,n.sample);   // GL-11 only under an enabled owner (SC-3)
   probe_frame(renderer,uintptr_t(scene),n,clock,weather,obs,cycle_fresh,st.clock);
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
   if(scene_ok){scene_antialiasing::apply_jitter(renderer,scene);scene_effects::photo_scene(scene);}   // SC-13 (effects package)

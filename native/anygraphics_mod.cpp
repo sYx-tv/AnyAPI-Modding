@@ -306,7 +306,7 @@ static void render(const AnyFrameV1* frame,AnyCanvasV1*,void*){
   const bool aa_on=on&&v[NativeAA]>=3;sent_aa=aa_on;
   // Scene AA v3 (K47): Extra smooth adds one TAA history level and keeps the chosen quality; v2 raises the quality instead.
   if(aa_v3){AnySceneAntialiasingParametersV3 a;a.base.enabled=aa_on;a.base.method=aa_method(v[NativeAA]);a.base.quality=uint32_t(v[AAQuality]);a.base.sharpening=sharpen_levels[size_t(v[Sharpening])];a.history_bias=aa_history_bias(v[NativeAA]);
-   a.taa_flags=ANY_TAA_CATMULL_ROM|(v[TaaStillV2]>0?ANY_TAA_STILL_V2:0u)|(v[TaaThinRescue]>0?ANY_TAA_THIN_RESCUE:0u);
+   a.taa_flags=(v[TaaStillV2]>0?ANY_TAA_CATMULL_ROM|ANY_TAA_STILL_V2:0u)|(v[TaaThinRescue]>0?ANY_TAA_THIN_RESCUE:0u);
    bool accepted=aa_v3->set(&a);if(!accepted){log_once(aa_v3_rejected,"SCENE_AA_UPDATE v3_rejected=1 fallback=v2");a.base.quality=aa_quality(v[NativeAA],v[AAQuality]);accepted=aa_v2->set(&a.base);}
    if(!accepted){all_accepted=false;log("SCENE_AA_UPDATE rejected=1 retry_pending=1");}}
   else if(aa_v2){AnySceneAntialiasingParametersV2 a;a.enabled=aa_on;a.method=aa_method(v[NativeAA]);a.quality=aa_quality(v[NativeAA],v[AAQuality]);a.sharpening=sharpen_levels[size_t(v[Sharpening])];if(!aa_v2->set(&a)){all_accepted=false;log("SCENE_AA_UPDATE rejected=1 retry_pending=1");}}
