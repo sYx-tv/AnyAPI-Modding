@@ -76,8 +76,8 @@ int main(){std::cout<<std::unitbuf;assert(gpu_test::create(d));auto device=d.dev
  auto diagonal=[](UINT x,UINT y){return grey(float(x)>.6f*y+15?230:20);};
  {// AA-14: lazy targets. SMAA alone allocates neither; sharpening the resolved image only; TAA both.
   scene_smaa::Gpu g;auto s=make_scene(64,64,DXGI_FORMAT_R8G8B8A8_UNORM,.005f);frame(g,s,diagonal,nullptr);assert(!g.offscreen_allocated()&&!g.history_allocated());
-  scene_smaa::Extra sharp;sharp.sharpen=.5f;frame(g,s,diagonal,&sharp);assert(g.offscreen_allocated()&&!g.history_allocated());
-  auto e=taa_extra(s.depth.Get());bool ok{};frame(g,s,diagonal,&e,3,&ok);assert(ok&&g.history_allocated());std::cout<<"PASS: TAA targets created on first use (AA-14)\n";}
+  scene_smaa::Extra sharp;sharp.sharpen=.5f;frame(g,s,diagonal,&sharp);assert(g.offscreen_allocated()&&!g.history_allocated()&&!g.temporal_ran());
+  auto e=taa_extra(s.depth.Get());bool ok{};frame(g,s,diagonal,&e,3,&ok);assert(ok&&g.history_allocated()&&g.temporal_ran());std::cout<<"PASS: TAA targets created on first use (AA-14)\n";}
  {// Static scene converges: 6 identical frames stay within 2 LSB of the 1-frame result away from the edge, and flat areas stay exact.
   scene_smaa::Gpu g;auto s=make_scene(64,64,DXGI_FORMAT_R8G8B8A8_UNORM,.005f);auto e=taa_extra(s.depth.Get());e.dither=0;auto first=frame(g,s,diagonal,&e);Readback last;for(int i=0;i<5;++i)last=frame(g,s,diagonal,&e);
   unsigned changed{};for(UINT y=10;y<60;++y)for(UINT x=10;x<60;++x){int a=first.at(x,y)[0],b=last.at(x,y)[0];if(std::abs(a-b)>2)++changed;if(std::abs(float(x)-.6f*y-15)>4)assert(std::abs(b-(float(x)>.6f*y+15?230:20))<=1);}

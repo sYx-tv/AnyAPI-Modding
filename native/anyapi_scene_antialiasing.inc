@@ -143,7 +143,10 @@ static void record_scene(void* renderer,void* scene,bool inner,bool overlay_now)
  if(p.method>=3){if(!inner&&overlay_now){history.valid=false;reason=ANY_AA_FALLBACK_EDITOR_OVERLAY;}else reason=temporal_extra(renderer,scene,UINT(desc.Width),desc.Height,extra,device.Get());}
  // ANY_AA_OCEAN_DEPTH (testing switch): no sea plane, so ocean pixels reproject with the depth buffer as in 0.40.1.
  if(policy.extras.flags&ANY_AA_OCEAN_DEPTH)extra.ocean=nullptr;
- const auto& saved=found->second;owned=true;bool depth_ok=gpu.record(list,back.Get(),p.quality,p.method==2,&extra);if(!depth_ok){history.valid=false;if(extra.temporal)reason=ANY_AA_FALLBACK_DEPTH;}temporal_active=extra.temporal&&depth_ok;saved.restore(list);owned=false;
+ const auto& saved=found->second;owned=true;bool depth_ok=gpu.record(list,back.Get(),p.quality,p.method==2,&extra);if(!depth_ok){history.valid=false;if(extra.temporal)reason=ANY_AA_FALLBACK_DEPTH;}
+ // The TAA histories could not be allocated (retried with backoff): SMAA only, and no jitter next frame.
+ else if(extra.temporal&&!gpu.temporal_ran()){history.valid=false;reason=ANY_AA_FALLBACK_INTERFACE;}
+ temporal_active=extra.temporal&&depth_ok&&gpu.temporal_ran();saved.restore(list);owned=false;
  if(p.method>=3&&!temporal_active&&reason!=ANY_AA_FALLBACK_HISTORY_RESET){
   // Inactive by design: quiet. Contract failures count as rejected and warn every 600.
   bool quiet=reason==ANY_AA_FALLBACK_SPECIAL_VISION||reason==ANY_AA_FALLBACK_SCOPE||reason==ANY_AA_FALLBACK_EDITOR_OVERLAY;
