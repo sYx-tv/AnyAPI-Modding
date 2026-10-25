@@ -25,22 +25,29 @@ static void scoped_render(void* self,const AnySceneParametersV1* p,const uint32_
 // K04: the effects finish replaces the game's bloom only while it rendered within the last FINISH_GRACE frames.
 // Effects stores board.finish_since_ok=0 on a rendered finish; renderer_hook counts every frame, saturating at
 // UINT32_MAX (also the start value). An effects FIN-12 identity frame stores nothing, so the game's bloom returns.
-static constexpr uint32_t FINISH_GRACE=15;
-static uint32_t count_finish_frame(){auto& c=scene_frame::board.finish_since_ok;uint32_t v=c.load(std::memory_order_relaxed);
+// wanted: this frame's finish is on and not an identity. When it becomes wanted (start-up, Gameplay only leaving a
+// menu, an identity finish getting work) the grace starts at once, so that first frame does not add the game's bloom
+// to the finish's own; a finish that then fails gives the bloom back after FINISH_GRACE frames as before.
+static constexpr uint32_t FINISH_GRACE=15;static bool finish_was_wanted{};
+static uint32_t count_finish_frame(bool wanted=false){auto& c=scene_frame::board.finish_since_ok;
+ if(wanted&&!finish_was_wanted)c.store(0,std::memory_order_relaxed);finish_was_wanted=wanted;uint32_t v=c.load(std::memory_order_relaxed);
  while(v<UINT32_MAX&&!c.compare_exchange_weak(v,v+1,std::memory_order_relaxed)){}return v<UINT32_MAX?v+1:v;}
 static bool finish_replaces_bloom(uint32_t since_ok){return since_ok<FINISH_GRACE;}
 static void renderer_hook(void* self){++renderer_calls;Policy policy;AnySceneParametersV1 p{};bool owned{};
- {scene_frame::CpuScope cpu;scene_frame::board.frame.fetch_add(1,std::memory_order_relaxed);const uint32_t since_ok=count_finish_frame();(void)since_ok;
+ {scene_frame::CpuScope cpu;scene_frame::board.frame.fetch_add(1,std::memory_order_relaxed);
   policy=snapshot();p=policy.scene;owned=p.enabled!=0;
 #ifndef ANYAPI_SCENE_CONTROLS_TEST
   if(scene_antialiasing::begin()){if(!p.enabled){p=AnySceneParametersV1{};p.enabled=1;}p.aa=1;}
   // Scene effects replace the game's bloom; their own bloom runs before tone mapping.
   auto fx=scene_effects::copy();scene_effects::update_photo(fx);
+  const uint32_t since_ok=count_finish_frame(fx.enabled&&fx.finish&&!scene_effects::finish_identity(fx,scene_effects::copy_extras()));
   // SC-16: the draw distance reaches this frame's culling, also when the lighting cell did not install.
   scene_effects::update_distance();
   if(fx.enabled&&fx.finish&&finish_replaces_bloom(since_ok)){if(!p.enabled){p=AnySceneParametersV1{};p.enabled=1;}p.bloom=1;}
   // The replacement ambient occlusion writes into the game's SSAO target, so the composite must bind it (m_is_ssao).
   if(fx.enabled&&fx.ambient_occlusion&&scene_effects::ao_available){if(!p.enabled){p=AnySceneParametersV1{};p.enabled=1;}p.ssao=2;}
+#else
+  count_finish_frame();
 #endif
  }
  // SC-3: a substituted default policy (owner off or absent) applies no clouds/grass/foliage overrides.

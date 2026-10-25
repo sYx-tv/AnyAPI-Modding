@@ -33,7 +33,7 @@ static bool flash_hold(double step,bool enabled){auto& h=flash_state;h.window+=s
  bool frozen=h.hold>0&&h.used<1.5;if(frozen)h.used+=step;return frozen;}
 // Seconds since the previous effects frame; long gaps restart eye adaptation.
 static double elapsed(){LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);double dt=last_tick.QuadPart&&frequency.QuadPart?double(now.QuadPart-last_tick.QuadPart)/double(frequency.QuadPart):-1;last_tick=now;return dt;}
-// K02: frame-core's cached vtable test (any non-exe image module, so wrapper layers pass). Sky and water use it too.
+// K02: frame-core's cached vtable test (D3D12 or the command list's module, so wrapper layers pass). Sky and water use it too.
 static bool interface_valid(uintptr_t resource){return resource&&scene_frame::resource_valid(resource);}
 static void bypass(int code,const char* why){gpu_ready=false;dither_active=false;history=false;pass_reject(finish_pass,code,why);}
 // An optional game target (gbuffer_1, gbuffer_ocean): same size and device as the HDR target, else null (the pass falls back).
@@ -45,7 +45,7 @@ static void record(void* renderer,void* scene){++fx_tick;release_idle_passes();a
  if(!p.enabled||!p.finish){history=false;gpu_ready=false;dither_active=false;pass_off(finish_pass);return;}
  // FIN-12: nothing to change, so no copy and no composite. finish_since_ok is not reset: after 15 frames controls
  // stops forcing the game's bloom off (K04), so this is exactly the game's own image.
- if(p.tonemap==0&&(p.look==0||p.look_strength<=0)&&p.exposure==0&&!p.eye_adaptation&&p.bloom<=0&&p.glare<=0&&p.vignette<=0&&!x.dither){
+ if(finish_identity(p,x)){
   history=false;gpu_ready=true;error=0;gpu_ms=0;dither_active=false;adapted_exposure=0;scene_luminance=-1;sun_visibility=0;pass_quiet(finish_pass);return;}
  want(finish_pass);
  scene_effects_gpu::Native n;uint32_t view=0;if(!scene_effects_gpu::capture_view(uintptr_t(renderer),uintptr_t(scene),n,scene_frame::reader,view)){bypass(100+int(n.failure),"native_frame_contract");return;}

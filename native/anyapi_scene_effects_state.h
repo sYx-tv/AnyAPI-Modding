@@ -34,6 +34,10 @@ static AnySceneEffectsParametersV1 copy(){std::lock_guard lock(mutex);auto p=par
 // SC-16: photo mode and draw distance work without the lighting cell; they need only an active owner.
 static AnySceneEffectsParametersV1 copy_owned(){std::lock_guard lock(mutex);auto p=parameters;if(owner<0||!anyapi_owner_active(owner))p.enabled=0;return p;}
 static Extras copy_extras(){std::lock_guard lock(mutex);return extras_v3;}
+// FIN-12: a finish that would change nothing (no copy, no composite). Controls uses it too (K04): such a finish never
+// replaces the game's bloom.
+inline bool finish_identity(const AnySceneEffectsParametersV1& p,const Extras& x){
+ return p.tonemap==0&&(p.look==0||p.look_strength<=0)&&p.exposure==0&&!p.eye_adaptation&&p.bloom<=0&&p.glare<=0&&p.vignette<=0&&!x.dither;}
 static Water copy_water(){std::lock_guard lock(mutex);if(owner<0||!anyapi_owner_active(owner)||!available||!parameters.enabled)return {};return water;}
 static bool status(AnySceneEffectsStatusV1* s){if(!s||s->struct_size!=sizeof(*s)||s->version!=1)return false;s->available=available;s->ready=gpu_ready;s->frames=frames;s->rejected_frames=rejected;s->gpu_ms=gpu_ready?gpu_ms.load():-1;s->adapted_exposure=adapted_exposure;s->scene_luminance=scene_luminance;s->sun_visibility=sun_visibility;s->error=error;s->ao_available=ao_available;s->ao_ready=ao_ready;s->ao_frames=ao_frames;s->ao_ms=ao_ready?ao_ms.load():-1;s->sky_ready=sky_ready;s->sky_ms=sky_ready?sky_ms.load():-1;s->night=night;s->contact_ready=contact_ready;s->contact_ms=contact_ready?contact_ms.load():-1;s->gi_ready=gi_ready;s->gi_ms=gi_ready?gi_ms.load():-1;s->lens_ready=lens_ready;s->lens_ms=lens_ready?lens_ms.load():-1;s->distance_available=distance_available;s->distance_scale=distance_used;s->photo_available=photo_available;return true;}
 static bool status_v2(AnySceneEffectsStatusV2* s){if(!s||s->struct_size!=sizeof(*s)||s->version!=2)return false;s->effects=AnySceneEffectsStatusV1{};if(!status(&s->effects))return false;s->water_ready=water_ready;s->water_ms=water_ready?water_ms.load():-1;s->water_frames=water_frames;return true;}

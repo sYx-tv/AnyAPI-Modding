@@ -72,7 +72,8 @@ world until owner testing.
 
 Hook behaviour in 0.40.2: the effects finish replaces the game's bloom only
 while it rendered within the last 15 renderer frames, so an effects bypass
-brings the game's bloom back. A substituted policy, used when AnyAPI
+brings the game's bloom back. A finish that becomes wanted (start-up, a
+Gameplay only menu closing) turns the game's bloom off from its first frame. A substituted policy, used when AnyAPI
 antialiasing or effects need a renderer switch but no owner policy is active,
 does not apply cloud, grass or foliage overrides. With AnyAPI ambient occlusion
 the game's SSAO runs only when AnyAPI did not write the occlusion that frame.

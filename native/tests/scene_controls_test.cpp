@@ -142,6 +142,14 @@ int main(){using namespace scene_controls;AnySceneParametersV1 p;p.enabled=1;p.a
   // K04: saturating frame counter and the 15-frame rule.
   board.finish_since_ok=UINT32_MAX;assert(count_finish_frame()==UINT32_MAX&&!finish_replaces_bloom(UINT32_MAX));board.finish_since_ok=0;assert(count_finish_frame()==1&&finish_replaces_bloom(1));
   board.finish_since_ok=13;assert(count_finish_frame()==14&&finish_replaces_bloom(14)&&count_finish_frame()==15&&!finish_replaces_bloom(15));
+  // A finish that becomes wanted (leaving a Gameplay only menu, start-up) forces the game's bloom off on its first frame;
+  // staying wanted while it fails gives the bloom back after the grace.
+  board.finish_since_ok=UINT32_MAX;assert(count_finish_frame(false)==UINT32_MAX&&count_finish_frame(true)==1&&finish_replaces_bloom(1));
+  for(int i=0;i<13;++i)count_finish_frame(true);assert(count_finish_frame(true)==15&&!finish_replaces_bloom(15));
+  count_finish_frame(false);board.finish_since_ok=40;assert(count_finish_frame(true)==1);
+  {AnySceneEffectsParametersV1 fx{};fx.tonemap=0;fx.eye_adaptation=0;fx.bloom=0;fx.glare=0;scene_effects::Extras x{};x.dither=0;assert(scene_effects::finish_identity(fx,x));x.dither=1;assert(!scene_effects::finish_identity(fx,x));
+   x.dither=0;fx.tonemap=1;assert(!scene_effects::finish_identity(fx,x));fx.tonemap=0;fx.look=2;fx.look_strength=0;assert(scene_effects::finish_identity(fx,x));fx.bloom=.5f;assert(!scene_effects::finish_identity(fx,x));}
+  count_finish_frame(false);board.finish_since_ok=UINT32_MAX;
   // K12: with no seam the native SSAO runs (today's order); the seam skips it only when AnyAPI AO rendered.
   {static unsigned native{};static void* seen[2]{};struct F{static void ssao(void*,void*){++native;}static bool yes(void* r,void* s){seen[0]=r;seen[1]=s;return true;}static bool no(void*,void*){return false;}};
    void* ssao_target=(void*)F::ssao;assert(ssao_cell.install(&ssao_target,(void*)ssao_hook));composite_renderer=renderer;composite_scene=d;
