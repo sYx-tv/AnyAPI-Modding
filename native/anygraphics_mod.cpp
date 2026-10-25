@@ -146,7 +146,10 @@ static void group_labels(int g){
  if(aa&&draft(NativeAA)>=3){AnySceneAntialiasingStatusV1 a;bool active=aa->status(&a)&&a.ready;auto choice=draft(NativeAA);status_label("aa_status",active,last_cost.aa,"Scene AA",choice>=6?"TAA extra smooth: scene only, before HUD.":choice>=5?"TAA: scene only, before HUD.":choice==4?"Enhanced SMAA: scene only, before HUD.":"SMAA: scene only, before HUD.","Scene AA is waiting for the scene renderer; native AA stays available.");}
  }
  else if(g==Lighting){
- if(lighting&&(draft(Atmosphere)>0||draft(SunShafts)>0||draft(LocalBeams)>0)){AnySceneLightingStatusV1 light;bool connected=lighting->status(&light)&&light.ready;status_label("lighting_status",connected,last_cost.lighting,"Volumetric lighting","Volumetric lighting: native scene depth and sun shadows.","Experimental lighting is waiting for a supported scene.");}
+ if(lighting&&(draft(Atmosphere)>0||draft(SunShafts)>0||draft(LocalBeams)>0)){AnySceneLightingStatusV1 light;const bool have=lighting->status(&light);bool connected=have&&light.ready;
+  // AnyAPI 0.40.2 reasons 7 (inactive view) and 8 (nothing to light this frame) are idle by design, not waiting.
+  const bool idle=have&&!light.ready&&(light.reason==7||light.reason==8);
+  status_label("lighting_status",connected,last_cost.lighting,"Volumetric lighting","Volumetric lighting: native scene depth and sun shadows.",idle?"Volumetric lighting: idle here (nothing to light in view, under water, underground or night vision).":"Experimental lighting is waiting for a supported scene.");}
  // K25: sun shafts are the game's sun shadows seen in the air; with the game's shadows forced off there are none.
  if(lighting&&draft(SunShafts)>0&&draft(NativeShadows)==1)widgets->tabs->label("shafts_shadows","Sun shafts need the game's shadows: with Shadows off they only brighten the haze.");
  if(lighting_v2&&lamp_beams_blocked())widgets->tabs->label("lamp_beams_amd","Lamp beams are off on AMD graphics cards: they break the picture there.");
@@ -358,7 +361,7 @@ static void render(const AnyFrameV1* frame,AnyCanvasV1*,void*){
  auto_pick(gameplay&&focused,on&&now_ready,configured);
  // K34: keep the gameplay readout and which passes ran, for the menus where Gameplay only bypasses AnyGraphics.
  if(gameplay&&on&&now_ready&&now-last_cost_at>=500){last_cost_at=now;LastCost c;c.have=true;cost_lines(c.gpu,c.frame);
-  AnySceneAntialiasingStatusV1 a;c.aa=aa&&aa->status(&a)&&a.ready;AnySceneLightingStatusV1 l;c.lighting=lighting&&lighting->status(&l)&&l.ready;
+  AnySceneAntialiasingStatusV1 a;c.aa=aa&&aa->status(&a)&&a.ready;AnySceneLightingStatusV1 l;c.lighting=lighting&&lighting->status(&l)&&(l.ready||l.reason==7||l.reason==8);   // 7/8: on, idle this frame
   AnySceneEffectsStatusV1 e;if(effects&&effects->status(&e)){c.ao=e.ao_ready;c.effects=e.ready;}AnySceneEffectsStatusV2 w;c.water=effects_v2&&effects_v2->status_v2(&w)&&w.water_ready;
   std::lock_guard lock(mutex);last_cost=std::move(c);}
  if(frame&&frame->tick-status_at>=10000){status_at=frame->tick;if(now_ready)log("NATIVE_SCENE ready=1 renderer_calls="+std::to_string(status.renderer_calls)+" scene_calls="+std::to_string(status.scene_calls)+" rejected="+std::to_string(status.rejected_frames));else log("NATIVE_SCENE ready=0 overrides_not_active=1");}
@@ -425,6 +428,9 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics
  // K37: bring a committed preset (1-10, 12) to the current tables once. Only the rows the preset owns whose table changed
  // move; Custom and the top-level rows stay. A save failure keeps the old values and tries again next launch.
  if(const int from=had_revision?int(state.settings[PresetRevision].committed.number):had_settings?0:preset_revision;from<preset_revision){
+  // A file without the row holds revision `from`, not the row's initial value: then the new revision is always staged and
+  // written (even when no row moves), and a failed save leaves `from` committed, so a later Apply cannot stamp it as done.
+  if(!had_revision){auto& r=state.settings[PresetRevision];r.committed.number=from;r.draft=r.committed;}
   Values c{};for(size_t j=0;j<Count;++j)c[j]=float(state.settings[j].committed.number);auto next=c;const auto rows=restage(next,from);next[PresetRevision]=float(preset_revision);
   state.begin();for(size_t j=0;j<Count;++j)if(next[j]!=c[j]){auto value=state.settings[j].draft;value.number=fit(j,next[j]);state.stage(j,value);}
   const bool saved=state.apply();if(!saved)state.begin();state.status.clear();

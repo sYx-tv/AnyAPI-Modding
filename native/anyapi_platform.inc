@@ -35,6 +35,8 @@ static std::unordered_map<IDXGISwapChain3*,ComPtr<ID3D12CommandQueue>> presentat
 static ComPtr<IDXGISwapChain3> swap;                  // the game chain AnyAPI composes into; kept across overlay resets and resizes (ROB-2)
 static ComPtr<ID3D12CommandQueue> scene_queue;        // the game's presentation queue, bound at chain accept; reset() never clears it (ROB-2)
 static ComPtr<ID3D12CommandQueue>& queue=scene_queue; // the name every scene pass reads
+// True when q is a queue of device d. Scene passes check it before they build GPU objects, so a new device is never paired with the previous chain's queue.
+static bool queue_on(ID3D12CommandQueue* q,ID3D12Device* d){ComPtr<ID3D12Device> owner;return q&&d&&SUCCEEDED(q->GetDevice(IID_PPV_ARGS(&owner)))&&owner.Get()==d;}
 static ComPtr<ID3D11Device> device11;static ComPtr<ID3D11DeviceContext> context11;
 static ComPtr<ID3D11On12Device> on12;static ComPtr<ID2D1Factory1> factory2d;
 static ComPtr<ID2D1Device> device2d;static ComPtr<ID2D1DeviceContext> context2d;
@@ -351,7 +353,12 @@ static bool hook_chain(IDXGISwapChain* chain){bool ok=hook_slot(chain,8,(void*)p
 using CreateFn=HRESULT(STDMETHODCALLTYPE*)(IDXGIFactory*,IUnknown*,DXGI_SWAP_CHAIN_DESC*,IDXGISwapChain**);
 using CreateHwndFn=HRESULT(STDMETHODCALLTYPE*)(IDXGIFactory2*,IUnknown*,HWND,const DXGI_SWAP_CHAIN_DESC1*,const DXGI_SWAP_CHAIN_FULLSCREEN_DESC*,IDXGIOutput*,IDXGISwapChain1**);
 // The factory's D3D12 pDevice parameter is the actual presentation queue, not a device.
-static void created(IUnknown* d,IDXGISwapChain* s){{std::lock_guard<std::recursive_mutex> lock(render_mutex);chain_cache.foreign=nullptr;}ComPtr<ID3D12CommandQueue> q;ComPtr<IDXGISwapChain3> identity;if(SUCCEEDED(d->QueryInterface(IID_PPV_ARGS(&q)))){std::lock_guard<std::mutex> lock(queue_mutex);observed_queue=q;if(SUCCEEDED(s->QueryInterface(IID_PPV_ARGS(&identity))))presentation_queues[identity.Get()]=q;}hook_chain(s);}
+// The game chain was let go (forget_chain) and the new chain is on another device: scene_queue is dropped, so the passes bypass
+// until bind_queue() binds the new queue at the first present, instead of pairing the new device with the old queue.
+static void created(IUnknown* d,IDXGISwapChain* s){ComPtr<ID3D12CommandQueue> q;ComPtr<IDXGISwapChain3> identity;bool is_queue=SUCCEEDED(d->QueryInterface(IID_PPV_ARGS(&q)));
+ {std::lock_guard<std::recursive_mutex> lock(render_mutex);chain_cache.foreign=nullptr;
+  if(is_queue&&scene_queue&&!chain_cache.queue_bound){ComPtr<ID3D12Device> device;if(FAILED(q->GetDevice(IID_PPV_ARGS(&device)))||!queue_on(scene_queue.Get(),device.Get()))scene_queue.Reset();}}
+ if(is_queue){std::lock_guard<std::mutex> lock(queue_mutex);observed_queue=q;if(SUCCEEDED(s->QueryInterface(IID_PPV_ARGS(&identity))))presentation_queues[identity.Get()]=q;}hook_chain(s);}
 // A new chain for the game's window: let go of the old one first, so a flip-model re-creation on the same HWND can succeed.
 static void release_window_chain(HWND h){std::lock_guard<std::recursive_mutex> lock(render_mutex);if(h&&chain_cache.raw&&chain_cache.window==h)forget_chain();}
 // Chain legacy DXGI swapchain creation and record successful results.

@@ -111,6 +111,8 @@ static void record(void* renderer,void* scene){
  platform::after_execute=submitted;volumetric::Gpu::ProbeStats stats;if(gpu.probe(stats))log_line(ANY_LOG_INFO,"framework",("SHAFT_PROBE lit_min="+std::to_string(stats.lit_min)+" lit_max="+std::to_string(stats.lit_max)+" lit_avg="+std::to_string(stats.lit_average)+" coverage="+std::to_string(stats.coverage)+" distance_fraction="+std::to_string(stats.distance)).c_str());
  auto target=(ID3D12Resource*)f.color.resource;auto depth=(ID3D12Resource*)f.depth.resource;auto shadow=(ID3D12Resource*)f.shadow.resource;Microsoft::WRL::ComPtr<ID3D12Device> td,dd,sd;auto before=gpu.current_device();
  if(FAILED(target->GetDevice(IID_PPV_ARGS(&td)))||FAILED(depth->GetDevice(IID_PPV_ARGS(&dd)))||FAILED(shadow->GetDevice(IID_PPV_ARGS(&sd)))||td.Get()!=device.Get()||dd.Get()!=device.Get()||sd.Get()!=device.Get())return bypass(4,"gpu_resource_contract");
+ // A new device before its chain binds would pair it with the old queue (whose Signal then fails in ensure()'s drain).
+ if(before!=device.Get()&&!platform::queue_on(platform::queue.Get(),device.Get()))return bypass(3,"queue_or_device");
  uint64_t now_ms=GetTickCount64();if(device.Get()!=retry_device){retry.reset();retry_device=device.Get();}if(!retry.ready(now_ms))return bypass(4,"gpu_retry",retry.failures);
  if(!gpu.ensure(device.Get(),platform::queue.Get(),target->GetDesc(),path)){retry.failed(now_ms);error=gpu.error();return bypass(4,"gpu_resource_contract",error.load());}retry.succeeded();
  gpu.use_permutations(x.amd_path!=3);   // a rebuild resets it to on, so it is set every frame

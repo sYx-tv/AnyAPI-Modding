@@ -109,7 +109,7 @@ version. Ownership is shared across versions.
 |---|---|
 | `temporal_active` | TAA wrote its history on the last recorded frame. |
 | `jitter_active` | This frame's camera is jittered. |
-| `last_fallback_reason` | `ANY_AA_FALLBACK_*` of the last recorded frame: 0 none, 1 special vision (night vision, thermal), 2 scope, 3 depth, 4 camera, 5 interface (depth is not a resource of the game's device), 6 editor overlay (TAA paused because AA ran after the overlay), 7 history reset (TAA ran without history), 8 bindings (AA bypassed). 0 for SMAA methods. |
+| `last_fallback_reason` | `ANY_AA_FALLBACK_*` of the last recorded frame: 0 none, 1 special vision (night vision, thermal), 2 scope, 3 depth, 4 camera, 5 interface (depth is not a resource of the game's device, or the TAA history images could not be created; retried after 1 to 60 s), 6 editor overlay (TAA paused because AA ran after the overlay), 7 history reset (TAA ran without history), 8 bindings (AA bypassed). 0 for SMAA methods. |
 | `editor_overlay` | 0 no overlay this frame; 1 overlay present, AA ran before it; 2 overlay present, AA ran after it. |
 | `jittered_frames`, `jitter_skipped` | Frames jittered, and TAA+jitter frames without jitter. |
 | `gpu_ms` | Smoothed GPU milliseconds of the AA pass; -1 while off or not measured. |

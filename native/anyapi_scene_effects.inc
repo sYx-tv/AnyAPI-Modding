@@ -22,7 +22,8 @@ static bool taa_resolving(){scene_frame::Temporal t{};return scene_frame::board.
 static void note_size(const scene_effects_gpu::Native& n){scene_frame::board.scene_width.store(n.color.width,std::memory_order_relaxed);scene_frame::board.scene_height.store(n.color.height,std::memory_order_relaxed);}
 // K43 + K09: a failed create retries at 1, 2, 4 .. 60 s instead of every frame; any re-create forgets the cached vtables.
 template<class G> static bool ensure_gpu(PassState& s,G& g,ID3D12Device* d,ID3D12CommandQueue* q,const D3D12_RESOURCE_DESC& desc){
- if(g.current(d,q,desc))return true;uint64_t now=GetTickCount64();if(!s.retry.ready(now))return false;scene_frame::reset_resource_cache();
+ if(g.current(d,q,desc))return true;if(!platform::queue_on(q,d))return false;   // a new device before its chain binds: no backoff, the next frame may match
+ uint64_t now=GetTickCount64();if(!s.retry.ready(now))return false;scene_frame::reset_resource_cache();
  if(g.ensure(d,q,desc)){s.retry.succeeded();return true;}s.retry.failed(now);return false;}
 // K21 (v3 weather 1, "hold exposure on lightning"): while a flash is active (board.flash, lighting) and .25 s after it
 // the adaptation weights are 0, at most 1.5 s in any 5 s window so a long storm cannot freeze it.

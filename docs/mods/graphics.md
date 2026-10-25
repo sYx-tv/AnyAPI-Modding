@@ -149,9 +149,12 @@ as Antialiasing and Fog are left alone):
 - Balanced sharpens TAA (Low).
 - Natural keeps the game's own ambient occlusion (no detailed shading), like
   Soft & warm.
-- Performance and Low keep the game's base fog at Reduced like every other
-  tier: removing it saved no GPU time and also removed the weather fog.
 - A preset saved before 0.33.0 also gets the water rows of its tier.
+
+Performance and Low now set the base fog to Reduced when picked, like every
+other tier: removing it saved no GPU time and also removed the weather fog.
+Fog is a top row, so a saved Performance or Low keeps the fog it has until the
+preset is picked again.
 
 Fixes:
 
@@ -178,7 +181,7 @@ them back.
 | `shading_revision` | 1, the 0.40.2 detailed shading and bounce light | 0: the 0.40.1 versions |
 | `tone_revision` | 0, the 0.40.1 Filmic | 1: Filmic with more midtone contrast |
 | `bloom_falloff` | 1, every bloom level weighted the same | 0.5 to 0.95: a weaker widest glow |
-| `taa_still_v2` | 1, the 0.40.2 rule for still and moving pixels | 0: the 0.40.1 rule |
+| `taa_still_v2` | 1, the 0.40.2 TAA history (Catmull-Rom resampling and the rule for still and moving pixels) | 0: the whole 0.40.1 history (both) |
 | `taa_thin_rescue` | 0 | 1: keep thin wires and grass in the TAA history (experiment) |
 | `keep_native_ssao` | 0, the game's ambient occlusion is skipped when Detailed shading replaces it | 1: run it anyway |
 | `amd_lamp_path` | 0, automatic (constant-buffer lamps with shaders sized to the lamps in view) | 1: the same; 2: the uniform-branch experiment; 3: the 0.40.1 single 8-lamp shader (AMD only) |

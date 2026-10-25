@@ -350,7 +350,7 @@ give the version 2 output: models, weather and revisions 0, `bloom_falloff` 1,
 | `sky_model_active` | The game-clock night sky is drawing |
 | `cloud_model_active` | Clouds v2 are drawing |
 | `weather_active` | Weather is being applied (needs the game's weather read by `anyapi.scene_controls`) |
-| `clock_valid` | The game clock was read within the last two frames |
+| `clock_valid` | A clock was read within the last two frames: the game clock or the parked-night fallback ([scene controls](scene-controls.md) `status_v2` `clock_source` 1 or 2) |
 | `native_ssao_skipped` | The game's SSAO was skipped last frame because this service's ambient occlusion rendered |
 | `dither_active` | The finishing pass rendered with dither |
 | `sun_visibility` | As in version 1: the open-sky fraction of the sun disc, 0 while glare is off |
