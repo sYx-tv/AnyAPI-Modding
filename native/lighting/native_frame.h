@@ -53,7 +53,8 @@ template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,const AnySc
  if(o.ocean){unsigned char is_ocean=2;uintptr_t object{};out.ocean=read(scene+0xb71,&is_ocean,1)&&is_ocean==1&&read(renderer+0x208,&object,8)&&target(object,out.ocean_target,read)&&out.ocean_target.srv_format==10&&out.ocean_target.width==out.color.width&&out.ocean_target.height==out.color.height;if(!out.ocean)out.ocean_target={};}
  if(local_strength>0){
   static thread_local std::vector<lighting::Lamp> lamps;lighting::LampReader<Read> reader(read);reader.gather(scene,f.camera.data(),p.maximum_distance,lamps,out.lamps);
-  if(o.tracker){o.tracker->select(lamps,local_budget,8,out.origin,o.now);out.lamps.tracked=o.tracker->active();}else lighting::select_legacy(lamps,local_budget);
+  // Fade-outs borrow at most half the budget again (2->3, 4->6, 6->8), so a low budget stays low.
+  if(o.tracker){o.tracker->select(lamps,local_budget,std::min<uint32_t>(8,local_budget+std::max<uint32_t>(1,local_budget/2)),out.origin,o.now);out.lamps.tracked=o.tracker->active();}else lighting::select_legacy(lamps,local_budget);
   // Spot shadows: the first 4 drawn spots with a matching shadow camera, as before. raw[29] names the game's camera
   // (render_util: m_shadow_cameras[g_shadow_renderer_count] = the spot camera, +0x74 = that index); one matrix
   // compare confirms it, otherwise the old scan runs. Slots are numbered by camera index, so the bound set does not
