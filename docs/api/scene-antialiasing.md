@@ -76,7 +76,10 @@ version 3 can turn it off. Plain SMAA is not dithered.
 
 If depth or camera data are unavailable, TAA falls back to SMAA for that frame
 and logs `SCENE_TAA bypass=<reason>`. Night-vision, thermal, scope and editor
-overlay frames fall back quietly (`SCENE_TAA inactive=<reason>`). GPU cost is
+overlay frames fall back quietly (`SCENE_TAA inactive=<reason>`). If the TAA
+offscreen images cannot be created (out of video memory), TAA falls back to SMAA
+without jitter, logs `SCENE_TAA bypass=targets` and retries after 1, 2, 4 .. 60
+seconds. GPU cost is
 available through [scene timing](scene-timing.md) (`pass_ms[ANY_PASS_AA]`) and
 the version 3 status.
 
@@ -109,7 +112,7 @@ version. Ownership is shared across versions.
 |---|---|
 | `temporal_active` | TAA wrote its history on the last recorded frame. |
 | `jitter_active` | This frame's camera is jittered. |
-| `last_fallback_reason` | `ANY_AA_FALLBACK_*` of the last recorded frame: 0 none, 1 special vision (night vision, thermal), 2 scope, 3 depth, 4 camera, 5 interface (depth is not a resource of the game's device), 6 editor overlay (TAA paused because AA ran after the overlay), 7 history reset (TAA ran without history), 8 bindings (AA bypassed). 0 for SMAA methods. |
+| `last_fallback_reason` | `ANY_AA_FALLBACK_*` of the last recorded frame: 0 none, 1 special vision (night vision, thermal), 2 scope, 3 depth, 4 camera, 5 interface (depth is not a resource of the game's device, or TAA's offscreen images could not be created), 6 editor overlay (TAA paused because AA ran after the overlay), 7 history reset (TAA ran without history), 8 bindings (AA bypassed). 0 for SMAA methods. |
 | `editor_overlay` | 0 no overlay this frame; 1 overlay present, AA ran before it; 2 overlay present, AA ran after it. |
 | `jittered_frames`, `jitter_skipped` | Frames jittered, and TAA+jitter frames without jitter. |
 | `gpu_ms` | Smoothed GPU milliseconds of the AA pass; -1 while off or not measured. |

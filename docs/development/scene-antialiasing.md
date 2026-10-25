@@ -84,7 +84,8 @@ Automated GPU readback verifies all four quality levels smooth a stepped
 diagonal, preserve flat colours, and let a distinct HUD pipeline draw crisp,
 correctly clipped pixels after binding restoration. Repeated frames, resource
 resizing and RGBA/BGRA formats are covered. The GPU test runs WARP with GPU-based
-validation and fails on any D3D12 error. TAA cases cover lazy targets, a static
+validation and fails on any D3D12 error. TAA cases cover lazy targets, a failed
+target creation (SMAA only, retried after the backoff), a static
 scene, re-centring by the jitter, history kept at the same depth and rejected at
 another, ocean and rim inputs, resize with history, the MRT path against the
 separate output pass (at most 1 LSB), output dither, and the gather undither
