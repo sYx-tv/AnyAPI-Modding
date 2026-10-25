@@ -1,5 +1,5 @@
 #pragma once
-// AnyLoot game bindings, generated for Anymaker 0.1.25 / Steam build 25904830 with
+// AnyLoot game bindings, generated for Anymaker 0.1.27 / Steam build 26113663 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the SDK reference root (reference-0.1.25), one --signature per binding below.
 // Experimental: located by code signature, not reviewed as an AnyAPI service.
@@ -24,7 +24,7 @@ inline constexpr func_desc vehicle_add_component{"(ptr<server_scene.vehicle_comp
 inline constexpr func_desc vehicle_post_load{"() server_scene.vehicle.post_load (server_scene.vehicle, server_scene)","53 55 48 81 ec 88 00 00 00 48 89 4c 24 40 48 89 54 24 48 8a 05 97 01 00 00 88 81 10 0b 00 00 48",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,5};
 // Rolls the game's own loot into a vehicle's storage at a loot level.
 // () server_scene.vehicle.generate_loot (server_scene.vehicle, server_scene, const s32) | side: server
-inline constexpr func_desc vehicle_generate_loot{"() server_scene.vehicle.generate_loot (server_scene.vehicle, server_scene, const s32)","53 55 56 57 48 81 ec c8 00 00 00 48 89 4c 24 68 48 89 54 24 70 4c 89 44 24 78 48 8d 84 24 80 00",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,83};
+inline constexpr func_desc vehicle_generate_loot{"() server_scene.vehicle.generate_loot (server_scene.vehicle, server_scene, const s32)","53 55 56 57 48 81 ec c8 00 00 00 48 89 4c 24 68 48 89 54 24 70 4c 89 44 24 78 48 8d 84 24 80 00",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,86};
 // Fills the items shown when a zombie or creature is inspected; stock it adds none (characters override it).
 // () client_scene.actor.on_inspect (const client_scene.actor, vector<inventory_item_util.item_id>) | side: client
 inline constexpr func_desc actor_on_inspect{"() client_scene.actor.on_inspect (const client_scene.actor, vector<inventory_item_util.item_id>)","",{"", {}, 0},"53 55 56 48 83 ec 70 48 89 4c 24 30 48 89 54 24 38 4c 89 44 24 40 48 8d 02 48 89 44 24 50 48 8b",336u,73};
