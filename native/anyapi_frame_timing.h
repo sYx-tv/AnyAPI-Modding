@@ -54,11 +54,18 @@ static std::string format(const AnySceneTimingV2& t){char m[512];
  return m;}
 
 // Refresh rate of the output holding the window, and the adapter's local VRAM budget/usage. Present thread, every 2 s
-// and after WM_DISPLAYCHANGE or settle(); outside state.lock.
-static void poll(IDXGISwapChain* chain){float hz=0;ComPtr<IDXGISwapChain1> one;DXGI_SWAP_CHAIN_FULLSCREEN_DESC fd{};
+// and after WM_DISPLAYCHANGE or settle(); outside state.lock. Windowed, the display mode is read again only when the
+// window's monitor changed or refresh is set (EnumDisplaySettings can take milliseconds, e.g. under Proton); the 2 s
+// poll itself is one MonitorFromWindow.
+static std::mutex poll_mutex;static HMONITOR polled_monitor{};static float polled_hz{};   // under poll_mutex
+static void poll(IDXGISwapChain* chain,bool refresh){float hz=0;ComPtr<IDXGISwapChain1> one;DXGI_SWAP_CHAIN_FULLSCREEN_DESC fd{};
  if(SUCCEEDED(chain->QueryInterface(IID_PPV_ARGS(&one)))&&SUCCEEDED(one->GetFullscreenDesc(&fd))&&!fd.Windowed&&fd.RefreshRate.Denominator)hz=float(fd.RefreshRate.Numerator)/float(fd.RefreshRate.Denominator);
- if(hz<=0){ComPtr<IDXGIOutput> out;DXGI_OUTPUT_DESC od{};MONITORINFOEXW mi{};mi.cbSize=sizeof(mi);DEVMODEW dm{};dm.dmSize=sizeof(dm);
-  if(SUCCEEDED(chain->GetContainingOutput(&out))&&SUCCEEDED(out->GetDesc(&od))&&GetMonitorInfoW(od.Monitor,(MONITORINFO*)&mi)&&EnumDisplaySettingsW(mi.szDevice,ENUM_CURRENT_SETTINGS,&dm)&&dm.dmDisplayFrequency>1)hz=float(dm.dmDisplayFrequency);}
+ if(hz<=0){HWND window{};DXGI_SWAP_CHAIN_DESC sd{};if(!one||FAILED(one->GetHwnd(&window)))window=nullptr;if(!window&&SUCCEEDED(chain->GetDesc(&sd)))window=sd.OutputWindow;
+  HMONITOR monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST):nullptr;std::lock_guard<std::mutex> p(poll_mutex);
+  if(monitor&&monitor==polled_monitor&&!refresh)hz=polled_hz;   // same monitor, no display change: the cached rate (0 stays unknown)
+  else if(monitor){MONITORINFOEXW mi{};mi.cbSize=sizeof(mi);DEVMODEW dm{};dm.dmSize=sizeof(dm);
+   if(GetMonitorInfoW(monitor,(MONITORINFO*)&mi)&&EnumDisplaySettingsW(mi.szDevice,ENUM_CURRENT_SETTINGS,&dm)&&dm.dmDisplayFrequency>1)hz=float(dm.dmDisplayFrequency);
+   polled_monitor=monitor;polled_hz=hz;}}
  state.refresh_hz=hz;   // 0 = unknown
  std::lock_guard<std::mutex> g(identity_mutex);DXGI_QUERY_VIDEO_MEMORY_INFO info{};
  if(adapter3&&SUCCEEDED(adapter3->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&info))){state.budget_mb=uint32_t(info.Budget>>20);state.usage_mb=uint32_t(info.CurrentUsage>>20);}}
@@ -75,7 +82,7 @@ static void presented(IDXGISwapChain* chain,int64_t entry,int64_t before,int64_t
  if(entry>=state.next_poll){state.next_poll=entry+int64_t(POLL_MS)*frequency()/1000;due=true;}
  if(state.frames%LOG_EVERY==0){log=true;fill(snapshot,after);}
  ReleaseSRWLockExclusive(&state.lock);
- bool refresh=refresh_due.exchange(false);if(chain&&(due||refresh))poll(chain);
+ bool refresh=refresh_due.exchange(false);if(chain&&(due||refresh))poll(chain,refresh);
  if(log)log_line(ANY_LOG_INFO,"framework",format(snapshot).c_str());}
 
 // Present thread, once per draw(): overlay CPU split into collect (mod callbacks, gpu_draw collect, canvas uploads and
