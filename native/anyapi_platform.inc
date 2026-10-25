@@ -236,7 +236,9 @@ static bool ensure_overlay(IDXGISwapChain* chain){if(context2d&&!targets.empty()
 // CPU-14: message-driven focus with a 1 s self-heal (one GetForegroundWindow per second instead of per present and per input message).
 static bool focused(){uint64_t now=GetTickCount64();if(now>=focus_checked_at){focus_checked_at=now+1000;window_focused=game_window&&GetForegroundWindow()==game_window;}return window_focused.load(std::memory_order_relaxed);}
 // Once per chain: pid check (CPU-14), window attach (input works while the overlay is down), new-chain reset (OVL-5).
-static bool accept(IDXGISwapChain* chain){DXGI_SWAP_CHAIN_DESC d{};ComPtr<IDXGISwapChain3> next;if(FAILED(chain->GetDesc(&d)))return false;
+// Two live in-process chains presenting in turn switch at most once a second (as the old 1 s retry did), not every frame.
+static bool accept(IDXGISwapChain* chain){if(chain_cache.raw&&GetTickCount64()-chain_cache.accepted_at<1000)return false;
+ DXGI_SWAP_CHAIN_DESC d{};ComPtr<IDXGISwapChain3> next;if(FAILED(chain->GetDesc(&d)))return false;
  DWORD pid{};GetWindowThreadProcessId(d.OutputWindow,&pid);if(pid!=GetCurrentProcessId()||FAILED(chain->QueryInterface(IID_PPV_ARGS(&next)))){chain_cache.foreign=chain;return false;}
  if(chain_cache.raw)reset();   // the overlay belonged to the previous chain
  swap=next;chain_cache.raw=chain;chain_cache.window=d.OutputWindow;chain_cache.desc=d;chain_cache.desc_valid=true;chain_cache.queue_bound=chain_cache.queue_logged=false;chain_cache.accepted_at=GetTickCount64();
@@ -249,9 +251,9 @@ static void bind_queue(IDXGISwapChain* chain){ComPtr<ID3D12CommandQueue> q;
 // K42: an 8 s toast after a mod faults, and a "Stopped mods" label while the game's Settings screen is open.
 static uint64_t settings_polled_at{};static bool settings_visible{};
 static uint64_t fault_age(uint64_t now,uint64_t at){return now>at?now-at:0;}
-static bool fault_notice_due(uint64_t now){if(!faults_total.load())return false;uint32_t n=plugin_count.load();
- for(uint32_t i=0;i<n;++i){auto t=plugins[i].fault_tick.load();if(t&&fault_age(now,t)<8000)return true;}
+static bool fault_notice_due(uint64_t now){if(!faults_total.load())return false;
  if(now>=settings_polled_at){settings_polled_at=now+250;auto menu=anyapi_menu_service();settings_visible=menu&&menu->settings_open&&menu->settings_open()!=0;}   // <=4 native reads/s, only after a fault
+ uint32_t n=plugin_count.load();for(uint32_t i=0;i<n;++i){auto t=plugins[i].fault_tick.load();if(t&&fault_age(now,t)<8000)return true;}
  return settings_visible;}
 static void draw_fault_notice(const AnyFrameV1& frame){auto ctx=context2d.Get();if(frame.width<96||frame.height<64)return;
  if(!gpu_draw::brush&&FAILED(ctx->CreateSolidColorBrush(D2D1::ColorF(1,1,1,1),&gpu_draw::brush)))return;

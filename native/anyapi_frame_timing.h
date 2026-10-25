@@ -31,7 +31,7 @@ static ComPtr<IDXGIAdapter3> adapter3;static std::mutex identity_mutex;static ID
 // Flag 2 for the next 2 s (resize, new chain, GPU change), and a refresh-rate/VRAM poll on the next present.
 static void settle(){AcquireSRWLockExclusive(&state.lock);state.settle_until_ms=GetTickCount64()+SETTLE_MS;ReleaseSRWLockExclusive(&state.lock);refresh_due=true;}
 static void clear(){AcquireSRWLockExclusive(&state.lock);state.head=state.count=0;state.last_entry=0;state.frames=0;state.overlay_head=state.overlay_count=0;state.overlay_frames=0;
- state.cached_at=0;state.settle_until_ms=0;state.cpu_seen=false;ReleaseSRWLockExclusive(&state.lock);}   // tests
+ state.cached_at=0;state.settle_until_ms=0;state.next_poll=0;state.cpu_seen=false;ReleaseSRWLockExclusive(&state.lock);}   // tests
 // Nearest-rank percentile (index round(q*(n-1))); reorders v. n==0 -> -1.
 static float percentile(float* v,uint32_t n,float q){if(!n)return -1;uint32_t k=std::min(n-1,uint32_t(q*float(n-1)+.5f));std::nth_element(v,v+k,v+n);return v[k];}
 
@@ -75,7 +75,7 @@ static void presented(IDXGISwapChain* chain,int64_t entry,int64_t before,int64_t
  if(entry>=state.next_poll){state.next_poll=entry+int64_t(POLL_MS)*frequency()/1000;due=true;}
  if(state.frames%LOG_EVERY==0){log=true;fill(snapshot,after);}
  ReleaseSRWLockExclusive(&state.lock);
- if(chain&&(due||refresh_due.exchange(false)))poll(chain);
+ bool refresh=refresh_due.exchange(false);if(chain&&(due||refresh))poll(chain);
  if(log)log_line(ANY_LOG_INFO,"framework",format(snapshot).c_str());}
 
 // Present thread, once per draw(): overlay CPU split into collect (mod callbacks, gpu_draw collect, canvas uploads and

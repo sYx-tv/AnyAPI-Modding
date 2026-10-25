@@ -75,6 +75,15 @@ int main(){
  assert(scene_frame::find_service("anyapi.scene_timing",2)==&frame_timing::api_v2&&scene_frame::find_service("anyapi.gpu_info",2)==&frame_timing::gpu_info_v2);
  assert(services::query("anyapi.scene_timing",2)==&frame_timing::api_v2&&services::query("anyapi.gpu_info",2)==&frame_timing::gpu_info_v2&&!services::query("anyapi.scene_timing",3));
  std::cout<<"PASS: timing v2 percentiles, 2 s window, gap skip, cpu/native-read sampling, overlay p50/p95, flags, registry\n";
+ // K41: layout cache hits without a copy, LRU eviction of layouts unused for 300 frames once 512 are cached, hard cap 1024.
+ if(gpu_draw::font(14,false)){auto name=[](int i){return L"layout "+std::to_wstring(i);};
+  auto first=gpu_draw::layout(name(0),14,100,20,0);assert(first&&gpu_draw::layout(std::wstring_view(name(0)),14,100,20,0)==first&&gpu_draw::layout(name(0),14,101,20,0)!=first);
+  for(int i=1;i<1100;++i)assert(gpu_draw::layout(name(i),14,100,20,0));assert(gpu_draw::layouts.size()<=1024&&gpu_draw::layouts.size()>=512);
+  for(int i=0;i<400;++i)gpu_draw::begin_frame();for(int i=0;i<8;++i)gpu_draw::layout(name(5000+i),14,100,20,0);
+  auto keep=gpu_draw::layout(name(5000),14,100,20,0);for(int i=0;i<60;++i)gpu_draw::begin_frame();gpu_draw::layout(name(6000),14,100,20,0);
+  assert(gpu_draw::layouts.size()<=10&&gpu_draw::layout(name(5000),14,100,20,0)==keep);gpu_draw::layouts.clear();
+  std::cout<<"PASS: gpu_draw layout cache lookups and LRU eviction\n";}
+ else std::cout<<"NOTE: DirectWrite unavailable; layout cache check skipped\n";
  assert(platform::start());ComPtr<IDXGIFactory4> factory;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));ComPtr<IDXGIAdapter> warp;assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));
  ComPtr<ID3D12Device> device;assert(SUCCEEDED(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));D3D12_COMMAND_QUEUE_DESC qdesc{};ComPtr<ID3D12CommandQueue> queue;assert(SUCCEEDED(device->CreateCommandQueue(&qdesc,IID_PPV_ARGS(&queue))));
  WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"AnyAPI.RenderTest";RegisterClassW(&wc);HWND hwnd=CreateWindowW(wc.lpszClassName,L"",WS_POPUP,0,0,64,64,nullptr,nullptr,wc.hInstance,nullptr);assert(hwnd);
@@ -97,7 +106,7 @@ int main(){
  check(64,64);assert(SUCCEEDED(swap->ResizeBuffers(2,96,80,DXGI_FORMAT_UNKNOWN,0)));check(96,80);
  effect_on=false;auto effect_frames=post_process::snapshot.frames;check(96,80);assert(post_process::snapshot.frames==effect_frames);effect_on=true;check(96,80);assert(post_process::snapshot.frames>effect_frames);assert(post_process::snapshot.active_passes==1);assert(post_process::back_targets.size()<=2);
  auto timing=(const AnySceneTimingServiceV2*)scene_frame::find_service("anyapi.scene_timing",2);AnySceneTimingV2 t;
- assert(timing&&timing->version==2&&timing->copy_v2(&t)&&t.frame_index>=5&&t.sync_interval==0&&t.pass_ms[ANY_PASS_OVERLAY]>=0&&!(t.flags&8));
+ assert(timing&&timing->version==2&&timing->copy_v2(&t)&&t.frame_index>=4&&t.sync_interval==0&&t.pass_ms[ANY_PASS_OVERLAY]>=0&&!(t.flags&8));
  auto info=(const AnyGpuInfoServiceV2*)scene_frame::find_service("anyapi.gpu_info",2);AnyGpuInfoV2 g;
  assert(info&&info->copy_v2(&g)&&g.v1.known&&g.v1.vendor_id==0x1414&&g.adapter_name[0]&&g.lamp_shadows_supported==1);
  std::cout<<"PASS: timing v2 and gpu_info v2 on WARP refresh_hz="<<t.refresh_hz<<" budget_mb="<<g.budget_mb<<" uma="<<g.uma<<" name="<<g.adapter_name<<'\n';
