@@ -115,16 +115,20 @@ int main(){
   v=frame_of({lamp(0,1,1),lamp(100,1,2)},1);assert(v.size()==2&&v[0].data[0]==100&&v[0].data[8]<.2f&&v[1].data[0]==0&&v[1].data[8]>.8f&&v[1].data[8]<1);
   for(int i=0;i<12;++i)v=frame_of({lamp(0,1,1),lamp(100,1,2)},1);assert(v.size()==1&&v[0].data[0]==100&&v[0].data[8]==1);
   v=frame_of({lamp(100,1,2),lamp(50,1,5)},1);assert(v[0].data[0]==100);   // a young omni (muzzle flash) does not evict it
-  uint16_t id=v[0].track;v=frame_of({},1,.5);v=frame_of({lamp(100,1,2)},1);assert(v[0].track==id&&v[0].data[8]<.2f);   // dormant, same track
-  v=frame_of({},1,.8);v=frame_of({lamp(100,1,2)},1);assert(v[0].data[8]==1);                                          // freed: a new light
+  uint16_t id=v[0].track;v=frame_of({},1,.5);v=frame_of({lamp(100,1,2)},1);assert(v[0].track==id&&v[0].data[8]==1);     // dormant: same track, relights at once
+  v=frame_of({},1,.8);v=frame_of({lamp(100,1,2)},1);assert(v[0].data[8]==1&&t.track(v[0].track).age==0);              // freed: a new light
   for(int i=0;i<4;++i)v=frame_of({lamp(100,1,2)},1);v=frame_of({lamp(100,3,2)},1);assert(std::abs(t.track(v[0].track).ema[0]-(1+2*(1-std::exp(-1/60./.3))))<1e-3f);
   for(int i=0;i<5;++i)v=frame_of({lamp(0,1,1),lamp(100,1,1)},1);uint16_t first=v[0].track;float other=v[0].data[0]==0?100.f:0.f;
   v=frame_of({lamp(other,1,9),lamp(100-other,1,1)},1,.3);assert(v[0].data[0]==other&&v[0].data[8]==1&&v[0].track!=first);  // a hitch snaps the fade
   v=frame_of({lamp(7,1,1)},1,1.5);assert(t.active()==1&&v[0].data[8]==1);                                               // a long pause resets
   // +-3% alternating scores at budget 1: at most one switch in 60 frames (legacy flips every frame).
   {lighting::LampTracker h;double at=0;int switches=0;float last=-1;for(int i=0;i<60;++i){at+=1/60.;std::vector<Lamp> in{lamp(0,1,i&1?1.03f:.97f),lamp(100,1,i&1?.97f:1.03f)};in[0].order=0;in[1].order=1;h.select(in,1,8,origin,at);float x=in[0].data[0];if(last>=0&&x!=last)++switches;last=x;}assert(switches<=1);}
-  // A strobe (0.25 s on, 0.25 s off) keeps its track.
-  {lighting::LampTracker h;double at=0;uint16_t id=0xffff;bool kept=true;for(int i=0;i<60;++i){at+=1/60.;bool on=(i/15)%2==0;std::vector<Lamp> in;if(on)in.push_back(lamp(0,1,1));h.select(in,1,8,origin,at);if(on&&!in.empty()){if(id==0xffff)id=in[0].track;kept&=in[0].track==id;}}assert(kept);}
+  // A strobe (0.25 s on, 0.25 s off) keeps its track and relights at full.
+  {lighting::LampTracker h;double at=0;uint16_t id=0xffff;bool kept=true;for(int i=0;i<60;++i){at+=1/60.;bool on=(i/15)%2==0;std::vector<Lamp> in;if(on)in.push_back(lamp(0,1,1));h.select(in,1,8,origin,at);if(on&&!in.empty()){if(id==0xffff)id=in[0].track;kept&=in[0].track==id&&in[0].data[8]==1;}}assert(kept);}
+  // Budget 2 (cap 3, as capture passes): the brightest lamp blinks 0.25 s on and off beside two weaker steady ones.
+  // It keeps its slot through the dark phase, so it is drawn at full on every lit frame; fades never exceed the cap.
+  {lighting::LampTracker h;double at=0;int lit=0,full=0;for(int i=0;i<120;++i){at+=1/60.;bool on=(i/15)%2==0;std::vector<Lamp> in;if(on)in.push_back(lamp(0,1,1));in.push_back(lamp(100,1,.9f));in.push_back(lamp(200,1,.8f));
+   for(uint32_t k=0;k<in.size();++k)in[k].order=k;h.select(in,2,3,origin,at);assert(in.size()<=3);if(on){++lit;for(auto& l:in)full+=l.data[0]==0&&l.data[8]==1;}}assert(lit==60&&full==lit);}
   std::vector<Lamp> many;for(int i=0;i<20;++i)many.push_back(lamp(float(i*20),1,float(i)));for(int i=0;i<5;++i)v=frame_of(many,8);assert(v.size()<=8);}
  // WI-4: V4 setter and status v2. V1-V3 setters reset every extra.
  {AnySceneLightingParametersV4 v4;v4.shaped=shaped;v4.shaped.lighting.scene.enabled=1;assert(set_v4(&v4));auto pol=copy_policy();

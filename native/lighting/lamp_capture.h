@@ -73,8 +73,9 @@ private:
 inline void select_legacy(std::vector<Lamp>& lamps,uint32_t budget){uint32_t n=std::min<uint32_t>({uint32_t(lamps.size()),budget,8u});
  std::partial_sort(lamps.begin(),lamps.begin()+n,lamps.end(),before);lamps.resize(n);}
 // K26 selection for V4 callers (ANY_LAMP_TRACKING). Lights keep an identity across frames, so a lamp at the budget
-// edge does not flip every frame, a strobe keeps its slot through its dark phase and a one-frame muzzle flash does
-// not evict a headlight. CPU only; the shader input is the same 16-float record with the colour scaled by fade.
+// edge does not flip every frame, a strobe keeps its slot through its dark phase (it stays selected while dormant, so
+// it relights at once at its old fade) and a one-frame muzzle flash does not evict a headlight. CPU only; the shader
+// input is the same 16-float record with the colour scaled by fade.
 struct LampTrack{bool used{},spot{},selected{},present{},grace{};float world[3]{},dir[3]{},radius{},ema[3]{},score{},fade{1};double last_seen{};uint32_t age{};};
 class LampTracker{
 public:
@@ -106,13 +107,14 @@ public:
    if(t.selected)s*=KEEP;else if(incumbents>=budget)s/=MARGIN;if(!l.spot&&t.age<3)s*=YOUNG;l.score=s;}
   uint32_t n=std::min<uint32_t>(budget,uint32_t(lamps.size()));std::partial_sort(lamps.begin(),lamps.begin()+n,lamps.end(),before);
   // Fades: re-entry (known >= 3 frames, not selected last frame) rises 0->1 over FADE; a new light starts at 1;
+  // a selected light that went dormant stays selected and keeps its fade, so a blinking light relights at once;
   // a light that leaves the selection while the game still lists it fades out in a spare slot (cap - drawn);
   // a light the game dropped is cut, like on game surfaces. A pause or hitch snaps every fade.
   auto& drawn=scratch;drawn.assign(lamps.begin(),lamps.begin()+n);   // members keep their capacity: no steady-state allocation
-  for(auto& l:drawn){auto& t=tracks[l.track];if(!t.selected&&!t.grace)t.fade=t.age>=3?0.f:1.f;t.fade=snap?1.f:std::min(1.f,t.fade+dt/float(FADE));t.selected=true;t.grace=false;scale(l,t.fade);}
+  for(auto& l:drawn){if(l.track==0xffff)continue;auto& t=tracks[l.track];if(!t.selected&&!t.grace)t.fade=t.age>=3?0.f:1.f;t.fade=snap?1.f:std::min(1.f,t.fade+dt/float(FADE));t.selected=true;t.grace=false;scale(l,t.fade);}
   for(uint32_t i=n;i<lamps.size();++i){auto& l=lamps[i];if(l.track==0xffff)continue;auto& t=tracks[l.track];if(!t.selected&&!t.grace)continue;
    t.selected=false;t.fade=snap?0.f:std::max(0.f,t.fade-dt/float(FADE));t.grace=t.fade>0&&drawn.size()<cap;if(t.grace){drawn.push_back(l);scale(drawn.back(),t.fade);}}
-  for(uint32_t k=0;k<TRACKS;++k)if(!tracks[k].present){tracks[k].selected=tracks[k].grace=false;}
+  for(uint32_t k=0;k<TRACKS;++k)if(!tracks[k].present)tracks[k].grace=false;   // selected survives dormancy; the DORMANT sweep frees the track
   lamps.swap(drawn);
  }
  const LampTrack& track(uint32_t i)const{return tracks[i];}

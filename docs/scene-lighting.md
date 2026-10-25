@@ -155,9 +155,12 @@ amd_path 0, weather_response 0), so older callers keep the 0.40.1 output.
   while the budget is full, and a point light younger than 3 frames ×0.25, so a
   muzzle flash does not evict a headlight. Scores use a 0.3 s colour average. A
   light that enters the budget fades in over 0.2 s; one that leaves it fades out
-  in a spare slot while fewer than 8 are drawn (at a budget of 8 it stops at
-  once). A light the game removes is cut. A track survives 0.75 s without its
-  light. A pause over 0.25 s snaps every fade; over 1 s resets the tracks.
+  in a spare slot. Fading lights add at most half the budget again (at least
+  one, 8 in all): a budget of 2 draws up to 3, 4 up to 6, and at 8 a light
+  stops at once. A light the game removes is cut. A track survives 0.75 s
+  without its light and keeps its slot, so a light that blinks back on within
+  that time relights at once. A pause over 0.25 s snaps every fade; over 1 s
+  resets the tracks.
 - **Sea plane** (`ANY_ATMOS_SEA_PLANE`). The ocean writes no depth, so without it
   rays over the sea run to the sea floor or the sky. While the game reports an
   ocean (`m_is_ocean`) and `gbuffer_ocean` is usable, rays on ocean pixels end at
