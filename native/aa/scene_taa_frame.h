@@ -1,13 +1,16 @@
 #pragma once
 #include "../lighting/native_frame.h"
+#include "scene_jitter.h"
 #include <cmath>
-// Camera and depth for temporal AA, read at the pre-HUD boundary with the same
+// Camera and depth for temporal AA, read at the postprocess boundary with the same
 // reviewed 0.1.24 offsets as the lighting frame (see lighting/native_frame.h).
 namespace scene_taa {
 struct Camera {double position[3]{};std::array<float,4> right{},up{},forward{},projection{};};
-struct Capture {volumetric::NativeTarget depth;Camera camera;uint32_t failure{};};
-template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,Capture& out,Read read){
- out.failure=1;unsigned char special[4]{};if(!read(scene+0x668,special,4)||special[0]||special[1]||special[2]||special[3])return false;
+// ocean/albedo: filled by capture_surfaces() only.
+struct Capture {volumetric::NativeTarget depth;Camera camera;uint32_t failure{};volumetric::NativeTarget ocean,albedo;bool ocean_ok{},albedo_ok{};};
+// bypass_mask: see scene_jitter::view_refused (0xff = any scene+0x668 flag fails, the 0.40.1 rule).
+template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,Capture& out,Read read,uint32_t bypass_mask=0xff){
+ out.failure=1;unsigned char special[4]{};if(!read(scene+0x668,special,4)||scene_jitter::view_refused(special,bypass_mask))return false;
  out.failure=2;uintptr_t depth{};if(!read(renderer+0x218,&depth,8)||!volumetric::target(depth,out.depth,read)||out.depth.srv_format!=41)return false;
  out.failure=3;uintptr_t main=scene+0x20;double v[3]{},offset[3]{},matrix[16]{};auto& c=out.camera;
  auto axis=[&](uintptr_t at,std::array<float,4>& to){if(!read(at,v,sizeof(v)))return false;double n=v[0]*v[0]+v[1]*v[1]+v[2]*v[2];if(!std::isfinite(n)||n<.98||n>1.02)return false;for(size_t i=0;i<3;++i)to[i]=float(v[i]);return true;};
@@ -18,5 +21,14 @@ template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,Capture& ou
  c.projection={float(matrix[10]),float(matrix[14]),float(matrix[11]),float(matrix[15])};c.right[3]=float(1/std::abs(matrix[0]));c.up[3]=float(1/std::abs(matrix[5]));c.forward[3]=10000;
  if(c.right[3]>=10||c.up[3]>=10||std::abs(c.projection[0]*c.projection[3]-c.projection[1]*c.projection[2])<1e-8f)return false;
  out.failure=0;return true;
+}
+// K05 and AA-6 inputs, read after a successful capture() and never failing it:
+// gbuffer_ocean (renderer+0x208; y > 0 = ocean, used as a flag only) while
+// scene+0xb71 m_is_ocean is 1, and gbuffer_0 (renderer+0x1e8; w = rim flag).
+// Both RGBA16F (DXGI 10), at the depth size (renderer-research-0.1.24 §2).
+template<class Read> void capture_surfaces(uintptr_t renderer,uintptr_t scene,Capture& out,Read read){
+ auto surface=[&](uintptr_t at,volumetric::NativeTarget& t){uintptr_t object{};return read(renderer+at,&object,8)&&volumetric::target(object,t,read)&&t.width==out.depth.width&&t.height==out.depth.height&&t.srv_format==10;};
+ unsigned char ocean=2;out.ocean_ok=read(scene+0xb71,&ocean,1)&&ocean==1&&surface(0x208,out.ocean);
+ out.albedo_ok=surface(0x1e8,out.albedo);
 }
 }
