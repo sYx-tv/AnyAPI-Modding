@@ -78,6 +78,11 @@ int main(){std::cout<<std::unitbuf;assert(gpu_test::create(d));auto device=d.dev
   scene_smaa::Gpu g;auto s=make_scene(64,64,DXGI_FORMAT_R8G8B8A8_UNORM,.005f);frame(g,s,diagonal,nullptr);assert(!g.offscreen_allocated()&&!g.history_allocated());
   scene_smaa::Extra sharp;sharp.sharpen=.5f;frame(g,s,diagonal,&sharp);assert(g.offscreen_allocated()&&!g.history_allocated()&&!g.temporal_ran());
   auto e=taa_extra(s.depth.Get());bool ok{};frame(g,s,diagonal,&e,3,&ok);assert(ok&&g.history_allocated()&&g.temporal_ran());std::cout<<"PASS: TAA targets created on first use (AA-14)\n";}
+ {// Failed target creation: SMAA writes the frame, temporal_ran() is false (the caller stops jitter), and no new attempt is made before the 1 s backoff.
+  scene_smaa::Gpu g;auto s=make_scene(64,64,DXGI_FORMAT_R8G8B8A8_UNORM,.005f);auto e=taa_extra(s.depth.Get());e.fail_targets=true;bool ok{};auto start=GetTickCount64();
+  frame(g,s,diagonal,&e,3,&ok);assert(ok&&!g.temporal_ran()&&!g.offscreen_allocated()&&!g.history_allocated());
+  e.fail_targets=false;frame(g,s,diagonal,&e,3,&ok);assert(ok);if(GetTickCount64()-start<900)assert(!g.temporal_ran()&&!g.offscreen_allocated()&&!g.history_allocated());
+  Sleep(1100);frame(g,s,diagonal,&e,3,&ok);assert(ok&&g.temporal_ran()&&g.history_allocated());std::cout<<"PASS: TAA target failure falls back to SMAA with backoff\n";}
  {// Static scene converges: 6 identical frames stay within 2 LSB of the 1-frame result away from the edge, and flat areas stay exact.
   scene_smaa::Gpu g;auto s=make_scene(64,64,DXGI_FORMAT_R8G8B8A8_UNORM,.005f);auto e=taa_extra(s.depth.Get());e.dither=0;auto first=frame(g,s,diagonal,&e);Readback last;for(int i=0;i<5;++i)last=frame(g,s,diagonal,&e);
   unsigned changed{};for(UINT y=10;y<60;++y)for(UINT x=10;x<60;++x){int a=first.at(x,y)[0],b=last.at(x,y)[0];if(std::abs(a-b)>2)++changed;if(std::abs(float(x)-.6f*y-15)>4)assert(std::abs(b-(float(x)>.6f*y+15?230:20))<=1);}
@@ -133,5 +138,5 @@ int main(){std::cout<<std::unitbuf;assert(gpu_test::create(d));auto device=d.dev
    if(pattern.natural)assert(worst<=.5f/255);if(!strcmp(pattern.name,"flat"))assert(flat_exit==64*64);
    std::cout<<(pattern.natural?"PASS":"INFO")<<": undither "<<pattern.name<<" max_diff_lsb="<<worst*255<<" flat_exit="<<flat_exit<<" moment_exit="<<moment_exit<<" full="<<64*64-flat_exit-moment_exit<<"\n";}}
  assert(gpu_test::wait(d));gpu_test::expect_clean(d,"end");
- std::cout<<"PASS: SMAA, TAA (lazy targets, convergence, re-centring, depth rejection, ocean/rim inputs, resize, MRT parity), output dither and undither parity with no D3D12 errors (validated="<<d.validated<<")\n";
+ std::cout<<"PASS: SMAA, TAA (lazy targets, target failure backoff, convergence, re-centring, depth rejection, ocean/rim inputs, resize, MRT parity), output dither and undither parity with no D3D12 errors (validated="<<d.validated<<")\n";
 }

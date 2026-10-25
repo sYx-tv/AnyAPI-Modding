@@ -144,14 +144,15 @@ static void record_scene(void* renderer,void* scene,bool inner,bool overlay_now)
  // ANY_AA_OCEAN_DEPTH (testing switch): no sea plane, so ocean pixels reproject with the depth buffer as in 0.40.1.
  if(policy.extras.flags&ANY_AA_OCEAN_DEPTH)extra.ocean=nullptr;
  const auto& saved=found->second;owned=true;bool depth_ok=gpu.record(list,back.Get(),p.quality,p.method==2,&extra);if(!depth_ok){history.valid=false;if(extra.temporal)reason=ANY_AA_FALLBACK_DEPTH;}
- // The TAA histories could not be allocated (retried with backoff): SMAA only, and no jitter next frame.
- else if(extra.temporal&&!gpu.temporal_ran()){history.valid=false;reason=ANY_AA_FALLBACK_INTERFACE;}
- temporal_active=extra.temporal&&depth_ok&&gpu.temporal_ran();saved.restore(list);owned=false;
+ // The TAA targets could not be created (video memory) or are backing off: SMAA only, no jitter from the next frame, history dropped.
+ // Reported as interface (no public reason of its own); the log says targets.
+ bool no_targets=extra.temporal&&depth_ok&&!gpu.temporal_ran();if(no_targets){history.valid=false;reason=ANY_AA_FALLBACK_INTERFACE;}
+ temporal_active=extra.temporal&&gpu.temporal_ran();saved.restore(list);owned=false;
  if(p.method>=3&&!temporal_active&&reason!=ANY_AA_FALLBACK_HISTORY_RESET){
   // Inactive by design: quiet. Contract failures count as rejected and warn every 600.
   bool quiet=reason==ANY_AA_FALLBACK_SPECIAL_VISION||reason==ANY_AA_FALLBACK_SCOPE||reason==ANY_AA_FALLBACK_EDITOR_OVERLAY;
   if(quiet){if(fallback_reason!=reason)log_line(ANY_LOG_INFO,"framework",("SCENE_TAA inactive="+std::string(reason_name(reason))+" fallback=SMAA").c_str());}
-  else{auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework",("SCENE_TAA bypass="+std::string(reason_name(reason))+" fallback=SMAA").c_str());}}
+  else{auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework",("SCENE_TAA bypass="+(no_targets?"targets error="+std::to_string(long(gpu.error())):std::string(reason_name(reason)))+" fallback=SMAA").c_str());}}
  fallback_reason=reason;gpu_ready=true;since_recorded=0;width=UINT(desc.Width);height=desc.Height;error=0;auto count=++frames;if(inner)++recorded_inner;
  float ms=float(gpu.gpu_milliseconds());gpu_ms=ms;board.pass_ms[ANY_PASS_AA].store(ms,std::memory_order_relaxed);board.pass_error[ANY_PASS_AA].store(0,std::memory_order_relaxed);
  if(count==1||count%600==0)log_line(ANY_LOG_INFO,"framework",("SCENE_SMAA frames="+std::to_string(count)+" method="+std::to_string(p.method)+" quality="+std::to_string(p.quality)+" sharpening="+std::to_string(p.sharpening)+" temporal="+std::to_string(extra.temporal)+" jittered="+std::to_string(jittered.load())+" fallback="+reason_name(reason)+" gpu_ms="+std::to_string(gpu.gpu_milliseconds())+" width="+std::to_string(width.load())+" height="+std::to_string(height.load())+" lists="+std::to_string(states.peak)+" inner_frames="+std::to_string(recorded_inner.load())+(inner?" location=BEFORE_OVERLAY":" location=BEFORE_HUD")+" native_FXAA_replaced=1 bindings_restored=1").c_str());

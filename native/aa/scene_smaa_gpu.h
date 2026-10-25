@@ -28,6 +28,7 @@ constexpr uint32_t flag_catmull_rom=1,flag_still_v2=2,flag_thin_rescue=4,flag_ap
 struct Extra {float sharpen{};bool temporal{},history_valid{};float history_weight{.9f};ID3D12Resource* depth{};D3D12_RESOURCE_STATES depth_state{};std::array<float,32> constants{};
  uint32_t flags{};float sea_height{},dither{};ID3D12Resource* ocean{};D3D12_RESOURCE_STATES ocean_state{};ID3D12Resource* albedo{};D3D12_RESOURCE_STATES albedo_state{};
  bool split_output{}; // tests only: keep the separate output pass with sharpening off (MRT parity)
+ bool fail_targets{}; // tests only: creating the offscreen targets fails this frame (as out of memory)
 };
 inline D3D12_RESOURCE_BARRIER transition(ID3D12Resource* r,D3D12_RESOURCE_STATES before,D3D12_RESOURCE_STATES after){D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={r,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,before,after};return b;}
 class Gpu {
@@ -40,8 +41,8 @@ class Gpu {
  HRESULT last_error=S_OK;ID3D12CommandQueue* queue_for_idle{};
  // K43: a failed (re)initialisation is retried with backoff, not every frame.
  scene_frame::Backoff retry;ID3D12Device* failed_device{};UINT64 failed_width{};UINT failed_height{};DXGI_FORMAT failed_format{};
- // The lazy targets() allocation has its own backoff (ensure() rebuilds Gpu on a new size, format or device).
- scene_frame::Backoff target_retry;bool temporal_ran_{};
+ // A failed creation of the lazy targets (targets()) is retried after 1, 2, 4 .. 60 s, not every frame.
+ scene_frame::Backoff targets_retry;bool temporal_ran_{};
  bool checked(HRESULT hr){last_error=hr;return SUCCEEDED(hr);}
  D3D12_CPU_DESCRIPTOR_HANDLE cpu(UINT n)const{auto h=srv->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(n)*srv_stride;return h;}
  D3D12_GPU_DESCRIPTOR_HANDLE gpu(UINT n)const{auto h=srv->GetGPUDescriptorHandleForHeapStart();h.ptr+=UINT64(n)*srv_stride;return h;}
@@ -83,16 +84,14 @@ class Gpu {
  }
  // AA-14: the resolved image (TAA or sharpening) and the two RGBA16F histories
  // (TAA) are created on first use. A failure leaves SMAA writing the back buffer
- // and is retried after 1, 2, 4 .. 60 s, not every frame (K43).
+ // (temporal_ran() false) until a retry with backoff succeeds.
  bool targets(bool temporal){
-  if(resolved&&(!temporal||history[1]))return true;
-  uint64_t now=GetTickCount64();if(!target_retry.ready(now))return false;
-  if(!resolved){if(!texture(resolved,width,height,format,true)){resolved.Reset();target_retry.failed(now);return false;}
+  if(!resolved){if(!texture(resolved,width,height,format,true)){resolved.Reset();return false;}
    view(heap::temporal_from1,resolved.Get(),format);view(heap::temporal_from0,resolved.Get(),format);view(heap::output_resolved,resolved.Get(),format);device->CreateRenderTargetView(resolved.Get(),nullptr,output(3));resolved_state=D3D12_RESOURCE_STATE_COMMON;}
-  if(temporal&&!history[1]){if(!texture(history[0],width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true)||!texture(history[1],width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true)){history[0].Reset();history[1].Reset();target_retry.failed(now);return false;}
+  if(temporal&&!history[1]){if(!texture(history[0],width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true)||!texture(history[1],width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true)){history[0].Reset();history[1].Reset();return false;}
    view(heap::temporal_from1+1,history[1].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT);view(heap::temporal_from0+1,history[0].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT);view(heap::output_history0,history[0].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT);view(heap::output_history1,history[1].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT);
    device->CreateRenderTargetView(history[0].Get(),nullptr,output(4));device->CreateRenderTargetView(history[1].Get(),nullptr,output(5));history_state={D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COMMON};history_frame=0;}
-  target_retry.succeeded();return true;
+  return true;
  }
  // Descriptors are volatile: a frame still in flight may read a slot, so a
  // changed input waits for the queue once before its view is rewritten (as depth).
@@ -103,7 +102,9 @@ public:
  bool ready()const{return source&&root;}
  bool offscreen_allocated()const{return resolved!=nullptr;}
  bool history_allocated()const{return history[0]!=nullptr&&history[1]!=nullptr;}
- // The last record() drew the temporal pass (false when TAA fell back to SMAA, e.g. no history targets).
+ // The last record() ran the temporal pass: false when TAA was not requested,
+ // its depth was unusable or its targets could not be created. Without it the
+ // caller must stop jittering and drop its history.
  bool temporal_ran()const{return temporal_ran_;}
  // Smoothed GPU milliseconds of the whole AA pass; negative until measured.
  double gpu_milliseconds()const{return timer.milliseconds();}
@@ -124,7 +125,7 @@ public:
  // With extra temporal or sharpening work, SMAA resolves into an offscreen
  // image and the final pass writes the scene target (with sharpening off, TAA
  // writes it directly through a second render target). Returns false only when a
- // requested depth input is unusable; SMAA output is still written.
+ // requested depth input is unusable; SMAA output is still written. See temporal_ran().
  bool record(ID3D12GraphicsCommandList* list,ID3D12Resource* back,UINT quality,bool enhanced=false,const Extra* extra=nullptr){
   timer.begin(list);temporal_ran_=false;bool temporal=extra&&extra->temporal,depth_ok=true;uint32_t flags=extra?extra->flags&flag_api:0;
   if(temporal){auto dd=extra->depth?extra->depth->GetDesc():D3D12_RESOURCE_DESC{};depth_ok=extra->depth&&dd.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&dd.Width==width&&dd.Height==height&&dd.SampleDesc.Count==1&&(dd.Format==DXGI_FORMAT_R32_TYPELESS||dd.Format==DXGI_FORMAT_R32_FLOAT)&&!(dd.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
@@ -134,9 +135,12 @@ public:
    if(temporal&&extra->ocean&&bind(ocean_input,extra->ocean,heap::extras,DXGI_FORMAT_R16G16B16A16_FLOAT))flags|=flag_ocean;
    if(temporal&&extra->albedo&&bind(albedo_input,extra->albedo,heap::extras+1,DXGI_FORMAT_R16G16B16A16_FLOAT))flags|=flag_rim;}
   bool offscreen=extra&&(temporal||extra->sharpen>0);
-  // Without the histories TAA falls back to SMAA (the caller reads temporal_ran()); sharpening keeps the resolved image if it exists.
-  if(offscreen&&!targets(temporal)){temporal=false;offscreen=extra->sharpen>0&&targets(false);}
-  temporal_ran_=temporal;
+  // targets() runs only when one is missing; while a failure backs off, SMAA writes the back buffer. Without the
+  // histories TAA falls back to SMAA (the caller reads temporal_ran()); sharpening keeps the resolved image if it exists.
+  if(offscreen){bool create=!resolved||(temporal&&!history[1]);uint64_t now=create?GetTickCount64():0;
+   if(create&&!targets_retry.ready(now)){temporal=false;offscreen=extra->sharpen>0&&resolved!=nullptr;}
+   else if((create&&extra->fail_targets)||!targets(temporal)){targets_retry.failed(now);temporal=false;offscreen=extra->sharpen>0&&resolved!=nullptr;}
+   else if(create)targets_retry.reset();}
   bool mrt=temporal&&extra->sharpen<=0&&!extra->split_output;
   if(!uploaded){for(auto pair:{std::pair<ID3D12Resource*,ID3D12Resource*>(area.Get(),area_upload.Get()),{search.Get(),search_upload.Get()}}){auto barrier=transition(pair.first,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST);list->ResourceBarrier(1,&barrier);D3D12_TEXTURE_COPY_LOCATION to{};to.pResource=pair.first;to.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;D3D12_TEXTURE_COPY_LOCATION from{};from.pResource=pair.second;from.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;from.PlacedFootprint=pair.first==area.Get()?area_footprint:search_footprint;list->CopyTextureRegion(&to,0,0,0,&from,nullptr);barrier=transition(pair.first,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);list->ResourceBarrier(1,&barrier);}uploaded=true;}
   D3D12_RESOURCE_BARRIER before[]={transition(back,D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE),transition(source.Get(),source_read?D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE:D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST)};list->ResourceBarrier(2,before);list->CopyResource(source.Get(),back);D3D12_RESOURCE_BARRIER after[]={transition(back,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_RENDER_TARGET),transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)};list->ResourceBarrier(2,after);
@@ -159,7 +163,7 @@ public:
     to(history[write].Get(),history_state[write],D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);image=heap::output_history0+write;++history_frame;}
    if(!mrt){device->CreateRenderTargetView(back,nullptr,output(2));auto handle=output(2);list->OMSetRenderTargets(1,&handle,FALSE,nullptr);list->SetPipelineState(output_pso.Get());list->SetGraphicsRootDescriptorTable(1,gpu(image));list->DrawInstanced(3,1,0,0);}
   }
-  timer.end(list);return depth_ok;
+  temporal_ran_=temporal;timer.end(list);return depth_ok;
  }
 };
 }
