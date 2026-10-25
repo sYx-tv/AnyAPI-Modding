@@ -156,7 +156,10 @@ static void group_labels(int g){
  if(effects&&draft(DetailedAO)>0&&draft(NativeSSAO)!=1){AnySceneEffectsStatusV1 e;bool connected=effects->status(&e)&&e.ao_ready;status_label("ao_status",connected,last_cost.ao,"Detailed shading","Detailed shading: replaces the game's ambient occlusion before lighting.","Detailed shading is waiting for a supported scene; the game's ambient occlusion stays.");}
  }
  else if(g==Sky){
- if(effects_v2&&(draft(WaterReflections)>0||draft(SunGlint)>0)){AnySceneEffectsStatusV2 e;bool connected=effects_v2->status_v2(&e)&&e.water_ready;status_label("water_status",connected,last_cost.water,"Water reflections and glint","Water reflections and glint: ocean only, before fog and sun beams.","Water reflections are waiting for the ocean (it must be on in the game's settings).");}
+ if(effects_v2&&(draft(WaterReflections)>0||draft(SunGlint)>0)){AnySceneEffectsStatusV2 e;bool connected=effects_v2->status_v2(&e)&&e.water_ready;
+  // Effects v3: a quiet frame (pass error -1: under water, in a bunker, no ocean drawn) is idle by design, not waiting.
+  AnySceneEffectsStatusV3 s3;const bool idle=!connected&&effects_v3&&effects_v3->status_v3(&s3)&&s3.pass_error[ANY_PASS_WATER]==-1;
+  status_label("water_status",connected,last_cost.water,"Water reflections and glint","Water reflections and glint: ocean only, before fog and sun beams.",idle?"Water: idle here (under water, in a bunker or no ocean in view).":"Water reflections are waiting for the ocean (it must be on in the game's settings).");}
  }
  else if(g==Finish){
  if(effects&&draft(ToneMapping)>0){AnySceneEffectsStatusV1 e;bool connected=effects->status(&e)&&e.ready;status_label("effects_status",connected,last_cost.effects,"Tone mapping and bloom","Tone mapping and bloom: HDR scene, before the game's tone mapping and HUD.","Scene effects are waiting for a supported scene.");}
