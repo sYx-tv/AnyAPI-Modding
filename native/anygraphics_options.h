@@ -7,7 +7,7 @@
 namespace graphics_options {
 enum Index {Enabled,GameplayOnly,Preset,Advanced,NativeAA,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,NativeShadows,NativeFogBlur,SunLight,SkyLight,AmbientLight,FogDensity,SceneExposure,AAQuality,Clouds,Grass,Foliage,Atmosphere,SunShafts,LightingQuality,GroundFog,ShaftIntensity,BeamFocus,LocalBeams,LocalIntensity,LocalBudget,ShaftClarity,BeamReach,SunResponse,TemporalLighting,Sharpening,CostReadout,ToneMapping,ColourLook,LookStrength,EyeAdaptation,Brightness,SceneBloom,SunGlare,Vignette,DetailedAO,NightSky,Moonlight,ContactShadows,BounceLight,DepthOfField,MotionBlur,DrawDistance,SunDisc,CloudLayer,FocusBlur,LightColour,WindStrength,WaterReflections,SunGlint,MoonSource,LightFollowsTime,WeatherResponse,
  // Hidden rows (group Hidden): settings.tsv only, never drawn. Testers flip them; Reset puts them back.
- AmdLampPath,CloudModel,ShadingRevision,ToneRevision,BloomFalloff,TaaStillV2,TaaThinRescue,KeepNativeSsao,PresetRevision,Count};
+ AmdLampPath,CloudModel,ShadingRevision,ToneRevision,BloomFalloff,TaaStillV2,TaaThinRescue,KeepNativeSsao,PresetRevision,SkyModel,AaBeforeOverlays,TaaOcean,OutputDither,Count};
 struct Option {const char* id;const char* group;const char* label;const char* description;uint32_t kind;float initial,minimum,maximum,step;};
 static constexpr Option definitions[]={
  {"enabled","General","Enable AnyGraphics","Use the selected native graphics settings. Off restores the game's own settings.",ANY_SETTING_BOOL,1,0,1,1},
@@ -73,7 +73,7 @@ static constexpr Option definitions[]={
  {"light_follows_time","Lighting","Light colour follows time","Golden light at sunrise and sunset, neutral at noon, cool blue at dusk and blue moonlight at night, following the game's clock. Off keeps one colour all day.",ANY_SETTING_BOOL,0,0,1,1},
  {"weather_response","Sky","Weather response","Lets rain, snow and storms change AnyGraphics too: thicker fog and cloud, dimmer stars and sun, a rougher sea, and lightning that lights up the fog without the exposure pumping. Almost no GPU cost.",ANY_SETTING_BOOL,0,0,1,1},
  // Hidden tuning (defaults are the AnyAPI 0.40.2 service defaults; docs/mods/graphics.md explains how to edit them).
- {"amd_lamp_path","Hidden","AMD lamp path","Testing only: 0 automatic, 1 constant-buffer lamps, 2 the uniform-branch experiment. Other graphics cards ignore it.",ANY_SETTING_CHOICE,0,0,2,1},
+ {"amd_lamp_path","Hidden","AMD lamp path","Testing only: 0 automatic (= 1), 1 constant-buffer lamps with shaders sized to the lamps in view, 2 the uniform-branch experiment, 3 the 0.40.1 single 8-lamp shader. Other graphics cards ignore it.",ANY_SETTING_CHOICE,0,0,3,1},
  {"cloud_model","Hidden","Cloud model","Testing only: 1 clouds v2 (default), 0 the AnyAPI 0.40.1 clouds.",ANY_SETTING_BOOL,1,0,1,1},
  {"shading_revision","Hidden","Shading revision","Testing only: 1 the 0.40.2 detailed shading and bounce light (default), 0 the 0.40.1 versions.",ANY_SETTING_BOOL,1,0,1,1},
  {"tone_revision","Hidden","Filmic revision","Testing only: 1 Filmic with more midtone contrast, 0 the 0.40.1 Filmic (default).",ANY_SETTING_BOOL,0,0,1,1},
@@ -81,7 +81,11 @@ static constexpr Option definitions[]={
  {"taa_still_v2","Hidden","TAA history v2","Testing only: 1 the 0.40.2 TAA history (Catmull-Rom resampling and the still/moving pixel rule, default), 0 the 0.40.1 history.",ANY_SETTING_BOOL,1,0,1,1},
  {"taa_thin_rescue","Hidden","TAA thin rescue","Testing only: 1 keeps thin wires and grass in the TAA history (experiment), 0 off (default).",ANY_SETTING_BOOL,0,0,1,1},
  {"keep_native_ssao","Hidden","Keep game SSAO","Testing only: 1 runs the game's ambient occlusion even when Detailed shading replaces it, 0 skips it (default).",ANY_SETTING_BOOL,0,0,1,1},
- {"preset_revision","Hidden","Preset revision","Internal: the preset tables these settings were saved with. Do not edit.",ANY_SETTING_INTEGER,1,0,1000,1}
+ {"preset_revision","Hidden","Preset revision","Internal: the preset tables these settings were saved with. Do not edit.",ANY_SETTING_INTEGER,1,0,1000,1},
+ {"sky_model","Hidden","Night sky model","Testing only: 1 the night sky on the game clock (stars all night, moon phases, dawn fade; default), 0 the AnyAPI 0.40.1 night sky.",ANY_SETTING_BOOL,1,0,1,1},
+ {"aa_before_overlays","Hidden","AA before overlays","Testing only: 1 runs scene AA before the editor, placement and inspection overlays (default), 0 the 0.40.1 placement after them, where TAA pauses while an overlay shows.",ANY_SETTING_BOOL,1,0,1,1},
+ {"taa_ocean","Hidden","TAA sea surface","Testing only: 1 TAA reprojects ocean pixels on the sea surface (default), 0 with the depth buffer as in 0.40.1.",ANY_SETTING_BOOL,1,0,1,1},
+ {"output_dither","Hidden","Output dither","Testing only: 1 adds about one step of dither to the finish and scene AA output against banding (default), 0 off.",ANY_SETTING_BOOL,1,0,1,1}
 };
 static_assert(std::size(definitions)==Count);
 // K37: State::add rejects a description over 255 bytes or a label over 127, which would disable the whole mod.
@@ -122,7 +126,7 @@ inline constexpr float moon_target=.012f;
 inline constexpr Index order[]={Enabled,GameplayOnly,Preset,Advanced,NativeAA,AAQuality,Sharpening,NativeBloom,BloomAmount,BloomThreshold,NativeSSAO,DetailedAO,NativeShadows,ContactShadows,BounceLight,DrawDistance,NativeFogBlur,SunLight,SkyLight,AmbientLight,LightColour,LightFollowsTime,FogDensity,SceneExposure,Clouds,Grass,Foliage,WindStrength,
  ToneMapping,ColourLook,LookStrength,Brightness,EyeAdaptation,SceneBloom,SunGlare,Vignette,DepthOfField,FocusBlur,MotionBlur,SunDisc,CloudLayer,WaterReflections,SunGlint,NightSky,Moonlight,MoonSource,WeatherResponse,
  Atmosphere,SunShafts,ShaftIntensity,ShaftClarity,BeamReach,SunResponse,BeamFocus,LightingQuality,TemporalLighting,GroundFog,LocalBeams,LocalIntensity,LocalBudget,CostReadout,
- AmdLampPath,CloudModel,ShadingRevision,ToneRevision,BloomFalloff,TaaStillV2,TaaThinRescue,KeepNativeSsao,PresetRevision};
+ AmdLampPath,CloudModel,ShadingRevision,ToneRevision,BloomFalloff,TaaStillV2,TaaThinRescue,KeepNativeSsao,PresetRevision,SkyModel,AaBeforeOverlays,TaaOcean,OutputDither};
 static_assert(std::size(order)==Count);
 template<size_t N> inline uint32_t nearest(float value,const float(&levels)[N]){uint32_t best=0;for(uint32_t i=1;i<N;++i)if(std::abs(value-levels[i])<std::abs(value-levels[best]))best=i;return best;}
 // Menu groups: the top level holds the preset and a few main choices; the rest sit in fine-tuning groups that open

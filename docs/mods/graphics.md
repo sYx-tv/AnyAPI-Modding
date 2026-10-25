@@ -178,8 +178,12 @@ them back.
 | `taa_still_v2` | 1, the 0.40.2 rule for still and moving pixels | 0: the 0.40.1 rule |
 | `taa_thin_rescue` | 0 | 1: keep thin wires and grass in the TAA history (experiment) |
 | `keep_native_ssao` | 0, the game's ambient occlusion is skipped when Detailed shading replaces it | 1: run it anyway |
-| `amd_lamp_path` | 0, automatic | 1: constant-buffer lamps; 2: the uniform-branch experiment (AMD only) |
+| `amd_lamp_path` | 0, automatic (constant-buffer lamps with shaders sized to the lamps in view) | 1: the same; 2: the uniform-branch experiment; 3: the 0.40.1 single 8-lamp shader (AMD only) |
 | `preset_revision` | 1 | internal: the preset tables the settings were saved with |
+| `sky_model` | 1, the night sky on the game clock | 0: the AnyAPI 0.40.1 night sky |
+| `aa_before_overlays` | 1, scene AA before the editor, placement and inspection overlays | 0: the 0.40.1 placement after them (TAA pauses while an overlay shows) |
+| `taa_ocean` | 1, TAA moves ocean pixels on the sea surface | 0: the 0.40.1 depth buffer rule |
+| `output_dither` | 1, about one step of dither in the finish and scene AA output | 0: no dither |
 
 ## Tone mapping and colour (0.30.0)
 

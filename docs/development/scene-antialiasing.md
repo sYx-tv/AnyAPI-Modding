@@ -29,7 +29,11 @@ are no longer smoothed or smeared. The scene-controls worker installs it through
 `scene_frame::seams.install_postprocess` and the log reads `SCENE_AA_STAGE inner=1`.
 The renderer and scene come from the scene hook of the same frame (one
 `renderer.render` builds and records one stack `scene_render` on one thread) and
-are checked against `self - 0x2450`. Without the inner hook (`inner=0`, with the
+are checked against `self - 0x2450`. The hook forwards all four integer argument
+registers (rcx, rdx, r8, r9) and the return value to the original. Version 3
+`flags` `ANY_AA_AFTER_OVERLAYS` (AnyGraphics hidden row `aa_before_overlays` 0)
+leaves every frame to the boundary record below while the hook stays installed.
+Without the inner hook (`inner=0`, with the
 prologue found in cell 15 printed as `cell15=`) AA records at the 0.1.27 boundary
 above and TAA pauses while an overlay vector (seven `vector<element>` at
 scene+0x25b8, step 0x28, count at +0xc) is non-empty. Jitter stays off for 30

@@ -124,9 +124,10 @@ static const char* const golden[]={
  "sky\twater_reflections\t4\t0\t0\t3","sky\tsun_glint\t4\t0\t0\t1",
  // 0.33.0
  "sky\tmoon_source\t4\t0\t0\t1","lighting\tlight_follows_time\t1\t0\t0\t1","sky\tweather_response\t1\t0\t0\t1",
- "hidden\tamd_lamp_path\t4\t0\t0\t2","hidden\tcloud_model\t1\t1\t0\t1","hidden\tshading_revision\t1\t1\t0\t1","hidden\ttone_revision\t1\t0\t0\t1",
+ "hidden\tamd_lamp_path\t4\t0\t0\t3","hidden\tcloud_model\t1\t1\t0\t1","hidden\tshading_revision\t1\t1\t0\t1","hidden\ttone_revision\t1\t0\t0\t1",
  "hidden\tbloom_falloff\t3\t1\t0.5\t1","hidden\ttaa_still_v2\t1\t1\t0\t1","hidden\ttaa_thin_rescue\t1\t0\t0\t1","hidden\tkeep_native_ssao\t1\t0\t0\t1",
- "hidden\tpreset_revision\t2\t1\t0\t1000"};
+ "hidden\tpreset_revision\t2\t1\t0\t1000","hidden\tsky_model\t1\t1\t0\t1","hidden\taa_before_overlays\t1\t1\t0\t1","hidden\ttaa_ocean\t1\t1\t0\t1",
+ "hidden\toutput_dither\t1\t1\t0\t1"};
 
 // K38: the preset table in docs/mods/graphics.md, generated from profile(). The test prints it and, when the docs are
 // next to the source, requires the docs to hold exactly this text between the preset-table markers.
@@ -184,8 +185,8 @@ static void pure_tests(){using namespace graphics_options;
  // AG-2: fresh installs and Reset get Balanced.
  assert(balanced()==profile(defaults(),3)&&balanced()[NativeAA]==5&&balanced()[Preset]==3&&balanced()[ToneMapping]==2);
  // Preference rows and hidden rows survive every preset; the hidden rows are never drawn.
- auto mine=defaults();mine[MoonSource]=1;mine[LightFollowsTime]=1;mine[WeatherResponse]=1;mine[CloudModel]=0;mine[BloomFalloff]=.7f;mine[TaaThinRescue]=1;mine[PresetRevision]=1;
- for(int level=1;level<=SoftWarmProfile;++level){auto v=profile(mine,level);for(auto i:{MoonSource,LightFollowsTime,WeatherResponse,CloudModel,BloomFalloff,TaaThinRescue,PresetRevision})assert(v[i]==mine[i]);}
+ auto mine=defaults();mine[MoonSource]=1;mine[LightFollowsTime]=1;mine[WeatherResponse]=1;mine[CloudModel]=0;mine[BloomFalloff]=.7f;mine[TaaThinRescue]=1;mine[PresetRevision]=1;mine[SkyModel]=0;mine[OutputDither]=0;
+ for(int level=1;level<=SoftWarmProfile;++level){auto v=profile(mine,level);for(auto i:{MoonSource,LightFollowsTime,WeatherResponse,CloudModel,BloomFalloff,TaaThinRescue,PresetRevision,SkyModel,OutputDither})assert(v[i]==mine[i]);}
  for(size_t i=0;i<Count;++i)assert(hidden(Index(i))==(i==BloomAmount||i==BloomThreshold||i==SceneExposure||i==Advanced||i>=AmdLampPath));
  // A look run by auto-pick at a lower tier never costs more than that tier.
  for(int look:{NaturalProfile,VibrantProfile,MoodyProfile,ClearDayProfile,SoftWarmProfile})for(size_t t=0;t<6;++t){auto tier=tier_values(defaults(),t),v=tier;apply_style(look,v);
@@ -225,7 +226,8 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
   // High as AnyGraphics 0.32 saved it: 48-step volumetrics and 8 lamps, no water rows yet, and a fog the user picked.
   row("anygraphics.general\tquality_profile",4,"4");row("anygraphics.lighting\tlighting_quality",4,"3");row("anygraphics.lighting\tlocal_budget",4,"3");row("anygraphics.scene\tcrispness",4,"1");row("anygraphics.scene\tdetailed_ao",4,"2");row("anygraphics.scene\tfog_density",3,"0.35");
   // Hidden rows a tester set by hand.
-  row("anygraphics.hidden\ttone_revision",1,"1");row("anygraphics.hidden\tbloom_falloff",3,"0.7");row("anygraphics.hidden\tcloud_model",1,"0");row("anygraphics.hidden\tkeep_native_ssao",1,"1");row("anygraphics.hidden\ttaa_thin_rescue",1,"1");row("anygraphics.hidden\tamd_lamp_path",4,"2");}
+  row("anygraphics.hidden\ttone_revision",1,"1");row("anygraphics.hidden\tbloom_falloff",3,"0.7");row("anygraphics.hidden\tcloud_model",1,"0");row("anygraphics.hidden\tkeep_native_ssao",1,"1");row("anygraphics.hidden\ttaa_thin_rescue",1,"1");row("anygraphics.hidden\tamd_lamp_path",4,"3");
+  row("anygraphics.hidden\tsky_model",1,"0");row("anygraphics.hidden\taa_before_overlays",1,"0");row("anygraphics.hidden\ttaa_ocean",1,"0");row("anygraphics.hidden\toutput_dither",1,"0");}
  else if(!fresh){std::ofstream old(root/L"AnyHelpers"/L"settings.tsv");old<<"anygraphics.scene\tsun_light\t3\t312e35\nanygraphics.general\tcomparison\t4\t31\nanygraphics.sharpness\tsharpen\t1\t31\n";if(mode.empty())old<<"anygraphics.scene\tnative_aa\t4\t35\n";}
  auto path=root.wstring();AnyModHostV1 host;host.game_directory=path.c_str();host.plugin_directory=path.c_str();host.log=log;AnyModCallbacksV1 g;assert(((AnyModInitV1)GetProcAddress(graphics,"AnyAPI_ModInit"))(&host,&g));((void(*)())GetProcAddress(graphics,"AnyAPI_ModReady"))();assert(g.render);
  auto event=(void(*)(uint32_t))GetProcAddress(fixture,"FixtureGraphicsEvent");auto stage=(void(*)(uint64_t,double))GetProcAddress(fixture,"FixtureGraphicsStage");auto rows=(uint32_t(*)())GetProcAddress(fixture,"FixtureRows");auto dirty=(uint32_t(*)())GetProcAddress(fixture,"FixtureGraphicsDirty");auto title=(const char*(*)())GetProcAddress(fixture,"FixtureGraphicsTitle");auto ui=(void(*)(int32_t))GetProcAddress(fixture,"FixtureUiState");assert(event&&stage&&rows&&dirty&&title&&ui);assert(std::string(title()).find("Modded")!=std::string::npos);assert(!service->query("anyhelpers.settings",1));
@@ -237,8 +239,8 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  assert(has("SERVICES controls=4 lighting=4 effects=3 aa=3 timing=2 gpu_info=2 lamp_budget_max=8")&&has("PRESET_REVISION from=0 to=1 preset=3 rows_changed=0 saved=1"));
  // Lighting v4: the lamp budget, the sea plane and the default lamp flags; the hidden rows send the 0.40.2 defaults.
  assert(lamps_sets&&lamps_policy.lamp_budget==4&&lamps_policy.atmosphere_flags==ANY_ATMOS_SEA_PLANE&&lamps_policy.flags==15&&lamps_policy.weather_response==0&&lamps_policy.amd_path==0&&lamps_policy.lamp_model==0);
- assert(fx3_sets&&fx3_policy.cloud_model==1&&fx3_policy.shading_revision==1&&fx3_policy.tone_revision==0&&fx3_policy.bloom_falloff==1&&fx3_policy.flags==0&&fx3_policy.weather==0&&fx3_policy.sky_model==1);
- assert(aa3_policy.taa_flags==(ANY_TAA_CATMULL_ROM|ANY_TAA_STILL_V2)&&aa3_policy.history_bias==0);
+ assert(fx3_sets&&fx3_policy.cloud_model==1&&fx3_policy.shading_revision==1&&fx3_policy.tone_revision==0&&fx3_policy.bloom_falloff==1&&fx3_policy.flags==0&&fx3_policy.weather==0&&fx3_policy.sky_model==1&&fx3_policy.dither==1);
+ assert(aa3_policy.taa_flags==(ANY_TAA_CATMULL_ROM|ANY_TAA_STILL_V2)&&aa3_policy.history_bias==0&&aa3_policy.flags==0&&aa3_policy.dither==1);
  assert(controls4_sets&&controls4_policy.tint_targets==1&&!controls4_policy.time_shaped&&!controls4_policy.moon_mode&&controls4_policy.moonlight==0&&!controls4_policy.weather_fog_keep&&controls4_policy.shadow_split==0);
  // Presets keep the fine-tuning groups closed; choosing Custom opens them all so each row can be set.
  apply(Preset,CustomProfile);
@@ -337,7 +339,8 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  assert(has("PRESET_REVISION from=0 to=1 preset=4 rows_changed=4 saved=1"));
  assert(lighting_policy.quality==2&&lamps_policy.lamp_budget==6&&water_policy.water_reflections==1&&water_policy.reflection_quality==1&&water_policy.sun_glint==1&&policy.fog==.35f&&aa3_policy.base.sharpening==.3f);
  // Hidden rows reach the services.
- assert(fx3_policy.tone_revision==1&&std::abs(fx3_policy.bloom_falloff-.7f)<1e-6f&&fx3_policy.cloud_model==0&&fx3_policy.flags==ANY_FX_KEEP_NATIVE_SSAO&&aa3_policy.taa_flags==7&&lamps_policy.amd_path==2);
+ assert(fx3_policy.tone_revision==1&&std::abs(fx3_policy.bloom_falloff-.7f)<1e-6f&&fx3_policy.cloud_model==0&&fx3_policy.flags==ANY_FX_KEEP_NATIVE_SSAO&&aa3_policy.taa_flags==7&&lamps_policy.amd_path==3);
+ assert(fx3_policy.sky_model==0&&fx3_policy.dither==0&&aa3_policy.flags==(ANY_AA_AFTER_OVERLAYS|ANY_AA_OCEAN_DEPTH)&&aa3_policy.dither==0);
  auto text=read_file(root/L"AnyGraphics"/L"settings.tsv");assert(text.find("anygraphics.hidden\tpreset_revision\t2\t31\n")!=std::string::npos&&text.find("anygraphics.sky\twater_reflections\t4\t32\n")!=std::string::npos&&text.find("anygraphics.scene\tfog_density\t3\t"+hex("0.34999999403953552"))!=std::string::npos);
  // A second start finds the revision and changes nothing.
  FreeLibrary(graphics);logs.clear();graphics=LoadLibraryW(argv[3]);assert(graphics);assert(((AnyModInitV1)GetProcAddress(graphics,"AnyAPI_ModInit"))(&host,&g));((void(*)())GetProcAddress(graphics,"AnyAPI_ModReady"))();

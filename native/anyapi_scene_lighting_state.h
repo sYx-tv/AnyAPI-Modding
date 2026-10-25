@@ -32,7 +32,7 @@ static bool set_v3(const AnySceneLightingParametersV3* p){if(!p||p->struct_size!
 static bool valid_v4(const AnySceneLightingParametersV4& p){if(p.struct_size!=sizeof(p)||p.version!=4)return false;auto unit=[](float f,float hi){return std::isfinite(f)&&f>=0&&f<=hi;};
  for(auto r:p.reserved)if(r)return false;
  return p.lamp_model==0&&p.lamp_quality<=3&&p.lamp_budget>=1&&p.lamp_budget<=16&&p.lamp_shadows<=2&&p.lamp_shape<=3&&unit(p.weather_response,1)&&unit(p.ambient_washout,1)&&
-  !(p.flags&~uint32_t(ANY_LAMP_UNDERGROUND|ANY_LAMP_TRACKING|ANY_LAMP_FLASHES|ANY_LAMP_OCEAN))&&p.native_halos==0&&p.amd_path<=2&&!(p.atmosphere_flags&~ATMOS_SUPPORTED)&&unit(p.sky_inscatter,2);}
+  !(p.flags&~uint32_t(ANY_LAMP_UNDERGROUND|ANY_LAMP_TRACKING|ANY_LAMP_FLASHES|ANY_LAMP_OCEAN))&&p.native_halos==0&&p.amd_path<=3&&!(p.atmosphere_flags&~ATMOS_SUPPORTED)&&unit(p.sky_inscatter,2);}
 static bool set_v4(const AnySceneLightingParametersV4* p){if(!p||!valid_v4(*p))return false;auto& v=p->shaped;auto& l=v.lighting;
  if(v.struct_size!=sizeof(v)||v.version!=3||l.struct_size!=sizeof(l)||l.version!=2||!std::isfinite(l.local_strength)||l.local_strength<0||l.local_strength>15||l.local_budget<1||l.local_budget>8)return false;
  if(!std::isfinite(v.clarity)||v.clarity<0||v.clarity>1||!std::isfinite(v.beam_reach)||(v.beam_reach!=0&&(v.beam_reach<10||v.beam_reach>2000))||v.sun_response>1||v.temporal>1)return false;
