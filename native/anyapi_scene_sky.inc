@@ -18,7 +18,8 @@ static void reject(Pass& s,int code,const char* why){s.rested=0;*s.ready=false;m
  if(++s.rejected==1||s.rejected%600==0)log_line(ANY_LOG_WARN,"framework",(std::string(s.tag)+" bypass="+why+" code="+std::to_string(code)+" count="+std::to_string(s.rejected)).c_str());}
 // K43 retry around ensure(): a failed create waits 1, 2, 4 .. 60 s instead of retrying every frame.
 template<class G> static bool ensure(Pass& s,G& gpu,ID3D12Device* d,ID3D12CommandQueue* q,const D3D12_RESOURCE_DESC& desc){
- if(gpu.current(d,q,desc))return true;uint64_t now=GetTickCount64();if(!s.retry.ready(now))return false;scene_frame::reset_resource_cache();
+ if(gpu.current(d,q,desc))return true;if(!platform::queue_on(q,d))return false;   // a new device before its chain binds
+ uint64_t now=GetTickCount64();if(!s.retry.ready(now))return false;scene_frame::reset_resource_cache();
  if(gpu.ensure(d,q,desc)){s.retry.succeeded();return true;}s.retry.failed(now);return false;}
 // K03: scene+0x668..0x66b; when unreadable, this frame's controls sample.
 static uint32_t view(void* scene){uint32_t v=scene_frame::view_flags(uintptr_t(scene));scene_frame::Sample s{};
