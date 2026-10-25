@@ -5,7 +5,7 @@
 namespace scene_effects {
 static scene_ao_gpu::Gpu ao_gpu;static uint32_t ao_frame_index{};
 static thread_local bool ao_skip_next{};   // replace_ssao failed this frame for a reason a retry cannot fix
-static void ao_bypass(int code,const char* why,const volumetric::NativeTarget* t=nullptr){ao_ready=false;std::string detail;if(t)for(int i=0;i<4;++i)detail+=" format"+std::to_string(i)+"="+std::to_string(t[i].srv_format)+" width"+std::to_string(i)+"="+std::to_string(t[i].width);pass_reject(ao_pass,code,why,detail);}
+static void ao_bypass(int code,const char* why,const volumetric::NativeTarget* t=nullptr){ao_ready=false;std::string detail;auto n=ao_pass.rejected+1;if(t&&(n==1||n%600==0))for(int i=0;i<4;++i)detail+=" format"+std::to_string(i)+"="+std::to_string(t[i].srv_format)+" width"+std::to_string(i)+"="+std::to_string(t[i].width);pass_reject(ao_pass,code,why,detail);}
 // Native inputs: 0 SSAO target, 1 depth, 2 normals (gbuffer_1), 3 albedo (gbuffer_0).
 // K03: no view check; bunkers and underwater have ambient light to occlude too. frame_index 0..15 (0 without TAA, K13).
 template<class Read> bool ao_capture(uintptr_t renderer,uintptr_t scene,volumetric::NativeTarget (&t)[4],scene_ao_gpu::Frame& f,const AnySceneEffectsParametersV1& p,Read read,float frame_index=0,uint32_t revision=0){
