@@ -46,7 +46,7 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 - Ocean pixels reproject on the sea surface, so the water no longer ghosts under TAA
   (`taa_ocean` reverts).
 - Sharper TAA in motion (Catmull-Rom history) and a better rule for still and moving pixels.
-  Both can be reverted (`taa_still_v2`; the history filter has no switch).
+  Both revert together with `taa_still_v2`; there is no separate switch for the history filter.
 - Looking through a scope resets the history instead of smearing.
 - A one-step dither removes banding in dark gradients (`output_dither` turns it off, also in
   the finish pass).
@@ -121,8 +121,9 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 - **Show GPU cost** lists every pass, and a second line shows frame times, AnyAPI's CPU time
   and the lamps drawn. In menus it shows the last gameplay numbers.
 - Presets: High is no longer as costly as Ultra (32 samples and 6 lamps), Balanced sharpens TAA,
-  Natural keeps the game's ambient occlusion, Performance and Low keep the game's weather fog.
-  A preset saved with an earlier version moves to these values once; Custom is not touched.
+  Natural keeps the game's ambient occlusion. A preset saved with an earlier version moves to
+  these values once; Custom is not touched. Picking Performance or Low again now keeps the
+  game's weather fog (base fog Reduced); a saved preset keeps the fog it has (Fog is a top row).
 - Fixes: a fresh install and Reset give the real Balanced preset; quick photo-key taps work at
   low frame rates; photo mode returns the camera if AnyGraphics stops updating it; photo
   controls no longer add sun glare or swap the bloom; the Lighting group shows without scene
@@ -130,7 +131,8 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 - Fog and light levels are named after the game (Reduced and Game instead of Medium and High).
   Saved values do not change.
 
-With AnyAPI 0.40.1 AnyGraphics 0.33.0 hides the new rows and keeps the 0.32.0 behaviour.
+With AnyAPI 0.40.1 AnyGraphics 0.33.0 hides the new rows; the 0.33.0 preset tables, the
+one-time preset update and Reset to Balanced still apply.
 
 ## How it was checked
 

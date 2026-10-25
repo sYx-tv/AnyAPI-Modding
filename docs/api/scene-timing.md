@@ -37,7 +37,7 @@ in [`anyapi_scene_timing_v2.h`](../../sdk/include/anyapi_scene_timing_v2.h):
 | `present_block_ms` | p50 ms spent inside the game's own `Present` (vsync or queue wait) |
 | `sync_interval` | The last `Present` SyncInterval |
 | `refresh_hz` | Refresh rate of the output holding the window: checked every 2 s (windowed: the display mode is read again when the window moves to another monitor) and on display changes; 0 unknown |
-| `pass_ms[16]` | GPU ms per `AnyScenePassV2` from each pass's timer, -1 off or not measured; `pass_ms[ANY_PASS_OVERLAY]` is the p50 CPU ms of AnyAPI's overlay composition (mod canvases, gpu_draw, post-process and the Direct2D flush) |
+| `pass_ms[16]` | GPU ms per `AnyScenePassV2` from each pass's timer; 0 when the pass skipped this frame by design (scene effects 3 `pass_error` -1, lighting reason 7 or 8); -1 when off, bypassed or not measured; `pass_ms[ANY_PASS_OVERLAY]` is the p50 CPU ms of AnyAPI's overlay composition (mod canvases, gpu_draw, post-process and the Direct2D flush) |
 | `overlay_ms_p95` | p95 of the same overlay CPU time |
 | `anyapi_cpu_ms` | p50 main-thread ms per frame inside AnyAPI scene hooks; -1 until measured |
 | `native_reads` | `ReadProcessMemory` calls during the last frame (0 is the target in gameplay) |
