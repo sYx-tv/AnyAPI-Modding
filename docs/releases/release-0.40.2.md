@@ -117,13 +117,21 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 - **Auto-pick** measures typical and worst frame times and how much AnyAPI's passes cost,
   stops when the CPU or game is the limit (never below Balanced that way; a game waiting for
   the graphics card still steps down), notices a frame-rate
-  cap, keeps a look's style, and stops if the settings cannot be saved.
+  cap (a 30 or 40 fps limit stops it instead of dropping presets), keeps a look's style, and
+  stops if the settings cannot be saved.
 - **Show GPU cost** lists every pass, and a second line shows frame times, AnyAPI's CPU time
   and the lamps drawn. In menus it shows the last gameplay numbers.
 - Presets: High is no longer as costly as Ultra (32 samples and 6 lamps), Balanced sharpens TAA,
-  Natural keeps the game's ambient occlusion. A preset saved with an earlier version moves to
-  these values once; Custom is not touched. Picking Performance or Low again now keeps the
-  game's weather fog (base fog Reduced); a saved preset keeps the fog it has (Fog is a top row).
+  Natural keeps the game's ambient occlusion. The looks use 32 volumetric samples, Natural and
+  Clear Day 24 (fewer than before, so their sun shafts are a little softer). A preset saved with
+  an earlier version moves to these values once; Custom is not touched. A saved preset keeps the
+  new Water reflections and Sun glint off: choose the preset again or select Reset preset to
+  turn them on. Picking Performance or Low again now keeps the game's weather fog (base fog
+  Reduced); a saved preset keeps the fog it has (Fog is a top row).
+- If you never selected Apply in AnyGraphics, you ran each row's own default; 0.33.0 runs the
+  real Balanced preset instead (TAA, Filmic, volumetric fog and sun shafts, the sky and contact
+  shadows), which costs more. On integrated graphics and Steam Deck it starts on Low instead,
+  once, and saves that. Auto-pick or a lower preset brings the cost down.
 - Fixes: a fresh install and Reset give the real Balanced preset; quick photo-key taps work at
   low frame rates; photo mode returns the camera if AnyGraphics stops updating it; photo
   controls no longer add sun glare or swap the bloom; the Lighting group shows without scene

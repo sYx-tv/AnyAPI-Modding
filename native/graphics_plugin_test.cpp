@@ -92,9 +92,9 @@ static AnySceneEffectsParametersV3 fx3_policy;static unsigned fx3_sets{};
 static bool effects_set_v3(const AnySceneEffectsParametersV3* p){fx3_policy=*p;++fx3_sets;return effects_set_v2(&p->water);}
 static bool effects_status_v3(AnySceneEffectsStatusV3* s){return effects_status_v2(&s->base);}
 static const AnySceneEffectsV3 effects3_api{sizeof(AnySceneEffectsV3),3,effects_set_v3,effects_status,effects_status_v2,effects_status_v3};
-static uint32_t gpu_vendor=0x10de,gpu_beams=1,gpu_shadows=1;
-static bool gpu_copy(AnyGpuInfoV1* g){g->known=1;g->vendor_id=gpu_vendor;g->lamp_beams_supported=gpu_beams;return true;}
-static bool gpu_copy_v2(AnyGpuInfoV2* g){gpu_copy(&g->v1);g->lamp_shadows_supported=gpu_shadows;return true;}
+static uint32_t gpu_vendor=0x10de,gpu_device=0x2560,gpu_beams=1,gpu_shadows=1,gpu_uma=0;
+static bool gpu_copy(AnyGpuInfoV1* g){g->known=1;g->vendor_id=gpu_vendor;g->device_id=gpu_device;g->lamp_beams_supported=gpu_beams;return true;}
+static bool gpu_copy_v2(AnyGpuInfoV2* g){gpu_copy(&g->v1);g->lamp_shadows_supported=gpu_shadows;g->uma=gpu_uma;return true;}
 static const AnyGpuInfoServiceV1 gpu1_api{sizeof(AnyGpuInfoServiceV1),1,gpu_copy};
 static const AnyGpuInfoServiceV2 gpu2_api{sizeof(AnyGpuInfoServiceV2),2,gpu_copy,gpu_copy_v2};
 static std::string logs;
@@ -167,6 +167,17 @@ static void pure_tests(){using namespace graphics_options;
  {auto w=window(30,40,1);w.present_block_ms=.5f;d=pick_decide(3,3,false,false,w);assert(d.done&&d.reason==PickCpuBound); // timing v2: the game hardly waits in Present
   w.present_block_ms=12;d=pick_decide(3,3,false,false,w);assert(!d.done&&d.tier==3&&d.reason==PickConfirm); // GPU-bound (low-end iGPU): it waits for the GPU
   d=pick_decide(3,3,false,true,w);assert(!d.done&&d.tier==2&&d.reason==PickSlow);w.present_block_ms=-1;assert(pick_decide(3,3,false,false,w).reason==PickCpuBound);}
+ // A frame-rate limit under 55 fps waits in Present too, but holds even the fastest frames at the period: it stops as
+ // CPU-bound and never ends below Balanced. Vsync rounding a GPU-bound frame mixes in faster frames and still steps down.
+ {auto limit=[](float median,float p95,float p05,float pass,float block){PickWindow w;w.median_ms=median;w.p95_ms=p95;w.p05_ms=p05;w.pass_ms=pass;w.present_block_ms=block;return w;};
+  assert(pick_cap(limit(33.33f,33.6f,33.1f,3,20))>33&&pick_cap(limit(25,25.3f,24.8f,3,15))==25&&std::abs(pick_cap(limit(22.2f,22.4f,22,3,15))-22.222f)<.01f&&pick_cap(limit(20,20.3f,19.8f,3,10))==20);
+  d=pick_decide(3,3,false,false,limit(33.33f,33.6f,33.1f,3,20));assert(d.done&&d.tier==3&&d.reason==PickCpuBound); // 30 Hz
+  d=pick_decide(5,5,false,false,limit(33.33f,33.6f,33.1f,3,20));assert(d.done&&d.tier==5&&d.reason==PickCpuBound);
+  d=pick_decide(3,3,false,false,limit(25,25.3f,24.8f,3,15));assert(d.done&&d.tier==3&&d.reason==PickCpuBound); // 40 Hz
+  d=pick_decide(3,3,false,false,limit(33.33f,33.33f,16.7f,3,25));assert(!d.done&&d.tier==3&&d.reason==PickConfirm); // vsync rounding
+  d=pick_decide(3,3,false,true,limit(33.33f,33.33f,16.7f,3,25));assert(!d.done&&d.tier==2&&d.reason==PickSlow);
+  d=pick_decide(3,3,false,false,limit(33.33f,33.6f,-1,3,20));assert(!d.done&&d.reason==PickConfirm); // no fastest-5% reading: unchanged
+  d=pick_decide(3,3,false,false,limit(16.667f,16.8f,16.5f,3,8));assert(!d.done&&d.tier==4&&d.reason==PickRoom);} // 60 Hz climbs as before
  // Fast: climb at 80 fps, hold below it, hold after stepping down, stop at Ultra.
  d=pick_decide(3,3,false,false,window(10,12,3));assert(!d.done&&d.tier==4&&d.reason==PickFast);
  d=pick_decide(3,3,false,false,window(14,16,3));assert(d.done&&d.tier==3&&d.reason==PickHolds);
@@ -179,14 +190,17 @@ static void pure_tests(){using namespace graphics_options;
  // K37: only the changed rows a committed preset owns move; Top rows, Custom and current settings stay.
  auto old=profile(defaults(),3);old[Sharpening]=0;old[FogDensity]=0;auto c=old;assert(restage(c,0)==1&&c[Sharpening]==1&&c[FogDensity]==0);
  c=old;assert(restage(c,1)==0&&c==old);c=old;c[Preset]=CustomProfile;auto before=c;assert(restage(c,0)==0&&c==before);c=old;c[Preset]=0;assert(restage(c,0)==0);
- old=profile(defaults(),4);old[LightingQuality]=3;old[LocalBudget]=3;old[WaterReflections]=0;old[SunGlint]=0;c=old;assert(restage(c,0)==4&&c[LightingQuality]==2&&c[LocalBudget]==2&&c[WaterReflections]==2&&c[SunGlint]==1);
+ // New rows (water and glint) stay off for a saved preset: an update never switches on a new pass by itself.
+ old=profile(defaults(),4);old[LightingQuality]=3;old[LocalBudget]=3;old[WaterReflections]=0;old[SunGlint]=0;c=old;assert(restage(c,0)==2&&c[LightingQuality]==2&&c[LocalBudget]==2&&c[WaterReflections]==0&&c[SunGlint]==0);
  old=profile(defaults(),NaturalProfile);old[DetailedAO]=2;c=old;assert(restage(c,0)==1&&c[DetailedAO]==0);
  // AG-7, K47, Natural: the 0.33.0 tables.
  const float quality[]={0,0,1,2,2,3},budget[]={0,0,1,2,3,3},crisp[]={0,0,1,1,1,2};
  for(int t=1;t<=6;++t){auto v=profile(defaults(),t);assert(v[LightingQuality]==quality[t-1]&&v[LocalBudget]==budget[t-1]&&v[Sharpening]==crisp[t-1]&&v[FogDensity]==.65f);}
  assert(profile(defaults(),NaturalProfile)[DetailedAO]==0&&profile(defaults(),NaturalProfile)[LightingQuality]==1&&profile(defaults(),ClearDayProfile)[LightingQuality]==1);
- // AG-2: fresh installs and Reset get Balanced.
+ // AG-2: fresh installs and Reset get Balanced; integrated graphics (UMA, Intel, Steam Deck) start fresh installs on Low.
  assert(balanced()==profile(defaults(),3)&&balanced()[NativeAA]==5&&balanced()[Preset]==3&&balanced()[ToneMapping]==2);
+ assert(integrated_gpu(0x8086,0x46a6,0)&&integrated_gpu(0x1002,0x163f,0)&&integrated_gpu(0x1002,0x1435,0)&&integrated_gpu(0x1002,0x15bf,1)&&integrated_gpu(0x10de,0x25a0,1));
+ assert(!integrated_gpu(0x10de,0x2560,0)&&!integrated_gpu(0x1002,0x73bf,0)&&!integrated_gpu(0,0,0));
  // Preference rows and hidden rows survive every preset; the hidden rows are never drawn.
  auto mine=defaults();mine[MoonSource]=1;mine[LightFollowsTime]=1;mine[WeatherResponse]=1;mine[CloudModel]=0;mine[BloomFalloff]=.7f;mine[TaaThinRescue]=1;mine[PresetRevision]=1;mine[SkyModel]=0;mine[OutputDither]=0;
  for(int level=1;level<=SoftWarmProfile;++level){auto v=profile(mine,level);for(auto i:{MoonSource,LightFollowsTime,WeatherResponse,CloudModel,BloomFalloff,TaaThinRescue,PresetRevision,SkyModel,OutputDither})assert(v[i]==mine[i]);}
@@ -212,16 +226,18 @@ static void run_child(wchar_t** argv,const wchar_t* mode){wchar_t self[MAX_PATH]
  std::wcout<<L"CHILD "<<mode<<L" exit="<<code<<std::endl;assert(code==0);}
 int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitbuf;using namespace graphics_options;assert(argc==4||argc==5);const std::wstring mode=argc==5?argv[4]:L"";
  // Modes: default (AnyAPI 0.28-era services), --local-lights (AnyAPI 0.40.2), --no-scene, and three the default mode runs
- // itself: --legacy (AnyAPI 0.40.1), --revision (settings saved by AnyGraphics 0.32/0.33 before preset_revision) and
- // --fresh (no settings file and no scene lighting).
- const bool local=mode==L"--local-lights",legacy=mode==L"--legacy",revision=mode==L"--revision",fresh=mode==L"--fresh",absent=mode==L"--no-scene";
- assert(mode.empty()||local||legacy||revision||fresh||absent);const bool current=local||revision,v040=current||legacy;
+ // itself: --legacy (AnyAPI 0.40.1), --revision (settings saved by AnyGraphics 0.32/0.33 before preset_revision),
+ // --fresh (no settings file, no scene lighting, a discrete card) and --fresh-igpu (no settings file, AnyAPI 0.40.2 and
+ // an integrated GPU).
+ const bool local=mode==L"--local-lights",legacy=mode==L"--legacy",revision=mode==L"--revision",fresh=mode==L"--fresh",igpu=mode==L"--fresh-igpu",absent=mode==L"--no-scene";
+ assert(mode.empty()||local||legacy||revision||fresh||igpu||absent);const bool current=local||revision||igpu,v040=current||legacy;
+ if(igpu){gpu_vendor=0x1002;gpu_device=0x15bf;gpu_uma=1;}
  if(mode.empty())pure_tests();
  auto fixture=LoadLibraryW(argv[1]);assert(fixture);auto service=AnyAPI_Services();assert(service);assert(service->publish("anyapi.post_process",1,&post));if(!absent){assert(service->publish("anyapi.scene_controls",1,&scene));assert(service->publish("anyapi.scene_controls",2,&scene_v2));assert(service->publish("anyapi.scene_antialiasing",1,&aa_api));if(!fresh)assert(service->publish("anyapi.scene_lighting",1,&lighting_api));}auto graphics=LoadLibraryW(argv[3]);assert(graphics);
  if(v040){assert(service->publish("anyapi.scene_lighting",2,&local_api));assert(service->publish("anyapi.scene_lighting",3,&shaped_api));assert(service->publish("anyapi.scene_antialiasing",2,&aa2_api));assert(service->publish("anyapi.scene_timing",1,&timing_api));assert(service->publish("anyapi.scene_effects",1,&effects_api));assert(service->publish("anyapi.scene_controls",3,&scene_v3));assert(service->publish("anyapi.gpu_info",1,&gpu1_api));}
  // Scene effects v2 (water) is AnyAPI 0.40.2: --legacy (0.40.1) has effects v1 only.
  if(current){assert(service->publish("anyapi.scene_effects",2,&effects2_api));assert(service->publish("anyapi.scene_lighting",4,&lamps_api));assert(service->publish("anyapi.scene_antialiasing",3,&aa3_api));assert(service->publish("anyapi.scene_timing",2,&timing2_api));assert(service->publish("anyapi.scene_effects",3,&effects3_api));assert(service->publish("anyapi.scene_controls",4,&controls4_api));assert(service->publish("anyapi.gpu_info",2,&gpu2_api));}
- if(fresh)assert(service->publish("anyapi.scene_controls",3,&scene_v3));
+ if(fresh){assert(service->publish("anyapi.scene_controls",3,&scene_v3));assert(service->publish("anyapi.gpu_info",1,&gpu1_api));}
  // Wine reuses process ids: a failed run's folder must not look like saved settings.
  auto root=std::filesystem::temp_directory_path()/(L"AnyGraphicsNative-"+std::to_wstring(GetCurrentProcessId()));{std::error_code stale;std::filesystem::remove_all(root,stale);}std::filesystem::create_directories(root/L"AnyHelpers");
  // Migration retains native keys, ignores removed post FX and does not load AnyHelpers. The default mode also saved TAA,
@@ -232,7 +248,7 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
   // Hidden rows a tester set by hand.
   row("anygraphics.hidden\ttone_revision",1,"1");row("anygraphics.hidden\tbloom_falloff",3,"0.7");row("anygraphics.hidden\tcloud_model",1,"0");row("anygraphics.hidden\tkeep_native_ssao",1,"1");row("anygraphics.hidden\ttaa_thin_rescue",1,"1");row("anygraphics.hidden\tamd_lamp_path",4,"3");
   row("anygraphics.hidden\tsky_model",1,"0");row("anygraphics.hidden\taa_before_overlays",1,"0");row("anygraphics.hidden\ttaa_ocean",1,"0");row("anygraphics.hidden\toutput_dither",1,"0");}
- else if(!fresh){std::ofstream old(root/L"AnyHelpers"/L"settings.tsv");old<<"anygraphics.scene\tsun_light\t3\t312e35\nanygraphics.general\tcomparison\t4\t31\nanygraphics.sharpness\tsharpen\t1\t31\n";if(mode.empty())old<<"anygraphics.scene\tnative_aa\t4\t35\n";}
+ else if(!fresh&&!igpu){std::ofstream old(root/L"AnyHelpers"/L"settings.tsv");old<<"anygraphics.scene\tsun_light\t3\t312e35\nanygraphics.general\tcomparison\t4\t31\nanygraphics.sharpness\tsharpen\t1\t31\n";if(mode.empty())old<<"anygraphics.scene\tnative_aa\t4\t35\n";}
  auto path=root.wstring();AnyModHostV1 host;host.game_directory=path.c_str();host.plugin_directory=path.c_str();host.log=log;AnyModCallbacksV1 g;assert(((AnyModInitV1)GetProcAddress(graphics,"AnyAPI_ModInit"))(&host,&g));((void(*)())GetProcAddress(graphics,"AnyAPI_ModReady"))();assert(g.render);
  auto event=(void(*)(uint32_t))GetProcAddress(fixture,"FixtureGraphicsEvent");auto stage=(void(*)(uint64_t,double))GetProcAddress(fixture,"FixtureGraphicsStage");auto rows=(uint32_t(*)())GetProcAddress(fixture,"FixtureRows");auto dirty=(uint32_t(*)())GetProcAddress(fixture,"FixtureGraphicsDirty");auto title=(const char*(*)())GetProcAddress(fixture,"FixtureGraphicsTitle");auto ui=(void(*)(int32_t))GetProcAddress(fixture,"FixtureUiState");assert(event&&stage&&rows&&dirty&&title&&ui);assert(std::string(title()).find("Modded")!=std::string::npos);assert(!service->query("anyhelpers.settings",1));
  AnyFrameV1 frame;frame.tick=100;frame.focused=1;AnyCanvasV1 canvas;ui(1);auto render=[&](){frame.tick+=16;g.render(&frame,&canvas,nullptr);assert(!canvas.pixels&&post_calls==0);};auto apply=[&](Index i,double v){event(ANY_MENU_OPEN);stage(i+1,v);event(ANY_MENU_APPLY);event(ANY_MENU_CANCEL);render();};render();
@@ -343,20 +359,29 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  gpu_beams=0;event(ANY_MENU_OPEN);stage(0,0);assert(rows()<plain);event(ANY_MENU_CANCEL);gpu_beams=1;gpu_vendor=0x10de;
  apply(LocalBudget,2);assert(local_policy.local_budget==6&&shaped_policy.lighting.local_budget==6);
  }else if(revision){
- // K37: the committed High moves to the 0.33.0 tables once; the user's fog stays.
- assert(has("PRESET_REVISION from=0 to=1 preset=4 rows_changed=4 saved=1"));
- assert(lighting_policy.quality==2&&lamps_policy.lamp_budget==6&&water_policy.water_reflections==1&&water_policy.reflection_quality==1&&water_policy.sun_glint==1&&policy.fog==.35f&&aa3_policy.base.sharpening==.3f);
+ // K37: the committed High moves to the 0.33.0 tables once; the user's fog stays, and the new water rows stay off.
+ assert(has("PRESET_REVISION from=0 to=1 preset=4 rows_changed=2 saved=1"));
+ assert(lighting_policy.quality==2&&lamps_policy.lamp_budget==6&&water_policy.water_reflections==0&&water_policy.sun_glint==0&&policy.fog==.35f&&aa3_policy.base.sharpening==.3f);
  // Hidden rows reach the services.
  assert(fx3_policy.tone_revision==1&&std::abs(fx3_policy.bloom_falloff-.7f)<1e-6f&&fx3_policy.cloud_model==0&&fx3_policy.flags==ANY_FX_KEEP_NATIVE_SSAO&&aa3_policy.taa_flags==7&&lamps_policy.amd_path==3);
  assert(fx3_policy.sky_model==0&&fx3_policy.dither==0&&aa3_policy.flags==(ANY_AA_AFTER_OVERLAYS|ANY_AA_OCEAN_DEPTH)&&aa3_policy.dither==0);
- auto text=read_file(root/L"AnyGraphics"/L"settings.tsv");assert(text.find("anygraphics.hidden\tpreset_revision\t2\t31\n")!=std::string::npos&&text.find("anygraphics.sky\twater_reflections\t4\t32\n")!=std::string::npos&&text.find("anygraphics.scene\tfog_density\t3\t"+hex("0.34999999403953552"))!=std::string::npos);
+ auto text=read_file(root/L"AnyGraphics"/L"settings.tsv");assert(text.find("anygraphics.hidden\tpreset_revision\t2\t31\n")!=std::string::npos&&text.find("anygraphics.sky\twater_reflections\t4\t30\n")!=std::string::npos&&text.find("anygraphics.scene\tfog_density\t3\t"+hex("0.34999999403953552"))!=std::string::npos);
  // A second start finds the revision and changes nothing.
  FreeLibrary(graphics);logs.clear();graphics=LoadLibraryW(argv[3]);assert(graphics);assert(((AnyModInitV1)GetProcAddress(graphics,"AnyAPI_ModInit"))(&host,&g));((void(*)())GetProcAddress(graphics,"AnyAPI_ModReady"))();
  assert(has("SERVICES")&&!has("PRESET_REVISION")&&read_file(root/L"AnyGraphics"/L"settings.tsv")==text);
  std::filesystem::remove_all(root);std::cout<<"PASS: preset revision"<<std::endl;ExitProcess(0);
+ }else if(igpu){
+ // A fresh install on integrated graphics starts on Low once AnyAPI knows the card, and saves it with the revision.
+ assert(has("FRESH_PICK low reason=integrated saved=1")&&!has("PRESET_REVISION")&&lighting_policy.quality==0&&lamps_policy.lamp_budget==2&&aa3_policy.base.enabled&&aa3_policy.base.method==1);
+ auto text=read_file(root/L"AnyGraphics"/L"settings.tsv");assert(text.find("anygraphics.general\tquality_profile\t4\t32\n")!=std::string::npos&&text.find("anygraphics.hidden\tpreset_revision\t2\t31\n")!=std::string::npos);
+ render();render();assert(count("FRESH_PICK")==1);
+ // A second start finds saved rows and changes nothing.
+ FreeLibrary(graphics);logs.clear();graphics=LoadLibraryW(argv[3]);assert(graphics);assert(((AnyModInitV1)GetProcAddress(graphics,"AnyAPI_ModInit"))(&host,&g));((void(*)())GetProcAddress(graphics,"AnyAPI_ModReady"))();
+ render();render();assert(has("SERVICES")&&!has("FRESH_PICK")&&!has("PRESET_REVISION")&&read_file(root/L"AnyGraphics"/L"settings.tsv")==text&&lighting_policy.quality==0);
+ std::filesystem::remove_all(root);std::cout<<"PASS: fresh install on integrated graphics"<<std::endl;ExitProcess(0);
  }else if(fresh){
- // AG-2: a fresh install gets Balanced (scene AA, here Enhanced SMAA on scene AA v1) without writing a file.
- assert(!std::filesystem::exists(root/L"AnyGraphics"/L"settings.tsv")&&!has("PRESET_REVISION")&&policy.enabled&&policy.aa==0&&aa_policy.enabled&&aa_policy.method==2);
+ // AG-2: a fresh install on a discrete card gets Balanced (scene AA, here Enhanced SMAA on scene AA v1) without writing a file.
+ assert(!std::filesystem::exists(root/L"AnyGraphics"/L"settings.tsv")&&!has("PRESET_REVISION")&&!has("FRESH_PICK")&&policy.enabled&&policy.aa==0&&aa_policy.enabled&&aa_policy.method==2);
  // AG-14: without scene lighting the Lighting group still holds Sunlight, Sky light, Ambient light and Light colour.
  apply(Preset,CustomProfile);apply(SunLight,3);assert(policy.sun==1.15f);apply(LightColour,2);assert(look_policy.key_tint[0]==1.08f);
  // Reset brings Balanced back.
@@ -401,5 +426,5 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
   if(std::filesystem::exists(docs,missing)){auto text=read_file(docs);std::string begin="<!-- preset-table:begin -->\n",end="<!-- preset-table:end -->";auto a=text.find(begin),b=text.find(end);
    assert(a!=std::string::npos&&b!=std::string::npos);if(text.substr(a+begin.size(),b-a-begin.size())!=table){std::cerr<<"docs/mods/graphics.md preset table differs from profile(); paste the table printed above"<<std::endl;assert(false);}std::cout<<"DOCS_TABLE matches"<<std::endl;}
   else std::cout<<"DOCS_TABLE skipped (docs not next to the source)"<<std::endl;
-  for(auto child:{L"--legacy",L"--revision",L"--fresh"})run_child(argv,child);}std::cout<<"PASS: native-only Graphics section, no AnyHelpers dependency or post-FX registrations, migration, draft/apply/cancel/reset, quality levels, thirteen profiles, light colour and wind, water reflections, TAA, sharpening, beam shaping, GPU cost readout, gameplay bypass and unavailable service\n";
+  for(auto child:{L"--legacy",L"--revision",L"--fresh",L"--fresh-igpu"})run_child(argv,child);}std::cout<<"PASS: native-only Graphics section, no AnyHelpers dependency or post-FX registrations, migration, draft/apply/cancel/reset, quality levels, thirteen profiles, light colour and wind, water reflections, TAA, sharpening, beam shaping, GPU cost readout, gameplay bypass and unavailable service\n";
 }

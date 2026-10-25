@@ -200,34 +200,45 @@ inline Values profile(const Values& current,int level){
 }
 // AG-2: what a fresh install and the menu's Reset get. Preset's own initial value is Balanced.
 inline Values balanced(){return profile(defaults(),3);}
+// Graphics that share the system's memory: anything D3D12 reports as UMA, Intel, and the Steam Deck APUs (LCD and OLED).
+// A fresh install there starts on Low instead of Balanced.
+inline bool integrated_gpu(uint32_t vendor,uint32_t device,uint32_t uma){return uma!=0||vendor==0x8086||(vendor==0x1002&&(device==0x163f||device==0x1435));}
 // K37: preset tables changed after settings were saved. Revision 1 (AnyGraphics 0.33.0): AG-7 sampling and lamp tables,
-// K47 Balanced sharpening, Natural without detailed shading, water rows (WATER-13), Performance and Low fog (AG-9).
+// K47 Balanced sharpening, Natural without detailed shading, Performance and Low fog (AG-9).
 inline constexpr int preset_revision=1;
 // Re-stages, on a committed preset (1-10, 12), only the rows the preset owns whose table changed since `from`. These are
 // all group rows, which cannot differ from the table without the preset turning Custom, so they follow the new table. Top
 // rows (Antialiasing, Fog and the other main choices) are the user's and stay. Returns how many rows changed.
+// Rows that are new in a revision are not taken: they start off for a saved preset (the water rows, WATER-13, stay off
+// until the preset is chosen again or reset), so an update never switches on a new pass by itself.
 inline uint32_t restage(Values& committed,int from){
  const int level=int(committed[Preset]);if(level<1||level>SoftWarmProfile||level==CustomProfile||from>=preset_revision)return 0;
  const auto next=profile(committed,level);uint32_t changed=0;auto take=[&](Index i){if(committed[i]!=next[i]){committed[i]=next[i];++changed;}};
- if(from<1)for(auto i:{LightingQuality,LocalBudget,Sharpening,DetailedAO,WaterReflections,SunGlint})take(i);
+ if(from<1)for(auto i:{LightingQuality,LocalBudget,Sharpening,DetailedAO})take(i);
  return changed;
 }
 // K35 auto-pick: one measured window of gameplay at a tier (1 Performance .. 5 Ultra).
-// pass_ms: AnyAPI GPU pass sum; present_block_ms: time inside the game's Present (scene timing v2). -1 when unknown.
-struct PickWindow {float median_ms{-1},p95_ms{-1},pass_ms{-1},present_block_ms{-1};};
+// pass_ms: AnyAPI GPU pass sum; present_block_ms: time inside the game's Present (scene timing v2); p05_ms: the fastest
+// 5% of frames. -1 when unknown.
+struct PickWindow {float median_ms{-1},p95_ms{-1},pass_ms{-1},present_block_ms{-1},p05_ms{-1};};
 enum PickReason:uint32_t{PickHolds,PickSlow,PickConfirm,PickFast,PickRoom,PickCapFull,PickCpuBound,PickTop,PickBottom};
 struct PickDecision {int tier;bool done;PickReason reason;};
 // A refresh cap: frame times this steady, at a common refresh period, mean vsync or a limiter decides the frame rate.
-inline float pick_cap(const PickWindow& w){static constexpr float periods[]={6.944f,8.333f,11.111f,13.333f,16.667f,33.333f};if(!(w.median_ms>0)||w.p95_ms>w.median_ms*1.03f)return 0;for(float p:periods)if(std::abs(w.median_ms-p)<=p*.02f)return p;return 0;}
+// 50, 45 and 40 Hz are Steam Deck limits; the climb path never sees them (it only runs at 55 fps and up).
+inline float pick_cap(const PickWindow& w){static constexpr float periods[]={6.944f,8.333f,11.111f,13.333f,16.667f,20.f,22.222f,25.f,33.333f};if(!(w.median_ms>0)||w.p95_ms>w.median_ms*1.03f)return 0;for(float p:periods)if(std::abs(w.median_ms-p)<=p*.02f)return p;return 0;}
 // Slow is under 55 fps typical or under 40 fps for the slowest 5% of frames. A slow tier steps down only after a second
 // slow window. When AnyAPI's passes are under 15% of the frame the game or CPU sets the frame rate: it stops there and
 // never ends below Balanced from a start at Balanced or above. Under a cap it climbs while the passes stay under 30% of
 // the frame; otherwise it climbs at 80 fps. With scene timing v2 the CPU-bound call also needs the game to wait in
 // Present for under 15% of the frame: a GPU-bound frame (a low-end integrated GPU busy with the game's own drawing)
-// waits there, and stepping down helps it. Without that reading the pass share decides alone.
+// waits there, and stepping down helps it. Without that reading the pass share decides alone. A frame-rate limit under
+// 55 fps (a Steam Deck 30 or 40 Hz limit, Battery Boost, half-rate vsync) also waits in Present, so it does not count as
+// GPU-bound: a limit holds the fastest frames at the period too, while vsync rounding a GPU-bound frame mixes in faster
+// frames. Without the fastest-5% reading nothing counts as a limit.
 inline PickDecision pick_decide(int tier,int start,bool went_down,bool confirming,const PickWindow& w){
  const bool known=w.pass_ms>0,slow=w.median_ms>1000/55.f||w.p95_ms>1000/40.f;const float share=known?w.pass_ms/w.median_ms:1;
- const bool gpu_waits=w.present_block_ms>=0&&w.present_block_ms>=.15f*w.median_ms;
+ const float cap=pick_cap(w);const bool limited=cap>0&&w.p05_ms>0&&w.p05_ms>=.97f*cap;
+ const bool gpu_waits=!limited&&w.present_block_ms>=0&&w.present_block_ms>=.15f*w.median_ms;
  if(slow){
   if(known&&share<.15f&&!gpu_waits)return {std::max(tier,std::min(start,3)),true,PickCpuBound};
   if(tier<=1)return {tier,true,PickBottom};
@@ -235,7 +246,7 @@ inline PickDecision pick_decide(int tier,int start,bool went_down,bool confirmin
   return {tier-1,false,PickSlow};}
  if(went_down)return {tier,true,PickHolds};
  if(tier>=5)return {tier,true,PickTop};
- if(float cap=pick_cap(w)){if(known&&w.pass_ms<=.3f*cap)return {tier+1,false,PickRoom};return {tier,true,PickCapFull};}
+ if(cap){if(known&&w.pass_ms<=.3f*cap)return {tier+1,false,PickRoom};return {tier,true,PickCapFull};}
  if(w.median_ms<=1000/80.f&&w.p95_ms<=1000/60.f)return {tier+1,false,PickFast};
  return {tier,true,PickHolds};
 }
