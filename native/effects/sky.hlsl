@@ -172,8 +172,9 @@ float4 cloud_layer(float3 d, float pixel, uint flags) {
             colour += float3(.55, .65, .9) * moonkey * (lerp(1, .5, saturate(tm - density * .4)) * base * .35 + pow(saturate(dot(d, m)), 8) * edge * .6);
         }
         colour += sky_light.rgb * (.3 + .15 * edge);
-        // SKY-8: dense cloud reaches about .97-.99 and hides the sun; the zenith fade no longer caps it.
-        fade = max(fade, .97 * smoothstep(.3, .6, d.y));
+        // SKY-8: dense cloud reaches about .97-.99 and hides the sun; the zenith fade no longer caps it,
+        // but the near-deck height fade still does, so the deck thins out smoothly as the camera climbs to it.
+        fade = max(fade, .97 * smoothstep(.3, .6, d.y) * saturate((height - 100) / 400));
         float alpha = fade * (1 - exp(-4 * density)) / (1 - exp(-4));
         return float4(colour * alpha, alpha);
     }
