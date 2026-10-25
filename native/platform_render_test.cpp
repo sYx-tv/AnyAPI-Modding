@@ -9,7 +9,8 @@
 #include "anymaker_mod_api.h"
 #include "anyapi_mod_v1.h"
 static std::filesystem::path g_game_dir;
-static void log_line(AnymakerLogLevel,const char*,const char* msg){std::cout<<msg<<'\n';}
+static int fault_logs{},overlay_down_logs{};
+static void log_line(AnymakerLogLevel,const char*,const char* msg){std::cout<<msg<<'\n';if(!strncmp(msg,"PLUGIN_FAULT ",13))++fault_logs;if(!strncmp(msg,"PLUGIN_RENDER overlay=DOWN ",27))++overlay_down_logs;}
 static std::string utf8(const std::filesystem::path& p){return p.filename().string();}
 static bool p34_copy_snapshot(AnySessionPlayersV1*,uint32_t*);
 #include "anyapi_platform.inc"
@@ -61,8 +62,19 @@ int main(){
  platform::fault(-1,"bad",1);platform::fault(9,"bad",1);platform::fault((const char*)nullptr,"bad",1);assert(platform::faults_total.load()==3&&!platform::plugins[0].faulted);
  assert(platform::fault_notice_due(GetTickCount64())&&!platform::fault_notice_due(GetTickCount64()+9000));                                // 8 s toast
  platform::capture_owner.store(-1);second.callbacks.render=crash_render;second.fault_tick=0;                                                 // stays faulted; no notice for the pixel checks
- assert(!platform::fault_notice_due(GetTickCount64()));
+ assert(!platform::fault_notice_due(GetTickCount64())&&fault_logs==3);
  std::cout<<"PASS: plugin faults release only their own capture and log once\n";
+ // OVL-5: a start failure backs off and is logged once per distinct stage/HRESULT; no queue means no attempt (the seam fails before any COM call).
+ platform::chain_cache.queue_bound=true;platform::overlay_fail_stage=platform::STAGE_CHAIN;auto tries=platform::overlay_attempts;
+ assert(!platform::ensure_overlay(nullptr)&&platform::overlay_attempts==tries+1&&platform::overlay_backoff.failures==1&&platform::overlay_down.load()&&overlay_down_logs==1
+  &&scene_frame::board.pass_error[ANY_PASS_OVERLAY].load()==int32_t(platform::STAGE_CHAIN));
+ assert(!platform::ensure_overlay(nullptr)&&platform::overlay_attempts==tries+1);                                                        // inside the 1 s backoff
+ platform::overlay_backoff.next_ms=0;assert(!platform::ensure_overlay(nullptr)&&platform::overlay_attempts==tries+2&&platform::overlay_backoff.failures==2&&overlay_down_logs==1);   // same failure: not logged again
+ assert(platform::overlay_backoff.next_ms>=GetTickCount64()+1500);                                                                        // 2 s after the second failure
+ platform::chain_cache.queue_bound=false;platform::chain_cache.accepted_at=GetTickCount64();platform::overlay_backoff.next_ms=0;
+ assert(!platform::ensure_overlay(nullptr)&&platform::overlay_attempts==tries+2&&scene_frame::board.pass_error[ANY_PASS_OVERLAY].load()==int32_t(platform::STAGE_QUEUE));
+ platform::overlay_fail_stage=0;platform::overlay_backoff.reset();platform::overlay_logged_stage=0;platform::overlay_logged_hr=S_OK;scene_frame::board.pass_error[ANY_PASS_OVERLAY].store(0);
+ std::cout<<"PASS: overlay start failures back off and log once\n";
  assert(platform::start());ComPtr<IDXGIFactory4> factory;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));ComPtr<IDXGIAdapter> warp;assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));
  ComPtr<ID3D12Device> device;assert(SUCCEEDED(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));D3D12_COMMAND_QUEUE_DESC qdesc{};ComPtr<ID3D12CommandQueue> queue;assert(SUCCEEDED(device->CreateCommandQueue(&qdesc,IID_PPV_ARGS(&queue))));
  WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"AnyAPI.RenderTest";RegisterClassW(&wc);HWND hwnd=CreateWindowW(wc.lpszClassName,L"",WS_POPUP,0,0,64,64,nullptr,nullptr,wc.hInstance,nullptr);assert(hwnd);

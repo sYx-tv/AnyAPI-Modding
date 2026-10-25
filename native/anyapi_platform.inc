@@ -338,8 +338,10 @@ static HRESULT STDMETHODCALLTYPE resize(IDXGISwapChain* s,UINT count,UINT w,UINT
 static HRESULT STDMETHODCALLTYPE resize1(IDXGISwapChain3* s,UINT count,UINT w,UINT h,DXGI_FORMAT format,UINT flags,const UINT* masks,IUnknown*const* queues){auto fn=original<Resize1Fn>(s,39);if(!fn)return E_FAIL;std::lock_guard<std::recursive_mutex> lock(render_mutex);if(chain_cache.raw==s){release_targets();chain_cache.desc_valid=false;overlay_backoff.reset();frame_timing::settle();}return fn(s,count,w,h,format,flags,masks,queues);}
 // Observe direct command-queue submissions for graphics discovery, then forward the original submission.
 // K24: a newly observed queue's device is identified once (CreateDXGIFactory1 only for a device not seen before).
+// identified_queue is compared only (no reference): created() may set observed_queue before the queue's first submission.
+static ID3D12CommandQueue* identified_queue{};
 static void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists){auto fn=original<ExecuteFn>(q,10);if(!fn)return;bool changed=false;
- if(q->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_DIRECT){std::lock_guard<std::mutex> lock(queue_mutex);if(observed_queue.Get()!=q){observed_queue=q;changed=true;}}fn(q,count,lists);
+ if(q->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_DIRECT){std::lock_guard<std::mutex> lock(queue_mutex);if(observed_queue.Get()!=q)observed_queue=q;if(identified_queue!=q){identified_queue=q;changed=true;}}fn(q,count,lists);
  if(changed){ComPtr<ID3D12Device> device;if(SUCCEEDED(q->GetDevice(IID_PPV_ARGS(&device))))frame_timing::identify(device.Get(),false);}
  if(auto callback=after_execute.load())callback(q,count,lists);}
 // Install presentation and resize callbacks on the interfaces supported by a swapchain.
