@@ -1,6 +1,6 @@
 #pragma once
 // Present-path measurement for anyapi.scene_timing v2 and anyapi.gpu_info v2 (AnyAPI 0.40.2).
-// Include only from anyapi_platform.inc after its first platform block (uses platform::overlay_down, log_line and the
+// Include only from anyapi_platform.inc after its first platform block (uses platform::overlay_down, platform::game_window, log_line and the
 // v1 service declarations in anyapi_services.inc). Writers run on the present/submit threads; copy_* run on any thread.
 // Lock order: identity_mutex, then state.lock. presented() releases state.lock before poll() takes identity_mutex.
 #include "anyapi_scene_frame.h"
@@ -13,7 +13,7 @@
 namespace frame_timing {
 using Microsoft::WRL::ComPtr;
 constexpr uint32_t RING=1024,OVERLAY_RING=600,LOG_EVERY=600,MIN_WINDOW=8;   // RING: 2 s of presents at 500 fps
-constexpr uint64_t WINDOW_MS=2000,POLL_MS=2000,SETTLE_MS=2000;
+constexpr uint64_t WINDOW_MS=2000,POLL_MS=2000,SETTLE_MS=2000,VRAM_IDLE_MS=5000;
 static int64_t frequency(){static const int64_t f=[]{LARGE_INTEGER v{};QueryPerformanceFrequency(&v);return v.QuadPart>0?v.QuadPart:1;}();return f;}
 static int64_t now(){LARGE_INTEGER v{};QueryPerformanceCounter(&v);return v.QuadPart;}
 static float ms(int64_t ticks){return float(double(ticks)*1000.0/double(frequency()));}
@@ -26,7 +26,10 @@ struct State {SRWLOCK lock=SRWLOCK_INIT;
  uint64_t settle_until_ms{};int64_t next_poll{};std::atomic<float> refresh_hz{0};std::atomic<uint32_t> budget_mb{0},usage_mb{0};
  AnySceneTimingV2 cached{};int64_t cached_at{};};
 static State state;
-static std::atomic<bool> refresh_due{true};                  // WM_DISPLAYCHANGE, settle(): poll on the next present
+static std::atomic<bool> refresh_due{true};                  // WM_DISPLAYCHANGE, settle(): full refresh-rate query on the next present
+static std::atomic<uint64_t> vram_wanted_at{0};static std::atomic<bool> vram_due{false};   // last gpu_info v2 copy (GetTickCount64); first copy after idle
+// Present thread only: the chain the refresh rate was measured for, its window and the monitor that held it.
+static IDXGISwapChain* poll_chain{};static HWND poll_window{};static HMONITOR poll_monitor{};
 static ComPtr<IDXGIAdapter3> adapter3;static std::mutex identity_mutex;static ID3D12Device* identity_device{};static uint64_t identity_luid{};static bool identity_presenter{};
 // Flag 2 for the next 2 s (resize, new chain, GPU change), and a refresh-rate/VRAM poll on the next present.
 static void settle(){AcquireSRWLockExclusive(&state.lock);state.settle_until_ms=GetTickCount64()+SETTLE_MS;ReleaseSRWLockExclusive(&state.lock);refresh_due=true;}
@@ -53,14 +56,25 @@ static std::string format(const AnySceneTimingV2& t){char m[512];
   state.budget_mb.load(),state.usage_mb.load(),t.flags,t.pass_ms[0],t.pass_ms[1],t.pass_ms[2],t.pass_ms[3],t.pass_ms[4],t.pass_ms[5],t.pass_ms[6],t.pass_ms[7],t.pass_ms[8]);
  return m;}
 
-// Refresh rate of the output holding the window, and the adapter's local VRAM budget/usage. Present thread, every 2 s
-// and after WM_DISPLAYCHANGE or settle(); outside state.lock.
-static void poll(IDXGISwapChain* chain){float hz=0;ComPtr<IDXGISwapChain1> one;DXGI_SWAP_CHAIN_FULLSCREEN_DESC fd{};
+// Refresh rate of the output holding the window. Present thread, outside state.lock. The 2 s poll is one MonitorFromWindow;
+// the fullscreen, GetContainingOutput and EnumDisplaySettingsW queries run only for a new chain, after WM_DISPLAYCHANGE or
+// settle() (force), when the window moved to another monitor, while the rate is unknown, or every poll when AnyAPI does
+// not hook this window (no WM_DISPLAYCHANGE reaches it).
+static void poll_refresh(IDXGISwapChain* chain,bool force){
+ if(chain!=poll_chain){poll_chain=chain;poll_window=nullptr;force=true;}
+ if(force||!poll_window){DXGI_SWAP_CHAIN_DESC d{};poll_window=SUCCEEDED(chain->GetDesc(&d))?d.OutputWindow:nullptr;}
+ HMONITOR monitor=poll_window?MonitorFromWindow(poll_window,MONITOR_DEFAULTTONEAREST):nullptr;
+ if(!force&&monitor&&monitor==poll_monitor&&poll_window==platform::game_window&&state.refresh_hz.load()>0)return;
+ poll_monitor=monitor;
+ float hz=0;ComPtr<IDXGISwapChain1> one;DXGI_SWAP_CHAIN_FULLSCREEN_DESC fd{};
  if(SUCCEEDED(chain->QueryInterface(IID_PPV_ARGS(&one)))&&SUCCEEDED(one->GetFullscreenDesc(&fd))&&!fd.Windowed&&fd.RefreshRate.Denominator)hz=float(fd.RefreshRate.Numerator)/float(fd.RefreshRate.Denominator);
  if(hz<=0){ComPtr<IDXGIOutput> out;DXGI_OUTPUT_DESC od{};MONITORINFOEXW mi{};mi.cbSize=sizeof(mi);DEVMODEW dm{};dm.dmSize=sizeof(dm);
   if(SUCCEEDED(chain->GetContainingOutput(&out))&&SUCCEEDED(out->GetDesc(&od))&&GetMonitorInfoW(od.Monitor,(MONITORINFO*)&mi)&&EnumDisplaySettingsW(mi.szDevice,ENUM_CURRENT_SETTINGS,&dm)&&dm.dmDisplayFrequency>1)hz=float(dm.dmDisplayFrequency);}
- state.refresh_hz=hz;   // 0 = unknown
- std::lock_guard<std::mutex> g(identity_mutex);DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+ state.refresh_hz=hz;}   // 0 = unknown
+// The adapter's local VRAM budget/usage. Present thread, outside state.lock; only while a gpu_info v2 consumer is active
+// (copy_v2 in the last 5 s, polled every 2 s and on settle()), on the first present after its first copy, and on the
+// SCENE_TIMING_V2 log present.
+static void poll_vram(){std::lock_guard<std::mutex> g(identity_mutex);DXGI_QUERY_VIDEO_MEMORY_INFO info{};
  if(adapter3&&SUCCEEDED(adapter3->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&info))){state.budget_mb=uint32_t(info.Budget>>20);state.usage_mb=uint32_t(info.CurrentUsage>>20);}}
 
 // Present thread, after the game's Present returns. entry: hook entry (present-to-present); before/after: around the
@@ -75,7 +89,8 @@ static void presented(IDXGISwapChain* chain,int64_t entry,int64_t before,int64_t
  if(entry>=state.next_poll){state.next_poll=entry+int64_t(POLL_MS)*frequency()/1000;due=true;}
  if(state.frames%LOG_EVERY==0){log=true;fill(snapshot,after);}
  ReleaseSRWLockExclusive(&state.lock);
- bool refresh=refresh_due.exchange(false);if(chain&&(due||refresh))poll(chain);
+ bool refresh=refresh_due.exchange(false);if(chain&&(due||refresh))poll_refresh(chain,refresh);
+ if(chain&&((vram_due.load(std::memory_order_relaxed)&&vram_due.exchange(false))||log||((due||refresh)&&GetTickCount64()-vram_wanted_at.load(std::memory_order_relaxed)<VRAM_IDLE_MS)))poll_vram();
  if(log)log_line(ANY_LOG_INFO,"framework",format(snapshot).c_str());}
 
 // Present thread, once per draw(): overlay CPU split into collect (mod callbacks, gpu_draw collect, canvas uploads and
@@ -100,7 +115,7 @@ static void identify(ID3D12Device* device,bool presenter){if(!device)return;LUID
  if(identity_presenter&&!presenter)return;
  scene_frame::GpuIdentity id{};id.luid=luid;D3D12_FEATURE_DATA_ARCHITECTURE1 a1{};D3D12_FEATURE_DATA_ARCHITECTURE a0{};
  if(SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE1,&a1,sizeof(a1))))id.uma=a1.UMA;else if(SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE,&a0,sizeof(a0))))id.uma=a0.UMA;
- ComPtr<IDXGIFactory4> f;ComPtr<IDXGIAdapter1> adapter;DXGI_ADAPTER_DESC1 d{};adapter3.Reset();
+ ComPtr<IDXGIFactory4> f;ComPtr<IDXGIAdapter1> adapter;DXGI_ADAPTER_DESC1 d{};adapter3.Reset();state.budget_mb=0;state.usage_mb=0;
  if(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&f)))&&SUCCEEDED(f->EnumAdapterByLuid(l,IID_PPV_ARGS(&adapter)))&&SUCCEEDED(adapter->GetDesc1(&d))){
   id.known=1;id.vendor_id=d.VendorId;id.device_id=d.DeviceId;id.dedicated_mb=uint32_t(d.DedicatedVideoMemory>>20);id.shared_mb=uint32_t(d.SharedSystemMemory>>20);
   WideCharToMultiByte(CP_UTF8,0,d.Description,-1,id.adapter_name,int(sizeof(id.adapter_name))-1,nullptr,nullptr);adapter.As(&adapter3);}
@@ -118,6 +133,7 @@ static bool copy_v2(AnySceneTimingV2* t){if(!t||t->struct_size!=sizeof(*t)||t->v
 // anyapi.gpu_info v2: board.gpu is the source of truth once known; v1 (lighting) otherwise.
 static bool copy_gpu_v1(AnyGpuInfoV1* g){auto v1=(const AnyGpuInfoServiceV1*)anyapi_gpu_info_service();return v1&&v1->copy&&v1->copy(g);}
 static bool copy_gpu_v2(AnyGpuInfoV2* g){if(!g||g->struct_size!=sizeof(*g)||g->version!=2)return false;AnyGpuInfoV2 out;copy_gpu_v1(&out.v1);
+ uint64_t tick=GetTickCount64();if(tick-vram_wanted_at.exchange(tick,std::memory_order_relaxed)>=VRAM_IDLE_MS)vram_due=true;   // consumer (re)appears: poll on the next present
  scene_frame::GpuIdentity id{};if(scene_frame::board.gpu.load(id)&&id.known){out.v1.known=1;out.v1.vendor_id=id.vendor_id;out.v1.device_id=id.device_id;
   out.uma=id.uma;out.dedicated_mb=id.dedicated_mb;out.shared_mb=id.shared_mb;memcpy(out.adapter_name,id.adapter_name,sizeof(out.adapter_name));out.adapter_name[sizeof(out.adapter_name)-1]=0;}
  out.lamp_shadows_supported=out.v1.known&&out.v1.vendor_id==0x1002?0:1;   // AMD: lamp beams without spot shadow maps in 0.40.2

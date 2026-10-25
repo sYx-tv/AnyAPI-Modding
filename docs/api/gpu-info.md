@@ -30,7 +30,7 @@ version 1 call above, and `copy_v2` fills `AnyGpuInfoV2` (matching
 | `v1` | The same values as `copy()` |
 | `uma` | 1 on a unified-memory adapter (D3D12 architecture query) |
 | `dedicated_mb`, `shared_mb` | Dedicated video memory and shared system memory from the adapter description |
-| `budget_mb`, `usage_mb` | `QueryVideoMemoryInfo`, local segment, polled every 2 s; on integrated GPUs and the Steam Deck this is the shared system-memory budget; 0 unknown |
+| `budget_mb`, `usage_mb` | `QueryVideoMemoryInfo`, local segment, polled every 2 s while `copy_v2` has been called in the last 5 s (the first call after a pause schedules a poll on the next present, so it can return 0 or an older value); on integrated GPUs and the Steam Deck this is the shared system-memory budget; 0 unknown |
 | `width`, `height` | The game's HDR scene target; 0 until a scene pass has run |
 | `lamp_shadows_supported` | 0 on AMD in 0.40.2: lamp beams run without spot shadow maps there |
 | `adapter_name` | Adapter description, UTF-8 |

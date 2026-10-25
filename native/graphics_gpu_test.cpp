@@ -42,6 +42,24 @@ static uint32_t input(const AnyInputV1* e,void*){input_events.push_back(*e);retu
 static void render(const AnyFrameV1*,AnyCanvasV1* out,void*){AnyPostParametersV1 params;params.enabled=effect_on;assert(post_process::set(effect,&params));out->width=8;out->height=8;out->pitch=32;out->x=4;out->y=4;out->revision=0;out->pixels=pixels;}
 static void gpu_fixture(const AnyFrameV1*,void*){auto api=anyapi_gpu_draw_service();assert(api->texture(1,8,8,32,pixels,1));AnyGpuCommandV1 c;c.kind=ANY_GPU_IMAGE;c.texture=1;c.rect[2]=c.rect[3]=8;c.source[2]=c.source[3]=8;c.matrix[4]=c.matrix[5]=4;assert(api->emit(&c));}
 static_assert(sizeof(AnyPostPassV1)==48&&sizeof(AnyPostParametersV1)==264&&sizeof(AnyPostStatusV1)==304&&sizeof(AnyPostProcessV1)==32);
+// Timing v2 poll: a swapchain that only answers the refresh-rate queries and counts them (exclusive fullscreen at 60 Hz).
+struct PollChain:IDXGISwapChain1{HWND window{};int descs{},fullscreen{},outputs{};
+ HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** out)override{if(id==__uuidof(IDXGISwapChain1)||id==__uuidof(IDXGISwapChain)||id==__uuidof(IUnknown)){*out=this;return S_OK;}*out=nullptr;return E_NOINTERFACE;}
+ ULONG STDMETHODCALLTYPE AddRef()override{return 2;}ULONG STDMETHODCALLTYPE Release()override{return 1;}
+ HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID,UINT,const void*)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE SetPrivateDataInterface(REFGUID,const IUnknown*)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE GetPrivateData(REFGUID,UINT*,void*)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE GetParent(REFIID,void**)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE GetDevice(REFIID,void**)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE Present(UINT,UINT)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE GetBuffer(UINT,REFIID,void**)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE SetFullscreenState(BOOL,IDXGIOutput*)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE GetFullscreenState(BOOL*,IDXGIOutput**)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE GetDesc(DXGI_SWAP_CHAIN_DESC* d)override{++descs;*d={};d->OutputWindow=window;d->Windowed=FALSE;return S_OK;}
+ HRESULT STDMETHODCALLTYPE ResizeBuffers(UINT,UINT,UINT,DXGI_FORMAT,UINT)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE ResizeTarget(const DXGI_MODE_DESC*)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE GetContainingOutput(IDXGIOutput** o)override{++outputs;*o=nullptr;return E_FAIL;}
+ HRESULT STDMETHODCALLTYPE GetFrameStatistics(DXGI_FRAME_STATISTICS*)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE GetLastPresentCount(UINT*)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE GetDesc1(DXGI_SWAP_CHAIN_DESC1*)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE GetFullscreenDesc(DXGI_SWAP_CHAIN_FULLSCREEN_DESC* d)override{++fullscreen;*d={};d->RefreshRate={60,1};d->Windowed=FALSE;return S_OK;}
+ HRESULT STDMETHODCALLTYPE GetHwnd(HWND*)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE GetCoreWindow(REFIID,void**)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE Present1(UINT,UINT,const DXGI_PRESENT_PARAMETERS*)override{return E_NOTIMPL;}BOOL STDMETHODCALLTYPE IsTemporaryMonoSupported()override{return FALSE;}
+ HRESULT STDMETHODCALLTYPE GetRestrictToOutput(IDXGIOutput**)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE SetBackgroundColor(const DXGI_RGBA*)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE GetBackgroundColor(DXGI_RGBA*)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE SetRotation(DXGI_MODE_ROTATION)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE GetRotation(DXGI_MODE_ROTATION*)override{return E_NOTIMPL;}};
 int main(){
  for(int i=0;i<64;++i){pixels[i*4+2]=255;pixels[i*4+3]=255;}platform::plugins[0].callbacks.id="render_fixture";platform::plugins[0].callbacks.render=render;platform::plugin_count.store(1);
  platform::plugins[0].callbacks.input=input;RAWMOUSE mouse{};mouse.lLastX=5;mouse.usButtonFlags=RI_MOUSE_LEFT_BUTTON_DOWN|RI_MOUSE_WHEEL;mouse.usButtonData=USHORT(SHORT(-120));assert(platform::raw_mouse(mouse,17,23));
@@ -72,6 +90,17 @@ int main(){
   AnyGpuInfoV2 g;assert(frame_timing::gpu_info_v2.copy_v2(&g)&&!g.v1.known&&g.lamp_shadows_supported==1);                                     // before any device
   AnyGpuInfoV2 small;small.struct_size=8;assert(!frame_timing::gpu_info_v2.copy_v2(&small));
   scene_frame::board.pass_ms[ANY_PASS_GI].store(-1);frame_timing::clear();}
+ // Timing v2 poll cost: the 2 s poll on a hooked window is one MonitorFromWindow; the full query runs for a new chain,
+ // WM_DISPLAYCHANGE/settle(), or every poll on a window AnyAPI does not hook. gpu_info v2 copies gate the VRAM poll.
+ {PollChain c;c.window=GetDesktopWindow();platform::game_window=c.window;auto f=frame_timing::frequency();int64_t t=5000*f;frame_timing::clear();frame_timing::refresh_due=false;
+  frame_timing::presented(&c,t,t,t,1);assert(c.descs==1&&c.fullscreen==1&&c.outputs==0&&frame_timing::state.refresh_hz.load()==60);   // new chain
+  for(int i=0;i<3;++i){t+=3*f;frame_timing::presented(&c,t,t,t,1);}assert(c.descs==1&&c.fullscreen==1);                                  // three 2 s polls, same monitor
+  frame_timing::refresh_due=true;t+=f/100;frame_timing::presented(&c,t,t,t,1);assert(c.descs==2&&c.fullscreen==2);                        // WM_DISPLAYCHANGE
+  t+=f/100;frame_timing::presented(&c,t,t,t,1);assert(c.fullscreen==2);                                                                     // not due
+  platform::game_window=nullptr;t+=3*f;frame_timing::presented(&c,t,t,t,1);assert(c.fullscreen==3);                                       // unhooked window: full query
+  frame_timing::vram_due=false;frame_timing::vram_wanted_at=0;AnyGpuInfoV2 g;assert(frame_timing::gpu_info_v2.copy_v2(&g)&&frame_timing::vram_due.exchange(false));
+  assert(frame_timing::gpu_info_v2.copy_v2(&g)&&!frame_timing::vram_due.load());                                                          // a steady consumer does not re-arm it
+  frame_timing::poll_chain=nullptr;frame_timing::poll_window=nullptr;frame_timing::poll_monitor=nullptr;frame_timing::state.refresh_hz=0;frame_timing::clear();}
  assert(scene_frame::find_service("anyapi.scene_timing",2)==&frame_timing::api_v2&&scene_frame::find_service("anyapi.gpu_info",2)==&frame_timing::gpu_info_v2);
  assert(services::query("anyapi.scene_timing",2)==&frame_timing::api_v2&&services::query("anyapi.gpu_info",2)==&frame_timing::gpu_info_v2&&!services::query("anyapi.scene_timing",3));
  std::cout<<"PASS: timing v2 percentiles, 2 s window, gap skip, cpu/native-read sampling, overlay p50/p95, flags, registry\n";
