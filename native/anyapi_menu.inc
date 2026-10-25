@@ -22,9 +22,10 @@ static void tabs_open();static void tabs_close();
 static std::vector<std::shared_ptr<Section>> snapshot(){std::lock_guard<std::mutex> lock(registry_mutex);return sections;}
 static bool enabled(Section* s){return !s->faulted&&s->owner>=0&&s->owner<int(platform::plugin_count.load())&&!platform::plugins[s->owner].faulted;}
 // Isolate plugin failures and restore the callback owner for capture_input.
-static void invoke_event(Section* s,uint32_t event){__try{if(s->callbacks.event)s->callbacks.event(event,s->callbacks.user);}__except(EXCEPTION_EXECUTE_HANDLER){s->faulted=true;anyapi_owner_fault(s->owner);log_line(ANY_LOG_ERROR,"framework","MENU_EVENT disabled_after_exception=1");}}
-static uint32_t invoke_flag(Section* s,bool defaults){__try{auto fn=defaults?s->callbacks.defaults:s->callbacks.dirty;return fn?fn(s->callbacks.user):(defaults?1:0);}__except(EXCEPTION_EXECUTE_HANDLER){s->faulted=true;anyapi_owner_fault(s->owner);return defaults?1:0;}}
-static void invoke_draw(Section* s,const AnyMenuFrameV1* frame){__try{s->callbacks.draw(frame,s->callbacks.user);}__except(EXCEPTION_EXECUTE_HANDLER){s->faulted=true;anyapi_owner_fault(s->owner);log_line(ANY_LOG_ERROR,"framework","MENU_SECTION disabled_after_exception=1");}}
+// K42: a fault disables the section and its owner through platform::fault (own capture only, PLUGIN_FAULT once, notice).
+static void invoke_event(Section* s,uint32_t event){uint32_t code=0;__try{if(s->callbacks.event)s->callbacks.event(event,s->callbacks.user);}__except(code=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){}if(code){s->faulted=true;platform::fault(s->owner,"menu.event",code);}}
+static uint32_t invoke_flag(Section* s,bool defaults){uint32_t code=0;__try{auto fn=defaults?s->callbacks.defaults:s->callbacks.dirty;return fn?fn(s->callbacks.user):(defaults?1:0);}__except(code=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){}s->faulted=true;platform::fault(s->owner,"menu.flag",code);return defaults?1:0;}
+static void invoke_draw(Section* s,const AnyMenuFrameV1* frame){uint32_t code=0;__try{s->callbacks.draw(frame,s->callbacks.user);}__except(code=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){}if(code){s->faulted=true;platform::fault(s->owner,"menu.draw",code);}}
 static void event(uint32_t type,uint32_t location=0){for(auto& s:snapshot()){if((location&&s->callbacks.location!=location)||!enabled(s.get()))continue;int previous=platform::current_plugin;platform::current_plugin=s->owner;invoke_event(s.get(),type);platform::current_plugin=previous;}}
 static bool aggregate(bool defaults,uint32_t location=ANY_MENU_SETTINGS_CONTROLS){bool result=defaults;for(auto& s:snapshot()){if(s->callbacks.location!=location||!enabled(s.get()))continue;int previous=platform::current_plugin;platform::current_plugin=s->owner;bool value=invoke_flag(s.get(),defaults)!=0;platform::current_plugin=previous;result=defaults?result&&value:result||value;}return result;}
 static bool add(const AnyMenuSectionV1* c){if(platform::current_plugin<0||!c||c->struct_size!=sizeof(*c)||(c->location!=ANY_MENU_SETTINGS_CONTROLS&&c->location!=ANY_MENU_SETTINGS_GRAPHICS)||!services::identifier(c->id)||!c->title||!*c->title||strlen(c->title)>127||!c->draw)return false;
@@ -77,6 +78,8 @@ static bool replace(Replacement& r){DWORD old{};auto slot=(void**)(r.owner+r.off
 static void restore(Replacement& r){DWORD old{};auto slot=(void**)(r.owner+r.offset);if(VirtualProtect(slot,8,PAGE_READWRITE,&old)){InterlockedCompareExchangePointer(slot,(void*)r.previous,&r.cell);DWORD ignored{};VirtualProtect(slot,8,old,&ignored);}}
 static std::string last_diagnostic;
 static bool diagnostic(const std::string& message){if(message!=last_diagnostic){last_diagnostic=message;log_line(ANY_LOG_WARN,"framework",("MENU_BRIDGE waiting="+message).c_str());}return false;}
+// OVL-9: code-contract mismatches never fix themselves within a session; native UI data (native_*) can still be loading.
+static uint32_t retry_ms(uint32_t attempt,const std::string& why){return attempt<12||why.rfind("native_",0)==0?5000u:30000u;}
 template<size_t N> static bool contract(uintptr_t owner,size_t offset,const unsigned char(&body)[N],uintptr_t& fn){if(p34_cell(owner,offset,fn)&&p34_body(fn,body))return true;return diagnostic("dependency_contract offset="+std::to_string(offset));}
 static bool dimension(uintptr_t owner,size_t offset,int32_t& out,int32_t low,int32_t high){uintptr_t pointer{};return safe_read_memory(owner+offset,&pointer,8)&&safe_read_memory(pointer,&out,4)&&out>=low&&out<=high;}
 static bool prepare(){auto hits=scan_exact(MENU_BUILDER,sizeof(MENU_BUILDER));if(hits.size()!=1)return diagnostic("builder_matches_"+std::to_string(hits.size()));builder=hits[0];uintptr_t eq{},head{},table{},end{},button{},apply{},reset{},footer{},close{},enter{};
@@ -100,7 +103,11 @@ static bool prepare(){auto hits=scan_exact(MENU_BUILDER,sizeof(MENU_BUILDER));if
  if(!install_detour("settings_update_current",update,BODY_SETTINGS_UPDATE_PREFIX,19,(uintptr_t)update_hook,(void**)&original_update)){while(count)restore(replacements[--count]);return false;}
  ready=true;log_line(ANY_LOG_INFO,"framework","MENU_BRIDGE ready=1 locations=settings.tabs,settings.controls native_widgets=tab,heading,label,key_row,toggle,number,choice,text,table,button,scroll lifecycle=open,apply,reset,cancel,deactivate shared_cells_modified=0 native_tab_enum_modified=0");return true;}
 // Hook and cell transactions run on a worker, never on a plugin or game callback stack.
-static DWORD WINAPI worker(void*){if(snapshot().empty()&&tab_snapshot().empty())return 0;log_line(ANY_LOG_INFO,"framework","MENU_BRIDGE resolving_current_contracts=1");while(!ready){if(prepare())break;Sleep(5000);}return 0;}
+// 5 s for the first minute and while native UI data loads, then 30 s, logged once when it slows down and every 20 slow attempts after.
+static DWORD WINAPI worker(void*){if(snapshot().empty()&&tab_snapshot().empty())return 0;log_line(ANY_LOG_INFO,"framework","MENU_BRIDGE resolving_current_contracts=1");
+ for(uint32_t attempt=0,slow=0;!ready;++attempt){if(prepare())break;auto wait=retry_ms(attempt,last_diagnostic);
+  if(wait==30000&&slow++%20==0)log_line(ANY_LOG_WARN,"framework",("MENU_BRIDGE unready=1 attempts="+std::to_string(attempt+1)+" retry_s=30 waiting="+last_diagnostic).c_str());
+  Sleep(wait);}return 0;}
 }
 static const AnyMenuV1* anyapi_menu_service(){return &menus::api;}
 static const AnyMenuV2* anyapi_menu_service_v2(){return &menus::api_v2;}
