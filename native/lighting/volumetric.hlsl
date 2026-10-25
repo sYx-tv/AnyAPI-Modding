@@ -33,6 +33,9 @@ Texture2D<float> shadow11 : register(t15);
 // texture says which one was written this frame.
 Texture2D<float4> history_a : register(t16);
 Texture2D<float4> history_b : register(t17);
+// gbuffer_ocean (renderer+0x208), or a 1x1 zero texture. .y>0 marks an ocean pixel: the ocean writes no
+// depth, so scene_depth there holds the sea floor or the sky.
+Texture2D<float4> ocean : register(t18);
 SamplerState linear_sampler : register(s0);
 SamplerState point_sampler : register(s1);
 // Drawn once per cascade. Matrix rows travel in immutable command-list constants.
@@ -79,13 +82,20 @@ float4 shadow_gather(uint cascade,float2 uv) {
 // temporal on; then history read selector and history weight.
 float4 shaping(){return matrices.Load(int3(0,21,0));}
 float4 temporal_controls(){return matrices.Load(int3(1,21,0));}
+// Row 21, AnyAPI 0.40.2 (all zero keeps the earlier output). temporal_controls().z: lamp scattering scale
+// (0 or 1 = clear air). atmosphere(): x sea mode (0 off, 1 lamp light stops at the sea surface, 2 the whole
+// ray does), y sea level (world height, m), z 1 = cap the sun phase at 4 without clarity. Texel 3: rgb glow
+// added to fogged air while lightning flashes.
+float4 atmosphere(){return matrices.Load(int3(2,21,0));}
+float3 flash_glow(){return matrices.Load(int3(3,21,0)).rgb;}
 
 // Some GPUs (AMD here) can produce a NaN or infinity where others quietly give
 // zero. One such pixel poisons bloom and eye adaptation and blows out the
 // whole screen. FXC may fold isnan away, so test the exponent bits. Finite values
 // pass through unchanged, so a frame without a bad value is bit-identical.
-float3 finite3(float3 v){return (asuint(v)&0x7f800000)==0x7f800000?0:v;}
-float4 finite4(float4 v){return float4(finite3(v.rgb),(asuint(v.a)&0x7f800000)==0x7f800000?1:v.a);}
+// The mask form compiles under FXC and DXC alike: bad=1 clears every bit (+0), bad=0 keeps v bit for bit.
+float3 finite3(float3 v){uint3 bad=(asuint(v)&0x7f800000)==0x7f800000;return asfloat(asuint(v)&(bad-1));}
+float4 finite4(float4 v){uint bad=(asuint(v.a)&0x7f800000)==0x7f800000;return float4(finite3(v.rgb),bad?1:v.a);}
 struct Varying { float4 position : SV_Position; float2 uv : TEXCOORD0; };
 Varying Vertex(uint id : SV_VertexID) {
     Varying v;v.uv=float2((id<<1)&2,id&2);
@@ -99,6 +109,20 @@ float view_distance(float depth) {
 float3 view_ray(float2 uv) {
     float2 ndc=uv*float2(2,-2)+float2(-1,1);
     return normalize(forward_axis.xyz+right_axis.xyz*ndc.x*right_axis.w+up_axis.xyz*ndc.y*up_axis.w);
+}
+// Along-ray distance to the sea plane on an ocean pixel seen from above it; 1e30 when there is no limit.
+float sea_distance(float2 uv,float3 ray,float4 atm) {
+    [branch]if(atm.x<.5)return 1e30;   // uniform: legacy frames never sample the ocean
+    float h=camera.w-atm.y;
+    return ocean.SampleLevel(point_sampler,uv,0).y>0&&ray.y<-.0001&&h>0?h/-ray.y:1e30;
+}
+// View-space depth, ending at the sea plane on ocean pixels in sea mode 2. The unnormalised ray has
+// dot(r,forward)=1, so h/-r.y is already view z.
+float surface_z(float2 uv,float4 atm) {
+    float z=view_distance(scene_depth.SampleLevel(point_sampler,uv,0));
+    [branch]if(atm.x>1.5){float2 ndc=uv*float2(2,-2)+float2(-1,1);float ry=forward_axis.y+right_axis.y*ndc.x*right_axis.w+up_axis.y*ndc.y*up_axis.w;float h=camera.w-atm.y;
+        if(ocean.SampleLevel(point_sampler,uv,0).y>0&&ry<-.0001&&h>0)z=min(z,h/-ry);}
+    return z;
 }
 // x: lit fraction (1 where no cascade covers); y: covered; z: beam weight, which
 // fades to 0 over the last cascade's outer edge. Air past every cascade has no
@@ -167,6 +191,8 @@ float scene_distance(float2 uv,float3 ray) {
 float4 Integrate(Varying v) : SV_Target {
     float3 ray=view_ray(v.uv);
     float distance=scene_distance(v.uv,ray);
+    float4 atm=atmosphere();float sea=sea_distance(v.uv,ray,atm);if(atm.x>1.5)distance=min(distance,sea);
+    float lamp_k=max(temporal_controls().z,1);
     uint count=(uint)clamp(controls.x,8,64);
     float4 shape=shaping();
     float g=clamp(medium.w,-.8,.8);float mu=dot(ray,normalize(sunlight.xyz));
@@ -177,7 +203,7 @@ float4 Integrate(Varying v) : SV_Target {
     float phase=(1-g*g)/pow(max(1+g*g-2*g*mu,.001),1.5);
     // Clarity mode caps the forward peak: Strong focus reached ~19x looking
     // into the sun, which turned the whole view white.
-    if(shape.x>0)phase=min(phase,4);
+    if(shape.x>0||atm.z>0)phase=min(phase,4);
     // Interleaved gradient noise, rotated each frame, moves the sample
     // positions so temporal blending removes banding instead of freezing it.
     bool temporal=shape.w>.5;
@@ -203,7 +229,7 @@ float4 Integrate(Varying v) : SV_Target {
         // a uniform veil over everything far away.
         if(shape.y>0)beam_weight*=exp(-d/shape.y);
         // Clear air for lamp beams: denser air turned every lamp into a glowing fog ball.
-        float local_segment=exp(-.006*step);
+        float local_segment=exp(-.006*(step*lamp_k));
         float local_weight=transmittance*local_transmittance*(1-local_segment);
         float3 shadow=shadow_result(position);float lit=shadow.x;
         // Clarity weights each sample by the lit/shadow change around it (this
@@ -218,7 +244,7 @@ float4 Integrate(Varying v) : SV_Target {
         // A flat fog colour read as an evenly milky wall.
         // Without cascade cover it returns to the neutral level, not to sunlit.
         float fog_light=shape.x>0?lerp(1,lerp(.45,1.35,lit),shadow.z):1;
-        scattered+=fog_colour.rgb*fog_weight*fog_light;lamps+=local_illumination(position,ray)*local_weight;
+        scattered+=fog_colour.rgb*fog_weight*fog_light;lamps+=local_illumination(position,ray)*local_weight*(d<sea?1.:0.);
         transmittance*=segment;beam_transmittance*=beam_segment;local_transmittance*=local_segment;
         if(transmittance<.001)break;
     }
@@ -242,10 +268,27 @@ float4 Integrate(Varying v) : SV_Target {
 // matrix texture with Load inside a dynamic loop with early exits, a pattern AMD's compiler has been seen to miscompile
 // (gamedev.net topic 701827). Here the lights come from a constant buffer and the loop is unrolled with a guard, so
 // there is no texture read and no early exit. Lamp shadows are not used on this path. Integrate stays as it was.
+// AnyAPI 0.40.2: LAMP_SLOTS 0/2/4/8 builds (D3D_SHADER_MACRO in lighting_shader_test). The record picks the
+// smallest one that holds this frame's lamps, so slots that can only add 0 are not evaluated. Same math, no new
+// flow control. LAMP_BRANCH 1 (hidden amd_path 2 experiment) adds uniform branches on the lamp count instead.
+#ifndef LAMP_SLOTS
+#define LAMP_SLOTS 8
+#endif
+#ifndef LAMP_BRANCH
+#define LAMP_BRANCH 0
+#endif
 cbuffer Lamps : register(b1) { float4 lamp_rows[32]; };
 float3 local_illumination_constants(float3 position,float3 ray) {
-    float3 result=0;uint count=min((uint)fog_colour.w,8u);
-    [unroll]for(uint i=0;i<8;++i){
+    float3 result=0;
+#if LAMP_SLOTS>0
+    uint count=min((uint)fog_colour.w,(uint)LAMP_SLOTS);
+#if LAMP_BRANCH
+    [branch]if(count==0)return result;
+#endif
+    [unroll]for(uint i=0;i<LAMP_SLOTS;++i){
+#if LAMP_BRANCH
+        [branch]if(i<count){
+#endif
         float4 location=lamp_rows[i*4],direction=lamp_rows[i*4+1],colour=lamp_rows[i*4+2];
         float reach=max(location.w*1.4,.001);float3 delta=location.xyz-position;float distance=length(delta);
         float3 toward_light=delta/max(distance,.001);
@@ -254,12 +297,18 @@ float3 local_illumination_constants(float3 position,float3 ray) {
         attenuation*=colour.w>.5?cone:1;
         float g=min(medium.w,.5),mu=dot(ray,toward_light);float phase=min((1-g*g)/pow(max(1+g*g-2*g*mu,.001),1.5),3);
         result+=finite3(clamp(colour.rgb,0,1e6)*attenuation*phase*sun_colour.w);
+#if LAMP_BRANCH
+        }
+#endif
     }
+#endif
     return result;
 }
 float4 IntegrateConstants(Varying v) : SV_Target {
     float3 ray=view_ray(v.uv);
     float distance=scene_distance(v.uv,ray);
+    float4 atm=atmosphere();float sea=sea_distance(v.uv,ray,atm);if(atm.x>1.5)distance=min(distance,sea);
+    float lamp_k=max(temporal_controls().z,1);
     uint count=(uint)clamp(controls.x,8,64);
     float4 shape=shaping();
     float g=clamp(medium.w,-.8,.8);float mu=dot(ray,normalize(sunlight.xyz));
@@ -270,7 +319,7 @@ float4 IntegrateConstants(Varying v) : SV_Target {
     float phase=(1-g*g)/pow(max(1+g*g-2*g*mu,.001),1.5);
     // Clarity mode caps the forward peak: Strong focus reached ~19x looking
     // into the sun, which turned the whole view white.
-    if(shape.x>0)phase=min(phase,4);
+    if(shape.x>0||atm.z>0)phase=min(phase,4);
     // Interleaved gradient noise, rotated each frame, moves the sample
     // positions so temporal blending removes banding instead of freezing it.
     bool temporal=shape.w>.5;
@@ -296,7 +345,7 @@ float4 IntegrateConstants(Varying v) : SV_Target {
         // a uniform veil over everything far away.
         if(shape.y>0)beam_weight*=exp(-d/shape.y);
         // Clear air for lamp beams: denser air turned every lamp into a glowing fog ball.
-        float local_segment=exp(-.006*step);
+        float local_segment=exp(-.006*(step*lamp_k));
         float local_weight=transmittance*local_transmittance*(1-local_segment);
         float3 shadow=shadow_result(position);float lit=shadow.x;
         // Clarity weights each sample by the lit/shadow change around it (this
@@ -311,7 +360,7 @@ float4 IntegrateConstants(Varying v) : SV_Target {
         // A flat fog colour read as an evenly milky wall.
         // Without cascade cover it returns to the neutral level, not to sunlit.
         float fog_light=shape.x>0?lerp(1,lerp(.45,1.35,lit),shadow.z):1;
-        scattered+=fog_colour.rgb*fog_weight*fog_light;lamps+=local_illumination_constants(position,ray)*local_weight;
+        scattered+=fog_colour.rgb*fog_weight*fog_light;lamps+=local_illumination_constants(position,ray)*local_weight*(d<sea?1.:0.);
         transmittance*=segment;beam_transmittance*=beam_segment;local_transmittance*=local_segment;
         if(transmittance<.001)break;
     }
@@ -339,16 +388,19 @@ float4 Accumulate(Varying v) : SV_Target {
     float4 previous_camera=matrices.Load(int3(0,20,0)),control=temporal_controls();
     if(previous_camera.w<.5)return current;
     float4 previous_right=matrices.Load(int3(1,20,0)),previous_up=matrices.Load(int3(2,20,0)),previous_forward=matrices.Load(int3(3,20,0));
-    float3 ray=view_ray(v.uv);float3 relative=camera.xyz+ray*scene_distance(v.uv,ray)-previous_camera.xyz;
+    float4 atm=atmosphere();float3 ray=view_ray(v.uv);float travel=scene_distance(v.uv,ray);if(atm.x>1.5)travel=min(travel,sea_distance(v.uv,ray,atm));
+    float3 relative=camera.xyz+ray*travel-previous_camera.xyz;
     float z=dot(relative,previous_forward.xyz);if(z<=.01)return current;
     float2 uv=float2(dot(relative,previous_right.xyz)/(z*previous_right.w),dot(relative,previous_up.xyz)/(z*previous_up.w))*float2(.5,-.5)+.5;
     if(any(uv<0)||any(uv>1))return current;
-    float4 history=control.x>.5?history_b.SampleLevel(linear_sampler,uv,0):history_a.SampleLevel(linear_sampler,uv,0);
+    // A ?: would sample both histories, one of them the render target of this draw (GPU-based validation
+    // flags it). The selector is uniform, so the branch costs nothing and the value is the same.
+    float4 history;[branch]if(control.x>.5)history=history_b.SampleLevel(linear_sampler,uv,0);else history=history_a.SampleLevel(linear_sampler,uv,0);
     // Only neighbours at a similar depth bound the history: at a silhouette the
     // sky's dense fog must not widen the box for the object in front of it.
     uint w,h;volume.GetDimensions(w,h);float2 texel=1/float2(w,h);float4 low=current,high=current;
-    float centre=view_distance(scene_depth.SampleLevel(point_sampler,v.uv,0)),tolerance=max(.5,centre*.05);
-    [unroll]for(int y=-1;y<=1;++y)[unroll]for(int x=-1;x<=1;++x){float2 uv_n=v.uv+float2(x,y)*texel;if(abs(view_distance(scene_depth.SampleLevel(point_sampler,uv_n,0))-centre)>tolerance)continue;float4 s=volume.SampleLevel(point_sampler,uv_n,0);low=min(low,s);high=max(high,s);}
+    float centre=surface_z(v.uv,atm),tolerance=max(.5,centre*.05);
+    [unroll]for(int y=-1;y<=1;++y)[unroll]for(int x=-1;x<=1;++x){float2 uv_n=v.uv+float2(x,y)*texel;if(abs(surface_z(uv_n,atm)-centre)>tolerance)continue;float4 s=volume.SampleLevel(point_sampler,uv_n,0);low=min(low,s);high=max(high,s);}
     return finite4(lerp(current,clamp(finite4(history),low,high),saturate(control.y)));
 }
 float4 resolved_lighting(float2 uv) {
@@ -356,12 +408,15 @@ float4 resolved_lighting(float2 uv) {
     // The selector names the history that was read, so the other one holds this frame.
     return temporal_controls().x>.5?history_a.SampleLevel(point_sampler,uv,0):history_b.SampleLevel(point_sampler,uv,0);
 }
+// Drawn with fixed-function blending (ONE, SRC_ALPHA, RGB write mask): target.rgb = rgb + target.rgb * a.
+// The HDR target is never copied, and its alpha (the game's own value) is never written.
 float4 Composite(Varying v) : SV_Target {
+    float4 atm=atmosphere();
     uint w,h;volume.GetDimensions(w,h);float2 pixel=v.uv*float2(w,h)-.5;
     float2 base=floor(pixel),fraction=frac(pixel);
-    float center_distance=view_distance(scene_depth.SampleLevel(point_sampler,v.uv,0));
+    float center_distance=surface_z(v.uv,atm);
     float4 accumulated=0;float total=0;float neighbour[4];
-    [unroll]for(uint n=0;n<4;++n)neighbour[n]=view_distance(scene_depth.SampleLevel(point_sampler,(base+float2(n&1,n>>1)+.5)/float2(w,h),0));
+    [unroll]for(uint n=0;n<4;++n)neighbour[n]=surface_z((base+float2(n&1,n>>1)+.5)/float2(w,h),atm);
     // Plane fit: on any flat surface 1/depth is affine in screen space, so the
     // four texels have no bilinear twist and their interpolation predicts this
     // pixel. Grazing ground then interpolates plainly; the 2% depth tolerance
@@ -382,9 +437,9 @@ float4 Composite(Varying v) : SV_Target {
     // window instead of the sky's fog, which would leave a bright outline.
     if(total<.1){float best=1e30;
         [unroll]for(int y=-1;y<3;++y)[unroll]for(int x=-1;x<3;++x){float2 uv=(base+float2(x,y)+.5)/float2(w,h);
-            float difference=abs(view_distance(scene_depth.SampleLevel(point_sampler,uv,0))-center_distance);
+            float difference=abs(surface_z(uv,atm)-center_distance);
             if(difference<best){best=difference;lighting=resolved_lighting(uv);}}}
-    lighting=finite4(lighting);
-    float4 original=scene_colour.SampleLevel(linear_sampler,v.uv,0);
-    return float4(original.rgb*lighting.a+lighting.rgb,original.a);
+    lighting=finite4(lighting);float transmittance=saturate(lighting.a);
+    // Never add negative light (every vendor). Lightning lights the fogged part of the view.
+    return float4(max(lighting.rgb+flash_glow()*(1-transmittance),0),transmittance);
 }
