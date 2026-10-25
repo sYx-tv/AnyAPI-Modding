@@ -71,6 +71,13 @@ int main(){assert(!services::api.query("bad/name",1));assert(!services::api.publ
  menus::reset_hook(nullptr,nullptr,&yes);assert(!events[ANY_MENU_RESET]);menus::reset_hook(nullptr,nullptr,&no);assert(events[ANY_MENU_RESET]==2&&reset_forwards==2);
  menus::session=true;menus::close_hook(nullptr,nullptr);menus::close_hook(nullptr,nullptr);assert(events[ANY_MENU_CANCEL]==2&&close_forwards==2);
  activation_regression();scroll_regression();graphics_regression();
+ // OVL-9: 5 s for the first minute and while native UI data loads, then 30 s.
+ assert(menus::retry_ms(0,"builder_matches_0")==5000&&menus::retry_ms(11,"dependency_contract offset=34248")==5000&&menus::retry_ms(12,"builder_matches_0")==30000
+  &&menus::retry_ms(500,"native_dimensions")==5000&&menus::retry_ms(12,"native_tab_dimensions")==5000);
+ // K42: a faulting section disables only its owner; another owner's capture stays.
+ {menus::Section crash;crash.owner=1;crash.callbacks.draw=[](const AnyMenuFrameV1*,void*){RaiseException(0xE0A10043,0,0,nullptr);};AnyMenuFrameV1 frame;platform::capture_owner.store(0);menus::invoke_draw(&crash,&frame);
+  assert(crash.faulted&&platform::plugins[1].faulted&&platform::plugins[1].fault_code==0xE0A10043&&!strcmp(platform::plugins[1].fault_where,"menu.draw")&&platform::capture_owner.load()==0&&!platform::plugins[0].faulted);
+  platform::plugins[1].faulted=false;platform::plugins[1].fault_tick=0;platform::capture_owner.store(-1);}   // the filter checks below expect plugin 1 active
  platform::current_plugin=0;assert(services::api.input_filter(filter,nullptr,100));platform::current_plugin=-1;AnyInputV1 e;e.kind=ANY_KEY_DOWN;e.key='K';assert(platform::input(e));assert(filter_calls==1&&!ordinary_calls);
  e.kind=ANY_FOCUS_LOST;platform::input(e);assert(filter_calls==2&&ordinary_calls==2);platform::plugins[0].faulted=true;assert(!services::api.query("fixture",1));
- std::cout<<"PASS: multiple menu owners, ID namespaces, table recovery, native equality call sites, original forwarding, Apply/Reset/Cancel, optional service versions, filter ordering/focus, real native hover-vs-activation regression, 256 rows inside scroll-close boundary\n";}
+ std::cout<<"PASS: multiple menu owners, ID namespaces, table recovery, native equality call sites, original forwarding, Apply/Reset/Cancel, optional service versions, filter ordering/focus, real native hover-vs-activation regression, 256 rows inside scroll-close boundary, bridge retry schedule, section fault isolation\n";}
