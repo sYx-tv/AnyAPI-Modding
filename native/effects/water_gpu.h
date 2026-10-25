@@ -15,7 +15,7 @@ inline D3D12_RESOURCE_BARRIER barrier(ID3D12Resource* resource,D3D12_RESOURCE_ST
 class Gpu {
  ComPtr<ID3D12Device> device;ComPtr<ID3D12CommandQueue> queue;ComPtr<ID3D12RootSignature> root;ComPtr<ID3D12PipelineState> march,composite;
  // Heap: two tables of {colour copy, depth, ocean, reflection}; the march's table has a null reflection, since it renders into it.
- ComPtr<ID3D12DescriptorHeap> srv,rtv;ComPtr<ID3D12Resource> source,half;D3D12_RESOURCE_STATES source_state{D3D12_RESOURCE_STATE_COMMON};std::array<ID3D12Resource*,2> inputs{};UINT width{},height{},half_width{},half_height{},srv_stride{},rtv_stride{};HRESULT last_error{};gpu_timer::Timer timer;
+ ComPtr<ID3D12DescriptorHeap> srv,rtv;ComPtr<ID3D12Resource> source,half;D3D12_RESOURCE_STATES source_state{D3D12_RESOURCE_STATE_COMMON};std::array<ComPtr<ID3D12Resource>,2> inputs{};bool views{};UINT width{},height{},half_width{},half_height{},srv_stride{},rtv_stride{};HRESULT last_error{};gpu_timer::Timer timer;
  bool checked(HRESULT h){last_error=h;return SUCCEEDED(h);}
  D3D12_CPU_DESCRIPTOR_HANDLE cpu(UINT i){auto h=srv->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(i)*srv_stride;return h;}
  D3D12_CPU_DESCRIPTOR_HANDLE target_view(UINT i){auto h=rtv->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(i)*rtv_stride;return h;}
@@ -29,7 +29,8 @@ class Gpu {
   D3D12_DESCRIPTOR_RANGE range{};range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;range.NumDescriptors=4;
   D3D12_ROOT_PARAMETER params[2]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants={0,0,56};params[0].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[1].DescriptorTable={1,&range};params[1].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
   D3D12_STATIC_SAMPLER_DESC samplers[2]{};for(UINT i=0;i<2;++i){auto& s=samplers[i];s.Filter=i?D3D12_FILTER_MIN_MAG_MIP_POINT:D3D12_FILTER_MIN_MAG_MIP_LINEAR;s.AddressU=s.AddressV=s.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;s.MaxLOD=D3D12_FLOAT32_MAX;s.ShaderRegister=i;s.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
-  D3D12_ROOT_SIGNATURE_DESC rd{2,params,2,samplers,D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};ComPtr<ID3DBlob> code,error;if(!checked(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&code,&error))||!checked(device->CreateRootSignature(0,code->GetBufferPointer(),code->GetBufferSize(),IID_PPV_ARGS(&root))))return false;
+  // LOW-1: no input layout; only the pixel shaders read root data.
+  D3D12_ROOT_SIGNATURE_DESC rd{2,params,2,samplers,D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS|D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS|D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS|D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS};ComPtr<ID3DBlob> code,error;if(!checked(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&code,&error))||!checked(device->CreateRootSignature(0,code->GetBufferPointer(),code->GetBufferSize(),IID_PPV_ARGS(&root))))return false;
   // No blending: the composite writes the finished colour of ocean pixels and
   // discards the rest; colour only, since the target's alpha belongs to the game.
   if(!pipeline(water_bytecode::March,sizeof(water_bytecode::March),D3D12_COLOR_WRITE_ENABLE_ALL,march)||!pipeline(water_bytecode::Composite,sizeof(water_bytecode::Composite),D3D12_COLOR_WRITE_ENABLE_RED|D3D12_COLOR_WRITE_ENABLE_GREEN|D3D12_COLOR_WRITE_ENABLE_BLUE,composite))return false;
@@ -49,13 +50,18 @@ public:
  double gpu_milliseconds()const{return timer.milliseconds();}
  // target: the game's HDR colour (RGBA16F, render-target state); it is copied, then its ocean pixels are redrawn.
  bool ensure(ID3D12Device* d,ID3D12CommandQueue* q,const D3D12_RESOURCE_DESC& target){if(!d||!q||target.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||target.SampleDesc.Count!=1||target.Width<16||target.Height<16||target.Width>16384||target.Height>16384||!(target.Flags&D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)||target.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return false;
-  if(composite&&device.Get()==d&&queue.Get()==q&&width==target.Width&&height==target.Height)return true;if(device&&!idle())return false;Gpu next;if(!next.initialize(d,q,UINT(target.Width),target.Height)){last_error=next.error();return false;}*this=std::move(next);return true;}
+  if(current(d,q,target))return true;if(device&&!idle()&&device.Get()==d)return false;Gpu next;if(!next.initialize(d,q,UINT(target.Width),target.Height)){last_error=next.error();return false;}*this=std::move(next);return true;}
+ // True when ensure() would do nothing.
+ bool current(ID3D12Device* d,ID3D12CommandQueue* q,const D3D12_RESOURCE_DESC& target)const{return composite&&device.Get()==d&&queue.Get()==q&&width==target.Width&&height==target.Height;}
+ bool loaded()const{return bool(device);}
+ // K09: drop every GPU object and input reference after the GPU is done with them (caller holds platform::render_mutex).
+ void release(){if(device)idle();*this=Gpu{};}
  bool record(ID3D12GraphicsCommandList* list,ID3D12Resource* target,Input depth,Input ocean,const Frame& f){
   if(!composite||!list||!target||!depth.resource||!ocean.resource||!valid(f))return false;
   auto same=[&](ID3D12Resource* r,DXGI_FORMAT a,DXGI_FORMAT b){auto d=r->GetDesc();return d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&d.Width==width&&d.Height==height&&d.SampleDesc.Count==1&&d.MipLevels==1&&!(d.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)&&(d.Format==a||d.Format==b);};
   if(!same(target,DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_R16G16B16A16_FLOAT)||!same(depth.resource,DXGI_FORMAT_R32_TYPELESS,DXGI_FORMAT_R32_FLOAT)||!same(ocean.resource,DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_R16G16B16A16_TYPELESS))return false;
-  std::array<ID3D12Resource*,2> now{depth.resource,ocean.resource};
-  if(now!=inputs){if(inputs[0]&&!idle())return false;inputs=now;for(UINT table=0;table<2;++table){view(table*4+1,depth.resource,DXGI_FORMAT_R32_FLOAT);view(table*4+2,ocean.resource,DXGI_FORMAT_R16G16B16A16_FLOAT);}}
+  // K09: inputs hold references, so a re-created game target can never reuse a cached address.
+  if(inputs[0].Get()!=depth.resource||inputs[1].Get()!=ocean.resource){if(views&&!idle())return false;inputs={depth.resource,ocean.resource};views=true;for(UINT table=0;table<2;++table){view(table*4+1,depth.resource,DXGI_FORMAT_R32_FLOAT);view(table*4+2,ocean.resource,DXGI_FORMAT_R16G16B16A16_FLOAT);}}
   timer.begin(list);
   // Copy the scene, then read the copy while redrawing the ocean pixels of the target.
   D3D12_RESOURCE_BARRIER b[5];UINT n=0;const auto read=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;bool reflections=f.view_up[3]>0;
