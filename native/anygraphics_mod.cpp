@@ -425,6 +425,9 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady(){using namespace graphics
  // K37: bring a committed preset (1-10, 12) to the current tables once. Only the rows the preset owns whose table changed
  // move; Custom and the top-level rows stay. A save failure keeps the old values and tries again next launch.
  if(const int from=had_revision?int(state.settings[PresetRevision].committed.number):had_settings?0:preset_revision;from<preset_revision){
+  // A file without the row holds revision `from`, not the row's initial value: then the new revision is always staged and
+  // written (even when no row moves), and a failed save leaves `from` committed, so a later Apply cannot stamp it as done.
+  if(!had_revision){auto& r=state.settings[PresetRevision];r.committed.number=from;r.draft=r.committed;}
   Values c{};for(size_t j=0;j<Count;++j)c[j]=float(state.settings[j].committed.number);auto next=c;const auto rows=restage(next,from);next[PresetRevision]=float(preset_revision);
   state.begin();for(size_t j=0;j<Count;++j)if(next[j]!=c[j]){auto value=state.settings[j].draft;value.number=fit(j,next[j]);state.stage(j,value);}
   const bool saved=state.apply();if(!saved)state.begin();state.status.clear();

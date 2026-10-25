@@ -52,7 +52,7 @@ static unsigned timing_reads{};
 static bool timing_copy(AnySceneTimingV1* t){++timing_reads;t->lighting_ms=1.25f;t->antialiasing_ms=.5f;t->frame_ms=16.6f;return true;}
 static const AnySceneTimingServiceV1 timing_api{sizeof(AnySceneTimingServiceV1),1,timing_copy};
 static AnySceneEffectsParametersV1 effects_policy;static unsigned effects_reads{};
-static bool effects_set(const AnySceneEffectsParametersV1* p){effects_policy=*p;return true;}
+static unsigned effects_sets{};static bool effects_set(const AnySceneEffectsParametersV1* p){effects_policy=*p;++effects_sets;return true;}
 static bool effects_status(AnySceneEffectsStatusV1* s){++effects_reads;s->ready=1;s->gpu_ms=.4f;return true;}
 static const AnySceneEffectsV1 effects_api{sizeof(AnySceneEffectsV1),1,effects_set,effects_status};
 static AnySceneEffectsParametersV2 water_policy;static unsigned water_sets{},water_reads{};
@@ -218,8 +218,9 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  assert(mode.empty()||local||legacy||revision||fresh||absent);const bool current=local||revision,v040=current||legacy;
  if(mode.empty())pure_tests();
  auto fixture=LoadLibraryW(argv[1]);assert(fixture);auto service=AnyAPI_Services();assert(service);assert(service->publish("anyapi.post_process",1,&post));if(!absent){assert(service->publish("anyapi.scene_controls",1,&scene));assert(service->publish("anyapi.scene_controls",2,&scene_v2));assert(service->publish("anyapi.scene_antialiasing",1,&aa_api));if(!fresh)assert(service->publish("anyapi.scene_lighting",1,&lighting_api));}auto graphics=LoadLibraryW(argv[3]);assert(graphics);
- if(v040){assert(service->publish("anyapi.scene_lighting",2,&local_api));assert(service->publish("anyapi.scene_lighting",3,&shaped_api));assert(service->publish("anyapi.scene_antialiasing",2,&aa2_api));assert(service->publish("anyapi.scene_timing",1,&timing_api));assert(service->publish("anyapi.scene_effects",1,&effects_api));assert(service->publish("anyapi.scene_effects",2,&effects2_api));assert(service->publish("anyapi.scene_controls",3,&scene_v3));assert(service->publish("anyapi.gpu_info",1,&gpu1_api));}
- if(current){assert(service->publish("anyapi.scene_lighting",4,&lamps_api));assert(service->publish("anyapi.scene_antialiasing",3,&aa3_api));assert(service->publish("anyapi.scene_timing",2,&timing2_api));assert(service->publish("anyapi.scene_effects",3,&effects3_api));assert(service->publish("anyapi.scene_controls",4,&controls4_api));assert(service->publish("anyapi.gpu_info",2,&gpu2_api));}
+ if(v040){assert(service->publish("anyapi.scene_lighting",2,&local_api));assert(service->publish("anyapi.scene_lighting",3,&shaped_api));assert(service->publish("anyapi.scene_antialiasing",2,&aa2_api));assert(service->publish("anyapi.scene_timing",1,&timing_api));assert(service->publish("anyapi.scene_effects",1,&effects_api));assert(service->publish("anyapi.scene_controls",3,&scene_v3));assert(service->publish("anyapi.gpu_info",1,&gpu1_api));}
+ // Scene effects v2 (water) is AnyAPI 0.40.2: --legacy (0.40.1) has effects v1 only.
+ if(current){assert(service->publish("anyapi.scene_effects",2,&effects2_api));assert(service->publish("anyapi.scene_lighting",4,&lamps_api));assert(service->publish("anyapi.scene_antialiasing",3,&aa3_api));assert(service->publish("anyapi.scene_timing",2,&timing2_api));assert(service->publish("anyapi.scene_effects",3,&effects3_api));assert(service->publish("anyapi.scene_controls",4,&controls4_api));assert(service->publish("anyapi.gpu_info",2,&gpu2_api));}
  if(fresh)assert(service->publish("anyapi.scene_controls",3,&scene_v3));
  // Wine reuses process ids: a failed run's folder must not look like saved settings.
  auto root=std::filesystem::temp_directory_path()/(L"AnyGraphicsNative-"+std::to_wstring(GetCurrentProcessId()));{std::error_code stale;std::filesystem::remove_all(root,stale);}std::filesystem::create_directories(root/L"AnyHelpers");
@@ -240,6 +241,8 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  else if(local){
  assert(lighting_policy.enabled&&local_policy.local_strength==1&&local_policy.local_budget==4);
  assert(has("SERVICES controls=4 lighting=4 effects=3 aa=3 timing=2 gpu_info=2 lamp_budget_max=8")&&has("PRESET_REVISION from=0 to=1 preset=3 rows_changed=0 saved=1"));
+ // abi-1: the revision is written even though no row moved, so the next launch does not run the migration again.
+ assert(read_file(root/L"AnyGraphics"/L"settings.tsv").find("anygraphics.hidden\tpreset_revision\t2\t31\n")!=std::string::npos);
  // Lighting v4: the lamp budget, the sea plane and the default lamp flags; the hidden rows send the 0.40.2 defaults.
  assert(lamps_sets&&lamps_policy.lamp_budget==4&&lamps_policy.atmosphere_flags==ANY_ATMOS_SEA_PLANE&&lamps_policy.flags==15&&lamps_policy.weather_response==0&&lamps_policy.amd_path==0&&lamps_policy.lamp_model==0);
  assert(fx3_sets&&fx3_policy.cloud_model==1&&fx3_policy.shading_revision==1&&fx3_policy.tone_revision==0&&fx3_policy.bloom_falloff==1&&fx3_policy.flags==0&&fx3_policy.weather==0&&fx3_policy.sky_model==1&&fx3_policy.dither==1);
@@ -329,8 +332,10 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
  apply(GameplayOnly,0);assert(lighting_policy.enabled);
  }else if(legacy){
  // AnyAPI 0.40.1: the 0.33.0 rows stay hidden and Extra smooth raises the AA quality one level (scene AA v2).
- assert(has("SERVICES controls=3 lighting=3 effects=2 aa=2 timing=1 gpu_info=1 lamp_budget_max=8")&&!lamps_sets&&!fx3_sets&&!controls4_sets);
+ assert(has("SERVICES controls=3 lighting=3 effects=1 aa=2 timing=1 gpu_info=1 lamp_budget_max=8")&&!lamps_sets&&!fx3_sets&&!controls4_sets);
  apply(Preset,CustomProfile);apply(NativeAA,6);apply(AAQuality,1);assert(aa2_policy.method==4&&aa2_policy.quality==2);
+ // Scene effects v1: the v1 set carries the policy, and the water rows (effects v2) stay hidden.
+ assert(effects_sets>0&&!water_sets&&effects_policy.enabled);event(ANY_MENU_OPEN);stage(WaterReflections+1,1);stage(SunGlint+1,1);assert(!dirty());event(ANY_MENU_CANCEL);
  apply(LightColour,2);apply(Moonlight,2);event(ANY_MENU_OPEN);stage(MoonSource+1,1);stage(LightFollowsTime+1,1);stage(WeatherResponse+1,1);assert(!dirty());event(ANY_MENU_CANCEL);
  // K11 with gpu_info v1: AMD on AnyAPI 0.39.2-0.40.1 runs lamp beams without shadows, one more row.
  apply(LocalBeams,2);event(ANY_MENU_OPEN);stage(0,0);auto plain=rows();gpu_vendor=0x1002;stage(0,0);assert(rows()==plain+1);event(ANY_MENU_CANCEL);
