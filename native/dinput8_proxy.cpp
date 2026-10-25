@@ -23,6 +23,8 @@
 #include "legacy_virtual_owners.h"
 #include "legacy_hook_specs.h"
 #include "native_pointer_pool.h"
+#include "anyapi_scene_frame.h"
+#include "scene_celestial.h"
 #include "legacy_telemetry.inc"
 #include "runtime_state.inc"
 static void p29_update_actor_from_player(const AnymakerLocalPlayerStateV2& state);
@@ -62,16 +64,37 @@ static std::string utf8(const std::filesystem::path& p) {
     return s;
 }
 static SRWLOCK g_log_lock=SRWLOCK_INIT;
+static HANDLE g_log_file=INVALID_HANDLE_VALUE;
+static ULONGLONG g_log_opened=0;
+// CPU-7: one append-only handle instead of an ofstream per line. FILE_APPEND_DATA keeps
+// each line whole when several processes share the file; the handle is reopened after a
+// failed write and when older than 5 s, so a deleted or rotated log comes back. Lines are
+// byte-identical to the old text-mode ofstream: every \n is written as \r\n.
 static void log_line(AnymakerLogLevel level,const char* mod,const char* message) {
-    AcquireSRWLockExclusive(&g_log_lock);
+    std::string line;std::wstring path;
     try {
-        std::ofstream f(g_game_dir/"anymaker_modding.log",std::ios::app);
-        f << "[" << (unsigned)level << "] [" << (mod?mod:"framework") << "] "
-          << "[pid=" << GetCurrentProcessId() << "] "
-          << (message?message:"") << "\n";
-    } catch(...) {}
+        line.reserve(64+(message?strlen(message):0));
+        line+="[";line+=std::to_string((unsigned)level);line+="] [";line+=mod?mod:"framework";
+        line+="] [pid=";line+=std::to_string(GetCurrentProcessId());line+="] ";
+        for(const char* p=message?message:"";*p;++p){if(*p=='\n')line+='\r';line+=*p;}
+        line+="\r\n";path=(g_game_dir/"anymaker_modding.log").wstring();
+    } catch(...) {return;}
+    AcquireSRWLockExclusive(&g_log_lock);
+    for(int attempt=0;attempt<2;++attempt) {
+        ULONGLONG now=GetTickCount64();
+        if(g_log_file!=INVALID_HANDLE_VALUE&&(attempt||now-g_log_opened>5000)){CloseHandle(g_log_file);g_log_file=INVALID_HANDLE_VALUE;}
+        if(g_log_file==INVALID_HANDLE_VALUE) {
+            g_log_file=CreateFileW(path.c_str(),FILE_APPEND_DATA,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
+            g_log_opened=now;if(g_log_file==INVALID_HANDLE_VALUE)break;
+        }
+        DWORD written=0;
+        if(WriteFile(g_log_file,line.data(),(DWORD)line.size(),&written,nullptr)&&written==line.size())break;
+    }
+    if(g_game_dir.empty()&&g_log_file!=INVALID_HANDLE_VALUE){CloseHandle(g_log_file);g_log_file=INVALID_HANDLE_VALUE;} // before loader_thread: old per-line behaviour
     ReleaseSRWLockExclusive(&g_log_lock);
 }
+static void scene_frame_log(bool warning,const char* line){log_line(warning?ANY_LOG_WARN:ANY_LOG_INFO,"framework",line);}
+static const bool g_scene_frame_log_ready=(scene_frame::log_sink=scene_frame_log,true);
 static std::string hexptr(uintptr_t p) {
     char b[32]{};
     std::snprintf(b,sizeof(b),"0x%llX",(unsigned long long)p);
@@ -101,18 +124,13 @@ struct GeoString16 {
 
 static bool safe_read_memory(uintptr_t address,void* out,size_t size) {
     if(!address || !out || !size) return false;
+    scene_frame::rpm_calls.fetch_add(1,std::memory_order_relaxed);
     SIZE_T got=0;
     return ReadProcessMemory(GetCurrentProcess(),(LPCVOID)address,out,size,&got) && got==size;
 }
 
 static bool safe_read_native(uintptr_t address,void* out,size_t size) {
-    if(!address || !out || !size) return false;
-    __try {
-        std::memcpy(out,(const void*)address,size);
-        return true;
-    } __except(EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return scene_frame::read(address,out,size);
 }
 
 #include "legacy_native_probes.inc"
@@ -5272,6 +5290,8 @@ static DWORD WINAPI loader_thread(void*) {
     g_game_dir=module_dir();g_game_dir_utf8=utf8(g_game_dir);
     if(!p27_build_matches())return 0;
     log_line(ANY_LOG_INFO,"framework","DLL_PLUGIN_PROFILE current_build=MATCH generic_players=1 v16_legacy_hooks=DISABLED map_specific_startup=0");
+    {std::string listed;for(uint32_t i=0;auto e=scene_frame::service_entry(i);++i)listed+=(i?",":"")+std::string(e->id)+"@"+std::to_string(e->version);
+     log_line(ANY_LOG_INFO,"framework",("SERVICE_REGISTRY entries="+std::to_string(scene_frame::service_entries())+" rejected="+std::to_string(scene_frame::service_rejected())+" services="+listed).c_str());}
     platform::load();platform::ready();
     if(platform::plugin_count.load()&&!platform::start())log_line(ANY_LOG_ERROR,"framework","PLUGIN_PLATFORM graphics_hooks=FAILED");
     HANDLE hud_worker=CreateThread(nullptr,0,hud_hints::worker,nullptr,0,nullptr);if(hud_worker)CloseHandle(hud_worker);

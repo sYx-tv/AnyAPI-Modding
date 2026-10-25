@@ -26,12 +26,12 @@ uses several services together, see the [mod tutorial](../development/mod-tutori
 | Shared inventory layout | [Screen layout](screen-layout.md) | `anyapi_screen_layout_v1.h` |
 | GPU UI drawing | [GPU drawing](gpu-drawing.md) | `anyapi_gpu_draw_v1.h` |
 | GPU effect passes | [Post-processing](post-processing.md) | `anyapi_post_process_v1.h` |
-| Native scene rendering controls (0.28.0) | [Scene controls](scene-controls.md) | `anyapi_scene_controls_v1.h`, `anyapi_scene_controls_v2.h`, `anyapi_scene_controls_v3.h` |
-| Scene SMAA before HUD (0.28.0), TAA and sharpening (0.36.0) | [Scene antialiasing](scene-antialiasing.md) | `anyapi_scene_antialiasing_v1.h`, `anyapi_scene_antialiasing_v2.h` |
-| HDR fog, sun shafts and local beams (0.29.0), beam shaping and temporal smoothing (0.36.0) | [Scene lighting](../scene-lighting.md) | `anyapi_scene_lighting_v1.h` through `anyapi_scene_lighting_v3.h` |
-| GPU cost of scene passes (0.36.0) | [Scene timing](scene-timing.md) | `anyapi_scene_timing_v1.h` |
-| The game's graphics card, and whether lamp beams run on it (0.39.1) | [GPU info](gpu-info.md) | `anyapi_gpu_info_v1.h` |
-| Tone mapping, colour looks, eye adaptation, bloom and sun glare (0.36.0), ocean reflections and sun glint (0.40.2) | [Scene effects](scene-effects.md) | `anyapi_scene_effects_v1.h`, `anyapi_scene_effects_v2.h` |
+| Native scene rendering controls (0.28.0), light tints by time of day, moonlight and storm fog (0.40.2) | [Scene controls](scene-controls.md) | `anyapi_scene_controls_v1.h` through `anyapi_scene_controls_v4.h` |
+| Scene SMAA before HUD (0.28.0), TAA and sharpening (0.36.0), TAA history and filter options and fallback status (0.40.2) | [Scene antialiasing](scene-antialiasing.md) | `anyapi_scene_antialiasing_v1.h` through `anyapi_scene_antialiasing_v3.h` |
+| HDR fog, sun shafts and local beams (0.29.0), beam shaping and temporal smoothing (0.36.0), lamp budget, tracking and weather response (0.40.2) | [Scene lighting](../scene-lighting.md) | `anyapi_scene_lighting_v1.h` through `anyapi_scene_lighting_v4.h` |
+| GPU cost of scene passes (0.36.0), per-pass times, frame-time percentiles and AnyAPI CPU time (0.40.2) | [Scene timing](scene-timing.md) | `anyapi_scene_timing_v1.h`, `anyapi_scene_timing_v2.h` |
+| The game's graphics card, and whether lamp beams run on it (0.39.1), video memory, shared-memory GPUs and the adapter name (0.40.2) | [GPU info](gpu-info.md) | `anyapi_gpu_info_v1.h`, `anyapi_gpu_info_v2.h` |
+| Tone mapping, colour looks, eye adaptation, bloom and sun glare (0.36.0), ocean reflections and sun glint, night sky on the game clock, clouds v2 and weather (0.40.2) | [Scene effects](scene-effects.md) | `anyapi_scene_effects_v1.h` through `anyapi_scene_effects_v3.h` |
 | Optional editable settings | [Helper settings](helper-settings.md) | `anyhelpers_settings_v1.h`, `anyhelpers_settings_v2.h` |
 | Optional keybind registry | [AnyHelpers](../mods/helpers.md) | `mod_controls_v1.h` |
 | Creation centre of mass (0.33.0, fluid 0.34.0) | [Creation balance](creation-balance.md) | `anyapi_creation_balance_v1.h` |
