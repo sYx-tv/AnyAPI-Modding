@@ -67,6 +67,8 @@ int wmain(int argc,wchar_t** argv){assert(argc==2||argc==3);std::ofstream out;if
  // SKY-16: moonlight dims with the phase down to the .35 floor.
  { ClockSky c{};double m[3]{0,.8,-.6},su[3]{0,-.8,-.6};for(int i=0;i<3;++i){c.moon[i]=m[i];c.sun[i]=su[i];}c.source=1;c.parked=true;c.night=1;const float any[3]{0,1,0};
    c.phase=0;auto full=build(right,up,forward,any,64,64,0,1,1,1);assert(apply_clock(full,c,any)&&full.params[2]==1&&full.model[1]>3.14f);
+   // The surface moonlight keeps the game's own sun timing: none under the parked noon sun, even with the clock at night.
+   assert(full.sun[3]==1&&full.celestial[3]==0);const float down[3]{0,-1,0};auto low=build(right,up,forward,down,64,64,0,1,1,1);assert(low.celestial[3]==1&&low.sun[3]==1);
    c.phase=.5f;auto none=build(right,up,forward,any,64,64,0,1,1,1);assert(apply_clock(none,c,any)&&std::abs(none.params[2]-.35f)<1e-6f&&none.model[1]==0);
    ClockSky broken=c;broken.source=0;assert(!clock_ok(broken));broken=c;broken.moon[1]=0;broken.moon[2]=0;assert(!clock_ok(broken)&&!apply_clock(none,broken,any)); }
  // K49: the disc moves to the game's night light and turns opaque.

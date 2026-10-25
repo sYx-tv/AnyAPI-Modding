@@ -276,7 +276,9 @@ rest of the scene. Everything follows the game's own sun
 Version 3 `sky_model` 1 follows the game's own clock instead (the time of day
 the game keeps, `scene_renderer` +0xba8): stars and the moon show all night,
 the moon goes through its phases, the sky fades out at dawn, and the star
-field is sparser. `moon_disc_follows_light` 1 puts the moon disc where the
+field is sparser. The moonlight on surfaces keeps the version 1 timing (the
+game's own sun, so mostly at dusk and dawn): it has no shadows, and all night
+it would light interiors through their roofs. `moon_disc_follows_light` 1 puts the moon disc where the
 game's night light comes from (with `anyapi.scene_controls` v4 `moon_mode` 1).
 With `weather` 1, rain, snow and storms dim the stars, moon and sun disc,
 thicken the clouds and roughen the sea; it also lets storms dim the scene

@@ -77,6 +77,8 @@ int main(){std::cout<<std::unitbuf;
   auto v=run(build(right,up,forward,midnight,W,H,3,1,1,1),Scene{});for(UINT i=0;i<W*H;++i)if(v[i*4+1]>.11f)++v2_lit;
   // SKY-6: about a third as many stars, mostly faint.
   std::cout<<"Parked sun: V2 unchanged, clock stars lit="<<clock_lit<<" (V2 midnight lit="<<v2_lit<<")\n";assert(clock_lit>3&&clock_lit<v2_lit&&clock_lit<W*H*8/100);cases+=2;}
+ // The unshadowed surface moonlight keeps the game's own sun: none under the parked noon sun on the clock (interiors stay dark).
+ {Scene ground;ground.depth=[](UINT,UINT){return .5f;};auto o=run(clock_frame(right,up,forward,0,0,0,1),ground);for(UINT i=0;i<W*H*4;i+=4)assert(std::abs(o[i]-.1f)<1e-4f);std::cout<<"Clock night, parked sun: surfaces unlit\n";++cases;}
  // The moon where the clock puts it, and its phase: full brighter than quarter brighter than new.
  {float m[3]{float(moon9[0]),float(moon9[1]),float(moon9[2])},t[3]{0,0,0};{float l=std::sqrt(m[0]*m[0]+m[2]*m[2]);t[0]=m[2]/l;t[2]=-m[0]/l;}
   float b[3]{m[1]*t[2]-m[2]*t[1],m[2]*t[0]-m[0]*t[2],m[0]*t[1]-m[1]*t[0]};float r2[4]{t[0],t[1],t[2],.05f},u2[4]{b[0],b[1],b[2],.05f},f2[4]{m[0],m[1],m[2],0};

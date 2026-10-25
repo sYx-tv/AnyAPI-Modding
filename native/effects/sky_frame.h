@@ -14,6 +14,9 @@ namespace scene_sky_gpu {
 // above the camera in metres, w daylight factor.
 // model: x MODEL_* flags (a whole number), y the moon's angle from the sun in radians (clock sky; 0 otherwise),
 // z weather cloud cover 0..1, w moon opacity 0..1 (K49; 0 = the V2 additive moon). All 0 is exactly the V2 pass.
+// celestial: x/y cos and sin of the sky rotation, z seconds, w the night factor of the moonlight on surfaces. That light
+// has no shadows, so it keeps the 0.40.1 timing on the game's own (parked) sun even when the sky follows the clock:
+// on the clock it would light interiors through their roofs all night.
 struct Frame {std::array<float,4> metrics{},right{},up{},forward{},sun{},moon{},celestial{},params{},sun_light{},sky_light{},clouds{},model{};};
 static_assert(sizeof(Frame)==48*4);
 enum : uint32_t {MODEL_CLOCK=1,MODEL_CLOUDS_V2=2,MODEL_STAR_SEARCH=4,MODEL_ALL=7};
@@ -47,7 +50,7 @@ inline Frame build(const float* right,const float* up,const float* forward,const
  for(int i=0;i<4;++i){f.right[i]=right[i];f.up[i]=up[i];f.forward[i]=forward[i];}
  auto m=moon_direction(sun);f.sun={sun[0],sun[1],sun[2],night_factor(sun[1])};f.moon={m[0],m[1],m[2],smoothstep(-.02f,.12f,m[1])};
  // The star field turns about the same axis as the sun (the game rotates it about x).
- float angle=std::atan2(sun[1],sun[2]);f.celestial={std::cos(angle),std::sin(angle),std::fmod(seconds,3600.f),0};
+ float angle=std::atan2(sun[1],sun[2]);f.celestial={std::cos(angle),std::sin(angle),std::fmod(seconds,3600.f),night_factor(sun[1])};
  f.params={stars,moon,moonlight,stars};
  auto colour=[](const float* c,float scale){return c?std::array<float,3>{std::clamp(c[0]*scale,0.f,100.f),std::clamp(c[1]*scale,0.f,100.f),std::clamp(c[2]*scale,0.f,100.f)}:std::array<float,3>{0,0,0};};
  auto s=colour(sun_colour,1),k=colour(sky_colour,1);f.sun_light={s[0],s[1],s[2],sun_disc};f.sky_light={k[0],k[1],k[2],clouds};

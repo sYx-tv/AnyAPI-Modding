@@ -10,7 +10,7 @@ cbuffer Frame : register(b0) {
     float4 forward_axis;
     float4 sun;        // toward the sun; w: night factor 0..1
     float4 moon;       // toward the moon; w: above-horizon fade
-    float4 celestial;  // cos, sin of the sky rotation; seconds
+    float4 celestial;  // cos, sin of the sky rotation; seconds; w: night factor of the moonlight on surfaces
     float4 params;     // stars, moon brightness, moonlight, milky way
     float4 sun_light;  // game sun colour; w: sun disc strength
     float4 sky_light;  // game sky colour; w: cloud amount
@@ -219,13 +219,14 @@ float4 Sky(Varying v) : SV_Target {
         // SKY-14: nothing to add here, so leave the pixel alone without a read-modify-write.
         if (alpha <= 0 && !any(behind)) discard;
         return float4(cloud.rgb + behind * (1 - cloud.a), alpha);
-    } else if (scene_depth > 0 && sea.x <= 0 && sea.y <= 0 && night > 0 && params.z > 0) {   // SKY-5: never on the seabed under the ocean
-        // Moonlight: unshadowed (the game has no shadow map for it).
+    } else if (scene_depth > 0 && sea.x <= 0 && sea.y <= 0 && celestial.w > 0 && params.z > 0) {   // SKY-5: never on the seabed under the ocean
+        // Moonlight: unshadowed (the game has no shadow map for it), so it keeps the game's own sun timing (celestial.w),
+        // not the clock night: through roofs, all night it would light interiors.
         float3 n = normalize(normals.SampleLevel(point_sampler, v.uv, 0).xyz);
         float3 a = albedo.SampleLevel(point_sampler, v.uv, 0).rgb;
         // About twice the game's night ambient at strength 1, so the moon casts a clear direction.
         colour = a * float3(.55, .65, .9) * .15 * params.z * moon.w * saturate(dot(n, normalize(moon.xyz)));
-        return float4(colour * night, 0);
+        return float4(colour * celestial.w, 0);
     }
     discard;   // SKY-14: geometry by day, ocean, and the seabed under it
     return 0;

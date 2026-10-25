@@ -97,7 +97,9 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 ## Sky and water
 
 - The night sky follows the game's clock: stars all night (before, about a tenth of it), moon
-  phases, a dawn fade and a sparser, more natural star field (`sky_model` reverts).
+  phases, a dawn fade and a sparser, more natural star field (`sky_model` reverts). The Sky
+  glow moonlight on the ground keeps its old timing: it has no shadows, so all night it would
+  light interiors too.
 - Clouds v2: cloud cover no longer changes with zoom or resolution, thick cloud hides the sun,
   the moon lights the clouds and the clouds drift with the game's wind (`cloud_model` reverts).
 - The moonlight glow no longer lands on the ocean surface.
