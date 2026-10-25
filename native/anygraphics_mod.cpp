@@ -58,7 +58,7 @@ static const ModControlsV1* controls;static uint64_t photo_action;static bool ph
 static uint32_t photo_key(){return controls&&photo_action?controls->key(photo_action):VK_F1;}
 // Auto-pick (K35) steps through Performance..Ultra until gameplay holds about 60 fps, from the median and the slowest 5%
 // of frame times and the GPU time of AnyAPI's passes. A look keeps its style at each cost level (the preset becomes Custom).
-struct Pick {bool on{},went_down{},confirming{},commit_pending{},confirm_custom{};int tier{},start{},look{};double seconds{},next_sample{},pass_sum{};uint64_t last{};uint32_t count{},pass_samples{};std::array<float,2048> dts{};};
+struct Pick {bool on{},went_down{},confirming{},commit_pending{},confirm_custom{};int tier{},start{},look{};double seconds{},next_sample{},pass_sum{},block_sum{};uint64_t last{};uint32_t count{},pass_samples{},block_samples{};std::array<float,2048> dts{};};
 static Pick pick;static std::string pick_result;
 // K34: the last gameplay readout and what was running, shown while Gameplay only bypasses AnyGraphics in a menu.
 struct LastCost {bool have{},aa{},lighting{},ao{},water{},effects{};std::string gpu,frame;};
@@ -88,7 +88,7 @@ static const char* tier_name(int t){static const char* names[]={"Off","Performan
 static const char* look_name(int level){return level==NaturalProfile?"Natural":level==VibrantProfile?"Vibrant":level==MoodyProfile?"Moody":level==ClearDayProfile?"Clear Day":level==SoftWarmProfile?"Soft & warm":"Custom";}
 // A tier's values: the preset itself, or the starting look on top of the tier's costs, as Custom.
 static Values pick_values(int t){auto c=committed();if(!pick.look)return profile(c,t);auto v=tier_values(c,size_t(t-1));apply_style(pick.look,v);v[Preset]=float(CustomProfile);return v;}
-static void pick_window(){pick.seconds=0;pick.next_sample=0;pick.pass_sum=0;pick.last=0;pick.count=0;pick.pass_samples=0;}
+static void pick_window(){pick.seconds=0;pick.next_sample=0;pick.pass_sum=0;pick.block_sum=0;pick.last=0;pick.count=0;pick.pass_samples=0;pick.block_samples=0;}
 static bool pick_commit(int t){if(commit_values(pick_values(t))){pick_window();return true;}pick.on=false;pick_result="Auto-pick stopped: the settings could not be saved.";log("AUTO_PICK stopped=1 reason=save_failed");return false;}
 // GPU ms of AnyAPI's scene passes now. The overlay is left out: it is CPU time the frame times already hold. -1 unknown.
 static float pass_ms_now(){
@@ -98,6 +98,8 @@ static float pass_ms_now(){
  if(effects){AnySceneEffectsStatusV1 e;if(effects->status(&e)){known=true;add(e.ready,e.gpu_ms);add(e.ao_ready,e.ao_ms);add(e.sky_ready,e.sky_ms);add(e.contact_ready,e.contact_ms);add(e.gi_ready,e.gi_ms);add(e.lens_ready,e.lens_ms);}}
  if(effects_v2){AnySceneEffectsStatusV2 w;if(effects_v2->status_v2(&w))add(w.water_ready,w.water_ms);}
  return known?sum:-1;}
+// Scene timing v2: median ms inside the game's Present; -1 without timing v2 or before it is measured.
+static float present_block_now(){AnySceneTimingV2 t;return timing_v2&&timing_v2->copy_v2(&t)&&t.present_block_ms>=0?t.present_block_ms:-1.f;}
 // One auto-pick step: measure 4 s of gameplay (after 1.5 s to settle), then move a tier or stop. It measures only while
 // AnyGraphics is on and connected to the renderer (AG-5) and stops when a save fails (AG-13, CPU-8).
 static void auto_pick(bool gameplay,bool active,bool configured_now){if(!pick.on)return;
@@ -107,12 +109,12 @@ static void auto_pick(bool gameplay,bool active,bool configured_now){if(!pick.on
  if(!configured_now){pick.last=0;return;}
  LARGE_INTEGER now,rate;QueryPerformanceCounter(&now);QueryPerformanceFrequency(&rate);
  if(pick.last){double dt=double(now.QuadPart-pick.last)/rate.QuadPart;if(dt<.5){pick.seconds+=dt;if(pick.seconds>1.5){if(pick.count<pick.dts.size())pick.dts[pick.count++]=float(dt*1000);
-  if(pick.seconds>=pick.next_sample){pick.next_sample=pick.seconds+.25;float ms=pass_ms_now();if(ms>=0){pick.pass_sum+=ms;++pick.pass_samples;}}}}}
+  if(pick.seconds>=pick.next_sample){pick.next_sample=pick.seconds+.25;float ms=pass_ms_now();if(ms>=0){pick.pass_sum+=ms;++pick.pass_samples;}float block=present_block_now();if(block>=0){pick.block_sum+=block;++pick.block_samples;}}}}}
  pick.last=now.QuadPart;
  if(pick.seconds<5.5||pick.count<8)return;
- PickWindow w;std::sort(pick.dts.begin(),pick.dts.begin()+pick.count);w.median_ms=pick.dts[pick.count/2];w.p95_ms=pick.dts[std::min(pick.count-1,uint32_t(pick.count*.95f))];w.pass_ms=pick.pass_samples?float(pick.pass_sum/pick.pass_samples):-1;
+ PickWindow w;std::sort(pick.dts.begin(),pick.dts.begin()+pick.count);w.median_ms=pick.dts[pick.count/2];w.p95_ms=pick.dts[std::min(pick.count-1,uint32_t(pick.count*.95f))];w.pass_ms=pick.pass_samples?float(pick.pass_sum/pick.pass_samples):-1;w.present_block_ms=pick.block_samples?float(pick.block_sum/pick.block_samples):-1;
  const auto d=pick_decide(pick.tier,pick.start,pick.went_down,pick.confirming,w);const float fps=1000/w.median_ms;char text[320];
- snprintf(text,sizeof(text),"AUTO_PICK tier=%s look=%d median_ms=%.2f p95_ms=%.2f pass_ms=%.2f cap_ms=%.2f next=%s done=%d reason=%u",tier_name(pick.tier),pick.look,w.median_ms,w.p95_ms,w.pass_ms,pick_cap(w),tier_name(d.tier),int(d.done),unsigned(d.reason));log(text);
+ snprintf(text,sizeof(text),"AUTO_PICK tier=%s look=%d median_ms=%.2f p95_ms=%.2f pass_ms=%.2f present_block_ms=%.2f cap_ms=%.2f next=%s done=%d reason=%u",tier_name(pick.tier),pick.look,w.median_ms,w.p95_ms,w.pass_ms,w.present_block_ms,pick_cap(w),tier_name(d.tier),int(d.done),unsigned(d.reason));log(text);
  pick.confirming=d.reason==PickConfirm;
  if(!d.done){
   if(d.tier==pick.tier){pick_window();return;} // slow once: measure again before stepping down

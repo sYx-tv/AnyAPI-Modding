@@ -115,7 +115,8 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 - **Weather response**: rain, snow and storms change fog, clouds, sky, sea and lamp beams. Off
   by default.
 - **Auto-pick** measures typical and worst frame times and how much AnyAPI's passes cost,
-  stops when the CPU or game is the limit (never below Balanced that way), notices a frame-rate
+  stops when the CPU or game is the limit (never below Balanced that way; a game waiting for
+  the graphics card still steps down), notices a frame-rate
   cap, keeps a look's style, and stops if the settings cannot be saved.
 - **Show GPU cost** lists every pass, and a second line shows frame times, AnyAPI's CPU time
   and the lamps drawn. In menus it shows the last gameplay numbers.

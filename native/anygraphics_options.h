@@ -213,7 +213,8 @@ inline uint32_t restage(Values& committed,int from){
  return changed;
 }
 // K35 auto-pick: one measured window of gameplay at a tier (1 Performance .. 5 Ultra).
-struct PickWindow {float median_ms{-1},p95_ms{-1},pass_ms{-1};}; // pass_ms: AnyAPI GPU pass sum, -1 when unknown
+// pass_ms: AnyAPI GPU pass sum; present_block_ms: time inside the game's Present (scene timing v2). -1 when unknown.
+struct PickWindow {float median_ms{-1},p95_ms{-1},pass_ms{-1},present_block_ms{-1};};
 enum PickReason:uint32_t{PickHolds,PickSlow,PickConfirm,PickFast,PickRoom,PickCapFull,PickCpuBound,PickTop,PickBottom};
 struct PickDecision {int tier;bool done;PickReason reason;};
 // A refresh cap: frame times this steady, at a common refresh period, mean vsync or a limiter decides the frame rate.
@@ -221,11 +222,14 @@ inline float pick_cap(const PickWindow& w){static constexpr float periods[]={6.9
 // Slow is under 55 fps typical or under 40 fps for the slowest 5% of frames. A slow tier steps down only after a second
 // slow window. When AnyAPI's passes are under 15% of the frame the game or CPU sets the frame rate: it stops there and
 // never ends below Balanced from a start at Balanced or above. Under a cap it climbs while the passes stay under 30% of
-// the frame; otherwise it climbs at 80 fps.
+// the frame; otherwise it climbs at 80 fps. With scene timing v2 the CPU-bound call also needs the game to wait in
+// Present for under 15% of the frame: a GPU-bound frame (a low-end integrated GPU busy with the game's own drawing)
+// waits there, and stepping down helps it. Without that reading the pass share decides alone.
 inline PickDecision pick_decide(int tier,int start,bool went_down,bool confirming,const PickWindow& w){
  const bool known=w.pass_ms>0,slow=w.median_ms>1000/55.f||w.p95_ms>1000/40.f;const float share=known?w.pass_ms/w.median_ms:1;
+ const bool gpu_waits=w.present_block_ms>=0&&w.present_block_ms>=.15f*w.median_ms;
  if(slow){
-  if(known&&share<.15f)return {std::max(tier,std::min(start,3)),true,PickCpuBound};
+  if(known&&share<.15f&&!gpu_waits)return {std::max(tier,std::min(start,3)),true,PickCpuBound};
   if(tier<=1)return {tier,true,PickBottom};
   if(!confirming)return {tier,false,PickConfirm};
   return {tier-1,false,PickSlow};}

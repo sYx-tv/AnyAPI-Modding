@@ -164,6 +164,9 @@ static void pure_tests(){using namespace graphics_options;
  d=pick_decide(4,4,false,false,window(15,30,8));assert(d.reason==PickConfirm); // slowest 5% under 40 fps counts too
  d=pick_decide(1,4,true,true,window(30,40,8));assert(d.done&&d.tier==1&&d.reason==PickBottom);
  d=pick_decide(4,4,false,false,window(20,25,-1));assert(d.reason==PickConfirm); // unknown pass time is never CPU-bound
+ {auto w=window(30,40,1);w.present_block_ms=.5f;d=pick_decide(3,3,false,false,w);assert(d.done&&d.reason==PickCpuBound); // timing v2: the game hardly waits in Present
+  w.present_block_ms=12;d=pick_decide(3,3,false,false,w);assert(!d.done&&d.tier==3&&d.reason==PickConfirm); // GPU-bound (low-end iGPU): it waits for the GPU
+  d=pick_decide(3,3,false,true,w);assert(!d.done&&d.tier==2&&d.reason==PickSlow);w.present_block_ms=-1;assert(pick_decide(3,3,false,false,w).reason==PickCpuBound);}
  // Fast: climb at 80 fps, hold below it, hold after stepping down, stop at Ultra.
  d=pick_decide(3,3,false,false,window(10,12,3));assert(!d.done&&d.tier==4&&d.reason==PickFast);
  d=pick_decide(3,3,false,false,window(14,16,3));assert(d.done&&d.tier==3&&d.reason==PickHolds);

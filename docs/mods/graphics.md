@@ -120,7 +120,9 @@ the warm sun tint also landed on the sky straight above).
 **Auto-pick** measures typical and worst frame times, not an average, and how
 much of each frame AnyAPI's passes take. When they take little of it, the game
 or the CPU sets the frame rate, so it stops there instead of dropping presets
-that would not help, and it never ends below Balanced that way. It notices a
+that would not help, and it never ends below Balanced that way. With AnyAPI
+0.40.2 it also checks that the game is not waiting for the graphics card (time
+spent in Present), so a slow integrated GPU still steps down. It notices a
 frame-rate cap (vsync or a limiter) and only climbs while the passes leave
 room. A slow result is measured twice before it steps down. It runs only while
 AnyGraphics is on and connected to the game's renderer, and stops if the
