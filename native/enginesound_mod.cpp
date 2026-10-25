@@ -9,7 +9,7 @@
 // stock running and power voices silenced. Rotary engines are left to AnyEngineParts.
 //
 // EXPERIMENTAL. This mod hooks game functions directly through the experimental SDK (see
-// enginesound_bindings.h). The hooks resolve only on Anymaker 0.1.25 / Steam build 25904830 and are not
+// enginesound_bindings.h). The hooks resolve only on Anymaker 0.1.27 / Steam build 26113663 and are not
 // reviewed as an AnyAPI service yet. The first in-game runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
@@ -18,6 +18,8 @@
 #include "anyapi_experimental.hpp"
 #include "enginesound_bindings.h"
 #include "enginesound_params.h"
+#include "enginesound_save.h"
+#include "route_cell.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -57,7 +59,14 @@ constexpr ptrdiff_t pd_elements = 72 + 24;           // property_data._m_propert
 constexpr ptrdiff_t srow_name = 32 + 24, srow_value_ptr = 96, srow_min_modified = 104 + 16, srow_min = 104 + 24;
 constexpr ptrdiff_t srow_max_modified = 136 + 16, srow_max = 136 + 24;
 constexpr size_t srow_size = 168;
+// Saves (enginesound_save.h). The sound row's value is the engine's master property_s32 (modified flag, value).
+constexpr ptrdiff_t server_sound_modified = server_engine_sound + 16, server_sound_value = server_engine_sound + 24;
+constexpr ptrdiff_t server_component_id = 64;        // server_scene.vehicle_component.m_id (s32, saved as "id")
+constexpr ptrdiff_t save_vehicle_id = 0;             // server_scene.save_data.vehicle.m_id (saved as "id", read first)
+constexpr ptrdiff_t parser_format = 0, parser_mode = 4;   // server_scene.save_data.parser._m_format, _m_mode
 }  // namespace off
+constexpr int32_t kParserJson = 0;               // server_scene.save_data.e_parser_format.json (binary = 1)
+constexpr int32_t kParseWrite = 1;               // e_parse_mode.write (read = 0)
 constexpr int32_t kSoundLabel = 324;             // e_localization_string.property_sound_effect (static)
 
 AnyModHostV1 host;
@@ -84,30 +93,37 @@ anymaker::cell_hook h_tick, h_vol_speed, h_props, h_row;
 void** g_push_cell;
 
 // ------------------------------------------------------------------ which engine (any thread)
+// Keyed by definition pointer, with the id the kind was worked out from. Every world loads its part definitions anew
+// (client_scene.create and server_scene.create), and one can land where the last world's definition of another engine
+// was: an entry counts only while the definition there still has the same id.
+struct KnownKind { const char* id = nullptr; int32_t length = 0; char text[64]{}; EngineKind kind{}; };
 std::mutex g_kind_mutex;
-std::unordered_map<const void*, EngineKind> g_kinds;   // definition pointer -> engine kind
+std::unordered_map<const void*, KnownKind> g_kinds;
 
 EngineKind kind_of(const void* definition) {
     if (!definition) return engine_kind(nullptr, 0);
+    const auto* base = static_cast<const uint8_t*>(definition);
+    anymaker::gc_string_view id{};
+    if (anymaker::readable(base + off::definition_id, sizeof id)) std::memcpy(&id, base + off::definition_id, sizeof id);
+    const bool usable = id.data && id.length > 0 && id.length < 64;
     std::lock_guard<std::mutex> lock(g_kind_mutex);
     auto found = g_kinds.find(definition);
-    if (found != g_kinds.end()) return found->second;
-    EngineKind k = engine_kind(nullptr, 0);
-    const auto* base = static_cast<const uint8_t*>(definition);
-    if (anymaker::readable(base + off::definition_id, sizeof(anymaker::gc_string_view))) {
-        anymaker::gc_string_view id;
-        std::memcpy(&id, base + off::definition_id, sizeof id);
-        if (id.data && id.length > 0 && id.length < 64 && anymaker::readable(id.data, size_t(id.length))) {
-            k = engine_kind(id.data, size_t(id.length));
-            if (!k.known) {
-                static int logs = 6;
-                if (logs-- > 0) log(1, "engine part '%.*s' is not one EngineSound knows; it sounds like an inline", int(id.length), id.data);
-            }
+    if (found != g_kinds.end() && found->second.id == id.data && found->second.length == id.length &&
+        (!usable || std::memcmp(found->second.text, id.data, size_t(id.length)) == 0)) return found->second.kind;
+    KnownKind known;
+    known.id = id.data; known.length = id.length;
+    known.kind = engine_kind(nullptr, 0);
+    if (usable && anymaker::readable(id.data, size_t(id.length))) {
+        std::memcpy(known.text, id.data, size_t(id.length));
+        known.kind = engine_kind(id.data, size_t(id.length));
+        if (!known.kind.known) {
+            static int logs = 6;
+            if (logs-- > 0) log(1, "engine part '%.*s' is not one EngineSound knows; it sounds like an inline", int(id.length), id.data);
         }
-    }
+    } else known.id = nullptr;                       // not read: never matches, so it is tried again next time
     if (g_kinds.size() > 4096) g_kinds.clear();
-    g_kinds[definition] = k;
-    return k;
+    g_kinds[definition] = known;
+    return known.kind;
 }
 const void* pointer_at(const uint8_t* base, ptrdiff_t offset) {
     if (!base || !anymaker::readable(base + offset, 8)) return nullptr;
@@ -120,12 +136,12 @@ int32_t extend_at(const uint8_t* base, ptrdiff_t offset) {
 
 // ------------------------------------------------------------------ generated sound (client, main thread)
 namespace audio {
-constexpr uint32_t play_voice_rva = 0x1409e0;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
-constexpr uint32_t append_rva = 0x141160;           // effect_3d.append_audio_data (takes the buffer's memory)
-constexpr uint32_t set_position_velocity_rva = 0x141140;
-constexpr uint32_t stop_rva = 0x141110;
-constexpr uint32_t reset_rva = 0x141050;            // effect_3d.reset (releases the handle)
-constexpr uint32_t buffer_reset_rva = 0x41c40;      // binary.buffer.reset (allocates with the game's allocator)
+constexpr uint32_t play_voice_rva = 0x13f240;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
+constexpr uint32_t append_rva = 0x13f9c0;           // effect_3d.append_audio_data (takes the buffer's memory)
+constexpr uint32_t set_position_velocity_rva = 0x13f9a0;
+constexpr uint32_t stop_rva = 0x13f970;
+constexpr uint32_t reset_rva = 0x13f8b0;            // effect_3d.reset (releases the handle)
+constexpr uint32_t buffer_reset_rva = 0x41a00;      // binary.buffer.reset (allocates with the game's allocator)
 constexpr int32_t kGroupVehicle = 4;                // e_audio_group.vehicle: follows the vehicle volume slider
 constexpr double kRange = 160.0;                    // metres
 constexpr double kLead = 0.08;                      // seconds of sound queued ahead
@@ -160,6 +176,7 @@ struct ClientEngine {
     bool game_volume_seen = false;
     double quiet_since = -1;
     int32_t logged_value = INT32_MAX; int logged_cylinders = 0;
+    bool was_running = false;                        // last tick's firing state, for the start and stop log lines
 };
 std::unordered_map<const void*, ClientEngine> g_engines;   // keyed by client engine
 std::vector<int16_t> g_pcm;
@@ -199,6 +216,14 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     in.tune = tune_of(decode(value, kind.layout), kind);
     // Firing: the game's power voice is audible.
     in.running = v.game_volume_seen ? v.game_volume > 0.001 : in.rps >= synth::kIdleRps;
+    if (in.running != v.was_running) {
+        static std::atomic<int> logs{16};
+        if (logs.fetch_sub(1) > 0)
+            log(0, "engine %s at %.0f rpm (game %.0f rpm), load %.2f, stock power volume %s%.3f, gain %.2f, starter %.2f", in.running ? "firing" : "stopped firing",
+                in.rps * 60, synth::clamp01(rd<double>(self, off::engine_factor_speed)) * synth::kMaxRps * 60, in.load, v.game_volume_seen ? "" : "(not seen, by speed) ",
+                v.game_volume, in.tune.gain, v.synth.starter_env);
+        v.was_running = in.running;
+    }
     v.game_volume_seen = false;
     if (v.logged_value != value || v.logged_cylinders != in.cylinders) {
         static std::atomic<int> logs{24};
@@ -337,6 +362,185 @@ void hk_props(uint8_t* engine, uint8_t* pd) {
     }
 }
 
+// ------------------------------------------------------------------ saves stay stock (host: server and worker threads)
+// A save only ever holds a stock sound, so an engine still plays without the mod (enginesound_save.h). The game
+// reads and writes an engine's save data with the same parse call: on write the engine holds kSavedStockSound just
+// while the game writes it (its modified flag untouched, so the stand-in is never replicated), and the choice is kept
+// beside it; on read the choice comes back.
+using parse_save_t = void (*)(uint8_t* self, uint8_t* parser);
+using parse_s32_t = void (*)(uint8_t* parser, const anymaker::gc_string_view* name, int32_t* value, const int32_t* fallback);
+using string_ctor_t = void (*)(anymaker::gc_string_view* s, const char* text);
+using string_dtor_t = void (*)(anymaker::gc_string_view* s);
+anymaker::cell_hook h_save_engine, h_save_vehicle;
+parse_s32_t g_parse_s32;
+string_ctor_t g_string_ctor;
+string_dtor_t g_string_dtor;
+thread_local const uint8_t* t_save_vehicle;   // the save_data.vehicle being read or written on this thread
+
+// The world's choices, mirrored in a file in the game's working folder (which the game swaps when a world loads).
+struct FileStamp { bool exists = false; FILETIME created{}, written{}; uint64_t size = 0; };
+std::mutex g_save_mutex;
+SoundMap g_saved;
+std::wstring g_saved_path;                       // empty: the folder was not found, world saves keep the choice as is
+FileStamp g_saved_stamp;
+bool g_saved_dirty = false;
+
+FileStamp stamp_of(const std::wstring& path) {
+    FileStamp s;
+    WIN32_FILE_ATTRIBUTE_DATA a{};
+    if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &a)) return s;
+    s.exists = true; s.created = a.ftCreationTime; s.written = a.ftLastWriteTime;
+    s.size = (uint64_t(a.nFileSizeHigh) << 32) | a.nFileSizeLow;
+    return s;
+}
+bool same_stamp(const FileStamp& a, const FileStamp& b) {
+    if (a.exists != b.exists) return false;
+    return !a.exists || (CompareFileTime(&a.created, &b.created) == 0 && CompareFileTime(&a.written, &b.written) == 0 && a.size == b.size);
+}
+std::string read_text(const std::wstring& path) {
+    std::string out;
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return out;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(f, &size) && size.QuadPart > 0 && size.QuadPart < (16 << 20)) {
+        out.resize(size_t(size.QuadPart));
+        DWORD got = 0;
+        if (!ReadFile(f, out.data(), DWORD(out.size()), &got, nullptr)) got = 0;
+        out.resize(got);
+    }
+    CloseHandle(f);
+    return out;
+}
+bool write_text(const std::wstring& path, const std::string& text) {
+    std::wstring temp = path + L".tmp";
+    HANDLE f = CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return false;
+    DWORD put = 0;
+    bool ok = WriteFile(f, text.data(), DWORD(text.size()), &put, nullptr) && put == text.size();
+    CloseHandle(f);
+    return ok && MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);
+}
+void init_saved_path() {
+    wchar_t buf[MAX_PATH];
+    DWORD n = GetEnvironmentVariableW(L"APPDATA", buf, MAX_PATH);
+    if (!n || n >= MAX_PATH || GetFileAttributesW((std::wstring(buf) + L"\\Anymaker").c_str()) == INVALID_FILE_ATTRIBUTES) {
+        log(1, "the game's user folder (%%APPDATA%%\\Anymaker) was not found; world saves keep modded sounds as they are");
+        return;
+    }
+    g_saved_path = std::wstring(buf) + L"\\Anymaker\\working\\enginesound_sounds.json";
+}
+// With g_save_mutex held: reload the choices when the world (the working folder's file) changed under us.
+void sync_saved() {
+    FileStamp s = stamp_of(g_saved_path);
+    if (same_stamp(s, g_saved_stamp)) return;
+    size_t before = g_saved.size();
+    g_saved = s.exists ? decode_saved(read_text(g_saved_path)) : SoundMap{};
+    g_saved_stamp = s;
+    g_saved_dirty = false;
+    static std::atomic<int> logs{8};
+    if (logs.fetch_sub(1) > 0) log(0, "world engine sounds %s: %zu engines (had %zu)", s.exists ? "loaded" : "file gone (another world)", g_saved.size(), before);
+}
+void flush_saved() {
+    if (!g_saved_dirty) return;
+    if (!write_text(g_saved_path, encode_saved(g_saved))) {
+        static std::atomic<int> logs{3};
+        if (logs.fetch_sub(1) > 0) log(1, "could not write the world engine sounds file (error %lu)", GetLastError());
+        return;
+    }
+    g_saved_stamp = stamp_of(g_saved_path);
+    g_saved_dirty = false;
+}
+SoundKey save_key(const uint8_t* save_vehicle, const uint8_t* engine) {
+    return SoundKey{rd<int32_t>(save_vehicle, off::save_vehicle_id), rd<int32_t>(engine, off::server_component_id)};
+}
+// Reads or writes kSaveKey in the engine's saved-vehicle (JSON) data.
+void parse_key(uint8_t* parser, int32_t* value, const int32_t* fallback) {
+    anymaker::gc_string_view name{};
+    g_string_ctor(&name, kSaveKey);
+    g_parse_s32(parser, &name, value, fallback);
+    g_string_dtor(&name);
+}
+
+void hk_save_vehicle(uint8_t* save_vehicle, uint8_t* parser) {
+    const uint8_t* prev = t_save_vehicle;
+    t_save_vehicle = save_vehicle;
+    reinterpret_cast<parse_save_t>(h_save_vehicle.original)(save_vehicle, parser);
+    t_save_vehicle = prev;
+    if (!prev && parser && rd<int32_t>(parser, off::parser_mode) == kParseWrite && !g_saved_path.empty()) {
+        std::lock_guard lock(g_save_mutex);
+        flush_saved();                                // once per vehicle, before the game copies the folder
+    }
+}
+
+std::atomic<int> g_save_logs{12};
+void hk_save_engine(uint8_t* engine, uint8_t* parser) {
+    auto original = reinterpret_cast<parse_save_t>(h_save_engine.original);
+    if (!engine || !parser || !anymaker::readable(parser, 8) || !anymaker::readable(engine + off::server_sound_modified, 12))
+        return original(engine, parser);
+    const bool json = rd<int32_t>(parser, off::parser_format) == kParserJson;
+    const uint8_t* vehicle = t_save_vehicle;
+    // World saves need the vehicle's id and the file; saved vehicles carry the choice themselves.
+    const bool keep = json || (vehicle && !g_saved_path.empty());
+    if (rd<int32_t>(parser, off::parser_mode) == kParseWrite) {
+        int32_t choice = rd<int32_t>(engine, off::server_sound_value);
+        if (!json && keep) {
+            std::lock_guard lock(g_save_mutex);
+            sync_saved();
+            if (note_saved(g_saved, save_key(vehicle, engine), choice)) g_saved_dirty = true;
+        }
+        if (!keep || !needs_stock_save(choice)) return original(engine, parser);
+        wr<int32_t>(engine, off::server_sound_value, kSavedStockSound);
+        original(engine, parser);
+        wr<int32_t>(engine, off::server_sound_value, choice);
+        if (json) { int32_t stock = kSavedStockSound; parse_key(parser, &choice, &stock); }   // a default unlike the value, in case defaults are skipped
+        if (g_save_logs.fetch_sub(1) > 0)
+            log(0, "engine %d sound %d saved as stock sound %d (%s)", rd<int32_t>(engine, off::server_component_id), choice, kSavedStockSound,
+                json ? "saved vehicle" : "world");
+        return;
+    }
+    original(engine, parser);
+    if (!keep) return;
+    int32_t loaded = rd<int32_t>(engine, off::server_sound_value), choice = loaded;
+    if (json) {
+        int32_t kept = loaded;
+        parse_key(parser, &kept, &loaded);
+        choice = restored_from_key(loaded, kept);
+    } else {
+        std::lock_guard lock(g_save_mutex);
+        sync_saved();
+        choice = restored(g_saved, save_key(vehicle, engine), loaded);
+    }
+    if (choice == loaded) return;
+    wr<int32_t>(engine, off::server_sound_value, choice);
+    wr<uint8_t>(engine, off::server_sound_modified, 1);
+    if (g_save_logs.fetch_sub(1) > 0)
+        log(0, "engine %d sound %d restored (saved as stock sound %d, %s)", rd<int32_t>(engine, off::server_component_id), choice, loaded,
+            json ? "saved vehicle" : "world");
+}
+
+// Optional: without these hooks the sounds still work and saves hold the choice as before.
+void install_save_hooks() {
+    using namespace anymaker::experimental;
+    void** engine = hook_cell(bind::server_engine_parse_save_data);
+    void** vehicle = route::cell(bind::save_vehicle_parse_save_data);
+    g_parse_s32 = reinterpret_cast<parse_s32_t>(route::function(bind::parser_parse_s32));
+    g_string_ctor = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
+    g_string_dtor = reinterpret_cast<string_dtor_t>(native(anymaker::sym::string_dtor_rva));
+    if (!engine || !vehicle || !g_parse_s32 || !g_string_ctor || !g_string_dtor) {
+        log(1, "save functions not found (engine=%d vehicle=%d value=%d string=%d/%d); saves keep modded sounds as they are, which the game can't play without EngineSound",
+            !!engine, !!vehicle, !!g_parse_s32, !!g_string_ctor, !!g_string_dtor);
+        return;
+    }
+    init_saved_path();
+    // The vehicle hook first: once the engine hook is in, world saves need the vehicle's id.
+    if (!h_save_vehicle.install(vehicle, (void*)&hk_save_vehicle) || !h_save_engine.install(engine, (void*)&hk_save_engine)) {
+        h_save_vehicle.remove((void*)&hk_save_vehicle);
+        log(1, "a save hook cell was already taken or not writable; saves keep modded sounds as they are");
+        return;
+    }
+    log(0, "saves hold a stock sound; the choice is kept %s and in saved vehicles", g_saved_path.empty() ? "only in saved vehicles (no world file)" : "in the world's enginesound_sounds.json");
+}
+
 // ------------------------------------------------------------------ panel state (shared by threads)
 std::mutex g_mutex;
 struct Panel {
@@ -435,6 +639,7 @@ void install_hooks() {
                   h_props.install(props, (void*)&hk_props) && h_row.install(row, (void*)&hk_row);
         if (!ok) { log(2, "a hook cell was already taken or not writable; EngineSound is off"); return; }
         g_sound_ok = true;
+        install_save_hooks();
         g_ready = true;
         log(0, "Ready after %d s: generated sounds %d..%d, Custom %d", attempt, kFirstPreset, kCustomIndex - 1, kCustomIndex);
         return;
@@ -442,6 +647,7 @@ void install_hooks() {
 }
 void remove_hooks() {
     g_sound_ok = false;
+    h_save_engine.remove((void*)&hk_save_engine); h_save_vehicle.remove((void*)&hk_save_vehicle);
     h_row.remove((void*)&hk_row); h_props.remove((void*)&hk_props);
     h_tick.remove((void*)&hk_tick); h_vol_speed.remove((void*)&hk_vol_speed);
 }

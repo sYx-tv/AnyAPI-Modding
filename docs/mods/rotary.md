@@ -1,7 +1,7 @@
 # Rotary engine (AnyEngineParts)
 
 > The rotary engine is part of [AnyEngineParts](engine-parts.md). It hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
 > **Prototype, single player only** for now: built from source, not in the catalog yet.
 
 Rotary adds a new part, the **Rotary Engine**. It is the stock small engine cell for cell (same size, ports,
@@ -49,7 +49,8 @@ the engine's position. It works next to EngineSound: EngineSound tunes the other
 
 ## Getting it
 
-- **Survival:** world loot after the 3rd bunker (tech tier 4, mechanical loot, 0.15 spawn probability).
+- **Survival:** world loot after the 3rd bunker (tech tier 4, mechanical loot), about a quarter less often than the
+  game's own tier 4 parts, like the other AnyEngineParts parts.
 - **Sandbox and Creative:** with the other engines.
 
 ## How it works

@@ -24,6 +24,7 @@
 #include "map_minimap_transform.h"
 #include "map_zoom.h"
 #include "map_markers.h"
+#include "anymap_pins_v1.h"
 #include "map_gpu_graphics.h"
 #include "map_motion.h"
 #include "map_actors.h"
@@ -38,7 +39,16 @@ static uint32_t map_key(){return controls&&map_action?controls->key(map_action):
 static std::wstring map_key_name(){char name[128]{};if(controls&&map_action&&controls->key_name(map_action,name,sizeof(name))){int length=MultiByteToWideChar(CP_UTF8,0,name,-1,nullptr,0);std::wstring text(length?length:1,L'\0');if(length)MultiByteToWideChar(CP_UTF8,0,name,-1,text.data(),length);if(length)text.pop_back();return text;}return L"M";}
 static void register_settings(const AnyServicesV1*);
 // Optional dependencies resolve after all DLLs initialize; base AnyAPI owns no map binding policy.
-extern "C" __declspec(dllexport) void AnyAPI_ModReady(){auto services=AnyAPI_Services();if(!services)return;ui_api=(const AnyUiStateV1*)services->query("anyapi.ui_state",1);if(ui_api&&(ui_api->struct_size!=sizeof(*ui_api)||ui_api->version!=1||!ui_api->copy))ui_api=nullptr;menu_api=(const AnyMenuV1*)services->query("anyapi.menu",1);controls=(const ModControlsV1*)services->query("anyhelpers.controls",1);if(!controls)controls=(const ModControlsV1*)services->query("modcontrols.bindings",1);register_settings(services);
+// Pins other mods set through anymap.pins (anymap_pins_v1.h): traders and the like. Copied under a lock; drawn as
+// squares with a label so they read apart from saved markers.
+static std::mutex pins_mutex;static std::vector<AnyMapPinV1> mod_pins;
+static bool pin_text_ok(const char* s,size_t cap){size_t n=strnlen(s,cap);return n>0&&n<cap;}
+static bool pin_set(const AnyMapPinV1* p){if(!p||p->struct_size!=sizeof(*p)||p->version!=1||!std::isfinite(p->x)||!std::isfinite(p->z)||!pin_text_ok(p->owner,32)||!pin_text_ok(p->id,32)||strnlen(p->label,64)>=64)return false;
+ std::lock_guard lock(pins_mutex);for(auto& q:mod_pins)if(!strcmp(q.owner,p->owner)&&!strcmp(q.id,p->id)){q=*p;return true;}if(mod_pins.size()>=256)return false;mod_pins.push_back(*p);return true;}
+static bool pin_remove(const char* owner,const char* id){if(!owner||!id)return false;std::lock_guard lock(pins_mutex);auto before=mod_pins.size();mod_pins.erase(std::remove_if(mod_pins.begin(),mod_pins.end(),[&](const AnyMapPinV1& q){return !strcmp(q.owner,owner)&&!strcmp(q.id,id);}),mod_pins.end());return mod_pins.size()!=before;}
+static const AnyMapPinsV1 pins_api{sizeof(AnyMapPinsV1),1,pin_set,pin_remove};
+static std::vector<AnyMapPinV1> pins_copy(){std::lock_guard lock(pins_mutex);return mod_pins;}
+extern "C" __declspec(dllexport) void AnyAPI_ModReady(){auto services=AnyAPI_Services();if(!services)return;if(services->publish)services->publish("anymap.pins",1,&pins_api);ui_api=(const AnyUiStateV1*)services->query("anyapi.ui_state",1);if(ui_api&&(ui_api->struct_size!=sizeof(*ui_api)||ui_api->version!=1||!ui_api->copy))ui_api=nullptr;menu_api=(const AnyMenuV1*)services->query("anyapi.menu",1);controls=(const ModControlsV1*)services->query("anyhelpers.controls",1);if(!controls)controls=(const ModControlsV1*)services->query("modcontrols.bindings",1);register_settings(services);
  gpu_api=(const AnyGpuDrawV1*)services->query("anyapi.gpu_draw",1);if(gpu_api&&(gpu_api->struct_size!=sizeof(*gpu_api)||gpu_api->version!=1||!gpu_api->register_renderer(gpu_render,nullptr)))gpu_api=nullptr;host.log(0,"anymap",gpu_api?"MAP_RENDER backend=GPU resident_terrain=1 refresh=every_present":"MAP_RENDER backend=CPU compatibility_fallback=1");
  if(controls&&controls->struct_size==sizeof(*controls)&&controls->version==1){ModControlActionV1 action;action.mod_id="anymap";action.mod_name="AnyMap";action.action_id="toggle_map";action.label="Open / close map";action.default_key='M';map_action=controls->register_action(&action);}else controls=nullptr;
  host.log(0,"anymap",map_action?"BINDING_SERVICE registered=1 action=toggle_map default=M":"BINDING_SERVICE available=0 fallback=M");
@@ -56,7 +66,7 @@ static void register_settings(const AnyServicesV1* services){settings_api=(const
  const char* labels[]={"Show minimap","Minimap size (%)","Minimap range (meters)","Minimap orientation","Show player names","Player marker scale","Show route guidance","Waypoint label","Minimap corner","Custom horizontal position (%)","Custom vertical position (%)","Minimap opacity (%)","Minimap player names","Show map grid","Show route on minimap","Show vehicles","Show zombies and creatures"};
  uint32_t kinds[]={ANY_SETTING_BOOL,ANY_SETTING_INTEGER,ANY_SETTING_NUMBER,ANY_SETTING_CHOICE,ANY_SETTING_BOOL,ANY_SETTING_NUMBER,ANY_SETTING_BOOL,ANY_SETTING_TEXT,ANY_SETTING_CHOICE,ANY_SETTING_NUMBER,ANY_SETTING_NUMBER,ANY_SETTING_INTEGER,ANY_SETTING_BOOL,ANY_SETTING_BOOL,ANY_SETTING_BOOL,ANY_SETTING_BOOL,ANY_SETTING_BOOL};
  double defaults[]={1,100,1200,0,1,1,1,0,0,100,0,100,0,1,1,1,1},minimum[]={0,60,400,0,0,.6,0,0,0,0,0,25,0,0,0,0,0},maximum[]={1,150,4000,1,1,1.6,1,1,4,100,100,100,1,1,1,1,1},step[]={1,10,100,1,1,.1,1,1,1,1,1,5,1,1,1,1,1};
- unsigned registered=0;for(int i=0;i<17;++i){AnyModSettingV1 d;d.mod_id="anymap";d.mod_name="AnyMap";d.setting_id=ids[i];d.label=labels[i];d.kind=kinds[i];d.order=i;d.default_number=defaults[i];d.minimum=minimum[i];d.maximum=maximum[i];d.step=step[i];d.default_text="Waypoint";d.text_limit=48;if(i>=8&&i<=10)d.description="Position settings override placement made with Move minimap. Choose Custom for percentage positions.";if(i>=15)d.description="Experimental: read from the game for Anymaker 0.1.25 only. Shown on the minimap and the full map.";if(i==3){d.choices=choices;d.choice_count=2;}if(i==8){d.choices=corners;d.choice_count=5;}settings_tokens[i]=settings_api->register_setting(&d);registered+=settings_tokens[i]!=0;}
+ unsigned registered=0;for(int i=0;i<17;++i){AnyModSettingV1 d;d.mod_id="anymap";d.mod_name="AnyMap";d.setting_id=ids[i];d.label=labels[i];d.kind=kinds[i];d.order=i;d.default_number=defaults[i];d.minimum=minimum[i];d.maximum=maximum[i];d.step=step[i];d.default_text="Waypoint";d.text_limit=48;if(i>=8&&i<=10)d.description="Position settings override placement made with Move minimap. Choose Custom for percentage positions.";if(i>=15)d.description="Experimental: read from the game for Anymaker 0.1.27 only. Shown on the minimap and the full map.";if(i==3){d.choices=choices;d.choice_count=2;}if(i==8){d.choices=corners;d.choice_count=5;}settings_tokens[i]=settings_api->register_setting(&d);registered+=settings_tokens[i]!=0;}
  auto message="SETTINGS_SERVICE registered="+std::to_string(registered);host.log(registered==17?0:2,"anymap",message.c_str());}
 static uint64_t painted_at{};
 static bool custom_position{};static double custom_x=1,custom_y=0;static void save_position();
@@ -241,6 +251,7 @@ static void draw(MapGraphics& g,int w,int h,bool preview) {
         g.DrawLine(&rim,at.X,at.Y-8,at.X,at.Y+3);g.FillEllipse(&pin,at.X-5,at.Y-13,10.f,10.f);g.DrawEllipse(&rim,at.X-5,at.Y-13,10.f,10.f);
     }
     for(auto& pin:saved_markers.records){auto at=pixel(pin.position.x,pin.position.y);SolidBrush fill(Color(255,244,186,101));Pen edge(Color(255,42,49,37),2);g.DrawLine(&edge,at.X,at.Y,at.X,at.Y-9);g.FillEllipse(&fill,at.X-5,at.Y-17,10.f,10.f);g.DrawEllipse(&edge,at.X-5,at.Y-17,10.f,10.f);auto title=utf16(pin.name.c_str());FontFamily family(L"Segoe UI");Font font(&family,12,FontStyleRegular,UnitPixel);RectF measured;g.MeasureString(title.c_str(),int(title.size()),&font,PointF(),&measured);float width=std::min(210.f,measured.Width+14);round_rect(g,{at.X+8,at.Y-22,width,23},6,Color(235,29,46,39));SolidBrush ink(Color(255,251,224,176));StringFormat format;format.SetFormatFlags(StringFormatFlagsNoWrap);format.SetTrimming(StringTrimmingEllipsisCharacter);g.DrawString(title.c_str(),int(title.size()),&font,RectF(at.X+15,at.Y-19,width-14,18),&format,&ink);}
+    for(auto& pin:pins_copy()){auto at=pixel(pin.x,pin.z);Color c(BYTE(pin.color>>24),BYTE(pin.color>>16),BYTE(pin.color>>8),BYTE(pin.color));SolidBrush fill(c);Pen edge(Color(255,30,30,30),2);g.FillRectangle(&fill,at.X-6,at.Y-6,12.f,12.f);g.DrawRectangle(&edge,at.X-6,at.Y-6,12.f,12.f);if(pin.label[0]){auto title=utf16(pin.label);round_rect(g,{at.X+10,at.Y-12,std::min(210.f,8.f*float(title.size())+14),23},6,Color(235,29,46,39));text(g,title,at.X+17,at.Y-9,12,c,false,196);}}
     if(!preview)for(auto& b:blips){if(show_blip(b))blip(g,b,pixel(b.x,b.z));}
     for(uint32_t i=0;i<players.count;++i){const auto& p=players.players[i];atlas::Point uv{};
         if(!(p.valid_fields&PLAYER_POSITION)||!atlas::project(p.position[0],p.position[2],uv)||uv.x<0||uv.x>1||uv.y<0||uv.y>1)continue;
@@ -300,6 +311,7 @@ static void minimap_draw(MapGraphics& g){SolidBrush background(Color(255,30,30,3
  Pen line(Color(255,222,119,220),3);if(options.mini_route)for(size_t i=1;i<route.points.size();++i)g.DrawLine(&line,at(route.points[i-1].x,route.points[i-1].z),at(route.points[i].x,route.points[i].z));
  for(auto& b:blips){if(!show_blip(b))continue;auto point=at(b.x,b.z);if(std::fabs(point.X)>200||std::fabs(point.Y)>200)continue;blip(g,b,point);}
  for(auto& pin:saved_markers.records){auto point=at(pin.position.x,pin.position.y);SolidBrush brush(Color(255,244,186,101));g.FillEllipse(&brush,point.X-3,point.Y-3,6.f,6.f);}
+ for(auto& pin:pins_copy()){auto point=at(pin.x,pin.z);if(std::fabs(point.X)>200||std::fabs(point.Y)>200)continue;SolidBrush brush(Color(BYTE(pin.color>>24),BYTE(pin.color>>16),BYTE(pin.color>>8),BYTE(pin.color)));Pen edge(Color(255,30,30,30),1);g.FillRectangle(&brush,point.X-4,point.Y-4,8.f,8.f);g.DrawRectangle(&edge,point.X-4,point.Y-4,8.f,8.f);}
  if(waypoint){auto pin=at(target.x,target.y);SolidBrush brush(Color(255,239,154,227));g.FillEllipse(&brush,pin.X-4,pin.Y-4,8.f,8.f);}g.Restore(saved);
  // Draw arrows in screen space so terrain rotation cannot rotate the local arrow twice.
  auto markers=g.Save();g.SetClip(RectF(12,12,side,side));
@@ -337,6 +349,7 @@ static void legend(MapGraphics& g,float x,float y,float width,float bottom){if(b
  row(L"Route",[&](PointF at){Pen line(Color(255,217,114,217),4);g.DrawLine(&line,at.X-10,at.Y,at.X+10,at.Y);});
  row(L"Waypoint",[&](PointF at){SolidBrush pin(Color(255,239,154,227));Pen rim(Color(255,51,37,57),2);g.FillEllipse(&pin,at.X-5,at.Y-5,10.f,10.f);g.DrawEllipse(&rim,at.X-5,at.Y-5,10.f,10.f);});
  row(L"Saved marker",[&](PointF at){SolidBrush fill(Color(255,244,186,101));Pen edge(Color(255,42,49,37),2);g.FillEllipse(&fill,at.X-5,at.Y-5,10.f,10.f);g.DrawEllipse(&edge,at.X-5,at.Y-5,10.f,10.f);});
+ if(!pins_copy().empty())row(L"Trader / mod place",[&](PointF at){SolidBrush fill(Color(255,232,198,106));Pen edge(Color(255,30,30,30),2);g.FillRectangle(&fill,at.X-6,at.Y-6,12.f,12.f);g.DrawRectangle(&edge,at.X-6,at.Y-6,12.f,12.f);});
  if(options.vehicles){row(L"Vehicle",[&](PointF at){blip(g,{0,0,mapactors::Vehicle},at);});row(L"Parked build / base",[&](PointF at){blip(g,{0,0,mapactors::Structure},at);});}
  if(options.zombies){row(L"Zombie",[&](PointF at){blip(g,{0,0,mapactors::Zombie},at);});row(L"Large creature",[&](PointF at){blip(g,{0,0,mapactors::Creature},at);});}
 }
@@ -438,7 +451,7 @@ static void mod_shutdown(void*){mapactors::state.stop=true;std::lock_guard<std::
 // Normal DLL plugin entry point, invoked by the host after its build guard succeeds.
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,AnyModCallbacksV1* callbacks){
  if(!api||!callbacks||api->struct_size!=sizeof(*api)||api->abi!=ANYAPI_MOD_ABI||!api->log||!api->copy_players||!api->capture_input||!api->game_directory||!api->plugin_directory)return false;
- host=*api;game_dir=api->game_directory;cache_dir=std::filesystem::path(api->plugin_directory)/L"AnyMap";std::filesystem::create_directories(cache_dir);
+ host=*api;game_dir=api->game_directory;cache_dir=std::filesystem::path(api->plugin_directory)/L"AnyMap";std::error_code folder_error;std::filesystem::create_directories(cache_dir,folder_error);
  GdiplusStartupInput input;if(GdiplusStartup(&gdiplus_token,&input,nullptr)!=Ok)return false;
  HRSRC resource=FindResourceW(mod_module,MAKEINTRESOURCEW(101),MAKEINTRESOURCEW(10));HGLOBAL memory=resource?LoadResource(mod_module,resource):nullptr;
  const char* data=memory?(const char*)LockResource(memory):nullptr;DWORD bytes=resource?SizeofResource(mod_module,resource):0;

@@ -349,7 +349,8 @@ private:
         const Token& t = cur();
         if (t.k == Tk::Ident) {
             const std::string& w = t.s;
-            if (w == "on_tick" || w == "on_render") { s.k = w == "on_tick" ? SK::OnTick : SK::OnRender; next(); return true; }
+            if (w == "on_render") { error(t, "on_render isn't supported: the game knows the word but never runs it and its Load rejects it. Use on_tick"); return false; }
+            if (w == "on_tick") { s.k = SK::OnTick; next(); return true; }
             if (w == "define") return define(s);
             if (w == "if" || w == "elseif" || w == "repeat" || w == "foreach") {
                 s.k = w == "if" ? SK::If : w == "elseif" ? SK::ElseIf : w == "repeat" ? SK::Repeat : SK::Foreach;
@@ -709,9 +710,12 @@ private:
     }
 
     void expr(Expr& e) {
-        if (e.a) expr(*e.a);
+        bool target = target_;
+        if (e.a) expr(*e.a);   // for a list item on the left of "=", a is the list being written
+        target_ = false;       // its index, and everything else inside, is read
         if (e.b) expr(*e.b);
         for (auto& a : e.args) expr(*a);
+        target_ = target;
         if (e.k == EK::Call) { error(e.line, e.col, e.len, "A function call can't be used as a value here; call it on its own line"); return; }
         if (e.k != EK::Ref) return;
         auto has = [&](RK k) {
@@ -1068,7 +1072,6 @@ inline Pretty prettify(const std::string& game_text) {
 struct HelpEntry { const char* group; const char* insert; const char* label; const char* help; };
 inline const HelpEntry kHelp[] = {   // "$" marks where the cursor lands after inserting
     {"Blocks", "on_tick {\n\t$\n}", "on_tick { }", "Runs every game tick"},
-    {"Blocks", "on_render {\n\t$\n}", "on_render { }", "Runs every frame"},
     {"Blocks", "if $ {\n\t\n}", "if x { }", "Runs the block when x is true"},
     {"Blocks", "elseif $ {\n\t\n}", "elseif x { }", "After an if: tried when the tests above were false"},
     {"Blocks", "else {\n\t$\n}", "else { }", "After an if: runs when nothing above matched"},

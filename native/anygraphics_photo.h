@@ -10,7 +10,7 @@
 // Photo controls change the scene effects only while photo mode is on and are not saved. Depth of field focuses on
 // the middle of the screen, so aim at the subject.
 //
-// EXPERIMENTAL (camera only): Anymaker 0.1.25 / Steam build 25904830. On any other build the camera is unavailable
+// EXPERIMENTAL (camera only): Anymaker 0.1.27 / Steam build 26113663. On any other build the camera is unavailable
 // and photo mode still hides the HUD and applies the photo controls.
 #include "anyapi_gpu_draw_v1.h"
 #include "anyapi_experimental.hpp"
@@ -63,7 +63,8 @@ using transform_t = void (*)(double* ret, uint8_t* scene);
 inline anymaker::cell_hook hook;
 inline std::atomic<bool> hook_ready{false}, stop{false}, have{false};
 // g_is_debug_render_first_person_head: the game hides the local player's head unless it is set, which looks
-// headless from a free camera. Set while flying, restored after (ThirdPerson sets it the same way).
+// headless from a free camera. Set while flying, then put back to the game's value from before any mod set it
+// (ThirdPerson sets it the same way and keeps setting it each frame while in third person).
 inline bool* head;
 inline bool head_set, head_original;
 enum : uint32_t { Forward = 1, Back = 2, Left = 4, Right = 8, Up = 16, Down = 32, Fast = 64 };
@@ -71,6 +72,7 @@ inline std::atomic<uint32_t> keys{0};
 inline std::atomic<double> facing{0};
 inline std::atomic<ULONGLONG> facing_time{0};
 inline std::mutex cam_mutex;
+inline uint8_t* camera_scene;   // the client scene the camera was placed in
 inline double position[3], origin[3];
 inline LARGE_INTEGER last_move;
 inline int forward_axis = -1;
@@ -111,9 +113,9 @@ inline void hk_transform(double* ret, uint8_t* scene) {
     std::lock_guard lock(cam_mutex);
     double* t = ret + 9;
     LARGE_INTEGER now, rate; QueryPerformanceCounter(&now); QueryPerformanceFrequency(&rate);
-    if (!have.load()) {
+    if (!have.load() || scene != camera_scene) {   // a new world starts the camera at its own view
         for (int i = 0; i < 3; ++i) position[i] = origin[i] = t[i];
-        last_move = now; have = true;
+        last_move = now; have = true; camera_scene = scene;
     }
     if (forward_axis < 0) calibrate(ret);
     // The position only moves when at least 2 ms have passed, so every call within one frame returns the same
@@ -151,8 +153,8 @@ inline void install() {
         void** cell = hook_cell(thirdperson::bind::client_scene_get_camera_transform);
         if (!cell) { if (attempt == 179) log("PHOTO_CAMERA unavailable=1 reason=not_located"); continue; }
         if (!hook.install(cell, (void*)&hk_transform)) { log("PHOTO_CAMERA unavailable=1 reason=hook_taken"); return; }
-        head = static_cast<bool*>(global(thirdperson::bind::g_render_first_person_head));
-        if (!head) log("PHOTO_CAMERA head_flag=0 (your character may look headless from the camera)");
+        if (auto flag = static_cast<bool*>(global(thirdperson::bind::g_render_first_person_head))) { head_original = *flag; head = flag; }
+        else log("PHOTO_CAMERA head_flag=0 (your character may look headless from the camera)");
         hook_ready = true;
         log("PHOTO_CAMERA ready=1");
         return;
@@ -179,8 +181,9 @@ inline void update(bool photo, bool gameplay) {
     bool fly;
     { std::lock_guard lock(mutex); fly = photo && free_camera && hook_ready.load(); if (active && !was) show(); }
     flying = fly;
+    // Leaving puts back the value read at install, not the one from when flying started: ThirdPerson may have set
+    // it then and switched to first person since, which left the head showing in first person.
     if (head && fly != head_set) {
-        if (fly) head_original = *head;
         *head = fly ? true : head_original;
         head_set = fly;
     } else if (head && fly) *head = true;   // ThirdPerson may have restored it when switching to first person
@@ -256,7 +259,7 @@ inline void draw(const AnyFrameV1* f, void*) {
     float s = std::max(1.f, float(f->height) / 1080.f), line = 22 * s, w = 430 * s, x = 24 * s;
     wchar_t rows[10][96]; int n = 0;
     swprintf(rows[n++], 96, L"PHOTO MODE");
-    if (!camera) swprintf(rows[n++], 96, L"Free camera needs Anymaker 0.1.25 (this game build is different)");
+    if (!camera) swprintf(rows[n++], 96, L"Free camera is not available on this game build");
     else if (free) swprintf(rows[n++], 96, L"WASD move · Space / C up, down · Shift fast · Wheel speed %.1f m/s", speed.load());
     if (camera) swprintf(rows[n++], 96, L"V  free camera: %ls", free ? L"on" : L"off (the camera follows you)");
     if (t.dof < 0) swprintf(rows[n++], 96, L"1 / 2  depth of field: preset (focuses on the middle)"); else swprintf(rows[n++], 96, L"1 / 2  depth of field: %.1f (focuses on the middle)", t.dof * .5);

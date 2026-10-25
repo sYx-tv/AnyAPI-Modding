@@ -11,7 +11,7 @@ static_assert(sizeof(Frame)==24*4);
 inline bool finite(const std::array<float,4>& a){for(auto v:a)if(!std::isfinite(v))return false;return true;}
 inline bool valid(const Frame& f){
  return finite(f.metrics)&&finite(f.sun_screen)&&finite(f.sun_colour)&&finite(f.grading)&&finite(f.exposure)&&finite(f.extras)&&f.metrics[2]>=16&&f.metrics[3]>=16
-  &&f.grading[0]>=0&&f.grading[0]<=2&&f.grading[1]>=0&&f.grading[1]<=5&&f.grading[2]>=0&&f.grading[2]<=1&&std::abs(f.grading[3])<=3
+  &&f.grading[0]>=0&&f.grading[0]<=3&&f.grading[1]>=0&&f.grading[1]<=6&&f.grading[2]>=0&&f.grading[2]<=1&&std::abs(f.grading[3])<=3
   &&f.exposure[1]>=0&&f.exposure[1]<=1&&f.exposure[2]>=0&&f.exposure[2]<=1&&f.exposure[3]>=0&&f.exposure[3]<=4&&f.extras[0]>=0&&f.extras[0]<=1&&f.extras[1]>=0&&f.extras[1]<=1
   &&f.sun_colour[0]>=0&&f.sun_colour[1]>=0&&f.sun_colour[2]>=0&&f.sun_colour[0]<=10000&&f.sun_colour[1]<=10000&&f.sun_colour[2]<=10000&&f.sun_colour[3]>=0&&f.sun_colour[3]<=2;
 }

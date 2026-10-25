@@ -2,11 +2,11 @@
 
 | System | Types | gcl functions | Observe | Change | Create | Register | Attach | Persist | Replicate |
 |---|---|---|---|---|---|---|---|---|---|
-| [Worlds, scenes, entities, transforms and spatial queries](world.md) | 2391 | 14748 | needs_validation | needs_validation | needs_validation | closed | unresolved | needs_validation | closed |
-| [Players, characters, health, abilities and interaction](players.md) | 575 | 2745 | needs_validation | needs_validation | needs_validation | closed | unresolved | needs_validation | closed |
+| [Worlds, scenes, entities, transforms and spatial queries](world.md) | 2396 | 14770 | needs_validation | needs_validation | needs_validation | closed | unresolved | needs_validation | closed |
+| [Players, characters, health, abilities and interaction](players.md) | 575 | 2748 | needs_validation | needs_validation | needs_validation | closed | unresolved | needs_validation | closed |
 | [Items, inventories and equipment (no crafting system present)](items.md) | 663 | 3505 | needs_validation | needs_validation | needs_validation | needs_validation | unresolved | needs_validation | closed |
-| [Vehicles, parts, components, physics and mechanical systems](vehicles.md) | 611 | 4932 | needs_validation | needs_validation | needs_validation | needs_validation | unresolved | needs_validation | closed |
-| [Electrical, fluid, logic and programmable systems](networks.md) | 182 | 1201 | needs_validation | needs_validation | needs_validation | closed | unresolved | needs_validation | closed |
+| [Vehicles, parts, components, physics and mechanical systems](vehicles.md) | 615 | 4943 | needs_validation | needs_validation | needs_validation | needs_validation | unresolved | needs_validation | closed |
+| [Electrical, fluid, logic and programmable systems](networks.md) | 182 | 1205 | needs_validation | needs_validation | needs_validation | closed | unresolved | needs_validation | closed |
 | [Definitions, content registration and asset loading](definitions.md) | 13 | 299 | needs_validation | needs_validation | needs_validation | needs_validation | unresolved | needs_validation | closed |
 | [Rendering, cameras, materials, textures, shaders and lighting](rendering.md) | 53 | 135 | needs_validation | needs_validation | unresolved | closed | unresolved | not_applicable | not_applicable |
 | [UI construction, layout, widgets, input routing and localization](ui.md) | 83 | 1122 | needs_validation | needs_validation | needs_validation | closed | not_applicable | needs_validation | not_applicable |

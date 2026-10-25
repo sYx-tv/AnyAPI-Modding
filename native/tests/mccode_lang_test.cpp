@@ -99,6 +99,7 @@ int main() {
     expect_error("define var integer x\non_tick {\n\tx = (1 + \n}\n", 2, "Expected a value");
     expect_error("define var integer x\non_tick {\n\tx = 1\n", 1, "never closed");
     expect_error("define var integer x\ndefine in integer x\non_tick {\n\tx = 1\n}\n", 3, "more than one thing");
+    expect_error("on_render {\n}\n", 0, "on_render isn't supported");
     expect_error("on_tick {\n\tfoo(1)\n}\n", 1, "no function called 'foo'");
     expect_error("define var integer x\non_tick {\n\tx\n}\n", 2, "doesn't do anything");
     expect_error("define var integer x\non_tick {\n\tx = \"abc\n}\n", 2, "closing");
@@ -145,6 +146,9 @@ int main() {
         assert(p.ok);
         Compiled back = compile(p.text);
         assert(back.ok && back.canonical == c.canonical);
+        // a channel used as the index of a list item being set is still read
+        Compiled item = compile("define list integer l\non_tick {\n\tl[Sensor.index] = 1\n}\n");
+        assert(item.ok && item.canonical.find("var l[in Sensor.index] = 1") != std::string::npos);
     }
     std::cout << "mccode_lang_test OK\n";
     return 0;

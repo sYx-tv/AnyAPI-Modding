@@ -19,8 +19,8 @@
 // now: the definitions are added on this game's server and client scene, and every player would need the mod.
 // The hot-side gas is not saved; it refills from the pipes after loading.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (turbo_bindings.h): Anymaker 0.1.25 /
-// Steam build 25904830 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (turbo_bindings.h): Anymaker 0.1.27 /
+// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -641,23 +641,41 @@ void hk_flood(void* self, void* out_nodes) {
 }
 
 // ------------------------------------------------------------------------------------- valves
+// A game vector of pointers (vector<ptr<T>>: buffer +0, ring start +8, count +12, capacity +16, element size +20). It is
+// a ring (anymaker::gc_vector_raw): entry i sits at (start + i) % capacity, so a list that has wrapped past the end of
+// its buffer carries on at the buffer's start (reading count entries straight on from the ring start missed those).
+// read_ring leaves it empty and returns false when the fields do not look right.
+struct PointerRing {
+    void* const* buffer = nullptr;
+    int32_t start = 0, count = 0, capacity = 0;
+    void* operator[](int32_t i) const { return buffer[(int64_t(start) + i) % capacity]; }
+};
+bool read_ring(const void* vec, int32_t max_count, PointerRing& out) {
+    out = PointerRing{};
+    if (!vec || !anymaker::readable(vec, 24)) return false;
+    auto* buffer = at<void* const*>(vec, 0);
+    int32_t start = at<int32_t>(vec, 8), count = at<int32_t>(vec, 12), capacity = at<int32_t>(vec, 16), size = at<int32_t>(vec, 20);
+    if (!buffer || count <= 0 || count > max_count || capacity < count || start < 0 || start >= capacity || size != 8 ||
+        !anymaker::readable(buffer, size_t(capacity) * 8)) return false;
+    out = PointerRing{buffer, start, count, capacity};
+    return true;
+}
+
 // Calls f(node) for every gas node pooled with `node` (its island). The island's node vector is read defensively:
 // every entry must point back at the same island, else nothing is visited.
 template <class F> void for_each_on_island(void* node, F f) {
     if (!node || !anymaker::readable(static_cast<uint8_t*>(node) + off::node_island, 8)) return;
     void* island = at<void*>(node, off::node_island);
-    if (!island || !anymaker::readable(island, 24)) return;
-    auto* buffer = at<uint8_t*>(island, 0);
-    int32_t offset = at<int32_t>(island, 8), count = at<int32_t>(island, 12), size = at<int32_t>(island, 20);
-    if (!buffer || count <= 0 || count > 4096 || size != 8) return;
-    for (int32_t start : {offset, 0}) {
-        if (start < 0 || !anymaker::readable(buffer + size_t(start) * 8, size_t(count) * 8)) continue;
-        auto* entries = reinterpret_cast<void**>(buffer + size_t(start) * 8);
+    PointerRing ring;
+    if (!island || !read_ring(island, 4096, ring)) return;
+    for (int32_t start : {ring.start, 0}) {           // from the ring's start, else (as before) from the buffer's
+        PointerRing entries = ring;
+        entries.start = start;
         bool ok = true;
-        for (int32_t i = 0; i < count && ok; ++i)
+        for (int32_t i = 0; i < entries.count && ok; ++i)
             ok = entries[i] && anymaker::readable(static_cast<uint8_t*>(entries[i]) + off::node_island, 8) && at<void*>(entries[i], off::node_island) == island;
         if (!ok) continue;
-        for (int32_t i = 0; i < count; ++i) f(entries[i]);
+        for (int32_t i = 0; i < entries.count; ++i) f(entries[i]);
         return;
     }
 }
@@ -777,13 +795,10 @@ void* island_of(void* node) {
 template <class F> void for_each_sharing_content(void* vehicle, void* node, F add) {
     if (!vehicle) return;
     const uint8_t* vec = static_cast<uint8_t*>(container_of(vehicle)) + off::container_nodes;
-    if (!anymaker::readable(vec, 24)) return;
     const void* content = at<void*>(node, off::node_content);
-    auto* buffer = at<uint8_t*>(vec, 0);
-    int32_t offset = at<int32_t>(vec, 8), count = at<int32_t>(vec, 12), size = at<int32_t>(vec, 20);
-    if (!content || !buffer || count <= 0 || count > 8192 || size != 8 || offset < 0 || !anymaker::readable(buffer + size_t(offset) * 8, size_t(count) * 8)) return;
-    auto* entries = reinterpret_cast<void* const*>(buffer + size_t(offset) * 8);
-    for (int32_t i = 0; i < count; ++i) {
+    PointerRing entries;
+    if (!content || !read_ring(vec, 8192, entries)) return;
+    for (int32_t i = 0; i < entries.count; ++i) {
         void* other = entries[i];
         if (other && other != node && anymaker::readable(static_cast<uint8_t*>(other), off::node_island + 8) && at<void*>(other, off::node_content) == content) add(other);
     }
@@ -1377,7 +1392,7 @@ void hk_tooltip(void* self, void* data) {
 
 // ------------------------------------------------------------------------------------- Properties Tool
 // The blow-off valve adds its spring and sound to the impeller's own rows (just the name): "Stiffness", 0-50 kPa
-// of boost over what the turbo holds before it opens, and "Sound effect", 0-3. Both are saved with the vehicle.
+// of boost over what the turbo holds before it opens, and "Sound effect", 0-3. Neither is saved (see below).
 using get_properties_t = void (*)(void* self, void* properties);
 using add_f64_range_t = void (*)(void* properties, const int32_t* label, double* const* value, const double* min, const double* max, const double* step);
 constexpr int kAddPropertyF64RangeSlot = 10;          // server_scene.peer.property_data method table
@@ -1569,17 +1584,18 @@ void hk_add_definitions(void* container, const void* file) {
 // Each turbo and blow-off valve streams its own synthesized sound (turbo_sound.h) into a positional voice effect,
 // the way the game plays voice chat, in place of the stock impeller hum. Main thread only.
 namespace audio {
-constexpr uint32_t play_voice_rva = 0x1409e0;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
-constexpr uint32_t append_rva = 0x141160;           // effect_3d.append_audio_data (takes the buffer's memory)
-constexpr uint32_t set_position_velocity_rva = 0x141140;
-constexpr uint32_t stop_rva = 0x141110;
-constexpr uint32_t reset_rva = 0x141050;            // effect_3d.reset (releases the handle)
-constexpr uint32_t buffer_reset_rva = 0x41c40;      // binary.buffer.reset (allocates with the game's allocator)
+constexpr uint32_t play_voice_rva = 0x13f240;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
+constexpr uint32_t append_rva = 0x13f9c0;           // effect_3d.append_audio_data (takes the buffer's memory)
+constexpr uint32_t set_position_velocity_rva = 0x13f9a0;
+constexpr uint32_t stop_rva = 0x13f970;
+constexpr uint32_t reset_rva = 0x13f8b0;            // effect_3d.reset (releases the handle)
+constexpr uint32_t buffer_reset_rva = 0x41a00;      // binary.buffer.reset (allocates with the game's allocator)
 constexpr int32_t kGroupVehicle = 4;                // e_audio_group.vehicle: follows the vehicle volume slider
 constexpr double kRange = 80.0;                     // metres
 constexpr double kLead = 0.08;                      // seconds of sound queued ahead
 // The voice object (what play_voice hands back) keeps the PCM still to play: a byte buffer whose size is at +0x78 and
-// a read cursor in samples at +0x80 (effect_3d.append_audio_data's handler and the mixer, game.exe 0xe85f0/0xe86e0).
+// a read cursor in samples at +0x80 (effect_3d.append_audio_data's handler and the mixer, game.exe 0xe65b0/0xe66a0;
+// 0.1.25: 0xe85f0/0xe86e0).
 constexpr int kVoiceBytes = 0x78, kVoiceCursor = 0x80;
 }  // namespace audio
 struct GameBuffer { void* data; int32_t size; uint32_t pad; };
@@ -1773,14 +1789,9 @@ thread_local bool t_in_engine = false, t_fuel_cut = false;
 thread_local double t_intake_c = 0, t_intake_pressure = 0, t_boost_factor = 0;
 
 // An engine's air manifolds (its m_air_manifolds vector): their count, 0 if it cannot be read.
-int32_t air_manifolds(const void* engine, void* const*& entries) {
-    const uint8_t* vec = static_cast<const uint8_t*>(engine) + off::engine_air_manifolds;
-    if (!anymaker::readable(vec, 24)) return 0;
-    auto* buffer = at<uint8_t*>(vec, 0);
-    int32_t offset = at<int32_t>(vec, 8), count = at<int32_t>(vec, 12), size = at<int32_t>(vec, 20);
-    if (!buffer || count <= 0 || count > 32 || size != 8 || offset < 0 || !anymaker::readable(buffer + size_t(offset) * 8, size_t(count) * 8)) return 0;
-    entries = reinterpret_cast<void* const*>(buffer + size_t(offset) * 8);
-    return count;
+int32_t air_manifolds(const void* engine, PointerRing& entries) {
+    read_ring(static_cast<const uint8_t*>(engine) + off::engine_air_manifolds, 32, entries);
+    return entries.count;
 }
 
 // Notes which engine breathes through each of its air manifolds, twice a second per engine, so refresh_topology can
@@ -1793,10 +1804,10 @@ void note_manifolds(const void* engine) {
     double& noted = g_engine_noted[engine];
     if (now - noted < 0.5) return;
     noted = now;
-    void* const* entries = nullptr;
+    PointerRing entries;
     int32_t count = air_manifolds(engine, entries);
     for (int32_t i = 0; i < count; ++i)
-        if (entries[i]) g_manifolds[entries[i]] = {engine, now};
+        if (void* manifold = entries[i]) g_manifolds[manifold] = {engine, now};
     if (now - g_manifold_sweep > 10.0) {
         g_manifold_sweep = now;
         for (auto it = g_manifolds.begin(); it != g_manifolds.end();) it = now - it->second.at > 5.0 ? g_manifolds.erase(it) : std::next(it);
@@ -1808,7 +1819,7 @@ void note_manifolds(const void* engine) {
 // engine works it out (each content's volume over capacity, 0 for none; NaN if a manifold cannot be read).
 double engine_intake_c(const void* engine, double& pressure) {
     pressure = NAN;
-    void* const* entries = nullptr;
+    PointerRing entries;
     int32_t count = air_manifolds(engine, entries);
     if (!count) return NAN;
     double sum = 0, pressure_sum = 0;

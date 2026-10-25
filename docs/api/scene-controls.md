@@ -14,6 +14,20 @@ version 1 clears the three additional overrides. Version 2 uses the same status
 structure and readiness checks. These switches change rendering, not collision
 or saved world objects, and restore the original flags even on exceptional exits.
 
+Version 3 (AnyAPI 0.40.1) uses [anyapi_scene_controls_v3.h](../../sdk/include/anyapi_scene_controls_v3.h).
+It embeds a version 2 policy in `detailed` and adds:
+
+| Parameter | Meaning |
+| --- | --- |
+| `key_tint` | RGB tint, 0.5–1.5 per channel, for the lit side: the sun, the upper sky light and the upper view colour |
+| `shade_tint` | RGB tint, 0.5–1.5 per channel, for the light that fills shadows: sky, back light and the lower sides |
+| `wind_scale` | 0–4; scales the wind the game sways trees and grass with |
+
+Each tinted light keeps its Rec.709 luminance, so tints change colour, not
+brightness. The wind is scaled around `_build_scene` only and put back right
+after, so physics, weather and other players never see it. Submitting version
+1 or 2 resets the tints and wind to 1.
+
 This service changes scene inputs and native renderer switches before the game
 builds scene constants and records its render commands. It does not operate on
 the finished screen image. Native bloom remains in the game's own pipeline.
@@ -44,7 +58,7 @@ policy. Providers and hook code stay loaded for the process lifetime.
 
 ## Reviewed native contracts
 
-The candidate targets Anymaker 0.1.25, Steam build 25904830, and the framework's
+The candidate targets Anymaker 0.1.27, Steam build 26113663, and the framework's
 exact executable/GCL hash guard. The SDK reference identifies:
 
 - `renderer`: FXAA through fog-blur flags at `0x638`–`0x63c`, bloom threshold

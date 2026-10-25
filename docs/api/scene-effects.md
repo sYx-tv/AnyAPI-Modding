@@ -33,8 +33,8 @@ trip and the image is unchanged.
 | --- | --- | --- |
 | `enabled` | 0/1 | Turn the service on |
 | `finish` | 0/1 | Run the finishing pass (the rows below up to `vignette`). While it runs, the game's own bloom is turned off for the frame because this pass replaces it |
-| `tonemap` | 0-2 | 0 Game (the game's ACES curve), 1 Filmic (AgX-style, keeps colour in bright light), 2 Clean (Khronos PBR Neutral) |
-| `look` | 0-5 | None, Warm, Cool, Teal & orange, Moody, Vivid |
+| `tonemap` | 0-3 | 0 Game (the game's ACES curve), 1 Filmic (AgX-style, keeps colour in bright light), 2 Clean (Khronos PBR Neutral), 3 Soft film (AnyAPI 0.40.1; Uchimura curve: a long straight middle and a slow highlight roll-off) |
+| `look` | 0-6 | None, Warm, Cool, Teal & orange, Moody, Vivid, Soft & warm (AnyAPI 0.40.1; golden highlights, cool shade) |
 | `look_strength` | 0-1 | How strongly the look is applied |
 | `exposure` | -3..3 | Manual stops before the curve |
 | `eye_adaptation` | 0/1 | Adds up to ±1.5 stops after big brightness changes, then settles back (see below) |

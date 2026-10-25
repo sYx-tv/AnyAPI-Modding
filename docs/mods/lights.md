@@ -1,8 +1,8 @@
 # AnyLights
 
 > AnyLights hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.25 / Steam build 25904830 and turns itself off on any other build.
-> Prototype: not in the catalog yet. Part of the AnyHelpers bundle.
+> so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
+> Prototype: not in the catalog yet. Ships as its own mod (`AnyLights.dll`).
 
 AnyLights turns the stock paint tools into one paint tool for every colour, and makes lights glow the colour
 they are painted.
@@ -44,7 +44,7 @@ coloured lights, players without it see stock lights.
 
 ## Test plan
 
-Build `AnyLights.dll` (or the AnyHelpers bundle) with the native CMake project. The lines tagged `anylights`
+Build `AnyLights.dll` with the native CMake project. The lines tagged `anylights`
 in `anymaker_modding.log` are what we need.
 
 1. Load a world. Expect `Ready after N s` and, once you hold a paint tool, `palette: 84 colours` and

@@ -1,7 +1,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
-#include "anyapi_menu_v4.h"
+#include "anyapi_menu_v5.h"
 #include "mod_controls_state.h"
 #include "anyhelpers_settings_state.h"
 #include <mutex>
@@ -19,7 +19,7 @@ static uint32_t defaults(void*){std::lock_guard<std::mutex> lock(mutex);return s
 static void end_capture(){state.capture=-1;host.capture_input(0);}
 // Native Apply commits; Reset stages; close/cancel discards. The game controls retain their own lifecycle.
 static void event(uint32_t event,void*){std::lock_guard<std::mutex> lock(mutex);end_capture();if(event==ANY_MENU_OPEN)state.begin();else if(event==ANY_MENU_RESET){state.reset();log("BINDINGS_RESET staged=1");}else if(event==ANY_MENU_APPLY){bool changed=state.dirty(),ok=state.apply();if(changed)log(ok?"BINDINGS_APPLY saved=1":"BINDINGS_APPLY saved=0 pending_retained=1",ok?0:2);}else if(event==ANY_MENU_CANCEL){bool pending=state.dirty();state.cancel();log("MENU_CLOSED pending_discarded="+std::to_string(pending));}}
-static uint64_t favorite_action{};
+static std::atomic<uint64_t> favorite_action{};   // set once by the favorites install thread
 namespace favorites{static bool screen_open();extern std::atomic<bool> toggle_pending;}
 static std::string upper(std::string text){for(auto& c:text)if(c>='a'&&c<='z')c-='a'-'A';return text;}
 // Native headings and rows use the game's font, geometry, hover state and scrolling.
@@ -42,7 +42,7 @@ static uint32_t input(const AnyInputV1* e,void*){std::lock_guard<std::mutex> loc
  if(e->kind==ANY_FOCUS_LOST){end_capture();memset(state.held,0,sizeof(state.held));return 0;}
  if(e->kind==ANY_KEY_UP&&e->key<256&&state.held[e->key]){state.held[e->key]=false;return 1;}
  if(e->kind==ANY_KEY_DOWN&&e->key<256&&state.held[e->key])return 1;
- if(state.capture<0){if(e->kind==ANY_KEY_DOWN&&e->key<256&&favorite_action&&favorite_action<=state.actions.size()&&state.actions[favorite_action-1].committed==e->key&&favorites::screen_open()){state.held[e->key]=true;favorites::toggle_pending=true;return 1;}return 0;}if(!menu->settings_open()||GetTickCount64()-state.last_draw>1000){end_capture();log("CAPTURE_CANCEL reason=menu_left");return 0;}
+ if(state.capture<0){uint64_t fav=favorite_action;if(e->kind==ANY_KEY_DOWN&&e->key<256&&fav&&fav<=state.actions.size()&&state.actions[fav-1].committed==e->key&&favorites::screen_open()){state.held[e->key]=true;favorites::toggle_pending=true;return 1;}return 0;}if(!menu->settings_open()||GetTickCount64()-state.last_draw>1000){end_capture();log("CAPTURE_CANCEL reason=menu_left");return 0;}
  if(e->kind==ANY_KEY_DOWN&&e->key<256){state.held[e->key]=true;int index=state.capture;
   if(e->key==VK_ESCAPE){state.status="Key capture cancelled.";end_capture();log("CAPTURE_CANCEL reason=escape");}
   else if(modcontrols::State::key_valid(e->key)){bool ok=state.stage(size_t(index),e->key==VK_DELETE?0:e->key);end_capture();log("BINDING_STAGE mod="+state.actions[index].mod+" action="+state.actions[index].id+" key="+std::to_string(state.actions[index].draft)+" accepted="+std::to_string(ok));}
@@ -51,18 +51,19 @@ static uint32_t input(const AnyInputV1* e,void*){std::lock_guard<std::mutex> loc
 #include "anyhelpers_settings.inc"
 #include "anyhelpers_favorites.inc"
 #include "anyhelpers_admin.inc"
+#include "anyhelpers_windows.inc"
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* api,AnyModCallbacksV1* callbacks){if(!api||!callbacks||api->abi!=1||api->struct_size!=sizeof(*api)||!api->log||!api->capture_input||!api->plugin_directory)return false;
  host=*api;auto services=AnyAPI_Services();menu=services?(const AnyMenuV2*)services->query("anyapi.menu",2):nullptr;if(!menu||menu->struct_size!=sizeof(*menu))return false;
  state.file=std::filesystem::path(api->plugin_directory)/L"AnyHelpers"/L"bindings.tsv";
  auto canonical=state.file,legacy=std::filesystem::path(api->plugin_directory)/L"ModControls"/L"bindings.tsv";
- if(!std::filesystem::exists(canonical)&&std::filesystem::exists(legacy))state.file=legacy;
+ std::error_code missing;if(!std::filesystem::exists(canonical,missing)&&std::filesystem::exists(legacy,missing))state.file=legacy;
  auto rejected=state.load();state.file=canonical;callbacks->id="anyhelpers";
  AnyMenuTabV2 section;section.icon=ANY_MENU_ICON_KEYBOARD;section.id="mod_controls";section.title="MOD CONTROLS";section.order=100;section.draw=draw;section.event=event;section.dirty=dirty;section.defaults=defaults;
  if(!menu->add_tab(&section)||!services->input_filter(input,nullptr,100)||!services->publish("modcontrols.bindings",1,&bindings)||!services->publish("anyhelpers.controls",1,&bindings)||!settingsmod::init(services))return false;
- favorites::init();bool admin_tab=adminui::init(services);callbacks->shutdown=[](void*){favorites::shutdown();admin::shutdown();};
+ favorites::init();bool admin_tab=adminui::init(services);callbacks->shutdown=[](void*){favorites::shutdown();admin::shutdown();windows::shutdown();};
  log("DLL_READY native_tabs_registered="+std::to_string(admin_tab?3:2)+" legacy_binding_service=1 rejected_saved_rows="+std::to_string(rejected));return true;}
 // Game functions are resolved after the JIT has loaded, on a background thread. Bundled mods only list their
 // parts (for the Enabled rows) once every DLL has loaded.
-extern "C" __declspec(dllexport) void AnyAPI_ModReady(){favorites::start();admin::start();settingsmod::add_part_rows(AnyAPI_Services());}
+extern "C" __declspec(dllexport) void AnyAPI_ModReady(){favorites::start();admin::start();windows::start();settingsmod::add_part_rows(AnyAPI_Services());}
 BOOL APIENTRY DllMain(HMODULE module,DWORD reason,LPVOID){if(reason==DLL_PROCESS_ATTACH)DisableThreadLibraryCalls(module);return TRUE;}
 

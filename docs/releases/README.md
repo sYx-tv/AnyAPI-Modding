@@ -10,6 +10,11 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Contents | Evidence |
 | --- | --- | --- | --- | --- |
+| 2026-10-21 | [mods-2026.10.21](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.21) | [AnyEngineParts 1.0.2](anyengineparts-1.0.2.md) | AnyCareer 0.0.6 (new: survival career with Cash, jobs and nine traders), AnyEngineParts bundle 1.0.2 (first for Anymaker 0.1.27; engine parts a quarter rarer in loot) | |
+| 2026-10-21 | [v0.40.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.40.1) | [0.40.1](release-0.40.1.md) | AnyAPI 0.40.1 for Anymaker 0.1.27 (port, graphics pass, menu v5 hover explanations, scene controls v3), AnyHelpers 1.0.2, AnyGraphics 1.0.3, AnyMap 1.0.1, AnyCombat 0.1.1, new AnyPerformance 0.1.1 and CustomGame 0.1.0; AnyStorage, AnyClock and AnyQuickWheel gain 0.1.27 in the catalog | |
+| 2026-10-20 | [mods-2026.10.20](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.20) | [AnyHelpers 1.0.1](anyhelpers-1.0.1.md) | AnyHelpers bundle 1.0.1 (fixes the Duplicate tool Favorites paste crash and the Workshop tab from Favorites) | |
+| 2026-10-19 | [v0.39.2](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.39.2) | [0.39.2](release-0.39.2.md) | AnyAPI 0.39.2 (lamp beams back on AMD graphics cards through their own lamp path; NVIDIA shaders unchanged) | |
+| 2026-10-19 | [v0.39.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.39.1) | [0.39.1](release-0.39.1.md) | AnyAPI 0.39.1 (lamp beams off on AMD graphics cards, gpu_info service), AnyGraphics bundle 1.0.2 (AnyGraphics 0.31.2: lamp beam settings hidden on AMD; photo free camera fix) | |
 | 2026-10-17 | [v0.39.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.39.0) | [0.39.0](release-0.39.0.md) | AnyAPI 0.39.0 (mod bundles, menu v4) and four bundles at 1.0.0: AnyEngineParts (with EngineSound and GpsPart), AnyHelpers (with Favorites, ADMIN, AnyInventory, AnyMirror, AnyBalance and MCCode), AnyGraphics (with ThirdPerson) and AnyMap | |
 | 2026-10-17 | [mods-2026.10.17](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.17) | [MCCode 0.2.0](mccode-0.2.0.md), [AnyEngineParts 0.2.1](anyengineparts-0.2.1.md), [EngineSound 0.4.0](enginesound-0.4.0.md) | AnyCombat 0.1.0 (new: hit markers and damage numbers), AnyMap 0.28.0 (vehicles, zombies and creatures on the map, map key), AnyGraphics 0.31.0 (photo mode fixes), MCCode 0.2.0 (nodes, suggestions), AnyEngineParts 0.2.1 and GpsPart 1.0.3 (world-start crash fix, loot tiers), EngineSound 0.4.0 (generated engine sounds) | |
 | 2026-10-16 | [mods-2026.10.16](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.16) | [MCCode 0.1.0](mccode-0.1.0.md) | MCCode 0.1.0, a Code view for the microcontroller editor with a command list, live values and the debugger | |
@@ -35,6 +40,7 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Evidence |
 | --- | --- | --- | --- |
+| 2026-10-19 | [manager-v1.5.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/manager-v1.5.1) | [1.5.1](manager-1.5.1.md) | |
 | 2026-10-17 | [manager-v1.5.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/manager-v1.5.0) | [1.5.0](manager-1.5.0.md) | |
 | 2026-10-09 | [manager-v1.4.0](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/manager-v1.4.0) | [1.4.0](manager-1.4.0.md) | |
 | 2026-10-08 | [manager-v1.3.2](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/manager-v1.3.2) | [1.3.2](manager-1.3.2.md) | [tests](manager-1.3.2-tests.json) |

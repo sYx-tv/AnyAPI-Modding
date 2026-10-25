@@ -634,11 +634,11 @@ int main() {
         for (int n : {2, 4, 5}) assert(full.find("\"id\": \"" + definition_id(n) + "\"") == std::string::npos);
         // Survival loot: the starter parts drop after the 2nd bunker (tier 3), the rest after the 3rd (tier 4).
         for (const char* id : {"turbocharger_3", "supercharger_small", "turbo_wastegate", "turbo_blow_off_valve", "turbo_air_filter"})
-            assert(entry(id).find("\"tech_tier\": 3,") != std::string::npos);
+            assert(entry(id).find("\"tech_tier\": 3,\n      \"spawn_probability\": 0.15,") != std::string::npos);
         for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_wastegate_large", "turbo_blow_off_valve_large", "turbo_air_filter_large",
                                "turbo_intercooler", "turbo_intercooler_round"})
-            assert(entry(id).find("\"tech_tier\": 4,") != std::string::npos);
-        assert(count_in(full, "\"tech_tier\": ") == 12);
+            assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
+        assert(count_in(full, "\"tech_tier\": ") == 12 && count_in(full, "\"spawn_probability\": ") == 12);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
         assert(definitions_json(all).find("meshes/components/turbo_a.mesh") != std::string::npos);   // no meshes: the stock look
         assert(blower_from_id("supercharger_small", 18) == kBlowerSmall && blower_from_id("supercharger_large", 18) == kBlowerLarge &&

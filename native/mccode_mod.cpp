@@ -14,12 +14,13 @@
 // in the same order the game writes the text: one line per statement, "{" / "}" lines for row containers.
 // If the counts disagree the editor still works and only the line-based debug features turn off.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (mccode_bindings.h): Anymaker 0.1.25 /
-// Steam build 25904830 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (mccode_bindings.h): Anymaker 0.1.27 /
+// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
 #include "anyapi_gpu_draw_v1.h"
+#include "anyapi_item_catalog_v1.h"
 #include "anyapi_experimental.hpp"
 #include "mccode_bindings.h"
 #include "route_cell.h"
@@ -28,12 +29,16 @@
 #include "mccode_complete.h"
 #include "mccode_nodes.h"
 #include "mccode_scripts.h"
+#include "mccode_parts.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -46,6 +51,7 @@ constexpr const char* kTempScript = "mccode_view";   // name of the Save round t
 
 AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
+const AnyItemCatalogV1* catalog;   // part definitions for the Parts tab (optional)
 std::atomic<bool> g_ready{false}, g_stop{false};
 
 void log(int level, const char* fmt, ...) {
@@ -186,7 +192,8 @@ struct Snapshot {
 struct State {
     // view
     bool open = false, editor_visible = false, captured = false;
-    int tab = 0;                 // side panel: 0 commands, 1 this microcontroller, 2 watch
+    int tab = 0;                 // side panel: 0 commands, 1 this microcontroller, 2 watch, 3 parts guide
+    int part_open = -1;          // Parts tab: the part whose channels are shown
     float side_scroll = 0;
     int scroll_line = 0, scroll_col = 0;
     bool follow_cursor = true;
@@ -354,11 +361,17 @@ void read_snapshot(const uint8_t* mc, Snapshot& s, const std::map<std::string, s
         }
 }
 
+// The Save round trip that reads a program carries the microcontroller in its name, so an answer that arrives
+// after the player moved on to another microcontroller is never shown (and applied) as that one's program.
+std::string fetch_name(int32_t vehicle, int32_t component) {
+    return std::string(kTempScript) + "_" + std::to_string(vehicle) + "_" + std::to_string(component);
+}
+
 void run_action(void* peer, int32_t vehicle, int32_t component, const Action& a) {
     switch (a.k) {
     case ActKind::Fetch: case ActKind::Load: {
         anymaker::gc_string_view s{};
-        const std::string& text = a.k == ActKind::Fetch ? std::string(kTempScript) : a.text;
+        const std::string& text = a.k == ActKind::Fetch ? fetch_name(vehicle, component) : a.text;
         g_string_ctor(&s, text.c_str());
         (a.k == ActKind::Fetch ? g_push_save : g_push_load)(peer, &vehicle, &component, &s);
         g_string_dtor(&s);
@@ -425,7 +438,8 @@ void hk_save_data(void* client, void* event, uint8_t* msg) {
         if (name.rfind(kTempScript, 0) == 0) {   // our read-back: keep it out of the player's saved scripts
             std::string data = gc_str(msg, off::msg_data);
             std::lock_guard lock(g_mutex);
-            if (g.fetching) {
+            if (g.fetching && name != fetch_name(g.vehicle, g.component)) log(1, "dropped a late program read (%s)", name.c_str());
+            else if (g.fetching) {
                 g.fetching = false;
                 Pretty p = prettify(data);
                 g.raw = !p.ok;
@@ -458,11 +472,12 @@ struct Box {
     float x = 0, y = 0, w = 0, h = 0;
     bool contains(float px, float py) const { return px >= x && px < x + w && py >= y && py < y + h; }
 };
+constexpr int kTabCount = 4;
 enum Btn { kApply, kReload, kUndo, kPause, kStepIn, kStepOver, kStepOut, kCopy, kPaste, kMode, kClose, kBtnCount };
 const wchar_t* kBtnLabel[kBtnCount] = {L"▶ Apply", L"Reload", L"Undo", L"Pause", L"Step in", L"Step over", L"Step out", L"Copy all", L"Paste", L"Nodes", L"×"};
 struct Layout {
     float s = 1, font = 15, line_h = 20, cw = 9;
-    Box button, panel, toolbar, btn[kBtnCount], editor, gutter, text, diag, side, tabs[3], side_body;
+    Box button, panel, toolbar, btn[kBtnCount], editor, gutter, text, diag, side, tabs[kTabCount], side_body;
     int rows = 1, cols = 1;
 };
 Layout layout(float w, float h) {
@@ -484,7 +499,7 @@ Layout layout(float w, float h) {
     float top = l.toolbar.y + l.toolbar.h;
     float side_w = std::min(420 * s, l.panel.w * .34f);
     l.side = {l.panel.x + l.panel.w - side_w, top, side_w, l.panel.y + l.panel.h - top};
-    for (int i = 0; i < 3; ++i) l.tabs[i] = {l.side.x + 8 * s + i * (side_w - 16 * s) / 3, top + 6 * s, (side_w - 16 * s) / 3 - 4 * s, 28 * s};
+    for (int i = 0; i < kTabCount; ++i) l.tabs[i] = {l.side.x + 8 * s + i * (side_w - 16 * s) / kTabCount, top + 6 * s, (side_w - 16 * s) / kTabCount - 4 * s, 28 * s};
     l.side_body = {l.side.x + 8 * s, top + 40 * s, side_w - 16 * s, l.side.h - 48 * s};
     l.font = 15 * s;
     l.line_h = 20 * s;
@@ -633,12 +648,19 @@ void commit_param() {
     }
     g.edit_param = -1;
 }
+// The selected node is drawn on top without moving it in the node list: that order is saved with the graph and
+// decides which node of a feedback loop reads last tick's value, so a click must not change it.
 void select_node(int id) {
     if (id != g.selected) commit_param();
     g.selected = id;
-    // bring it to the front
-    auto it = std::find_if(g.graph.nodes.begin(), g.graph.nodes.end(), [&](const nodes::Node& n) { return n.id == id; });
-    if (it != g.graph.nodes.end()) std::rotate(it, it + 1, g.graph.nodes.end());
+}
+// Nodes back to front: list order, then the selected node.
+std::vector<const nodes::Node*> stacking() {
+    std::vector<const nodes::Node*> out;
+    const nodes::Node* top = nullptr;
+    for (auto& n : g.graph.nodes) { if (n.id == g.selected) top = &n; else out.push_back(&n); }
+    if (top) out.push_back(top);
+    return out;
 }
 void add_node(const std::string& kind, float canvas_w, float canvas_h, float z) {
     commit_param();
@@ -826,8 +848,157 @@ void set_clipboard(const std::string& s) {
 }
 
 // Side panel rows, built the same way for drawing and clicking.
-enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode, InsertScript };
+enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode, InsertScript, TogglePart };
 struct SideRow { std::string label, help, insert; bool header = false; uint32_t color = 0xffe8ecef; SideAct act = SideAct::None; int arg = 0; };
+// Parts tab: the setup guide, the parts wired to this microcontroller, then every part that has channels.
+// The list is the game's parts (AnyAPI's item catalog) plus the parts mods add, read from the definition files they
+// write under "AnyAPI and Modding" (the catalog's entries for those carry no channels). It is built at startup and
+// rebuilt when the catalog grows (a world load adds the mods' parts) or the Parts tab is opened.
+using PartList = std::shared_ptr<const std::vector<parts::Part>>;
+std::mutex g_parts_mu;
+PartList g_parts;
+uint32_t g_parts_catalog_count = ~0u;
+
+// The catalog's parts, parsed once per entry; entries added later are parsed when they appear.
+std::vector<parts::Part> catalog_parts(uint32_t& seen, uint32_t& bad) {
+    static std::vector<parts::Part> cache;
+    static uint32_t parsed = 0;
+    if (!catalog) return cache;
+    uint32_t n = std::min<uint32_t>(catalog->count(), 10000);
+    std::string json;
+    for (; parsed < n; ++parsed) {
+        AnyItemDefinitionV1 d;
+        if (!catalog->copy(parsed, &d) || !(d.valid_fields & ANY_ITEM_VEHICLE_COMPONENT)) continue;
+        uint32_t need = 0;
+        catalog->definition_json(parsed, nullptr, 0, &need);
+        if (!need || need > (1u << 20)) continue;
+        json.assign(need, '\0');
+        if (!catalog->definition_json(parsed, json.data(), need, &need)) continue;
+        json.resize(strnlen(json.data(), json.size()));
+        std::string id = d.id;
+        if (id.rfind("component:", 0) == 0) id = id.substr(10);   // the catalog's prefix; mod files use the bare id
+        parts::Part part{id, d.name[0] ? d.name : id, d.category, {}, {}};
+        if (parts::parse_part(json, part)) cache.push_back(std::move(part)); else ++bad;
+    }
+    seen = n;
+    return cache;
+}
+
+// Definition files in "AnyAPI and Modding" and its folders (GpsPart\gps_sensor.json, AnyEngineParts' turbo files...).
+std::vector<parts::Part> mod_parts(int& files) {
+    std::vector<parts::Part> out;
+    files = 0;
+    if (!host.game_directory) return out;
+    std::error_code ec;
+    std::filesystem::path root = std::filesystem::path(host.game_directory) / L"AnyAPI and Modding";
+    auto read_dir = [&](const std::filesystem::path& dir, const std::string& source) {
+        for (auto it = std::filesystem::directory_iterator(dir, ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
+            if (!it->is_regular_file(ec) || it->path().extension() != L".json") continue;
+            auto size = it->file_size(ec);
+            if (ec || size == 0 || size > (4u << 20)) continue;
+            std::ifstream in(it->path(), std::ios::binary);
+            std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            if (text.find("\"definitions\"") == std::string::npos) continue;
+            auto found = parts::parse_definition_file(text, source);
+            if (found.empty()) continue;
+            ++files;
+            for (auto& p : found) out.push_back(std::move(p));
+        }
+        ec.clear();
+    };
+    read_dir(root, "Mods");
+    for (auto it = std::filesystem::directory_iterator(root, ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec))
+        if (it->is_directory(ec) && it->path().filename() != L"mods") read_dir(it->path(), it->path().filename().string());
+    return out;
+}
+
+void rebuild_parts(const char* why) {
+    static std::mutex build_mu;   // one build at a time; readers keep the old list meanwhile
+    std::lock_guard<std::mutex> building(build_mu);
+    uint32_t seen = 0, bad = 0;
+    int files = 0;
+    auto list = catalog_parts(seen, bad);
+    std::vector<parts::Part> mods;
+    try { mods = mod_parts(files); } catch (...) { log(2, "PARTS_GUIDE could not read the mod part files"); }
+    size_t mod_count = 0;
+    for (auto& m : mods) if (!m.channels.empty()) ++mod_count;
+    parts::merge_mod_parts(list, std::move(mods));
+    parts::sort_parts(list);
+    size_t channels = 0;
+    for (auto& p : list) channels += p.channels.size();
+    log(1, "PARTS_GUIDE parts_with_channels=%zu channels=%zu mod_parts=%zu mod_files=%d unreadable=%u (%s)", list.size(), channels,
+        mod_count, files, bad, why);
+    std::lock_guard<std::mutex> lock(g_parts_mu);
+    g_parts = std::make_shared<const std::vector<parts::Part>>(std::move(list));
+    g_parts_catalog_count = seen;
+}
+PartList all_parts() {
+    uint32_t now = catalog ? std::min<uint32_t>(catalog->count(), 10000) : 0;
+    {
+        std::lock_guard<std::mutex> lock(g_parts_mu);
+        if (g_parts && now == g_parts_catalog_count) return g_parts;
+    }
+    rebuild_parts(g_parts ? "catalog grew" : "first use");
+    std::lock_guard<std::mutex> lock(g_parts_mu);
+    return g_parts;
+}
+const parts::Channel* find_channel(const std::vector<parts::Part>& list, const std::string& name) {
+    for (auto& p : list)
+        for (auto& c : p.channels) if (c.name == name) return &c;
+    return nullptr;
+}
+void parts_rows(std::vector<SideRow>& rows) {
+    constexpr size_t kWrap = 52;
+    constexpr uint32_t kDimText = 0xff8b96a0, kCode = 0xff8fd18f;
+    rows.push_back({"Set up a microcontroller", "", "", true});
+    for (auto& line : parts::setup_guide()) {
+        for (auto& w : parts::wrap(line.text, kWrap)) rows.push_back({w, "", "", false, 0xffe8ecef});
+        if (line.code) {
+            std::string first = line.code;
+            first = first.substr(0, first.find('\n'));
+            first.erase(std::remove(first.begin(), first.end(), '$'), first.end());
+            rows.push_back({"   " + first, "click to insert", line.code, false, kCode});
+        }
+    }
+    PartList snapshot = all_parts();
+    const std::vector<parts::Part>& list = *snapshot;
+    rows.push_back({"Wired to this MC", "", "", true});
+    if (g.snap.part_ports.empty()) rows.push_back({"Nothing wired yet", "", "", false, kDimText});
+    for (auto& pp : g.snap.part_ports) {
+        if (pp.part.empty() || pp.channel.empty()) continue;
+        const parts::Channel* c = find_channel(list, pp.channel);
+        std::string help = std::string(pp.input ? "read" : "set") + (c && !c->type.empty() ? ", " + c->type : "");
+        rows.push_back({pp.part + "." + pp.channel, help, pp.part + "." + pp.channel, false, pp.input ? 0xff7cc8ff : 0xffffb86c});
+        if (c && !c->doc.empty())
+            for (auto& w : parts::wrap(c->doc, kWrap)) rows.push_back({"   " + w, "", "", false, kDimText});
+    }
+    if (list.empty()) {
+        rows.push_back({"Every part", "", "", true});
+        rows.push_back({"The part list needs AnyAPI's item catalog, which didn't load.", "", "", false, kDimText});
+        return;
+    }
+    rows.push_back({"Every part with channels (" + std::to_string(list.size()) + ")", "", "", true});
+    rows.push_back({"Click a part to see what code can read and set on it.", "", "", false, kDimText});
+    std::string category;
+    for (size_t i = 0; i < list.size(); ++i) {
+        auto& p = list[i];
+        if (p.category != category) { category = p.category; if (!category.empty()) rows.push_back({category, "", "", false, 0xffc586c0}); }
+        bool open = g.part_open == int(i);
+        std::string count = std::to_string(p.channels.size()) + (p.channels.size() == 1 ? " channel" : " channels");
+        if (!p.source.empty()) count += " \xb7 " + p.source;
+        rows.push_back({(open ? "- " : "+ ") + p.name, count, "", false, 0xfff1d36b, SideAct::TogglePart, int(i)});
+        if (!open) continue;
+        std::string name = parts::code_name(p.name);
+        for (auto& c : p.channels) {
+            const char* hint = parts::type_hint(c.type);
+            std::string help = c.type + (*hint ? std::string(": ") + hint : std::string());
+            if (c.dir != parts::Dir::Unknown) help = (c.dir == parts::Dir::Read ? "read, " : "set, ") + help;
+            rows.push_back({"   " + name + "." + c.name, help, name + "." + c.name, false, c.dir == parts::Dir::Set ? 0xffffb86c : 0xff7cc8ff});
+            for (auto& w : parts::wrap(c.doc, kWrap)) rows.push_back({"      " + w, "", "", false, kDimText});
+        }
+    }
+}
+
 std::vector<SideRow> side_rows() {
     std::vector<SideRow> rows;
     if (g.nodes_mode && g.tab == 0) {
@@ -899,6 +1070,8 @@ std::vector<SideRow> side_rows() {
             for (auto& p : g.snap.ports) rows.push_back({p, "", "", false, 0xffaab4bd});
         }
         if (rows.empty()) rows.push_back({"Nothing defined yet", "Add one with define var, define in or define out", ""});
+    } else if (g.tab == 3) {
+        parts_rows(rows);
     } else {
         rows.push_back({"Live values", "", "", true});
         if (g.snap.watch.empty()) rows.push_back({"No values yet", "They appear while the program runs or is paused", ""});
@@ -989,7 +1162,9 @@ void port_pos(const Layout& l, const nodes::Node& n, int port, bool input, float
 NodeHit hit_node(const Layout& l, float x, float y) {
     NodeHit h;
     float z = canvas_z(l), r = std::max(9.f, 9 * z);
-    for (auto it = g.graph.nodes.rbegin(); it != g.graph.nodes.rend(); ++it) {
+    auto order = stacking();
+    for (auto top = order.rbegin(); top != order.rend(); ++top) {
+        const nodes::Node* it = *top;
         const nodes::NodeDef* d = nodes::find_def(it->kind);
         if (!d) continue;
         for (int side = 0; side < 2; ++side) {
@@ -1080,7 +1255,8 @@ void draw_node_canvas(const Layout& l, Painter& p) {
     // nodes, back to front
     float fs = 13 * z, text_s = 11.5f * z;
     bool labels = z >= .5f;
-    for (auto& n : g.graph.nodes) {
+    for (const nodes::Node* np : stacking()) {
+        const nodes::Node& n = *np;
         const nodes::NodeDef* d = nodes::find_def(n.kind);
         if (!d) continue;
         float nx = l.editor.x + (n.x - g.cam_x) * z, ny = l.editor.y + (n.y - g.cam_y) * z;
@@ -1338,9 +1514,9 @@ void draw(const AnyFrameV1* frame, void*) {
     }
     // side panel
     p.box(l.side, 0xff13181d, 6 * s);
-    const wchar_t* tabs[3] = {L"Commands", L"This MC", L"Watch"};
+    const wchar_t* tabs[kTabCount] = {L"Commands", L"This MC", L"Watch", L"Parts"};
     if (g.nodes_mode) { tabs[0] = L"Add node"; tabs[1] = L"Selected"; }
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < kTabCount; ++i) {
         p.box(l.tabs[i], g.tab == i ? 0xff2b333b : 0xff1b2127, 5 * s);
         p.text(l.tabs[i].x, l.tabs[i].y, l.tabs[i].w, l.tabs[i].h, tabs[i], 13 * s, g.tab == i ? kYellow : kDim, ANY_GPU_CENTER | (g.tab == i ? uint32_t(ANY_GPU_BOLD) : 0u));
     }
@@ -1675,11 +1851,17 @@ uint32_t input(const AnyInputV1* e, void*) {
         if (g.nodes_mode && e->button == 2 && l.editor.contains(x, y)) { nodes_mouse_down(l, x, y, 2); return 1; }
         if (e->button != 1) return 1;
         for (int i = 0; i < kBtnCount; ++i) if (l.btn[i].contains(x, y)) { press(i); capture(g.open); return 1; }
-        for (int i = 0; i < 3; ++i) if (l.tabs[i].contains(x, y)) { g.tab = i; g.side_scroll = 0; return 1; }
+        for (int i = 0; i < kTabCount; ++i) if (l.tabs[i].contains(x, y)) {
+            if (i == 3 && g.tab != 3) std::thread([] { rebuild_parts("tab opened"); }).detach();   // picks up parts mods wrote since
+            g.tab = i; g.side_scroll = 0; return 1;
+        }
         if (l.side_body.contains(x, y)) {
             auto rows = side_rows();
             int i = int((y - l.side_body.y + g.side_scroll) / (22 * l.s));
             if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act == SideAct::InsertScript) insert_script(rows[size_t(i)].arg);
+            else if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act == SideAct::TogglePart) {
+                g.part_open = g.part_open == rows[size_t(i)].arg ? -1 : rows[size_t(i)].arg;
+            }
             else if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act != SideAct::None) nodes_side_click(rows[size_t(i)]);
             else if (i >= 0 && i < int(rows.size()) && !rows[size_t(i)].insert.empty() && !g.nodes_mode) insert_snippet(rows[size_t(i)].insert);
             return 1;
@@ -1786,6 +1968,7 @@ void install_hooks() {
         if (!ok) { log(2, "a hook cell was not writable; MCCode is off"); remove_hooks(); return; }
         g_ready = true;
         log(0, "Ready after %d s. Open a microcontroller and press </> Code (top right).", attempt);
+        rebuild_parts("startup");   // the game's parts and the ones mods wrote at load; a world load adds more
         return;
     }
 }
@@ -1805,6 +1988,8 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
     if (auto services = AnyAPI_Services()) {
         auto* gd = static_cast<const AnyGpuDrawV1*>(services->query("anyapi.gpu_draw", 1));
         if (gd && gd->struct_size == sizeof(*gd) && gd->version == 1 && gd->emit && gd->register_renderer && gd->register_renderer(draw, nullptr)) gpu = gd;
+        auto* cat = static_cast<const AnyItemCatalogV1*>(services->query("anyapi.item_catalog", 1));
+        if (cat && cat->struct_size == sizeof(*cat) && cat->version == 1 && cat->count && cat->copy && cat->definition_json) catalog = cat;
     }
     if (!gpu) { log(2, "anyapi.gpu_draw is missing; MCCode needs it to draw the Code view"); return; }
     std::thread(install_hooks).detach();   // resolving scans game memory; keep it off the loader and frame threads

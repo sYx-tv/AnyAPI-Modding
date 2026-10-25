@@ -12,8 +12,8 @@
 // so the paint saves with the vehicle and every player sees it, modded or not. Light colours are drawn on each player's
 // own game from that synced paint: players with AnyLights see coloured lights, players without it see stock lights.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (anylights_bindings.h): Anymaker 0.1.25 /
-// Steam build 25904830 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (anylights_bindings.h): Anymaker 0.1.27 /
+// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -64,7 +64,7 @@ void refresh_settings() {
     for (int i = 0; i < kSettingCount; ++i) { AnySettingValueV1 v; if (settings->get(g_tokens[i], &v)) targets[i]->store(v.number != 0); }
 }
 
-// Field offsets (reference layouts, metadata, Anymaker 0.1.25).
+// Field offsets (reference layouts, metadata, Anymaker 0.1.27; unchanged since 0.1.25).
 namespace off {
 // client_scene.item_world.vehicle_editor_paint: slave properties, value 8 bytes in
 constexpr ptrdiff_t paint_colour = 0x38 + 8;          // m_color (s32 palette index)

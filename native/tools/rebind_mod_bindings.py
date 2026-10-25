@@ -43,7 +43,12 @@ def main():
                 print('  %s: %s no longer exists in this build' % (path.name, m[2])); problems += 1
                 return m[0]
             if not records[0]['has_locator']:
-                print('  %s: %s has no locator route in this build' % (path.name, m[2])); problems += 1
+                # Descriptors written without a route (resolved another way, e.g. through a vtable)
+                # stay that way; only a route that existed before and is gone now is a problem.
+                if ',"",{"", {}, 0},"",0u,-1}' in m[0]:
+                    print('  %s: %s has no locator route (none before either)' % (path.name, m[2]))
+                else:
+                    print('  %s: %s has no locator route in this build' % (path.name, m[2])); problems += 1
             body = re.search(r'inline constexpr func_desc fn_\w+\{(.*)\};', header)[1]
             new = m[1] + '{' + body + '};'
             changed += new != m[0]

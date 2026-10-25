@@ -39,7 +39,7 @@ inline bool project(const Camera& c, Vec3 world, double width, double height, do
     return true;
 }
 
-// Damage types (e_actor_damage_type, 0.1.25 reference order).
+// Damage types (e_actor_damage_type, 0.1.27 SDK order, unchanged since 0.1.25).
 enum DamageType : int32_t { kMelee = 0, kGun = 1, kImpact = 2, kGrenade = 3, kExplosion = 4, kInjury = 5, kAcid = 6 };
 
 constexpr double kMarkerSeconds = 0.28;   // hit marker on screen
