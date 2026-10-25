@@ -7,7 +7,7 @@ authors. AnyGraphics 0.33.0 adds ocean reflections, three new rows and a measuri
 Update AnyAPI and your mods in the manager, then restart the game.
 
 - **AnyAPI 0.40.2**
-- **AnyGraphics bundle** with AnyGraphics 0.33.0 and ThirdPerson
+- **AnyGraphics bundle 1.1.0** with AnyGraphics 0.33.0 and ThirdPerson (needs AnyAPI 0.40.2)
 
 Everything new that changes the look is either a clear bug fix or a row that starts off. Each
 default change has a hidden revert in `AnyGraphics/settings.tsv` (see
