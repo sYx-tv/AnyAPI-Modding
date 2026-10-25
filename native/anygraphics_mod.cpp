@@ -82,7 +82,7 @@ static void stage_values(const Values& v){for(size_t j=0;j<Count;++j){auto next=
 // Stages every value of a preset into the menu draft. The status line says so, not the last row's description (AG-15).
 static void stage_preset(int level){Values draft{};for(size_t j=0;j<Count;++j)draft[j]=float(state.settings[j].draft.number);stage_values(profile(draft,level));state.status="Preset staged. Select Apply to save.";}
 // Commits values outside the menu (auto-pick). False when the settings could not be saved; nothing changes then.
-static bool commit_values(const Values& v){std::lock_guard lock(mutex);state.begin();stage_values(v);bool ok=state.apply();if(!ok){log("SETTINGS_SAVE failed draft_retained=0 source=auto_pick");state.begin();}state.status.clear();return ok;}
+static bool commit_values(const Values& v,const char* source="auto_pick"){std::lock_guard lock(mutex);state.begin();stage_values(v);bool ok=state.apply();if(!ok){log(std::string("SETTINGS_SAVE failed draft_retained=0 source=")+source);state.begin();}state.status.clear();return ok;}
 static Values committed(){std::lock_guard lock(mutex);Values c{};for(size_t j=0;j<Count;++j)c[j]=float(state.settings[j].committed.number);return c;}
 static const char* tier_name(int t){static const char* names[]={"Off","Performance","Low","Balanced","High","Ultra"};return names[std::clamp(t,0,5)];}
 static const char* look_name(int level){return level==NaturalProfile?"Natural":level==VibrantProfile?"Vibrant":level==MoodyProfile?"Moody":level==ClearDayProfile?"Clear Day":level==SoftWarmProfile?"Soft & warm":"Custom";}
@@ -125,6 +125,23 @@ static void auto_pick(bool gameplay,bool active,bool configured_now){if(!pick.on
  const char* why=d.reason==PickCpuBound?" The game, the CPU or a frame-rate limit sets the frame rate here, so presets barely change it.":d.reason==PickCapFull?" The frame rate is capped, and more would leave too little of each frame.":"";
  snprintf(text,sizeof(text),"Auto-pick chose %s (%.0f fps).%s%s",chosen.c_str(),fps,why,pick.look?"":" Natural, Clear Day, Vibrant, Moody and Soft & warm cost about the same as High or Ultra.");
  pick_result=text;log(std::string("AUTO_PICK ")+text);pick.on=false;}
+// AG-2 on integrated graphics: Balanced (TAA, volumetric fog and shafts, the sky, contact shadows) costs several ms a
+// frame on an Intel or AMD integrated GPU or a Steam Deck, and on a host that lowers the server tick. An install with no
+// saved AnyGraphics rows (a fresh one, or one that never selected Apply) starts on Low there instead, once, as soon as
+// AnyAPI knows the graphics card. Discrete cards keep Balanced and nothing is written for them.
+static bool fresh_checked;
+static void fresh_pick(){if(fresh_checked)return;
+ bool known=false,igpu=false;
+ if(gpu_info_v2){AnyGpuInfoV2 g;if(gpu_info_v2->copy_v2(&g)&&g.v1.known){known=true;igpu=integrated_gpu(g.v1.vendor_id,g.v1.device_id,g.uma);}}
+ else if(gpu_info){AnyGpuInfoV1 g;if(gpu_info->copy(&g)&&g.known){known=true;igpu=integrated_gpu(g.vendor_id,g.device_id,0);}}
+ else{fresh_checked=true;return;}
+ if(!known)return; // AnyAPI knows the card once it has seen a scene frame
+ fresh_checked=true;
+ {std::lock_guard lock(mutex);if(!state.saved.empty())return;}
+ if(!igpu||pick.on)return;
+ auto v=profile(committed(),2);v[PresetRevision]=float(preset_revision);const bool saved=commit_values(v,"fresh_pick");
+ log(std::string("FRESH_PICK low reason=integrated saved=")+(saved?"1":"0"));
+ if(saved)pick_result="Integrated graphics: AnyGraphics started on Low. Auto-pick can try a higher preset.";}
 static const AnyMenuV4* buttons;
 // Soft film and Soft & warm need AnyAPI 0.40.1; older APIs reject them, so they fall back to Clean and Vivid there.
 static bool soft_grades=true;
@@ -269,7 +286,7 @@ static void draw(const AnyMenuFrameV1*,void*){std::lock_guard lock(mutex);
     else{auto from=preset>=1&&preset<=5?preset:preset==6||preset==VibrantProfile?5:4;pick=Pick{};pick.on=pick.commit_pending=true;pick.tier=pick.start=from;pick.look=is_look(preset)?preset:0;
      pick_result=pick.look?std::string("Auto-pick: close the menu and play; it keeps ")+look_name(preset)+" and measures a few seconds per cost level.":"Auto-pick: close the menu and play; it measures a few seconds per preset.";}}
    if(!pick_result.empty())widgets->tabs->label("auto_pick_status",pick_result.c_str());
-   // AG-2: a fresh install starts on Balanced, which can be heavy for a laptop or integrated graphics.
+   // AG-2: a fresh install starts on Balanced (Low on integrated graphics), which can be heavy for a laptop.
    else if((preset>=1&&preset<=10)||preset==SoftWarmProfile)widgets->tabs->label("auto_pick_hint","On a laptop or integrated graphics, Auto-pick finds the preset your PC holds at about 60 fps.");
   }
  }
@@ -290,8 +307,10 @@ static void draw(const AnyMenuFrameV1*,void*){std::lock_guard lock(mutex);
 }
 static bool aa_v3_rejected,lighting_v4_rejected,effects_v3_rejected,controls_v4_rejected;
 static void render(const AnyFrameV1* frame,AnyCanvasV1*,void*){
- if(state.settings.size()!=Count)return;read();if(!scene)return;bool on=values[Enabled]>.5f&&values[Preset]!=0;
- AnyUiSnapshotV1 snapshot;bool gameplay=ui&&ui->copy(&snapshot)&&snapshot.kind==ANY_UI_GAMEPLAY;const bool enabled=on;if(on&&values[GameplayOnly]>.5f)on=gameplay;
+ if(state.settings.size()!=Count)return;
+ AnyUiSnapshotV1 snapshot;bool gameplay=ui&&ui->copy(&snapshot)&&snapshot.kind==ANY_UI_GAMEPLAY;if(gameplay&&scene)fresh_pick();
+ read();if(!scene)return;bool on=values[Enabled]>.5f&&values[Preset]!=0;
+ const bool enabled=on;if(on&&values[GameplayOnly]>.5f)on=gameplay;
  menu_bypass=enabled&&!on;
  const auto now=frame?frame->tick:GetTickCount64();
  // Photo mode key: toggles only in gameplay with the game focused; the HUD comes back in every menu. The input callback

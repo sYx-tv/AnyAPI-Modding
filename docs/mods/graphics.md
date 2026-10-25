@@ -161,7 +161,12 @@ as Antialiasing and Fog are left alone):
 Fixes:
 
 - A fresh install and **Reset** now give the real Balanced preset (TAA, tone
-  mapping, sky and sun shafts), not each row's own default.
+  mapping, sky and sun shafts), not each row's own default. This includes an
+  install that never selected **Apply** in AnyGraphics, which used to run each
+  row's own default. On integrated graphics (Intel, an AMD processor's
+  graphics or a Steam Deck) such an install starts on **Low** instead, once, as
+  soon as AnyAPI knows the graphics card, and saves it. Elsewhere, Auto-pick
+  or a lower preset brings the cost down.
 - The photo key works on quick taps at low frame rates, and photo mode no
   longer freezes the camera if AnyGraphics stops updating it.
 - Photo controls that switch the colour pass on no longer swap the game's bloom
@@ -276,7 +281,8 @@ blur retain the game's actual on/off capability.
 Presets are **Off / Performance / Low / Balanced / High / Ultra / Cinematic /
 Natural / Vibrant / Moody / Clear Day / Custom / Soft & warm**. Choosing a preset stages a group of
 settings. Off bypasses overrides and restores the game's own values. Balanced is
-the initial preset, and a fresh install and Reset give its values.
+the initial preset, and a fresh install and Reset give its values. On
+integrated graphics and Steam Deck a fresh install starts on Low instead.
 
 Every preset except Custom shows only a few common settings: Antialiasing,
 Fog, Brightness, Colour look, Depth of field (with Blur strength), Motion blur,

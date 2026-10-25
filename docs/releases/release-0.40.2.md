@@ -127,6 +127,10 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
   sun shafts are a little softer). A preset saved with an earlier version moves to these
   values once; Custom is not touched. A saved preset keeps the new Water reflections and Sun
   glint off: choose the preset again or select Reset preset to turn them on.
+- If you never selected Apply in AnyGraphics, you ran each row's own default; 0.33.0 runs the
+  real Balanced preset instead (TAA, Filmic, volumetric fog and sun shafts, the sky and contact
+  shadows), which costs more. On integrated graphics and Steam Deck it starts on Low instead,
+  once, and saves that. Auto-pick or a lower preset brings the cost down.
 - Fixes: a fresh install and Reset give the real Balanced preset; quick photo-key taps work at
   low frame rates; photo mode returns the camera if AnyGraphics stops updating it; photo
   controls no longer add sun glare or swap the bloom; the Lighting group shows without scene

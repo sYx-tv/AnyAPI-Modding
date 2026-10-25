@@ -200,6 +200,9 @@ inline Values profile(const Values& current,int level){
 }
 // AG-2: what a fresh install and the menu's Reset get. Preset's own initial value is Balanced.
 inline Values balanced(){return profile(defaults(),3);}
+// Graphics that share the system's memory: anything D3D12 reports as UMA, Intel, and the Steam Deck APUs (LCD and OLED).
+// A fresh install there starts on Low instead of Balanced.
+inline bool integrated_gpu(uint32_t vendor,uint32_t device,uint32_t uma){return uma!=0||vendor==0x8086||(vendor==0x1002&&(device==0x163f||device==0x1435));}
 // K37: preset tables changed after settings were saved. Revision 1 (AnyGraphics 0.33.0): AG-7 sampling and lamp tables,
 // K47 Balanced sharpening, Natural without detailed shading, Performance and Low fog (AG-9).
 inline constexpr int preset_revision=1;
