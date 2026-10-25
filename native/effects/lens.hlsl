@@ -95,7 +95,9 @@ float4 Lens(Varying v) : SV_Target {
     if (coc < .5 && all(velocity == 0)) return scene;
     float jitter = noise(v.position.xy + params.w * 5.588238), angle = jitter * 6.2831853;
     // FIN-6: Karis weights on the centre and every tap, so one bright tap (sun disc, lamp) cannot dominate.
-    float k0 = karis(scene.rgb); float4 sum = float4(scene.rgb * k0, k0); const int taps = 16;
+    // The weighted colours are clamped to [0, 65000]: under D3D min/max NaN becomes 0 and inf 65000, so one bad HDR texel
+    // cannot make a weight 0 or negative (inf * 0 = NaN). Finite input in that range is unchanged.
+    float3 s0 = clamp(scene.rgb, 0, 65000); float k0 = karis(s0); float4 sum = float4(s0 * k0, k0); const int taps = 16;
     [loop] for (int i = 0; i < taps; ++i) {
         float t = (i + jitter) / taps, a = angle + i * 2.39996323;
         float2 offset = float2(cos(a), sin(a)) * sqrt(t) * coc * metrics.xy + velocity * (t - .5);
@@ -103,7 +105,7 @@ float4 Lens(Varying v) : SV_Target {
         float sz = scene_z(uv);
         // A sharp foreground sample must not smear over the pixel; held items never blur in.
         float w = sz < 1.5 ? 0 : sz + .5 >= z ? 1 : saturate(circle(sz, focus) / max(length(offset * metrics.zw), .5));
-        float3 c = colour.SampleLevel(linear_sampler, uv, 0).rgb;
+        float3 c = clamp(colour.SampleLevel(linear_sampler, uv, 0).rgb, 0, 65000);
         sum += float4(c, 1) * (w * karis(c));
     }
     return float4(sum.rgb / sum.w, scene.a);
