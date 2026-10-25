@@ -204,7 +204,7 @@
     {
       "Title": "anyapi_gpu_info_v2.h",
       "Group": "Headers",
-      "Body": "# anyapi_gpu_info_v2.h\n\nExact public declarations for the revision shown in this guide.\n\n```cpp\n#pragma once\n#include \"anyapi_gpu_info_v1.h\"\nstruct AnyGpuInfoV2 {uint32_t struct_size=sizeof(AnyGpuInfoV2),version=2;AnyGpuInfoV1 v1;\n uint32_t uma=0,dedicated_mb=0,shared_mb=0,budget_mb=0,usage_mb=0; // budget/usage: QueryVideoMemoryInfo(LOCAL) every 2 s; 0 = unknown\n uint32_t width=0,height=0;              // the game's HDR scene target\n uint32_t lamp_shadows_supported=1;      // 0 where lamp beams run without spot shadow maps (AMD in 0.40.2)\n char adapter_name[128]={};              // UTF-8\n uint32_t reserved[4]={};};\nstruct AnyGpuInfoServiceV2 {uint32_t struct_size,version;bool(*copy)(AnyGpuInfoV1*);bool(*copy_v2)(AnyGpuInfoV2*);};\n\n```",
+      "Body": "# anyapi_gpu_info_v2.h\n\nExact public declarations for the revision shown in this guide.\n\n```cpp\n#pragma once\n#include \"anyapi_gpu_info_v1.h\"\nstruct AnyGpuInfoV2 {uint32_t struct_size=sizeof(AnyGpuInfoV2),version=2;AnyGpuInfoV1 v1;\n uint32_t uma=0,dedicated_mb=0,shared_mb=0,budget_mb=0,usage_mb=0; // budget/usage: QueryVideoMemoryInfo(LOCAL), polled every 2 s while copy_v2 was called in the last 5 s; 0 = unknown\n uint32_t width=0,height=0;              // the game's HDR scene target\n uint32_t lamp_shadows_supported=1;      // 0 where lamp beams run without spot shadow maps (AMD in 0.40.2)\n char adapter_name[128]={};              // UTF-8\n uint32_t reserved[4]={};};\nstruct AnyGpuInfoServiceV2 {uint32_t struct_size,version;bool(*copy)(AnyGpuInfoV1*);bool(*copy_v2)(AnyGpuInfoV2*);};\n\n```",
       "Kind": "Public header"
     },
     {
@@ -963,7 +963,7 @@
     "anyapi_equipment_v2.h": "373d9f1a08975d94dd087a010e7f007c9ead4ecc78c2f8f0feb80ea933e30dfd",
     "anyapi_gpu_draw_v1.h": "f8881c0e6ae4533312282493704953b14fc24d46ff9eda6237f221ddc45fdd3e",
     "anyapi_gpu_info_v1.h": "46501b95d0ad3d11818a0cb06a07c208b25cbd70fe9781fe9a8de88e61385767",
-    "anyapi_gpu_info_v2.h": "d1a46baee4f437d1152ed4440d6e6bb2ee5541ee2d2b449dc23c33368e8b1ab7",
+    "anyapi_gpu_info_v2.h": "64408af9f5725d825607bfe7fd7a1012b656d45f0fd6045b3e7096fd5b7af273",
     "anyapi_hud_hint_provider_v1.h": "4178baae0c8a63228fd92f6c9963dcadc24d637c2808b7b892f693147d268748",
     "anyapi_inventory_actions_v1.h": "461a4f472779ead1441f7f258b10f97383e625b775bfcdf5615fa9fb140ff537",
     "anyapi_inventory_actions_v2.h": "1e94d793b3fadcc9078d3c89a07125da5e34061a0644be7822f21ad3497ebe3e",
