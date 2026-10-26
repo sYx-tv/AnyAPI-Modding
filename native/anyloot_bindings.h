@@ -43,4 +43,8 @@ inline constexpr func_desc actor_get_is_incapacitated{"(bool) client_scene.actor
 // A client actor by its replicated id.
 // (ptr<client_scene.actor>) client_scene.actor.container.get_actor_by_id (const client_scene.actor.container, const s32) | side: client
 inline constexpr func_desc actor_container_get_actor_by_id{"(ptr<client_scene.actor>) client_scene.actor.container.get_actor_by_id (const client_scene.actor.container, const s32)","",{"", {}, 0},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 4d 00 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05 44 00 00 00 48 8b 4c 24 28 48 89 01 48 c7 41 30",104u,22};
+// Puts one item of a given definition into the first storage part of a vehicle with room for it (the game's own
+// dead-drop and furniture loot use it).
+// (bool) server_scene.vehicle._spawn_loot_item_in_furniture (server_scene.vehicle, server_scene, math.random, const ptr<const inventory_definition>) | side: server
+inline constexpr func_desc vehicle_spawn_loot_item_in_furniture{"(bool) server_scene.vehicle._spawn_loot_item_in_furniture (server_scene.vehicle, server_scene, math.random, const ptr<const inventory_definition>)","53 55 56 57 41 54 41 55 41 56 48 81 ec 00 02 00 00 4c 8b a4 24 60 02 00 00 48 89 8c 24 38 01 00",{"", {}, 0},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 b4 04 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",1232u,89};
 } // namespace anyloot::bind
