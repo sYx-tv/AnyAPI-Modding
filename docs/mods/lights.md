@@ -25,7 +25,8 @@ Edges, links and brush or pencil pixel strokes can't be undone yet: Ctrl+Z after
 
 ## Lights
 
-Spot, omni and rotating lights glow the colour of their paint, at full brightness so dark paints still light
+Paint a light with Fill or Flood (AnyLights paints the light part itself, even where the stock tool finds no
+paintable surface on it). Spot, omni and rotating lights glow the colour of their paint, at full brightness so dark paints still light
 up. Greys, black and white paint give white light. Unpainted lights keep the stock warm white.
 
 ## Multiplayer
