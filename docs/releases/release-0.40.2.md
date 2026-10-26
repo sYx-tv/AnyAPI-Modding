@@ -17,7 +17,8 @@ Update AnyAPI and your mods in the manager, then restart the game.
   fills to 9999 after a few world loads, and the direction line at the top of the screen is gone
 - **AnyMoto 0.0.1** (new): motorcycle fork, swingarm, seat, handlebars and Lean Assist, in loot
   after the first bunker
-- **AnyLights 0.2.0** (new): one paint tool for every colour, and lights glow their paint colour
+- **AnyLights 0.2.0** (new): one paint tool for every colour (palette, paint modes, Ctrl+Z).
+  Painted lights don't glow their colour yet
 
 Everything new that changes the look is either a clear bug fix or a row that starts off. Each
 default change has a hidden revert in `AnyGraphics/settings.tsv` (see

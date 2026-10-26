@@ -73,7 +73,7 @@
           "GclSha256": "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22"
         }
       ],
-      "Description": "One paint tool for every colour: right-click any paint tool for the full palette and Fill, Flood, Brush, Pencil and erase modes, with Ctrl+Z undo. Lights glow the colour they are painted. Standalone mod, not part of a bundle. Anymaker 0.1.27 only."
+      "Description": "One paint tool for every colour: right-click any paint tool for the full palette and Fill, Flood, Brush, Pencil and erase modes, with Ctrl+Z undo. Glowing painted lights are still being worked on. Standalone mod, not part of a bundle. Anymaker 0.1.27 only."
     }
   }
 }
