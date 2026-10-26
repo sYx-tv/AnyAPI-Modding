@@ -5,14 +5,14 @@
     {
       "Id": "anyapi",
       "Name": "AnyAPI",
-      "Version": "0.40.1",
-      "Revision": 46,
+      "Version": "0.40.2",
+      "Revision": 47,
       "MinimumApi": 0,
-      "Description": "Native mod framework for Anymaker 0.1.27; loads mod bundles (several mods in one DLL, each switchable in Mod Settings), adds menu v4 and v5 (hover explanations in Mod Settings) and scene controls v3 (light colour and wind for graphics mods), and draws lamp beams on AMD graphics cards too.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.1/AnyAPI-0.40.1.zip",
-      "Sha256": "0035d26aa419c827cac80a35e84bb6e2cd58ec7a3a37db03550076965c8e0ab4",
+      "Description": "Native mod framework for Anymaker 0.1.27; faster scene reads, the game's own clock and weather for sky and lights, crash-safe graphics passes, and new scene services (lighting 4, effects 3, controls 4, antialiasing 3, timing 2, GPU info 2) for graphics mods.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.2/AnyAPI-0.40.2.zip",
+      "Sha256": "6a677ce984393da011220df25c98c804ae883fe68e7ce7e11fdb52b530d21cff",
       "FileHashes": {
-        "dinput8.dll": "6998e4303f59ee73ad217a2fea7db6cb8075df24fb9e863f08d6d19a2c46d933"
+        "dinput8.dll": "839108d95dcb663d5c48c38d4dab30bb6d51842dccb942ba00e178ba52452332"
       },
       "GameBuilds": [
         {
@@ -28,14 +28,14 @@
     {
       "Id": "anyhelpers",
       "Name": "AnyHelpers",
-      "Version": "1.0.2",
-      "Revision": 30,
+      "Version": "1.1.0",
+      "Revision": 31,
       "MinimumApi": 46,
       "Description": "Building and editing helpers in one mod: Mod Controls and Mod Settings, Duplicate tool favorites and a host ADMIN tab, AnyInventory's item search, AnyMirror's mirrored building, AnyBalance's centre of mass, and MCCode's Code view for microcontrollers. Each piece can be switched off in Mod Settings. Anymaker 0.1.27 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.1/AnyHelpers-1.0.2.zip",
-      "Sha256": "c9aa5730db0ac68aa369039a9ac95959a92d81f451bbc7e3c581bfc2b1995b06",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.2/AnyHelpers-1.1.0.zip",
+      "Sha256": "a39afe802cb8d5aa3762f03f38ef791d1a79eb964b7fdca508a9abbb6eeb98ed",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyHelpers.dll": "995d534dd76d3a4f8d4fa1fbb22c8a3ad09358f7eacd5fc434eb9431b0373f8c"
+        "AnyAPI and Modding/mods/AnyHelpers.dll": "715792abfe7f0674cee41199f09b557c96340abb146fc6e55aa0668e4e881c64"
       },
       "GameBuilds": [
         {
@@ -94,14 +94,14 @@
     {
       "Id": "anymap",
       "Name": "AnyMap",
-      "Version": "1.0.1",
-      "Revision": 32,
+      "Version": "1.0.2",
+      "Revision": 33,
       "MinimumApi": 46,
       "Description": "World map and minimap with route placement and zoom; shows vehicles, zombies and creatures with a map key. Ready to carry more map pieces as one mod. Anymaker 0.1.27 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.1/AnyMap-1.0.1.zip",
-      "Sha256": "592384b34d66f188f8c827dcb0732ca8dfd474eec5b50f157c3b0addd7f2371c",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.2/AnyMap-1.0.2.zip",
+      "Sha256": "5abd462b977a972f46526dafe9da5cb775c3d6fd2c6ccbf84451b7ed825d14b6",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyMap.dll": "044fc8764be2e6473f6429bc4cb9215ab67a718e4874c9cabbb57fffef3e74ba"
+        "AnyAPI and Modding/mods/AnyMap.dll": "d6d070dff8eb381e96fa81e2c1f96066642779ff1789a370cd847c784a6e4263"
       },
       "GameBuilds": [
         {
@@ -115,14 +115,14 @@
     {
       "Id": "anygraphics",
       "Name": "AnyGraphics",
-      "Version": "1.0.3",
-      "Revision": 37,
-      "MinimumApi": 46,
-      "Description": "Graphics overhaul with presets from Off to Cinematic plus Soft & warm and Custom, grouped in Show/Hide sub-menus: TAA, tone mapping and colour looks, light colour, shading, shadows, sky and wind in trees, depth of field, motion blur and photo mode, plus ThirdPerson's F5 third-person camera. Each piece can be switched off in Mod Settings. Anymaker 0.1.27 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.1/AnyGraphics-1.0.3.zip",
-      "Sha256": "63a6e77a444effc2ce9514f4da3f5656159ce7e63a320e7e42e0f12debca6040",
+      "Version": "1.1.0",
+      "Revision": 38,
+      "MinimumApi": 47,
+      "Description": "Graphics overhaul with ocean reflections, smoother local lights, defaults picked for your GPU and presets from Off to Cinematic plus Soft & warm and Custom, grouped in Show/Hide sub-menus: TAA, tone mapping and colour looks, light colour, shading, shadows, sky and wind in trees, depth of field, motion blur and photo mode, plus ThirdPerson's F5 third-person camera. Each piece can be switched off in Mod Settings. Anymaker 0.1.27 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.2/AnyGraphics-1.1.0.zip",
+      "Sha256": "d32e349958eecb2a7a4862385980e19a500b1d1394acd849cd1a481d9e92792a",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyGraphics.dll": "577016bcef3008338956ee2c498a54ca0ad337db92752e0ecd777b355ed9498e"
+        "AnyAPI and Modding/mods/AnyGraphics.dll": "dcb8694c4d55166faf702bfaf70a8ff7b5bbf186aa033a18362279c108835f9e"
       },
       "GameBuilds": [
         {
@@ -263,14 +263,14 @@
     {
       "Id": "anyperformance",
       "Name": "AnyPerformance",
-      "Version": "0.1.1",
-      "Revision": 1,
+      "Version": "0.1.2",
+      "Revision": 2,
       "MinimumApi": 46,
-      "Description": "Fixes the world slowing down and then rushing to catch up, and logs what causes stutters. Standalone mod, not part of a bundle. Anymaker 0.1.27 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.1/AnyPerformance-0.1.1.zip",
-      "Sha256": "9a138dea168ff3ef23dd5441901d1d37a878b9d1f012103aec68fa49a7853bb4",
+      "Description": "Fixes the world slowing down and then rushing to catch up (including the stall when new terrain fills its wrecks with loot), updates the items in far-away parked vehicles less often for more FPS, and logs what causes stutters. Standalone mod, not part of a bundle. Anymaker 0.1.27 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.2/AnyPerformance-0.1.2.zip",
+      "Sha256": "cbcbb33c3244829e49e13105e5ad5d0d1855eb9abb0c23c1211cfcfd352d1386",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyPerformance.dll": "81f2c6855a8845484446c298dceeec8ba4c8e8921e427ad072df7b536866f368"
+        "AnyAPI and Modding/mods/AnyPerformance.dll": "a69b6b523ce7ad1ae670c6c1b025b9a697ac79f6bf8bf48cedcfc2431e559f9a"
       },
       "GameBuilds": [
         {
@@ -305,14 +305,56 @@
     {
       "Id": "anycareer",
       "Name": "AnyCareer",
-      "Version": "0.0.6",
+      "Version": "0.0.8",
+      "Revision": 2,
+      "MinimumApi": 46,
+      "Description": "A survival career: earn Cash from delivery and kill jobs and small finds in houses and shops, and trade with nine traders spread over the map (Hayzeco Autoparts, Builder, Junkyard, Grocer, Medic, Marine & Air, Mod Shop, Outfitter, Gunsmith). Survival only; the host runs it, and co-op joiners with AnyCareer trade and take jobs through the host. Trader map pins need AnyMap 1.0.1 or later. Standalone mod, not part of a bundle. Anymaker 0.1.27 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.2/AnyCareer-0.0.8.zip",
+      "Sha256": "665909d563afa1184e869bfd5687f1254a403ac35f2c6bf304c5bd33269897bd",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/AnyCareer.dll": "2752301b2c937efa7740e6c8a646a88166ebe1a9600c5263c55162444fea32ea"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.27",
+          "SteamBuild": 26113663,
+          "ExeSha256": "097e1167477587c51a3b93ab7e7843382d99d30010678c9bd89a2fee648fec23",
+          "GclSha256": "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22"
+        }
+      ]
+    },
+    {
+      "Id": "anylights",
+      "Name": "AnyLights",
+      "Version": "0.2.0",
       "Revision": 1,
       "MinimumApi": 46,
-      "Description": "A survival career: earn Cash from delivery and kill jobs and small finds in houses and shops, and trade with nine traders spread over the map (Hayzeco Autoparts, Builder, Junkyard, Grocer, Medic, Marine & Air, Mod Shop, Outfitter, Gunsmith). Survival only; the host runs it. Trader map pins need AnyMap 1.0.1 or later. Standalone mod, not part of a bundle. Anymaker 0.1.27 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.21/AnyCareer-0.0.6.zip",
-      "Sha256": "ca494755cad3551751b4342e1257c7b4a05f9a3247b2ad19a6ba1006c0b9c08a",
+      "Description": "One paint tool for every colour: right-click any paint tool for the full palette and Fill, Flood, Brush, Pencil and erase modes, with Ctrl+Z undo. Glowing painted lights are still being worked on. Standalone mod, not part of a bundle. Anymaker 0.1.27 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.2/AnyLights-0.2.0.zip",
+      "Sha256": "b811e6963188ac841fb45c8446b4ef3dac3fe8324866ce1ff83d993bcd229201",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyCareer.dll": "2f6364ec927d7413b7e04937a3812483ad75ae6261d2dfa4e8a4ef3c870f4dec"
+        "AnyAPI and Modding/mods/AnyLights.dll": "1d7f5653fe5841d9088014da30a7c82377c266654588c248e34eb7070045ef96"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.1.27",
+          "SteamBuild": 26113663,
+          "ExeSha256": "097e1167477587c51a3b93ab7e7843382d99d30010678c9bd89a2fee648fec23",
+          "GclSha256": "a3fd2df2fd62e38b629f6a0df824269a34d77d57caf66d596362d7e5e53c3b22"
+        }
+      ]
+    },
+    {
+      "Id": "anymoto",
+      "Name": "AnyMoto",
+      "Version": "0.0.1",
+      "Revision": 1,
+      "MinimumApi": 46,
+      "Description": "Motorcycle parts for the stock Motorcycle Wheel: a steering fork, a swingarm, a seat, handlebars and Lean Assist, which keeps the bike upright and leans it into turns (power and lean settings in the Properties tool). Found in loot after the first bunker. Standalone mod, not part of a bundle. Anymaker 0.1.27 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.40.2/AnyMoto-0.0.1.zip",
+      "Sha256": "03ccfa29c36fb675592866d3d7839694abf5c16368d8f425ff2da6705985835c",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/AnyMoto.dll": "2d747150efc3cb75fede407a9b16cafa412b7ad71c3727fbffb34a3398f50e79"
       },
       "GameBuilds": [
         {
