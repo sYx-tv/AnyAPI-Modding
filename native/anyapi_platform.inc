@@ -192,8 +192,10 @@ static bool idle(){if(!queue||!fence)return true;if(FAILED(queue->Signal(fence.G
  return fence_event&&SUCCEEDED(fence->SetEventOnCompletion(fence_value,fence_event))&&WaitForSingleObject(fence_event,3000)==WAIT_OBJECT_0;}
 // OVL-6: back-buffer references only; devices, plugin bitmaps, gpu_draw textures and post-process shaders stay.
 // D3D11On12 resize order: drop the D2D target and the wrapped buffers, then ClearState + Flush, then wait.
+// 11on12 drops a released wrapped buffer's D3D12 reference at a Flush only once the GPU is done with it, and the kept devices are never torn
+// down here: Flush again after the wait so a frame still in flight at the first Flush cannot keep a back buffer alive into ResizeBuffers.
 static void release_targets(){if(context2d)context2d->SetTarget(nullptr);post_process::release_targets();targets.clear();wrapped.clear();
- if(context11){context11->ClearState();context11->Flush();}idle();}
+ if(context11){context11->ClearState();context11->Flush();}idle();if(context11)context11->Flush();}
 // Full overlay teardown (start failure, D2D device loss, new chain). Never touches swap or scene_queue (ROB-2).
 static void reset(){release_targets();gpu_draw::reset();post_process::reset();for(auto& p:plugins){p.bitmap.Reset();p.width=p.height=0;p.revision=0;}
  context2d.Reset();device2d.Reset();factory2d.Reset();on12.Reset();context11.Reset();device11.Reset();fence.Reset();fence_value=0;overlay_down=true;}
