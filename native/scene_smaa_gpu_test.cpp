@@ -91,13 +91,15 @@ int main(){std::cout<<std::unitbuf;assert(gpu_test::create(d));auto device=d.dev
   scene_smaa::Gpu g;auto s=make_scene(64,64,DXGI_FORMAT_R8G8B8A8_UNORM,.005f);auto e=taa_extra(s.depth.Get());e.dither=0;e.history_valid=false;auto edge=[](UINT x,UINT){return grey(x>32?255:0);};
   auto plain=frame(g,s,edge,&e);for(UINT x=8;x<56;++x)assert(plain.at(x,20)[0]==(x>32?255:0));
   e.constants[19]=.5f/64;auto moved=frame(g,s,edge,&e);int mid=moved.at(32,20)[0];assert(mid>=120&&mid<=135);for(UINT x=8;x<56;++x)if(x!=32)assert(moved.at(x,20)[0]==(x>32?255:0));std::cout<<"PASS: rejected pixels re-centred by the jitter (AA-7) mid="<<mid<<"\n";}
- {// Depth rejection: 2-px stripes, then the same stripes shifted by 2 px. At the same distance the history survives the
+ {// Depth rejection: 3-px stripes, then the same stripes shifted by 3 px (inverted). At the same distance the history survives the
   // (wide) 3x3 box and pulls the output away from the new frame; at 10x the distance it is rejected and the output equals SMAA alone.
-  auto stripes=[](UINT phase){return [phase](UINT x,UINT){return grey(((x+phase)/2)%2?255:0);};};
-  scene_smaa::Gpu ref;auto r=make_scene(64,64,DXGI_FORMAT_R8G8B8A8_UNORM,.005f);auto alone=frame(ref,r,stripes(2),nullptr);
+  // Period 6, not 4: the resolve's undither replaces any 4x4-periodic pattern (2-px stripes) with its box average, which leaves
+  // no edge for the history to survive in. SMAA keeps the straight stripes exact, so SMAA alone is the stripes themselves.
+  auto stripes=[](UINT phase){return [phase](UINT x,UINT){return grey(((x+phase)/3)%2?255:0);};};
+  scene_smaa::Gpu ref;auto r=make_scene(64,64,DXGI_FORMAT_R8G8B8A8_UNORM,.005f);auto alone=frame(ref,r,stripes(3),nullptr);for(UINT y=10;y<60;++y)for(UINT x=10;x<60;++x)assert(alone.at(x,y)[0]==(((x+3)/3)%2?255:0));
   for(bool reject:{false,true}){scene_smaa::Gpu g;auto s=make_scene(64,64,DXGI_FORMAT_R8G8B8A8_UNORM,.005f);auto e=taa_extra(s.depth.Get());e.dither=0;frame(g,s,stripes(0),&e);
    if(reject){begin();D3D12_DEPTH_STENCIL_VIEW_DESC dv{};dv.Format=DXGI_FORMAT_D32_FLOAT;dv.ViewDimension=D3D12_DSV_DIMENSION_TEXTURE2D;device->CreateDepthStencilView(s.depth.Get(),&dv,dsv->GetCPUDescriptorHandleForHeapStart());list->ClearDepthStencilView(dsv->GetCPUDescriptorHandleForHeapStart(),D3D12_CLEAR_FLAG_DEPTH,.0005f,0,0,nullptr);submit("depth");}
-   auto out=frame(g,s,stripes(2),&e);unsigned far_off{},worst{};for(UINT y=10;y<60;++y)for(UINT x=10;x<60;++x){unsigned dlt=unsigned(std::abs(int(out.at(x,y)[0])-int(alone.at(x,y)[0])));worst=std::max(worst,dlt);far_off+=dlt>40;}
+   auto out=frame(g,s,stripes(3),&e);unsigned far_off{},worst{};for(UINT y=10;y<60;++y)for(UINT x=10;x<60;++x){unsigned dlt=unsigned(std::abs(int(out.at(x,y)[0])-int(alone.at(x,y)[0])));worst=std::max(worst,dlt);far_off+=dlt>40;}
    if(reject)assert(worst<=1);else assert(far_off>50*50/4);std::cout<<"PASS: TAA history "<<(reject?"rejected at another depth":"kept at the same depth")<<" far_from_SMAA="<<far_off<<" max="<<worst<<"\n";}}
  {// K05/AA-6 inputs: ocean (y>0) and rim (w=1) tables bound under GPU-based validation, 3 frames; then the same scene without them. Output finite and HUD restored.
   scene_smaa::Gpu g;auto s=make_scene(96,80,DXGI_FORMAT_B8G8R8A8_UNORM,.005f);auto e=taa_extra(s.depth.Get());e.ocean=s.ocean.Get();e.ocean_state=D3D12_RESOURCE_STATE_RENDER_TARGET;e.albedo=s.albedo.Get();e.albedo_state=D3D12_RESOURCE_STATE_RENDER_TARGET;e.sea_height=10;
