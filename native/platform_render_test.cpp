@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <cassert>
 #include <iostream>
+#include <cstring>
 #include "anymaker_mod_api.h"
 #include "anyapi_mod_v1.h"
 static std::filesystem::path g_game_dir;
@@ -80,6 +81,17 @@ int main(){
  WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"AnyAPI.RenderTest";RegisterClassW(&wc);HWND hwnd=CreateWindowW(wc.lpszClassName,L"",WS_POPUP,0,0,64,64,nullptr,nullptr,wc.hInstance,nullptr);assert(hwnd);
  DXGI_SWAP_CHAIN_DESC1 desc{};desc.Width=64;desc.Height=64;desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.SampleDesc.Count=1;desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=2;desc.SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD;
  ComPtr<IDXGISwapChain1> first;assert(SUCCEEDED(factory->CreateSwapChainForHwnd(queue.Get(),hwnd,&desc,nullptr,nullptr,&first)));ComPtr<IDXGISwapChain3> swap;assert(SUCCEEDED(first.As(&swap)));
+ // Hook re-entry (crash 2026-10-26, Steam overlay): an overlay gives the chain its own copy of the hooked table and hooks
+ // ResizeBuffers in it, keeping our function as its original; AnyAPI then hooks that copy as a new chain. The call must pass
+ // the overlay once and reach DXGI, with no recursion. A plain copy (our hooks already in it) must not chain to itself.
+ {static void* copy[44];static void* plain[44];static int overlay_calls;static platform::ResizeFn overlay_next;void** table=*(void***)swap.Get();
+  std::memcpy(copy,table,sizeof(copy));std::memcpy(plain,table,sizeof(plain));assert(copy[13]==(void*)platform::resize&&copy[8]==(void*)platform::present);overlay_next=(platform::ResizeFn)copy[13];
+  platform::ResizeFn overlay=[](IDXGISwapChain* s,UINT c,UINT w,UINT h,DXGI_FORMAT f,UINT fl)->HRESULT{++overlay_calls;return overlay_next(s,c,w,h,f,fl);};copy[13]=(void*)overlay;
+  *(void***)swap.Get()=copy;assert(platform::hook_chain(swap.Get())&&copy[13]==(void*)platform::resize);
+  assert(SUCCEEDED(swap->ResizeBuffers(2,64,64,DXGI_FORMAT_UNKNOWN,0))&&overlay_calls==1);
+  *(void***)swap.Get()=plain;assert(platform::hook_chain(swap.Get())&&plain[13]==(void*)platform::resize);assert(SUCCEEDED(swap->ResizeBuffers(2,64,64,DXGI_FORMAT_UNKNOWN,0))&&overlay_calls==1);
+  *(void***)swap.Get()=table;assert(SUCCEEDED(swap->ResizeBuffers(2,64,64,DXGI_FORMAT_UNKNOWN,0))&&overlay_calls==1);
+  std::cout<<"PASS: an overlay's re-hook over ours and a copied table both reach DXGI once, with no recursion\n";}
  ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);uint64_t value{};
  auto wait=[&](){assert(SUCCEEDED(queue->Signal(fence.Get(),++value)));if(fence->GetCompletedValue()<value){assert(SUCCEEDED(fence->SetEventOnCompletion(value,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);}};
  ComPtr<ID3D12Resource> presented;
