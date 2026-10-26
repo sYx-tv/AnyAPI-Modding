@@ -55,9 +55,14 @@ int main(){std::cout<<std::unitbuf;
  {auto out=run(base(),step,none);float inside=out[32*W+30],open=out[32*W+6],raised=out[32*W+40];std::cout<<"Step inside="<<inside<<" open="<<open<<" raised="<<raised<<'\n';assert(inside<open-.05f&&open>.95f&&raised>.95f);++cases;}
  {auto f=base();f.params[1]=0;auto out=run(f,step,none);float low=1;for(auto v:out)low=std::min(low,v);std::cout<<"Strength 0 lowest="<<low<<'\n';assert(low>.99f);++cases;}
  {auto sky=[](UINT x,UINT){return x<32?0.f:9.f;};auto cloud=[](UINT x,UINT){return x>=48;};auto out=run(base(),sky,cloud);std::cout<<"Sky="<<out[32*W+16]<<" cloud="<<out[32*W+56]<<'\n';assert(out[32*W+16]>.99f&&out[32*W+56]>.99f);++cases;}
- // CSG-9: the 4x4 interleave matches the 4x4 blur, so a scene that does not change down a column gives one value down it.
- for(float revision:{0.f,1.f}){auto f=base();f.params[3]=revision;auto out=run(f,step,none);float lo=1,hi=0;for(UINT y=8;y<56;++y){lo=std::min(lo,out[y*W+30]);hi=std::max(hi,out[y*W+30]);}
-  std::cout<<"Step column revision "<<revision<<" spread="<<(hi-lo)*255<<" LSB\n";assert(hi-lo<=1.5f/255);++cases;}
+ // CSG-9: the 4x4 interleave matches the 4x4 blur, so the rotation pattern cancels and the step's shaded columns (28-31)
+ // show no grain down them. Only rows whose 9.6 px footprint and blur taps stay on screen count (12-51): off-screen samples
+ // fade to open by design. Perspective shifts the raised half's samples by tan*ndc_y per metre of step, a smooth drift of
+ // up to 2.6 LSB over those rows (0.3 LSB a row) in 0.40.1's math too, so: adjacent rows within 1 LSB, and the middle
+ // 8 rows (two pattern periods, drift < 0.4 LSB) within 1 LSB. 0.40.1's hash rotation fails both (3-5 and 4-8 LSB).
+ for(float revision:{0.f,1.f}){auto f=base();f.params[3]=revision;auto out=run(f,step,none);float step_max=0,spread=0;
+  for(UINT x=28;x<32;++x){float lo=1,hi=0;for(UINT y=12;y<52;++y){auto v=out[y*W+x];if(y>12)step_max=std::max(step_max,std::abs(v-out[(y-1)*W+x]));if(y>=28&&y<36){lo=std::min(lo,v);hi=std::max(hi,v);}}spread=std::max(spread,hi-lo);}
+  std::cout<<"Step columns revision "<<revision<<" row step="<<step_max*255<<" middle spread="<<spread*255<<" LSB\n";assert(step_max<=1.5f/255&&spread<=1.5f/255);++cases;}
  // Revision 1: a floor (1.5 m below the camera) meeting a wall 10 m away darkens on both sides of the crease (CSG-1/CSG-8),
  // and a slab 2 m in front of the wall leaves no halo 4 px outside its edge (CSG-8 thickness).
  {auto corner_z=[](UINT,UINT y){float ndc=1-2*(y+.5f)/H;float floor_z=ndc<0?-1.5f/(ndc*.5f):1e9f;return std::min(10.f,floor_z);};
