@@ -273,7 +273,8 @@ void colour_light(int kind, uint8_t* light) {
         if ((seen == g_light_index.end() || seen->second != index) && g_light_logs.load() > 0) {
             g_light_index[light] = index;
             if (g_light_logs.fetch_sub(1) > 0)
-                log(0, "%s light: %d paint slots, first %d %d %d, glows index %d", kKindNames[kind], n, n > 0 ? slots[0] : -1, n > 1 ? slots[1] : -1, n > 2 ? slots[2] : -1, index);
+                log(0, "%s light: %d paint slots, first %d %d %d, glows index %d as %d %d %d", kKindNames[kind], n, n > 0 ? slots[0] : -1,
+                    n > 1 ? slots[1] : -1, n > 2 ? slots[2] : -1, index, c.r, c.g, c.b);
         }
     }
     uint32_t alpha = rd<uint32_t>(light, kLightColour[kind]) & 0xff000000u;
@@ -287,7 +288,12 @@ void light_tick(int kind, uint8_t* light, void* client, uint8_t* vehicle, void* 
         if (g_light_index.size() > 8192) g_light_index.clear();
     }
     if (g_ready) colour_light(kind, light);
+    uint32_t written = g_ready && light && anymaker::readable(light, kLightColour[kind] + 4) ? rd<uint32_t>(light, kLightColour[kind]) : 0;
     reinterpret_cast<light_tick_t>(h_light_tick[kind].original)(light, client, vehicle, scene, dt);
+    // Diagnostic: the game should never rewrite the colour; say so once if it does.
+    static std::atomic<int> overwritten_logs{3};
+    if (written && rd<uint32_t>(light, kLightColour[kind]) != written && overwritten_logs.fetch_sub(1) > 0)
+        log(1, "%s light colour was rewritten by the game during its tick (0x%08x -> 0x%08x)", kKindNames[kind], written, rd<uint32_t>(light, kLightColour[kind]));
 }
 void hk_spot(uint8_t* l, void* c, uint8_t* v, void* s, const double* d) { light_tick(kSpot, l, c, v, s, d); }
 void hk_omni(uint8_t* l, void* c, uint8_t* v, void* s, const double* d) { light_tick(kOmni, l, c, v, s, d); }
