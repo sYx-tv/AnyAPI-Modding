@@ -28,6 +28,9 @@ default change has a hidden revert in `AnyGraphics/settings.tsv` (see
 
 ## Overlay and plugin faults
 
+- Fixed a startup crash with the Steam overlay (or another overlay that hooks the game's swap
+  chain after AnyAPI): the two hooks could call each other until the game ran out of stack.
+  AnyAPI now notices the loop, logs `PLUGIN_PLATFORM hook_reentry` once and calls DXGI directly.
 - A mod that faults no longer takes the mouse from another mod or silently stops drawing: the
   fault is logged under that mod's id, its capture is released and a short notice appears.
 - If the overlay cannot start (11on12 or Direct2D), the scene passes keep running; the overlay
