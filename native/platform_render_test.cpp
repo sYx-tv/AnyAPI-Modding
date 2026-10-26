@@ -127,8 +127,8 @@ int main(){
   *(void***)swap.Get()=tracked;assert(platform::hook_chain(swap.Get())&&tracked[13]==(void*)platform::resize&&calls(S_OK,1,1,0,0));
   void** tracked_late=copy_of(table);std::memcpy(tracked_late,lifetime_hooks,sizeof(lifetime_hooks));above.next=(platform::ResizeFn)tracked_late[13];tracked_late[13]=(void*)&overlay_resize<&above>;*(void***)swap.Get()=tracked_late;
   assert(calls(S_OK,1,1,0,0));
-  // A table compiled into a module with the overlay's hook (its file holds the hook, not DXGI's function).
-  for(int k=0;k<64;++k)if(k!=13)compiled_table[k]=table[k];compiled.next=(platform::ResizeFn)platform::resize;*(void***)swap.Get()=compiled_table;
+  // A table compiled into a module with the overlay's hook (its file holds the hook, not DXGI's function) and lifetime hooks.
+  for(int k=0;k<64;++k)if(k!=13)compiled_table[k]=table[k];std::memcpy(compiled_table,lifetime_hooks,sizeof(lifetime_hooks));compiled.next=(platform::ResizeFn)platform::resize;*(void***)swap.Get()=compiled_table;
   assert(platform::hook_chain(swap.Get())&&compiled_table[13]==(void*)platform::resize&&calls(S_OK,1,0,0,1));
   // The overlay below us re-hooks the system table over ours, keeping ours as its original (and hooks its lifetime calls).
   *(void***)swap.Get()=table;for(int k=0;k<3;++k)poke(table+k,lifetime_hooks[k]);below.next=(platform::ResizeFn)table[13];poke(table+13,(void*)&overlay_resize<&below>);assert(calls(S_OK,1,0,0,0));

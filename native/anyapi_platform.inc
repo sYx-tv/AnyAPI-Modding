@@ -26,8 +26,9 @@ static std::atomic<bool> window_focused{};static uint64_t focus_checked_at{};   
 static bool raw_mouse_only{},raw_keyboard_only{};static AnyTextDecoder text_decoder;
 static std::atomic<bool> enabled{true};static std::atomic<uint64_t> frames{};
 static SRWLOCK hook_lock=SRWLOCK_INIT;
-// pristine: the slot's function in its module file (pristine_of); image: the table is in a module image; head: its first 8 entries.
-struct Hook {void** slot{};void* original{};void* replacement{};size_t index{};void* pristine{};bool image{};void* head[8]{};};
+// pristine: the slot's function in its module file (pristine_of); image: the table is in a module image; home: that module also
+// implements the table's basics (entry 3), so it is the class's own table, not an overlay's copy; head: its first 8 entries.
+struct Hook {void** slot{};void* original{};void* replacement{};size_t index{};void* pristine{};bool image{};bool home{};void* head[8]{};};
 static Hook hooks[128]{};static size_t hook_count{};
 static std::recursive_mutex render_mutex;
 static std::mutex queue_mutex;
@@ -139,10 +140,11 @@ static void* pristine_of(HMODULE m,void** slot){auto live=(uint8_t*)m;auto ldos=
 // which do hook QueryInterface/AddRef/Release in their copies) mostly match. 0 for another class or a proxy's
 // wrapper class; higher is closer.
 static int likeness(void*const* a,void*const* b){int basics=0,all=0;for(int k=0;k<8;++k){const bool same=a[k]==b[k];all+=same;basics+=k>=3&&same;}return basics>=4?1+all:0;}
-// The table in a module image hooked at this index (and replacement, unless null) of head's class, closest first,
-// the earliest on a tie: the class's system table, which start() or the first chain hooked. Needs hook_lock.
+// The class's system table hooked at this index (and replacement, unless null), for a table of head's class: one in
+// the module that implements the class (home) first, then the closest, the earliest on a tie (start() or the first
+// chain hooked it). An overlay's copy kept in its own module image is never preferred over it. Needs hook_lock.
 static const Hook* table_of(void*const* head,size_t index,void* replacement){const Hook* best{};int score=0;
- for(size_t i=0;i<hook_count;++i){const Hook& h=hooks[i];if(!h.image||h.index!=index||(replacement&&h.replacement!=replacement))continue;const int s=likeness(h.head,head);if(s>score){best=&h;score=s;}}return best;}
+ for(size_t i=0;i<hook_count;++i){const Hook& h=hooks[i];if(!h.image||h.index!=index||(replacement&&h.replacement!=replacement))continue;int s=likeness(h.head,head);if(s&&h.home)s+=16;if(s>score){best=&h;score=s;}}return best;}
 // Publish the original COM slot before atomically replacing it; no instruction patching.
 // Copies (crash 2026-10-26): an overlay may give an object its own copy of a hooked table. Slots of the copy that
 // still hold our hook get no record, original() resolves them through the table they were copied from (table_of);
@@ -154,10 +156,11 @@ static bool hook_slot(void* object,size_t index,void* replacement){void** base=*
   done=hook_count==std::size(hooks);return false;};
  bool done{};AcquireSRWLockShared(&hook_lock);bool ok=known(done);ReleaseSRWLockShared(&hook_lock);if(done)return ok;
  HMODULE m{};const bool image=GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCWSTR)slot,&m);void* pristine=image?pristine_of(m,slot):nullptr;
+ HMODULE b{};const bool home=image&&GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCWSTR)base[3],&b)&&b==m;
  AcquireSRWLockExclusive(&hook_lock);ok=known(done);if(done){ReleaseSRWLockExclusive(&hook_lock);return ok;}
  DWORD old{};if(!VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&old)){ReleaseSRWLockExclusive(&hook_lock);return false;}
  Hook* h{};for(size_t i=0;i<hook_count&&!h;++i)if(hooks[i].slot==slot)h=&hooks[i];const Hook previous=h?*h:Hook{};if(!h)h=&hooks[hook_count++];
- void* original=*slot;*h={slot,original,replacement,index,pristine,image};for(int k=0;k<8;++k)h->head[k]=base[k];
+ void* original=*slot;*h={slot,original,replacement,index,pristine,image,home};for(int k=0;k<8;++k)h->head[k]=base[k];
  ok=InterlockedCompareExchangePointer(slot,replacement,original)==original;
  DWORD ignored{};VirtualProtect(slot,sizeof(void*),old,&ignored);
  if(!ok){if(previous.slot)*h=previous;else --hook_count;}ReleaseSRWLockExclusive(&hook_lock);return ok;
