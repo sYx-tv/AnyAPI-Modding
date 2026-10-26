@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <cassert>
 #include <iostream>
+#include <cstring>
+#include <memory>
 #include "anymaker_mod_api.h"
 #include "anyapi_mod_v1.h"
 static std::filesystem::path g_game_dir;
@@ -40,6 +42,25 @@ static uint8_t pixels[8*8*4];
 static std::vector<AnyInputV1> input_events;
 static uint32_t input(const AnyInputV1* e,void*){input_events.push_back(*e);return 1;}
 static int renders{};
+// Hook re-entry cases (crash 2026-10-26): stand-in overlay hooks count their calls and forward to the function they
+// replaced; a depth limit turns a regression into a failed assert instead of a stack overflow.
+struct StandIn {int calls{},depth{};platform::ResizeFn next{};};
+namespace {StandIn below,above,reused,compiled,cross;}   // unnamed namespace: MSVC 19.11 rejects internal-linkage template arguments
+template<StandIn* o> static HRESULT STDMETHODCALLTYPE overlay_resize(IDXGISwapChain* s,UINT c,UINT w,UINT h,DXGI_FORMAT f,UINT fl){if(o->depth>8)return E_ABORT;++o->calls;++o->depth;HRESULT hr=o->next(s,c,w,h,f,fl);--o->depth;return hr;}
+static void poke(void** slot,void* value){DWORD old{};assert(VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&old));*slot=value;VirtualProtect(slot,sizeof(void*),old,&old);}
+// A table compiled into this exe with an overlay's hook at ResizeBuffers (its other entries are copied at run time).
+static void* compiled_table[64]={nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,(void*)&overlay_resize<&compiled>};
+// Another class (a proxy's own swap chain class): its ResizeBuffers must never be given DXGI's.
+static int proxy_calls{};
+static HRESULT STDMETHODCALLTYPE proxy_resize(IDXGISwapChain*,UINT,UINT,UINT,DXGI_FORMAT,UINT){++proxy_calls;return S_OK;}
+static HRESULT STDMETHODCALLTYPE proxy_other(void*){return E_NOTIMPL;}
+static void* proxy_table[64];struct Proxy {void** table;};static Proxy proxy{proxy_table};
+// Lifetime hooks an overlay may add to its copy (or to the system table): QueryInterface, AddRef and Release forward.
+static void* lifetime[3];
+static HRESULT STDMETHODCALLTYPE hooked_query(IUnknown* s,REFIID id,void** out){return ((HRESULT(STDMETHODCALLTYPE*)(IUnknown*,REFIID,void**))lifetime[0])(s,id,out);}
+static ULONG STDMETHODCALLTYPE hooked_addref(IUnknown* s){return ((ULONG(STDMETHODCALLTYPE*)(IUnknown*))lifetime[1])(s);}
+static ULONG STDMETHODCALLTYPE hooked_release(IUnknown* s){return ((ULONG(STDMETHODCALLTYPE*)(IUnknown*))lifetime[2])(s);}
+static void* const lifetime_hooks[3]={(void*)&hooked_query,(void*)&hooked_addref,(void*)&hooked_release};
 static void render(const AnyFrameV1*,AnyCanvasV1* out,void*){++renders;out->width=8;out->height=8;out->pitch=32;out->x=4;out->y=4;out->revision=0;out->pixels=pixels;}
 static void gpu_fixture(const AnyFrameV1*,void*){auto api=anyapi_gpu_draw_service();assert(api->texture(1,8,8,32,pixels,1));AnyGpuCommandV1 c;c.kind=ANY_GPU_IMAGE;c.texture=1;c.rect[2]=c.rect[3]=8;c.source[2]=c.source[3]=8;c.matrix[4]=c.matrix[5]=4;assert(api->emit(&c));}
 static void crash_render(const AnyFrameV1*,AnyCanvasV1*,void*){RaiseException(0xE0A10042,0,0,nullptr);}
@@ -75,11 +96,51 @@ int main(){
  assert(!platform::ensure_overlay(nullptr)&&platform::overlay_attempts==tries+2&&scene_frame::board.pass_error[ANY_PASS_OVERLAY].load()==int32_t(platform::STAGE_QUEUE));
  platform::overlay_fail_stage=0;platform::overlay_backoff.reset();platform::overlay_logged_stage=0;platform::overlay_logged_hr=S_OK;scene_frame::board.pass_error[ANY_PASS_OVERLAY].store(0);
  std::cout<<"PASS: overlay start failures back off and log once\n";
- assert(platform::start());ComPtr<IDXGIFactory4> factory;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));ComPtr<IDXGIAdapter> warp;assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));
+ ComPtr<IDXGIFactory4> factory;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));ComPtr<IDXGIAdapter> warp;assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));
  ComPtr<ID3D12Device> device;assert(SUCCEEDED(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));D3D12_COMMAND_QUEUE_DESC qdesc{};ComPtr<ID3D12CommandQueue> queue;assert(SUCCEEDED(device->CreateCommandQueue(&qdesc,IID_PPV_ARGS(&queue))));
  WNDCLASSW wc{};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"AnyAPI.RenderTest";RegisterClassW(&wc);HWND hwnd=CreateWindowW(wc.lpszClassName,L"",WS_POPUP,0,0,64,64,nullptr,nullptr,wc.hInstance,nullptr);assert(hwnd);
  DXGI_SWAP_CHAIN_DESC1 desc{};desc.Width=64;desc.Height=64;desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.SampleDesc.Count=1;desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=2;desc.SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD;
+ // An overlay that vtable-hooked the system swap chain table's ResizeBuffers before AnyAPI started: it stays below us.
+ {HWND early=CreateWindowW(wc.lpszClassName,L"",WS_POPUP,0,0,64,64,nullptr,nullptr,wc.hInstance,nullptr);ComPtr<IDXGISwapChain1> probe;assert(early&&SUCCEEDED(factory->CreateSwapChainForHwnd(queue.Get(),early,&desc,nullptr,nullptr,&probe)));
+  void** table=*(void***)probe.Get();below.next=(platform::ResizeFn)table[13];poke(table+13,(void*)&overlay_resize<&below>);probe.Reset();DestroyWindow(early);}
+ assert(platform::start());
  ComPtr<IDXGISwapChain1> first;assert(SUCCEEDED(factory->CreateSwapChainForHwnd(queue.Get(),hwnd,&desc,nullptr,nullptr,&first)));ComPtr<IDXGISwapChain3> swap;assert(SUCCEEDED(first.As(&swap)));
+ // Hook re-entry (crash 2026-10-26, Steam overlay): overlays that hook after us keep our function as their original, in
+ // the object's own copy of the table or in the system table. Every call must pass each overlay once and reach DXGI.
+ {void** table=*(void***)swap.Get();const platform::ResizeFn dxgi=below.next;assert(table[13]==(void*)platform::resize&&table[8]==(void*)platform::present);
+  std::vector<std::unique_ptr<void*[]>> copies;auto copy_of=[&](void** from){copies.push_back(std::make_unique<void*[]>(64));std::memcpy(copies.back().get(),from,64*sizeof(void*));return copies.back().get();};
+  auto calls=[&](HRESULT expect,int b,int a,int r,int c){HRESULT hr=swap->ResizeBuffers(2,64,64,DXGI_FORMAT_UNKNOWN,0);bool ok=hr==expect&&below.calls==b&&above.calls==a&&reused.calls==r&&compiled.calls==c;
+   below.calls=above.calls=reused.calls=compiled.calls=0;return ok;};
+  assert(calls(S_OK,1,0,0,0));
+  // The overlay gives the chain a copy of the hooked table with its hook at ResizeBuffers; AnyAPI hooks the copy too.
+  void** copy=copy_of(table);above.next=(platform::ResizeFn)copy[13];copy[13]=(void*)&overlay_resize<&above>;*(void***)swap.Get()=copy;
+  assert(platform::hook_chain(swap.Get())&&copy[13]==(void*)platform::resize&&calls(S_OK,1,1,0,0));
+  // Plain copies (our hooks already in them) take no records.
+  const size_t records=platform::hook_count;for(int i=0;i<20;++i){*(void***)swap.Get()=copy_of(table);assert(platform::hook_chain(swap.Get()));}assert(platform::hook_count==records&&calls(S_OK,1,0,0,0));
+  // The copy's block is freed and reused for a new copy with another overlay hook: its record is refreshed.
+  std::memcpy(copy,table,64*sizeof(void*));reused.next=(platform::ResizeFn)copy[13];copy[13]=(void*)&overlay_resize<&reused>;*(void***)swap.Get()=copy;
+  assert(platform::hook_chain(swap.Get())&&copy[13]==(void*)platform::resize&&calls(S_OK,1,0,1,0));
+  // The overlay swaps in its copy after AnyAPI hooked the chain (no new hook_chain).
+  void** late=copy_of(table);above.next=(platform::ResizeFn)late[13];late[13]=(void*)&overlay_resize<&above>;*(void***)swap.Get()=late;assert(calls(S_OK,1,1,0,0));
+  // Both kinds of copy with the overlay's lifetime hooks in them (QueryInterface, AddRef, Release) as well.
+  std::memcpy(lifetime,table,sizeof(lifetime));void** tracked=copy_of(table);std::memcpy(tracked,lifetime_hooks,sizeof(lifetime_hooks));above.next=(platform::ResizeFn)tracked[13];tracked[13]=(void*)&overlay_resize<&above>;
+  *(void***)swap.Get()=tracked;assert(platform::hook_chain(swap.Get())&&tracked[13]==(void*)platform::resize&&calls(S_OK,1,1,0,0));
+  void** tracked_late=copy_of(table);std::memcpy(tracked_late,lifetime_hooks,sizeof(lifetime_hooks));above.next=(platform::ResizeFn)tracked_late[13];tracked_late[13]=(void*)&overlay_resize<&above>;*(void***)swap.Get()=tracked_late;
+  assert(calls(S_OK,1,1,0,0));
+  // A table compiled into a module with the overlay's hook (its file holds the hook, not DXGI's function) and lifetime hooks.
+  for(int k=0;k<64;++k)if(k!=13)compiled_table[k]=table[k];std::memcpy(compiled_table,lifetime_hooks,sizeof(lifetime_hooks));compiled.next=(platform::ResizeFn)platform::resize;*(void***)swap.Get()=compiled_table;
+  assert(platform::hook_chain(swap.Get())&&compiled_table[13]==(void*)platform::resize&&calls(S_OK,1,0,0,1));
+  // The overlay below us re-hooks the system table over ours, keeping ours as its original (and hooks its lifetime calls).
+  *(void***)swap.Get()=table;for(int k=0;k<3;++k)poke(table+k,lifetime_hooks[k]);below.next=(platform::ResizeFn)table[13];poke(table+13,(void*)&overlay_resize<&below>);assert(calls(S_OK,1,0,0,0));
+  {void* kept[std::size(platform::hooks)];for(size_t i=0;i<platform::hook_count;++i){kept[i]=platform::hooks[i].pristine;platform::hooks[i].pristine=nullptr;}
+   assert(calls(E_FAIL,1,0,0,0));for(size_t i=0;i<platform::hook_count;++i)platform::hooks[i].pristine=kept[i];}   // no file to read: bounded, with an error
+  poke(table+13,(void*)platform::resize);below.next=dxgi;for(int k=0;k<3;++k)poke(table+k,lifetime[k]);assert(calls(S_OK,1,0,0,0));
+  // Another class hooked at the same slot: its overlay copy must resolve to that class's function, not DXGI's.
+  for(auto& e:proxy_table)e=(void*)&proxy_other;proxy_table[13]=(void*)&proxy_resize;assert(platform::hook_slot(&proxy,13,(void*)platform::resize));
+  void** proxy_copy=copy_of(proxy_table);cross.next=(platform::ResizeFn)proxy_copy[13];proxy_copy[13]=(void*)&overlay_resize<&cross>;proxy.table=proxy_copy;assert(platform::hook_slot(&proxy,13,(void*)platform::resize));
+  assert(SUCCEEDED(((platform::ResizeFn)proxy_copy[13])((IDXGISwapChain*)&proxy,2,64,64,DXGI_FORMAT_UNKNOWN,0))&&proxy_calls==1&&cross.calls==1);
+  assert(*(void***)swap.Get()==table&&calls(S_OK,1,0,0,0));
+  std::cout<<"PASS: overlays hooking after AnyAPI (table copies, a reused copy, a late copy, lifetime hooks, a compiled table, a system-table re-hook, another class) each run once and reach DXGI\n";}
  ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);uint64_t value{};
  auto wait=[&](){assert(SUCCEEDED(queue->Signal(fence.Get(),++value)));if(fence->GetCompletedValue()<value){assert(SUCCEEDED(fence->SetEventOnCompletion(value,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);}};
  ComPtr<ID3D12Resource> presented;
