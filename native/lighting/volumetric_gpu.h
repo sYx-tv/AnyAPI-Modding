@@ -16,9 +16,7 @@ inline D3D12_RESOURCE_BARRIER barrier(ID3D12Resource* resource,D3D12_RESOURCE_ST
 struct Ocean {ID3D12Resource* resource{};D3D12_RESOURCE_STATES state{D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE};};
 // Lamp paths. 0: marched lamps read from the matrix texture (Integrate). 1 (AMD): lamps in a constant buffer,
 // IntegrateConstants built for 0/2/4/8 slots, the smallest that holds the frame's lamps. 2 (AMD, experiment):
-// the 8-slot build with a uniform branch per slot. Paths 1 and 2 never use lamp shadows. Their lamp CBV (b1) is bound
-// through a one-entry descriptor table (58 root DWORDs), not a root CBV (59): vkd3d without virtual heaps cannot
-// create a root descriptor next to these tables (lavapipe, 8 descriptor sets), and it leaves tools more root space.
+// the 8-slot build with a uniform branch per slot. Paths 1 and 2 never use lamp shadows.
 enum : uint32_t {PATH_MARCHED=0,PATH_CONSTANTS=1,PATH_BRANCH=2};
 class Gpu {
  ComPtr<ID3D12Device> device;ComPtr<ID3D12CommandQueue> queue;
@@ -33,8 +31,7 @@ class Gpu {
  // K09: each table holds a reference to the resources its views name (depth, 12 shadows, ocean) until it is reused.
  std::array<std::array<ComPtr<ID3D12Resource>,14>,TABLES> table_refs;
  ComPtr<ID3D12Fence> ring_fence;UINT64 serial{},signalled{},pending{};ID3D12CommandList* ring_list{};
- // Paths 1-2: lights travel in a constant buffer, an 8-slot upload ring fenced like the tables. Heap entries
- // TABLE*TABLES+s hold a CBV of slot s, written once at initialize.
+ // Paths 1-2: lights travel in a root constant buffer, an 8-slot upload ring fenced like the tables.
  UINT path{};ComPtr<ID3D12Resource> lamp_buffer;unsigned char* lamp_mapped{};UINT lamp_slot{};static constexpr UINT lamp_stride=512,lamp_slots=8;std::array<UINT64,lamp_slots> lamp_use{};HRESULT last_error{};
  uint32_t idle_calls{},ring_waits{},ring_unconfirmed{};bool permutations{true};
  ComPtr<ID3D12Resource> probe_target,probe_readback;ComPtr<ID3D12Fence> probe_fence;ComPtr<ID3D12GraphicsCommandList> probe_list;
@@ -43,7 +40,6 @@ class Gpu {
  D3D12_CPU_DESCRIPTOR_HANDLE cpu(UINT i){auto h=staging->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(i)*srv_stride;return h;}
  D3D12_CPU_DESCRIPTOR_HANDLE ring_cpu(UINT t){auto h=srv->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(t)*TABLE*srv_stride;return h;}
  D3D12_GPU_DESCRIPTOR_HANDLE ring_gpu(UINT t){auto h=srv->GetGPUDescriptorHandleForHeapStart();h.ptr+=UINT64(t)*TABLE*srv_stride;return h;}
- D3D12_GPU_DESCRIPTOR_HANDLE lamp_gpu(UINT s){auto h=srv->GetGPUDescriptorHandleForHeapStart();h.ptr+=UINT64(TABLE*TABLES+s)*srv_stride;return h;}
  D3D12_CPU_DESCRIPTOR_HANDLE output(UINT i){auto h=rtv->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(i)*rtv_stride;return h;}
  // Whole-queue wait: only ensure() (resize, device or path change) and a ring use never seen submitted call it.
  bool idle(){++idle_calls;ComPtr<ID3D12Fence> f;if(!device||!queue||FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&f)))||FAILED(queue->Signal(f.Get(),1)))return false;HANDLE e=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!e)return false;bool ok=SUCCEEDED(f->SetEventOnCompletion(1,e))&&WaitForSingleObject(e,3000)==WAIT_OBJECT_0;CloseHandle(e);return ok;}
@@ -58,8 +54,8 @@ class Gpu {
  template<size_t N> bool pipeline(ComPtr<ID3D12PipelineState>& out,const unsigned char(&ps)[N],DXGI_FORMAT f,bool blend=false){D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.VS={volumetric_bytecode::Vertex,sizeof(volumetric_bytecode::Vertex)};pd.PS={ps,N};auto& b=pd.BlendState.RenderTarget[0];b.RenderTargetWriteMask=15;
   if(blend){b.BlendEnable=TRUE;b.SrcBlend=D3D12_BLEND_ONE;b.DestBlend=D3D12_BLEND_SRC_ALPHA;b.BlendOp=D3D12_BLEND_OP_ADD;b.SrcBlendAlpha=D3D12_BLEND_ONE;b.DestBlendAlpha=D3D12_BLEND_ZERO;b.BlendOpAlpha=D3D12_BLEND_OP_ADD;b.LogicOp=D3D12_LOGIC_OP_NOOP;b.RenderTargetWriteMask=7;}   // red, green, blue
   pd.SampleMask=UINT_MAX;pd.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;pd.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;pd.RasterizerState.DepthClipEnable=TRUE;pd.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;pd.NumRenderTargets=1;pd.RTVFormats[0]=f;pd.SampleDesc.Count=1;return checked(device->CreateGraphicsPipelineState(&pd,IID_PPV_ARGS(&out)));}
- bool initialize(ID3D12Device* d,ID3D12CommandQueue* q,const D3D12_RESOURCE_DESC& desc,UINT lamp_path){device=d;queue=q;path=lamp_path;width=UINT(desc.Width);height=desc.Height;format=desc.Format;D3D12_DESCRIPTOR_RANGE range{},lamp_range{};range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;range.NumDescriptors=TABLE;lamp_range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_CBV;lamp_range.NumDescriptors=1;lamp_range.BaseShaderRegister=1;
-  D3D12_ROOT_PARAMETER params[3]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants={0,0,56};params[0].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[1].DescriptorTable={1,&range};params[1].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;params[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[2].DescriptorTable={1,&lamp_range};params[2].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
+ bool initialize(ID3D12Device* d,ID3D12CommandQueue* q,const D3D12_RESOURCE_DESC& desc,UINT lamp_path){device=d;queue=q;path=lamp_path;width=UINT(desc.Width);height=desc.Height;format=desc.Format;D3D12_DESCRIPTOR_RANGE range{};range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;range.NumDescriptors=TABLE;
+  D3D12_ROOT_PARAMETER params[3]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants={0,0,56};params[0].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[1].DescriptorTable={1,&range};params[1].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;params[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;params[2].Descriptor={1,0};params[2].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
   D3D12_STATIC_SAMPLER_DESC samplers[2]{};for(UINT i=0;i<2;++i){auto& s=samplers[i];s.Filter=i?D3D12_FILTER_MIN_MAG_MIP_POINT:D3D12_FILTER_MIN_MAG_MIP_LINEAR;s.AddressU=s.AddressV=s.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;s.MaxLOD=D3D12_FLOAT32_MAX;s.ShaderRegister=i;s.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
   // LOW-1: no input layout (SV_VertexID only) and nothing but the pixel shader reads the root.
   D3D12_ROOT_SIGNATURE_DESC rd{path?3u:2u,params,2,samplers,D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS|D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS|D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS|D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS};ComPtr<ID3DBlob> code,error;if(!checked(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&code,&error))||!checked(device->CreateRootSignature(0,code->GetBufferPointer(),code->GetBufferSize(),IID_PPV_ARGS(&root))))return false;
@@ -67,7 +63,7 @@ class Gpu {
   bool integrate_ok=path==PATH_CONSTANTS?pipeline(integrate,volumetric_bytecode::IntegrateConstants,hdr)&&pipeline(integrate_small[0],volumetric_bytecode::IntegrateConstants0,hdr)&&pipeline(integrate_small[1],volumetric_bytecode::IntegrateConstants2,hdr)&&pipeline(integrate_small[2],volumetric_bytecode::IntegrateConstants4,hdr):
    path==PATH_BRANCH?pipeline(integrate,volumetric_bytecode::IntegrateConstantsBranch,hdr):pipeline(integrate,volumetric_bytecode::Integrate,hdr);
   if(!integrate_ok||!pipeline(accumulate,volumetric_bytecode::Accumulate,hdr)||!pipeline(composite,volumetric_bytecode::Composite,format,true)||!pipeline(matrix_pipeline,volumetric_bytecode::Matrices,DXGI_FORMAT_R32G32B32A32_FLOAT)||!pipeline(probe_pipeline,volumetric_bytecode::Probe,DXGI_FORMAT_R32G32B32A32_FLOAT))return false;
-  D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=TABLE*TABLES+(path?lamp_slots:0);hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;if(!checked(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&srv))))return false;
+  D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=TABLE*TABLES;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;if(!checked(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&srv))))return false;
   hd.NumDescriptors=TABLE;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_NONE;if(!checked(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&staging))))return false;
   hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=7;if(!checked(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&rtv))))return false;srv_stride=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);rtv_stride=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   if(!checked(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&ring_fence))))return false;
@@ -81,8 +77,7 @@ class Gpu {
   device->CreateRenderTargetView(ocean_dummy.Get(),nullptr,output(6));
   for(UINT i=0;i<2;++i){history_state[i]=D3D12_RESOURCE_STATE_COMMON;view(16+i,history[i].Get(),hdr);device->CreateRenderTargetView(history[i].Get(),nullptr,output(4+i));}
   if(path){D3D12_HEAP_PROPERTIES upload{};upload.Type=D3D12_HEAP_TYPE_UPLOAD;D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=lamp_stride*lamp_slots;bd.Height=1;bd.DepthOrArraySize=1;bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-   if(!checked(device->CreateCommittedResource(&upload,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&lamp_buffer))))return false;D3D12_RANGE none{0,0};if(!checked(lamp_buffer->Map(0,&none,(void**)&lamp_mapped)))return false;memset(lamp_mapped,0,lamp_stride*lamp_slots);
-   for(UINT s=0;s<lamp_slots;++s){D3D12_CONSTANT_BUFFER_VIEW_DESC cd{lamp_buffer->GetGPUVirtualAddress()+UINT64(s)*lamp_stride,lamp_stride};auto h=srv->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(TABLE*TABLES+s)*srv_stride;device->CreateConstantBufferView(&cd,h);}}
+   if(!checked(device->CreateCommittedResource(&upload,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&lamp_buffer))))return false;D3D12_RANGE none{0,0};if(!checked(lamp_buffer->Map(0,&none,(void**)&lamp_mapped)))return false;memset(lamp_mapped,0,lamp_stride*lamp_slots);}
   timer.create(device.Get(),queue.Get());return true;
  }
  ID3D12PipelineState* integrate_for(UINT lamps){if(path!=PATH_CONSTANTS||!permutations||lamps>4)return integrate.Get();return integrate_small[lamps==0?0:lamps<=2?1:2].Get();}
@@ -149,7 +144,7 @@ public:
   if(depth_state!=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE){auto b=barrier(depth,depth_state,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);list->ResourceBarrier(1,&b);}for(UINT i=0;i<count;++i){bool duplicate=false;for(UINT j=0;j<i;++j)duplicate|=shadows[j]==shadows[i];if(!duplicate&&states[i]!=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE){auto b=barrier(shadows[i],states[i],D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);list->ResourceBarrier(1,&b);}}
   if(ocean&&ocean_in.state!=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE){auto b=barrier(ocean,ocean_in.state,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);list->ResourceBarrier(1,&b);}
   list->SetGraphicsRootSignature(root.Get());ID3D12DescriptorHeap* heap=srv.Get();list->SetDescriptorHeaps(1,&heap);list->SetGraphicsRootDescriptorTable(1,ring_gpu(table));
-  if(path)list->SetGraphicsRootDescriptorTable(2,lamp_gpu(lamp_slot));
+  if(path)list->SetGraphicsRootConstantBufferView(2,lamp_buffer->GetGPUVirtualAddress()+lamp_slot*lamp_stride);
   list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   auto matrix_barrier=barrier(matrix_texture.Get(),read?D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE:D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_RENDER_TARGET);list->ResourceBarrier(1,&matrix_barrier);
   auto matrix_handle=output(2);list->OMSetRenderTargets(1,&matrix_handle,FALSE,nullptr);list->SetPipelineState(matrix_pipeline.Get());
