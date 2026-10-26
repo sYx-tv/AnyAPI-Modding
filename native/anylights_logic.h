@@ -1,182 +1,116 @@
 #pragma once
-// AnyLights colours, patterns, the name tag that saves them and the 32-bit word that syncs them.
-// Pure and platform-free so it is unit tested without the game.
-#include <cmath>
+// AnyLights paint-tool and light-colour logic with no game or Windows dependencies (tested by tests/anylights_logic_test.cpp).
+#include <algorithm>
 #include <cstdint>
-#include <cstring>
-#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace anylights {
-enum Pattern : uint8_t { kSteady, kBlink, kStrobe, kDoubleFlash, kPulse, kAlternateA, kAlternateB, kColourCycle, kPatternCount };
-inline const char* const kPatternNames[kPatternCount] = {"Steady", "Blink", "Strobe", "Double flash", "Pulse", "Alternate A", "Alternate B", "Colour cycle"};
-constexpr int kSpeedCount = 8;
-inline const double kSpeedHz[kSpeedCount] = {0.25, 0.5, 1, 1.5, 2, 3, 4, 6};
-constexpr uint8_t kDefaultSpeed = 2;   // 1 Hz
 
-struct Colour { uint8_t r = 0, g = 0, b = 0; };
-inline bool operator==(const Colour& a, const Colour& b) { return a.r == b.r && a.g == b.g && a.b == b.b; }
+struct Rgb { uint8_t r = 0, g = 0, b = 0; };
+inline bool operator==(const Rgb& a, const Rgb& b) { return a.r == b.r && a.g == b.g && a.b == b.b; }
 
-// What the player chose in the Properties tool. has_colour false keeps the light's stock colour.
-struct Config {
-    bool has_colour = false;
-    Colour colour;
-    uint8_t pattern = kSteady;
-    uint8_t speed = kDefaultSpeed;
-    bool modded() const { return has_colour || pattern != kSteady; }
-};
-inline bool operator==(const Config& a, const Config& b) {
-    return a.has_colour == b.has_colour && (!a.has_colour || a.colour == b.colour) && a.pattern == b.pattern && (a.pattern == kSteady || a.speed == b.speed);
-}
+// A freshly placed part's paint slots all hold palette index 79 (gunmetal): such a light keeps its stock colour.
+constexpr int32_t kUnpaintedIndex = 79;
+constexpr Rgb kStockLight{255, 255, 200};   // what the game's light constructors set
+constexpr int kMaxPalette = 256;
 
-// ------------------------------------------------------------------ name tag
-// Saved as the last word of the light's name (its Properties alias): "AL" + RRGGBB + pattern + speed, all hex,
-// e.g. "Left beacon ALff220032" (red-orange, strobe, 1.5 Hz). Letters and digits only, so the game's name field accepts it. RRGGBB 000000
-// means the stock colour. Vanilla players just see the word in the name.
-constexpr size_t kTagLength = 10;
+// The stock paint tool's modes, in the game's e_mode order.
+enum Mode : int32_t { kFill = 0, kBrush = 1, kPencil = 2, kEraseBrush = 3, kErasePencil = 4, kFlood = 5, kModeCount = 6 };
+// The order the panel shows them in.
+constexpr Mode kModeOrder[kModeCount] = {kFill, kFlood, kBrush, kPencil, kEraseBrush, kErasePencil};
 
-inline int hex_value(char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+// The paint index a light glows with: its first painted slot, or -1 when every slot is unpainted or out of range.
+inline int32_t light_paint_index(const int32_t* slots, int count, int palette_count) {
+    for (int i = 0; i < count; ++i)
+        if (slots[i] != kUnpaintedIndex && slots[i] >= 0 && slots[i] < palette_count) return slots[i];
     return -1;
 }
-inline bool parse_tag(const char* word, size_t length, Config& out) {
-    if (length != kTagLength || word[0] != 'A' || word[1] != 'L') return false;
-    int d[8];
-    for (int i = 0; i < 8; ++i) if ((d[i] = hex_value(word[2 + i])) < 0) return false;
-    Config c;
-    c.colour = {uint8_t(d[0] * 16 + d[1]), uint8_t(d[2] * 16 + d[3]), uint8_t(d[4] * 16 + d[5])};
-    c.has_colour = !(c.colour == Colour{});
-    c.pattern = uint8_t(d[6] < kPatternCount ? d[6] : kSteady);
-    c.speed = uint8_t(d[7] < kSpeedCount ? d[7] : kDefaultSpeed);
-    out = c;
-    return true;
-}
-// Splits a name into the player's own text and the AnyLights tag (if its last word is one).
-inline bool split_name(const std::string& name, std::string& base, Config& config) {
-    size_t end = name.find_last_not_of(' ');
-    if (end == std::string::npos) { base.clear(); config = {}; return false; }
-    size_t start = name.find_last_of(' ', end);
-    start = start == std::string::npos ? 0 : start + 1;
-    Config parsed;
-    if (!parse_tag(name.data() + start, end + 1 - start, parsed)) { base = name.substr(0, end + 1); config = {}; return false; }
-    size_t base_end = start ? name.find_last_not_of(' ', start - 1) : std::string::npos;
-    base = base_end == std::string::npos ? std::string() : name.substr(0, base_end + 1);
-    config = parsed;
-    return true;
-}
-inline std::string tag(const Config& c) {
-    static const char* digits = "0123456789abcdef";
-    Colour col = c.has_colour ? c.colour : Colour{};
-    uint8_t v[3] = {col.r, col.g, col.b};
-    std::string out = "AL";
-    for (uint8_t x : v) { out += digits[x >> 4]; out += digits[x & 15]; }
-    out += digits[c.pattern < kPatternCount ? c.pattern : 0];
-    out += digits[c.speed < kSpeedCount ? c.speed : kDefaultSpeed];
-    return out;
-}
-// Keeps a name safe to send back: drops control bytes and anything that is not valid UTF-8 (a misread name
-// must never be saved onto the light), and trims spaces at the ends.
-inline std::string clean_text(const std::string& in) {
-    std::string out;
-    for (size_t i = 0; i < in.size();) {
-        unsigned char c = static_cast<unsigned char>(in[i]);
-        size_t n = c < 0x80 ? 1 : (c & 0xe0) == 0xc0 ? 2 : (c & 0xf0) == 0xe0 ? 3 : (c & 0xf8) == 0xf0 ? 4 : 0;
-        bool ok = n && i + n <= in.size() && (n > 1 || (c >= 0x20 && c != 0x7f)) && !(n == 2 && c < 0xc2);
-        for (size_t k = 1; ok && k < n; ++k) ok = (static_cast<unsigned char>(in[i + k]) & 0xc0) == 0x80;
-        if (ok) out.append(in, i, n);
-        i += ok ? n : 1;
-    }
-    size_t a = out.find_first_not_of(' '), b = out.find_last_not_of(' ');
-    return a == std::string::npos ? std::string() : out.substr(a, b - a + 1);
-}
-// The name to save: the player's text plus the tag, or just their text when the light is back to stock.
-inline std::string join_name(const std::string& base, const Config& c) {
-    if (!c.modded()) return base;
-    return base.empty() ? tag(c) : base + " " + tag(c);
+
+// Paint colour -> light colour: same hue, full brightness, so dark paints still light up. Greys and black give white.
+inline Rgb light_from_paint(Rgb paint) {
+    int hi = std::max({int(paint.r), int(paint.g), int(paint.b)}), lo = std::min({int(paint.r), int(paint.g), int(paint.b)});
+    if (hi < 24 || hi - lo < 12) return {255, 255, 255};
+    auto up = [&](uint8_t v) { return uint8_t(std::min(255, (int(v) * 255 + hi / 2) / hi)); };
+    return {up(paint.r), up(paint.g), up(paint.b)};
 }
 
-// ------------------------------------------------------------------ sync word
-// Sent by the host to every player as the light's component ability event. Bit 31 marks AnyLights (vanilla
-// abilities are small positive numbers); 30-28 pattern; 27-25 speed; 24 custom colour; 23-0 RGB.
-// 0x80000000 means "back to stock".
-constexpr uint32_t kMarker = 0x80000000u;
-inline int32_t pack(const Config& c) {
-    uint32_t w = kMarker | (uint32_t(c.pattern & 7) << 28) | (uint32_t(c.speed & 7) << 25);
-    if (c.has_colour) w |= (1u << 24) | (uint32_t(c.colour.r) << 16) | (uint32_t(c.colour.g) << 8) | c.colour.b;
-    int32_t out; std::memcpy(&out, &w, 4);
-    return out;
-}
-inline bool is_word(int32_t value) { return value < 0; }
-inline Config unpack(int32_t value) {
-    uint32_t w; std::memcpy(&w, &value, 4);
-    Config c;
-    c.pattern = uint8_t((w >> 28) & 7);
-    c.speed = uint8_t((w >> 25) & 7);
-    c.has_colour = (w >> 24) & 1;
-    if (c.has_colour) c.colour = {uint8_t(w >> 16), uint8_t(w >> 8), uint8_t(w)};
-    return c;
+// Undo: the paint of one vehicle's parts and plates before a click. Restoring sends one stock fill event per difference.
+struct PaintSlot { int32_t component, slot, colour; };
+struct PlateSide { int32_t plate; bool front; int32_t colour; };
+struct Snapshot {
+    int32_t vehicle = 0;
+    std::vector<PaintSlot> slots;
+    std::vector<PlateSide> plates;
+};
+struct Diff { int32_t vehicle = 0; std::vector<PaintSlot> slots; std::vector<PlateSide> plates; bool empty() const { return slots.empty() && plates.empty(); } };
+
+// What has to be repainted to bring `now` back to `before` (same vehicle). Parts or plates removed since are skipped.
+// Looked up by key, not pairwise: a big build has tens of thousands of paint slots.
+inline Diff diff_to_restore(const Snapshot& before, const Snapshot& now) {
+    Diff d;
+    d.vehicle = before.vehicle;
+    if (before.vehicle != now.vehicle) return d;
+    auto slot_key = [](int32_t component, int32_t slot) { return uint64_t(uint32_t(component)) << 32 | uint32_t(slot); };
+    auto plate_key = [](int32_t plate, bool front) { return uint64_t(uint32_t(plate)) << 1 | (front ? 1u : 0u); };
+    std::unordered_map<uint64_t, int32_t> slots, plates;
+    slots.reserve(now.slots.size());
+    plates.reserve(now.plates.size());
+    for (const auto& n : now.slots) slots.emplace(slot_key(n.component, n.slot), n.colour);
+    for (const auto& n : now.plates) plates.emplace(plate_key(n.plate, n.front), n.colour);
+    for (const auto& b : before.slots) {
+        auto it = slots.find(slot_key(b.component, b.slot));
+        if (it != slots.end() && it->second != b.colour) d.slots.push_back(b);
+    }
+    for (const auto& b : before.plates) {
+        auto it = plates.find(plate_key(b.plate, b.front));
+        if (it != plates.end() && it->second != b.colour) d.plates.push_back(b);
+    }
+    return d;
 }
 
-// ------------------------------------------------------------------ data inputs
-// Values written by data links or a microcontroller. NaN means "not connected": the Properties choice stays.
-struct Inputs { double r = NAN, g = NAN, b = NAN, pattern = NAN, speed = NAN; };
-inline uint8_t channel(double v) {
-    if (!std::isfinite(v) || v <= 0) return 0;
-    if (v <= 1) return uint8_t(std::lround(v * 255));
-    return v >= 255 ? 255 : uint8_t(std::lround(v));   // 0-255 also accepted
-}
-inline uint8_t nearest_speed(double hz) {
-    uint8_t best = kDefaultSpeed; double best_err = 1e9;
-    for (uint8_t i = 0; i < kSpeedCount; ++i) {
-        double err = std::fabs(std::log(kSpeedHz[i]) - std::log(hz));
-        if (err < best_err) { best_err = err; best = i; }
+// Undo history: newest last, bounded.
+class UndoStack {
+public:
+    explicit UndoStack(size_t limit = 40) : limit_(limit) {}
+    void push(Snapshot s) {
+        if (!items_.empty() && same(items_.back(), s)) return;   // a click that changed nothing yet
+        items_.push_back(std::move(s));
+        if (items_.size() > limit_) items_.erase(items_.begin());
     }
-    return best;
-}
-inline Config effective(const Config& chosen, const Inputs& in) {
-    Config c = chosen;
-    if (std::isfinite(in.r) || std::isfinite(in.g) || std::isfinite(in.b)) {
-        c.colour = {channel(in.r), channel(in.g), channel(in.b)};
-        c.has_colour = !(c.colour == Colour{});
+    // Pops the newest snapshot and returns what to repaint; `current(vehicle, out)` reads the paint now. Empty when the
+    // last click changed nothing undo can see (an edge, a link, a pixel stroke): undo never reaches past it to an older click.
+    template <class Read> Diff pop_restore(Read&& current) {
+        if (items_.empty()) return {};
+        Snapshot s = std::move(items_.back());
+        items_.pop_back();
+        Snapshot now;
+        if (!current(s.vehicle, now)) return {};
+        return diff_to_restore(s, now);
     }
-    if (std::isfinite(in.pattern)) {
-        long p = std::lround(in.pattern);
-        c.pattern = uint8_t(p >= 0 && p < kPatternCount ? p : kSteady);
+    size_t size() const { return items_.size(); }
+    void clear() { items_.clear(); }
+
+private:
+    static bool same(const Snapshot& a, const Snapshot& b) {
+        if (a.vehicle != b.vehicle || a.slots.size() != b.slots.size() || a.plates.size() != b.plates.size()) return false;
+        for (size_t i = 0; i < a.slots.size(); ++i)
+            if (a.slots[i].component != b.slots[i].component || a.slots[i].slot != b.slots[i].slot || a.slots[i].colour != b.slots[i].colour) return false;
+        for (size_t i = 0; i < a.plates.size(); ++i)
+            if (a.plates[i].plate != b.plates[i].plate || a.plates[i].front != b.plates[i].front || a.plates[i].colour != b.plates[i].colour) return false;
+        return true;
     }
-    if (std::isfinite(in.speed) && in.speed > 0) c.speed = nearest_speed(in.speed);
-    return c;
+    std::vector<Snapshot> items_;
+    size_t limit_;
+};
+
+// Palette grid in the panel: `columns` swatches per row. Returns the palette index under (x, y) relative to the grid, or -1.
+inline int grid_hit(float x, float y, float cell, float gap, int columns, int count) {
+    if (x < 0 || y < 0 || cell <= 0 || columns <= 0) return -1;
+    int col = int(x / (cell + gap)), row = int(y / (cell + gap));
+    if (col >= columns || x - col * (cell + gap) > cell || y - row * (cell + gap) > cell) return -1;
+    int i = row * columns + col;
+    return i < count ? i : -1;
 }
 
-// ------------------------------------------------------------------ animation
-// Brightness factor 0-1 for a pattern at `seconds` (any shared clock).
-inline double level(uint8_t pattern, uint8_t speed, double seconds) {
-    double hz = kSpeedHz[speed < kSpeedCount ? speed : kDefaultSpeed];
-    double phase = seconds * hz; phase -= std::floor(phase);
-    switch (pattern) {
-    case kBlink: case kAlternateA: return phase < 0.5 ? 1 : 0;
-    case kAlternateB: return phase < 0.5 ? 0 : 1;
-    case kStrobe: return phase < 0.12 ? 1 : 0;
-    case kDoubleFlash: return (phase < 0.08 || (phase >= 0.18 && phase < 0.26)) ? 1 : 0;
-    case kPulse: return 0.15 + 0.85 * (0.5 - 0.5 * std::cos(phase * 6.283185307179586));
-    default: return 1;
-    }
-}
-inline bool lit(uint8_t pattern, uint8_t speed, double seconds) { return level(pattern, speed, seconds) >= 0.5; }
-
-inline Colour hsv(double hue, double sat, double val) {
-    hue -= std::floor(hue); hue *= 6;
-    int i = int(hue); double f = hue - i, p = val * (1 - sat), q = val * (1 - sat * f), t = val * (1 - sat * (1 - f));
-    double r, g, b;
-    switch (i % 6) { case 0: r = val; g = t; b = p; break; case 1: r = q; g = val; b = p; break; case 2: r = p; g = val; b = t; break;
-                     case 3: r = p; g = q; b = val; break; case 4: r = t; g = p; b = val; break; default: r = val; g = p; b = q; }
-    return {uint8_t(std::lround(r * 255)), uint8_t(std::lround(g * 255)), uint8_t(std::lround(b * 255))};
-}
-// Colour to show at `seconds`: the chosen colour, or a hue sweep for Colour cycle.
-inline bool colour_at(const Config& c, double seconds, Colour& out) {
-    if (c.pattern == kColourCycle) { out = hsv(seconds * kSpeedHz[c.speed < kSpeedCount ? c.speed : kDefaultSpeed] * 0.25, 1, 1); return true; }
-    if (!c.has_colour) return false;
-    out = c.colour;
-    return true;
-}
 }  // namespace anylights
