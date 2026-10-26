@@ -71,12 +71,15 @@ int main(){std::cout<<std::unitbuf;
  double sun9[3],moon9[3];celestial::path(.9,1,1,sun9);celestial::path(.4,1,1,moon9);float parked[3];{double n[3];celestial::path(.5,1,1,n);for(int i=0;i<3;++i)parked[i]=float(n[i]);}
  auto clock_frame=[&](const float* r,const float* u,const float* fw,float phase,float stars,float moon_strength,float moonlight){ClockSky c{};for(int i=0;i<3;++i){c.sun[i]=sun9[i];c.moon[i]=moon9[i];}c.night=1;c.source=1;c.parked=true;c.phase=phase;
   const float dark[3]{.001f,.001f,.002f};auto f=build(r,u,fw,parked,W,H,3,stars,moon_strength,moonlight,nullptr,dark,0,0);assert(apply_clock(f,c,parked));return f;};
- unsigned v2_lit=0,clock_lit=0;
+ unsigned v2_lit=0,clock_lit=0,clock_all=0;auto lit=[&](const std::vector<float>& o){unsigned n=0;for(UINT i=0;i<W*H;++i)if(o[i*4+1]>.11f)++n;return n;};
  {auto o=run(build(right,up,forward,parked,W,H,3,1,1,1),Scene{});for(UINT i=0;i<W*H*4;i+=4)assert(std::abs(o[i]-.1f)<1e-4f);
-  auto c=run(clock_frame(right,up,forward,0,1,1,1),Scene{});for(UINT i=0;i<W*H;++i)if(c[i*4+1]>.11f)++clock_lit;alpha_kept(c);
-  auto v=run(build(right,up,forward,midnight,W,H,3,1,1,1),Scene{});for(UINT i=0;i<W*H;++i)if(v[i*4+1]>.11f)++v2_lit;
+  auto c=run(clock_frame(right,up,forward,0,1,1,1),Scene{});clock_all=lit(c);alpha_kept(c);
+  // SKY-6 compares the star fields alone (no moon, no milky way): this view at t=.9 also holds the clock moon (path(.4))
+  // and a stretch of the milky way band, about 500 lit pixels together, while V2's midnight view has neither.
+  auto sf=clock_frame(right,up,forward,0,1,0,0);sf.params[3]=0;clock_lit=lit(run(sf,Scene{}));
+  auto vf=build(right,up,forward,midnight,W,H,3,1,0,0);vf.params[3]=0;v2_lit=lit(run(vf,Scene{}));
   // SKY-6: about a third as many stars, mostly faint.
-  std::cout<<"Parked sun: V2 unchanged, clock stars lit="<<clock_lit<<" (V2 midnight lit="<<v2_lit<<")\n";assert(clock_lit>3&&clock_lit<v2_lit&&clock_lit<W*H*8/100);cases+=2;}
+  std::cout<<"Parked sun: V2 unchanged, clock sky lit="<<clock_all<<", clock stars lit="<<clock_lit<<" (V2 midnight stars lit="<<v2_lit<<")\n";assert(clock_all>clock_lit&&clock_lit>3&&clock_lit<v2_lit&&clock_lit<W*H*8/100);cases+=2;}
  // The unshadowed surface moonlight keeps the game's own sun: none under the parked noon sun on the clock (interiors stay dark).
  {Scene ground;ground.depth=[](UINT,UINT){return .5f;};auto o=run(clock_frame(right,up,forward,0,0,0,1),ground);for(UINT i=0;i<W*H*4;i+=4)assert(std::abs(o[i]-.1f)<1e-4f);std::cout<<"Clock night, parked sun: surfaces unlit\n";++cases;}
  // The moon where the clock puts it, and its phase: full brighter than quarter brighter than new.
