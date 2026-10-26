@@ -15,7 +15,7 @@
 using Microsoft::WRL::ComPtr;
 int main(){std::cout<<std::unitbuf;
  // K39: the shared WARP device (debug layer, GPU-based validation where the Graphics Tools are installed).
- gpu_test::Device dev;assert(gpu_test::create(dev));ComPtr<ID3D12Device> device=dev.device;
+ gpu_test::Device dev;assert(gpu_test::create(dev));ComPtr<ID3D12Device> device=dev.device;std::cout<<"Device validated="<<dev.validated<<std::endl;
  ComPtr<ID3D12CommandQueue> queue=dev.queue;ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};auto wait=[&]{assert(SUCCEEDED(queue->Signal(fence.Get(),++serial)));assert(SUCCEEDED(fence->SetEventOnCompletion(serial,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);};
  ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));assert(SUCCEEDED(list->Close()));
  struct Texture{ComPtr<ID3D12Resource> resource,upload,readback;D3D12_RESOURCE_DESC desc{};D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes{};};
@@ -88,7 +88,7 @@ int main(){std::cout<<std::unitbuf;
  auto shot=[&](const volumetric::Frame& f,UINT path,float shadow_value,float distance,bool ocean=false,float alpha=1,bool report=true){const UINT w=64,h=48;
   wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));
   auto color=texture(w,h,DXGI_FORMAT_R16G16B16A16_FLOAT),depth=texture(w,h,DXGI_FORMAT_R32_FLOAT),shadow=texture(32,32,DXGI_FORMAT_R32_FLOAT),water=texture(w,h,DXGI_FORMAT_R16G16B16A16_FLOAT);
-  assert(gpu.ensure(device.Get(),queue.Get(),color.desc,path));
+  bool ready=gpu.ensure(device.Get(),queue.Get(),color.desc,path);if(!ready)std::cout<<"ensure failed path="<<path<<" hr=0x"<<std::hex<<unsigned(gpu.error())<<std::dec<<std::endl;assert(ready);
   for(auto item:{&color,&depth,&shadow,&water}){unsigned char* data{};D3D12_RANGE none{0,0};assert(SUCCEEDED(item->upload->Map(0,&none,(void**)&data)));
    for(UINT y=0;y<item->desc.Height;++y)for(UINT x=0;x<item->desc.Width;++x){auto p=data+item->footprint.Offset+y*item->footprint.Footprint.RowPitch;
     if(item==&color||item==&water){auto half=(HALF*)p+x*4;float v[4]{.05f,.05f,.05f,alpha};if(item==&water){v[0]=v[2]=v[3]=0;v[1]=1;}for(UINT c=0;c<4;++c)half[c]=DirectX::PackedVector::XMConvertFloatToHalf(v[c]);}
@@ -111,6 +111,7 @@ int main(){std::cout<<std::unitbuf;
  // 8-slot build, the branch build matches it, and both stay within fp16 noise of the marched lamps.
  {float previous=0;for(UINT n:{0u,1u,2u,3u,4u,5u,8u}){auto f=scene(.002f,0,0,n);auto marched=shot(f,volumetric::PATH_MARCHED,1,30),fast=shot(f,volumetric::PATH_CONSTANTS,1,30);gpu.use_permutations(false);auto eight=shot(f,volumetric::PATH_CONSTANTS,1,30);auto branch=shot(f,volumetric::PATH_BRANCH,1,30);
   std::cout<<"Constants lamps="<<n<<" marched="<<marched.centre[0]<<" permutation="<<fast.centre[0]<<" eight="<<eight.centre[0]<<" branch="<<branch.centre[0]<<std::endl;
+  if(!same(fast,eight)){size_t differ=0;for(size_t i=0;i<fast.texels.size();++i)differ+=fast.texels[i]!=eight.texels[i];std::cout<<"Constants lamps="<<n<<" permutation differs from eight in "<<differ<<" of "<<fast.texels.size()<<" channels"<<std::endl;}
   assert(same(fast,eight)&&std::abs(branch.centre[0]-eight.centre[0])<1e-4f&&std::abs(fast.centre[0]-marched.centre[0])<2e-3f&&fast.centre[0]>=previous);previous=fast.centre[0];if(n)assert(fast.centre[0]>.0505f);}}
  // K39: two temporal frames. The second blends the history the first wrote; a static view stays put.
  {auto f1=scene(.004f,1,4,2,true);f1.temporal[1][4]=1;auto a=shot(f1,volumetric::PATH_MARCHED,1,100);auto f2=f1;f2.temporal[1][4]=0;f2.temporal[0]={0,0,0,1,1,0,0,1,0,1,0,1,0,0,1,1};auto b=shot(f2,volumetric::PATH_MARCHED,1,100);
