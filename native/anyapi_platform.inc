@@ -135,17 +135,22 @@ static void* pristine_of(HMODULE m,void** slot){auto live=(uint8_t*)m;auto ldos=
   if(section(rva,home)&&read(rva-home.VirtualAddress+home.PointerToRawData,&value,8)&&value>=nt.OptionalHeader.ImageBase){const uint64_t target=value-nt.OptionalHeader.ImageBase;
    if(target<size&&section(target,code)&&(code.Characteristics&IMAGE_SCN_MEM_EXECUTE))result=live+target;}}
  CloseHandle(file);return result;}
-// Same class: a table in a module image whose first 8 entries (IUnknown and the object basics, never hooked here)
-// mostly match the live table's. Runtime copies of that table match it; other classes and proxy wrappers do not.
-static bool kin(const Hook& h,void*const* base,size_t index){if(!h.image||h.index!=index)return false;int same=0;for(int k=0;k<8;++k)same+=h.head[k]==base[k];return same>=6;}
+// Same class: entries 3..7 of two tables (the object basics after IUnknown: never hooked here and rarely by overlays,
+// which do hook QueryInterface/AddRef/Release in their copies) mostly match. 0 for another class or a proxy's
+// wrapper class; higher is closer.
+static int likeness(void*const* a,void*const* b){int basics=0,all=0;for(int k=0;k<8;++k){const bool same=a[k]==b[k];all+=same;basics+=k>=3&&same;}return basics>=4?1+all:0;}
+// The table in a module image hooked at this index (and replacement, unless null) of head's class, closest first,
+// the earliest on a tie: the class's system table, which start() or the first chain hooked. Needs hook_lock.
+static const Hook* table_of(void*const* head,size_t index,void* replacement){const Hook* best{};int score=0;
+ for(size_t i=0;i<hook_count;++i){const Hook& h=hooks[i];if(!h.image||h.index!=index||(replacement&&h.replacement!=replacement))continue;const int s=likeness(h.head,head);if(s>score){best=&h;score=s;}}return best;}
 // Publish the original COM slot before atomically replacing it; no instruction patching.
 // Copies (crash 2026-10-26): an overlay may give an object its own copy of a hooked table. Slots of the copy that
-// still hold our hook get no record, original() resolves them through the table they were copied from (kin);
+// still hold our hook get no record, original() resolves them through the table they were copied from (table_of);
 // recording one with our own function as its original made the hook call itself. A record of a copy that is not
 // in a module image is refreshed when its slot no longer holds our hook (the block was freed and reused).
 static bool hook_slot(void* object,size_t index,void* replacement){void** base=*(void***)object;auto slot=base+index;
  auto known=[&](bool& done){done=true;for(size_t i=0;i<hook_count;++i)if(hooks[i].slot==slot){done=hooks[i].replacement!=replacement||hooks[i].image||*slot==replacement;return hooks[i].replacement==replacement;}
-  if(*slot==replacement){for(size_t i=0;i<hook_count;++i)if(hooks[i].replacement==replacement&&kin(hooks[i],base,index))return true;return false;}
+  if(*slot==replacement)return table_of(base,index,replacement)!=nullptr;
   done=hook_count==std::size(hooks);return false;};
  bool done{};AcquireSRWLockShared(&hook_lock);bool ok=known(done);ReleaseSRWLockShared(&hook_lock);if(done)return ok;
  HMODULE m{};const bool image=GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCWSTR)slot,&m);void* pristine=image?pristine_of(m,slot):nullptr;
@@ -160,14 +165,15 @@ static bool hook_slot(void* object,size_t index,void* replacement){void** base=*
 // Re-entry (crash 2026-10-26, Steam overlay): an overlay that hooks a slot after us and keeps our function as its
 // original sends the call straight back into our hook for the same object, so chaining again would recurse until
 // the stack overflows. Enter counts how often this thread is already inside a hook for the same object and slot;
-// a re-entered hook skips its own work and original() picks a target below the loop by level:
-//  1: the original of the class's table in a module image (first recorded: the system table, which keeps a vtable
-//     hook that sat below us), else as level 2;
-//  2: the slot's function in its module file (pristine_of), else that table's original;
+// a re-entered hook skips its own work and original() picks a target below the loop by level, always from the
+// class's system table (table_of):
+//  1: its original (keeps a vtable hook that sat below us), else as level 2;
+//  2: its slot's function in its module file (pristine_of), else its original;
 //  3+: nothing (the hook returns an error): the depth per object and slot stays bounded whatever the overlays do.
 // A first call whose slot still holds the function we would chain to starts at level 1: that hook (an overlay that
-// re-hooked over ours, keeping ours as its original) has already run. Only the command-list hooks of
-// scene_antialiasing have no Enter: no known overlay vtable-hooks command lists.
+// re-hooked over ours, keeping ours as its original) has already run. Known gaps, none of them a loop: such a
+// re-hook in the system table seen through a later copy, or two stacked copies, can run one overlay twice or skip
+// one. Only the command-list hooks of scene_antialiasing have no Enter: no known overlay vtable-hooks command lists.
 struct Entered {void* object{};size_t index{};};
 static thread_local Entered entered[16]{};static thread_local int entered_count{};
 struct Enter {int again{};Enter(void* object,size_t index){for(int i=0;i<entered_count&&i<16;++i)again+=entered[i].object==object&&entered[i].index==index;
@@ -178,15 +184,14 @@ static std::atomic<uint64_t> reentry_logged{};
 // its table resolves through that table.
 template<class T> static T original(void* object,size_t index,int again=0){void** base=*(void***)object;auto slot=base+index;const Hook* self{};void* fn{};int level=again;AcquireSRWLockShared(&hook_lock);
  for(size_t i=0;i<hook_count&&!self;++i)if(hooks[i].slot==slot)self=&hooks[i];
- for(size_t i=0;i<hook_count&&!self;++i)if(kin(hooks[i],base,index))self=&hooks[i];
- if(self){fn=self->original;void* mine=self->replacement;
-  auto table=[&](size_t i){return hooks[i].replacement==mine&&kin(hooks[i],base,index);};auto usable=[&](void* p){return p&&p!=fn&&p!=mine;};
-  if(!level&&fn!=mine&&*slot==fn){void* sys{};for(size_t i=0;i<hook_count&&!sys;++i)if(table(i))sys=hooks[i].pristine;if(fn!=sys)level=1;}
+ if(!self)self=table_of(base,index,nullptr);   // a copy of a hooked table that still holds our hook
+ if(self){fn=self->original;void* mine=self->replacement;const Hook* system{};bool found=false;auto usable=[&](void* p){return p&&p!=fn&&p!=mine;};
+  auto table=[&]{if(!found){system=table_of(self->head,index,mine);found=true;}return system;};
+  if(!level&&fn!=mine&&*slot==fn&&!(table()&&fn==system->pristine))level=1;
   if(!level&&fn==mine)level=1;
   if(level){void* direct{};
-   if(level==1)for(size_t i=0;i<hook_count&&!direct;++i)if(&hooks[i]!=self&&table(i)&&usable(hooks[i].original))direct=hooks[i].original;
-   if(level<=2)for(size_t i=0;i<hook_count&&!direct;++i)if(table(i)&&usable(hooks[i].pristine))direct=hooks[i].pristine;
-   if(level<=2)for(size_t i=0;i<hook_count&&!direct;++i)if(table(i)&&usable(hooks[i].original))direct=hooks[i].original;
+   if(table()&&level==1&&usable(system->original))direct=system->original;
+   if(table()&&level<=2&&!direct)direct=usable(system->pristine)?system->pristine:usable(system->original)?system->original:nullptr;
    fn=direct;}}
  ReleaseSRWLockShared(&hook_lock);
  if(level){const uint64_t bit=1ull<<(index&63);if(!(reentry_logged.load(std::memory_order_relaxed)&bit)&&!(reentry_logged.fetch_or(bit)&bit)){char m[96];
