@@ -26,8 +26,9 @@ static std::atomic<bool> window_focused{};static uint64_t focus_checked_at{};   
 static bool raw_mouse_only{},raw_keyboard_only{};static AnyTextDecoder text_decoder;
 static std::atomic<bool> enabled{true};static std::atomic<uint64_t> frames{};
 static SRWLOCK hook_lock=SRWLOCK_INIT;
-struct Hook {void** slot{};void* original{};void* replacement{};size_t index{};void* pristine{};};   // pristine: the slot's function in its module file (pristine_of)
-static Hook hooks[64]{};static size_t hook_count{};
+// pristine: the slot's function in its module file (pristine_of); image: the table is in a module image; head: its first 8 entries.
+struct Hook {void** slot{};void* original{};void* replacement{};size_t index{};void* pristine{};bool image{};void* head[8]{};};
+static Hook hooks[128]{};static size_t hook_count{};
 static std::recursive_mutex render_mutex;
 static std::mutex queue_mutex;
 static ComPtr<ID3D12CommandQueue> observed_queue;
@@ -114,10 +115,13 @@ static void capture_imports(){HMODULE user32=GetModuleHandleW(L"user32.dll");rea
 }
 
 // The function a COM slot holds in its module's file on disk: the system implementation, before any overlay
-// patched the table. nullptr when the table is not in a module image (an overlay's heap copy) or the file on disk
-// is not the loaded one. Read from the raw file (section table), so no loader or relocation state is involved.
-static void* pristine_of(void** slot){HMODULE m{};if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCWSTR)slot,&m))return nullptr;
- auto live=(uint8_t*)m;auto lnt=(const IMAGE_NT_HEADERS64*)(live+((const IMAGE_DOS_HEADER*)live)->e_lfanew);const uint32_t size=lnt->OptionalHeader.SizeOfImage;const uint64_t rva=uint64_t((uint8_t*)slot-live);if(rva+8>size)return nullptr;
+// patched the table. nullptr when the slot is not in the module's initialised data (a copy made at run time), the
+// file on disk is not the loaded one, or the headers are not a PE32+ image. Read from the raw file (section table),
+// so no loader or relocation state is involved.
+static void* pristine_of(HMODULE m,void** slot){auto live=(uint8_t*)m;auto ldos=(const IMAGE_DOS_HEADER*)live;
+ if(ldos->e_magic!=IMAGE_DOS_SIGNATURE||ldos->e_lfanew<=0||ldos->e_lfanew>LONG(4096-sizeof(IMAGE_NT_HEADERS64)))return nullptr;
+ auto lnt=(const IMAGE_NT_HEADERS64*)(live+ldos->e_lfanew);if(lnt->Signature!=IMAGE_NT_SIGNATURE||lnt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR64_MAGIC)return nullptr;
+ const uint32_t size=lnt->OptionalHeader.SizeOfImage;const uint64_t rva=uint64_t((uint8_t*)slot-live);if(rva+8>size)return nullptr;
  wchar_t path[1024];DWORD n=GetModuleFileNameW(m,path,DWORD(std::size(path)));if(!n||n>=std::size(path))return nullptr;
  HANDLE file=CreateFileW(path,GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(file==INVALID_HANDLE_VALUE)return nullptr;
  auto read=[&](uint64_t at,void* out,DWORD bytes){LARGE_INTEGER p;p.QuadPart=LONGLONG(at);DWORD got{};return SetFilePointerEx(file,p,nullptr,FILE_BEGIN)&&ReadFile(file,out,bytes,&got,nullptr)&&got==bytes;};
@@ -131,45 +135,62 @@ static void* pristine_of(void** slot){HMODULE m{};if(!GetModuleHandleExW(GET_MOD
   if(section(rva,home)&&read(rva-home.VirtualAddress+home.PointerToRawData,&value,8)&&value>=nt.OptionalHeader.ImageBase){const uint64_t target=value-nt.OptionalHeader.ImageBase;
    if(target<size&&section(target,code)&&(code.Characteristics&IMAGE_SCN_MEM_EXECUTE))result=live+target;}}
  CloseHandle(file);return result;}
+// Same class: a table in a module image whose first 8 entries (IUnknown and the object basics, never hooked here)
+// mostly match the live table's. Runtime copies of that table match it; other classes and proxy wrappers do not.
+static bool kin(const Hook& h,void*const* base,size_t index){if(!h.image||h.index!=index)return false;int same=0;for(int k=0;k<8;++k)same+=h.head[k]==base[k];return same>=6;}
 // Publish the original COM slot before atomically replacing it; no instruction patching.
-// A slot that already holds this replacement belongs to a copy of a table hooked here (an overlay gave the object
-// its own copy of the table): it is recorded with that table's original, never with our own function as its
-// original, which would make the hook call itself (crash 2026-10-26).
-static bool hook_slot(void* object,size_t index,void* replacement){
- auto slot=(*(void***)object)+index;
- AcquireSRWLockShared(&hook_lock);for(size_t i=0;i<hook_count;++i)if(hooks[i].slot==slot){bool ok=hooks[i].replacement==replacement;ReleaseSRWLockShared(&hook_lock);return ok;}ReleaseSRWLockShared(&hook_lock);
- void* pristine=pristine_of(slot);AcquireSRWLockExclusive(&hook_lock);
- for(size_t i=0;i<hook_count;++i)if(hooks[i].slot==slot){bool ok=hooks[i].replacement==replacement;ReleaseSRWLockExclusive(&hook_lock);return ok;}
- if(hook_count==std::size(hooks)){ReleaseSRWLockExclusive(&hook_lock);return false;}
- if(*slot==replacement){bool ok=false;for(size_t i=0;i<hook_count;++i)if(hooks[i].replacement==replacement&&hooks[i].index==index&&hooks[i].original!=replacement){
-   hooks[hook_count++]={slot,hooks[i].original,replacement,index,pristine?pristine:hooks[i].pristine};ok=true;break;}
-  ReleaseSRWLockExclusive(&hook_lock);return ok;}
+// Copies (crash 2026-10-26): an overlay may give an object its own copy of a hooked table. Slots of the copy that
+// still hold our hook get no record, original() resolves them through the table they were copied from (kin);
+// recording one with our own function as its original made the hook call itself. A record of a copy that is not
+// in a module image is refreshed when its slot no longer holds our hook (the block was freed and reused).
+static bool hook_slot(void* object,size_t index,void* replacement){void** base=*(void***)object;auto slot=base+index;
+ auto known=[&](bool& done){done=true;for(size_t i=0;i<hook_count;++i)if(hooks[i].slot==slot){done=hooks[i].replacement!=replacement||hooks[i].image||*slot==replacement;return hooks[i].replacement==replacement;}
+  if(*slot==replacement){for(size_t i=0;i<hook_count;++i)if(hooks[i].replacement==replacement&&kin(hooks[i],base,index))return true;return false;}
+  done=hook_count==std::size(hooks);return false;};
+ bool done{};AcquireSRWLockShared(&hook_lock);bool ok=known(done);ReleaseSRWLockShared(&hook_lock);if(done)return ok;
+ HMODULE m{};const bool image=GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCWSTR)slot,&m);void* pristine=image?pristine_of(m,slot):nullptr;
+ AcquireSRWLockExclusive(&hook_lock);ok=known(done);if(done){ReleaseSRWLockExclusive(&hook_lock);return ok;}
  DWORD old{};if(!VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&old)){ReleaseSRWLockExclusive(&hook_lock);return false;}
- void* original=*slot;hooks[hook_count++]={slot,original,replacement,index,pristine};
- bool ok=InterlockedCompareExchangePointer(slot,replacement,original)==original;
+ Hook* h{};for(size_t i=0;i<hook_count&&!h;++i)if(hooks[i].slot==slot)h=&hooks[i];const Hook previous=h?*h:Hook{};if(!h)h=&hooks[hook_count++];
+ void* original=*slot;*h={slot,original,replacement,index,pristine,image};for(int k=0;k<8;++k)h->head[k]=base[k];
+ ok=InterlockedCompareExchangePointer(slot,replacement,original)==original;
  DWORD ignored{};VirtualProtect(slot,sizeof(void*),old,&ignored);
- if(!ok)--hook_count;ReleaseSRWLockExclusive(&hook_lock);return ok;
+ if(!ok){if(previous.slot)*h=previous;else --hook_count;}ReleaseSRWLockExclusive(&hook_lock);return ok;
 }
 // Re-entry (crash 2026-10-26, Steam overlay): an overlay that hooks a slot after us and keeps our function as its
-// original sends the call straight back into our hook for the same object, so chaining again recurses until the
-// stack overflows. A hook re-entered on one thread for the same object and slot skips its own work (Enter::again)
-// and calls the system implementation instead: the slot's function in its module file, else the first original
-// recorded for that slot index (taken from the system table before any re-hook).
+// original sends the call straight back into our hook for the same object, so chaining again would recurse until
+// the stack overflows. Enter counts how often this thread is already inside a hook for the same object and slot;
+// a re-entered hook skips its own work and original() picks a target below the loop by level:
+//  1: the original of the class's table in a module image (first recorded: the system table, which keeps a vtable
+//     hook that sat below us), else as level 2;
+//  2: the slot's function in its module file (pristine_of), else that table's original;
+//  3+: nothing (the hook returns an error): the depth per object and slot stays bounded whatever the overlays do.
+// A first call whose slot still holds the function we would chain to starts at level 1: that hook (an overlay that
+// re-hooked over ours, keeping ours as its original) has already run. Only the command-list hooks of
+// scene_antialiasing have no Enter: no known overlay vtable-hooks command lists.
 struct Entered {void* object{};size_t index{};};
-static thread_local Entered entered[8]{};static thread_local int entered_count{};
-struct Enter {bool again{};Enter(void* object,size_t index){for(int i=0;i<entered_count&&i<8;++i)if(entered[i].object==object&&entered[i].index==index)again=true;
-  if(entered_count<8)entered[entered_count]={object,index};++entered_count;}
+static thread_local Entered entered[16]{};static thread_local int entered_count{};
+struct Enter {int again{};Enter(void* object,size_t index){for(int i=0;i<entered_count&&i<16;++i)again+=entered[i].object==object&&entered[i].index==index;
+  if(entered_count<16)entered[entered_count]={object,index};++entered_count;}
  ~Enter(){--entered_count;}Enter(const Enter&)=delete;Enter& operator=(const Enter&)=delete;};
 static std::atomic<uint64_t> reentry_logged{};
-// Find the chained method for this exact COM table, preserving other overlays' hooks; with again, the system one.
-template<class T> static T original(void* object,size_t index,bool again=false){auto slot=(*(void***)object)+index;void* fn{},*mine{},*pristine{};AcquireSRWLockShared(&hook_lock);
- for(size_t i=0;i<hook_count;++i)if(hooks[i].slot==slot){fn=hooks[i].original;mine=hooks[i].replacement;pristine=hooks[i].pristine;break;}
- if(fn&&(again||fn==mine)){void* direct=pristine;
-  for(size_t i=0;!direct&&i<hook_count;++i)if(hooks[i].index==index&&hooks[i].replacement==mine&&hooks[i].pristine)direct=hooks[i].pristine;
-  for(size_t i=0;!direct&&i<hook_count;++i)if(hooks[i].index==index&&hooks[i].replacement==mine&&hooks[i].original!=mine&&hooks[i].original!=fn)direct=hooks[i].original;
-  fn=direct==mine?nullptr:direct;}
+// Find the chained method for this exact COM table, preserving other overlays' hooks; a copy made after we hooked
+// its table resolves through that table.
+template<class T> static T original(void* object,size_t index,int again=0){void** base=*(void***)object;auto slot=base+index;const Hook* self{};void* fn{};int level=again;AcquireSRWLockShared(&hook_lock);
+ for(size_t i=0;i<hook_count&&!self;++i)if(hooks[i].slot==slot)self=&hooks[i];
+ for(size_t i=0;i<hook_count&&!self;++i)if(kin(hooks[i],base,index))self=&hooks[i];
+ if(self){fn=self->original;void* mine=self->replacement;
+  auto table=[&](size_t i){return hooks[i].replacement==mine&&kin(hooks[i],base,index);};auto usable=[&](void* p){return p&&p!=fn&&p!=mine;};
+  if(!level&&fn!=mine&&*slot==fn){void* sys{};for(size_t i=0;i<hook_count&&!sys;++i)if(table(i))sys=hooks[i].pristine;if(fn!=sys)level=1;}
+  if(!level&&fn==mine)level=1;
+  if(level){void* direct{};
+   if(level==1)for(size_t i=0;i<hook_count&&!direct;++i)if(&hooks[i]!=self&&table(i)&&usable(hooks[i].original))direct=hooks[i].original;
+   if(level<=2)for(size_t i=0;i<hook_count&&!direct;++i)if(table(i)&&usable(hooks[i].pristine))direct=hooks[i].pristine;
+   if(level<=2)for(size_t i=0;i<hook_count&&!direct;++i)if(table(i)&&usable(hooks[i].original))direct=hooks[i].original;
+   fn=direct;}}
  ReleaseSRWLockShared(&hook_lock);
- if(again){const uint64_t bit=1ull<<(index&63);if(!(reentry_logged.fetch_or(bit)&bit)){char m[96];std::snprintf(m,sizeof(m),"PLUGIN_PLATFORM hook_reentry slot=%zu system_call=%d",index,fn!=nullptr);log_line(ANY_LOG_WARN,"framework",m);}}
+ if(level){const uint64_t bit=1ull<<(index&63);if(!(reentry_logged.load(std::memory_order_relaxed)&bit)&&!(reentry_logged.fetch_or(bit)&bit)){char m[96];
+   std::snprintf(m,sizeof(m),"PLUGIN_PLATFORM hook_reentry slot=%zu level=%d system_call=%d",index,level,fn!=nullptr);log_line(ANY_LOG_WARN,"framework",m);}}
  return (T)fn;}
 // Each plugin can capture input only for itself, and can only release its own capture.
 static void capture(uint32_t active){if(current_plugin<0)return;if(active)capture_owner.store(current_plugin);else {int expected=current_plugin;capture_owner.compare_exchange_strong(expected,-1);}}
@@ -381,10 +402,10 @@ static HRESULT STDMETHODCALLTYPE present1(IDXGISwapChain1* s,UINT interval,UINT 
  auto entry=frame_timing::now();presenting=true;try{draw(s);}catch(...){capture_owner.store(-1);log_line(ANY_LOG_ERROR,"framework","PLUGIN_RENDER exception=CPP frame_skipped=1");}presenting=false;
  bool game=chain_cache.raw==s;auto before=frame_timing::now();HRESULT hr=fn(s,interval,flags,params);if(game)frame_timing::presented(s,entry,before,frame_timing::now(),interval);return hr;}
 // Release overlay back-buffer references (devices stay, OVL-6), forward ResizeBuffers and rewrap on the next frame.
-static HRESULT STDMETHODCALLTYPE resize(IDXGISwapChain* s,UINT count,UINT w,UINT h,DXGI_FORMAT format,UINT flags){Enter enter(s,13);auto fn=original<ResizeFn>(s,13,enter.again);if(!fn)return enter.again?DXGI_ERROR_INVALID_CALL:E_FAIL;if(enter.again)return fn(s,count,w,h,format,flags);
+static HRESULT STDMETHODCALLTYPE resize(IDXGISwapChain* s,UINT count,UINT w,UINT h,DXGI_FORMAT format,UINT flags){Enter enter(s,13);auto fn=original<ResizeFn>(s,13,enter.again);if(!fn)return E_FAIL;if(enter.again)return fn(s,count,w,h,format,flags);
  std::lock_guard<std::recursive_mutex> lock(render_mutex);if(chain_cache.raw==s){release_targets();chain_cache.desc_valid=false;overlay_backoff.reset();frame_timing::settle();}return fn(s,count,w,h,format,flags);}
 // Handle extended ResizeBuffers1 with the same resource teardown behavior.
-static HRESULT STDMETHODCALLTYPE resize1(IDXGISwapChain3* s,UINT count,UINT w,UINT h,DXGI_FORMAT format,UINT flags,const UINT* masks,IUnknown*const* queues){Enter enter(s,39);auto fn=original<Resize1Fn>(s,39,enter.again);if(!fn)return enter.again?DXGI_ERROR_INVALID_CALL:E_FAIL;
+static HRESULT STDMETHODCALLTYPE resize1(IDXGISwapChain3* s,UINT count,UINT w,UINT h,DXGI_FORMAT format,UINT flags,const UINT* masks,IUnknown*const* queues){Enter enter(s,39);auto fn=original<Resize1Fn>(s,39,enter.again);if(!fn)return E_FAIL;
  if(enter.again)return fn(s,count,w,h,format,flags,masks,queues);std::lock_guard<std::recursive_mutex> lock(render_mutex);if(chain_cache.raw==s){release_targets();chain_cache.desc_valid=false;overlay_backoff.reset();frame_timing::settle();}return fn(s,count,w,h,format,flags,masks,queues);}
 // Observe direct command-queue submissions for graphics discovery, then forward the original submission.
 // K24: a newly observed queue's device is identified once (CreateDXGIFactory1 only for a device not seen before).
