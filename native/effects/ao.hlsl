@@ -95,9 +95,10 @@ float4 Resolve(Varying v) : SV_Target {
     int2 at = int2(v.position.xy);
     float2 centre = raw.Load(int3(at, 0)).rg;
     float sum = 0, weight = 0;
-    // Texel-exact 4x4 window (offsets -2..1), clamped to the target, matching the 4x4 interleave.
+    // Texel-exact 4x4 window, clamped to the target, matching the 4x4 interleave. Offsets -1..2:
+    // the texels 0.40.1's point taps at uv + (-1.5..1.5) texels landed on, so the AO is not shifted.
     int2 last = int2(metrics.zw) - 1;
-    [unroll] for (int y = -2; y < 2; ++y) [unroll] for (int x = -2; x < 2; ++x) {
+    [unroll] for (int y = -1; y < 3; ++y) [unroll] for (int x = -1; x < 3; ++x) {
         float2 s = raw.Load(int3(clamp(at + int2(x, y), 0, last), 0)).rg;
         float w = saturate(1 - abs(s.y - centre.y) / max(centre.y * .05, .05));
         sum += s.x * w; weight += w;

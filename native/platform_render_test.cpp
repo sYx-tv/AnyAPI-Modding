@@ -100,11 +100,15 @@ int main(){
   uint8_t* data{};D3D12_RANGE range{0,size_t(total)};assert(SUCCEEDED(readback->Map(0,&range,(void**)&data)));auto at=data+footprint.Offset+y*footprint.Footprint.RowPitch+x*4;std::array<uint8_t,4> value{at[0],at[1],at[2],at[3]};D3D12_RANGE none{0,0};readback->Unmap(0,&none);return value;
  };
  // canvas=false: the overlay drew nothing, so the canvas spot (6,6) keeps the game's green.
- auto check=[&](UINT width,UINT height,bool canvas=true){present_green();auto at=pixel(6,6),background=pixel(20,20);
+ auto check=[&](UINT width,UINT height,bool canvas=true){present_green();auto size=presented->GetDesc();assert(size.Width==width&&size.Height==height);auto at=pixel(6,6),background=pixel(20,20);
   if(canvas)assert(at[0]>240&&at[1]<10&&at[2]<10);else assert(at[0]<10&&at[1]>240);assert(background[0]<10&&background[1]>240&&background[2]<10);
   std::cout<<"PASS: GPU readback confirms "<<(canvas?"red DLL canvas":"untouched game pixels")<<" over green game backbuffer at "<<width<<'x'<<height<<'\n';
  };
- check(64,64);assert(SUCCEEDED(swap->ResizeBuffers(2,96,80,DXGI_FORMAT_UNKNOWN,0)));check(96,80);
+ // DXGI fails ResizeBuffers while any back-buffer reference is alive. The test drops its own (presented); the hook must drop the overlay's
+ // (wrapped buffers, D2D targets) and keep the devices (OVL-6). ROB-2: the overlay is redrawn by the next check().
+ auto resize=[&](UINT width,UINT height){presented.Reset();bool up=platform::context2d.Get()!=nullptr;assert(SUCCEEDED(swap->ResizeBuffers(2,width,height,DXGI_FORMAT_UNKNOWN,0)));
+  assert(platform::wrapped.empty()&&platform::targets.empty()&&(platform::context2d.Get()!=nullptr)==up);};
+ check(64,64);resize(96,80);check(96,80);
  // ROB-2, OVL-5, K24: the scene queue is the game's and survives overlay resets; callbacks run while the overlay is down; retries back off.
  assert(platform::queue&&platform::queue.Get()==platform::scene_queue.Get()&&platform::scene_queue.Get()==queue.Get());
  scene_frame::GpuIdentity id{};DXGI_ADAPTER_DESC wd{};warp->GetDesc(&wd);uint64_t luid=(uint64_t(uint32_t(wd.AdapterLuid.HighPart))<<32)|wd.AdapterLuid.LowPart;
@@ -117,7 +121,7 @@ int main(){
  platform::overlay_fail_stage=0;platform::overlay_backoff.reset();check(96,80);assert(!platform::overlay_down.load()&&platform::overlay_backoff.failures==0&&scene_frame::board.pass_error[ANY_PASS_OVERLAY].load()==0);
  auto d11=platform::device11.Get();
  std::cout<<"PASS: scene queue survives overlay resets, callbacks run while the overlay is down, retry backoff, GPU identity\n";
- platform::plugins[0].callbacks.render=nullptr;platform::current_plugin=0;auto gpu=anyapi_gpu_draw_service();assert(gpu->register_renderer(gpu_fixture,nullptr));assert(!gpu->register_renderer(gpu_fixture,nullptr));platform::current_plugin=-1;AnyGpuCommandV1 invalid;assert(!gpu->emit(&invalid));check(96,80);auto uploads=gpu_draw::renderers[0].uploads;assert(uploads==1);check(96,80);assert(gpu_draw::renderers[0].uploads==uploads);assert(SUCCEEDED(swap->ResizeBuffers(2,128,96,DXGI_FORMAT_UNKNOWN,0)));check(128,96);assert(gpu_draw::renderers[0].uploads==uploads&&platform::device11.Get()==d11&&platform::overlay_backoff.failures==0);
+ platform::plugins[0].callbacks.render=nullptr;platform::current_plugin=0;auto gpu=anyapi_gpu_draw_service();assert(gpu->register_renderer(gpu_fixture,nullptr));assert(!gpu->register_renderer(gpu_fixture,nullptr));platform::current_plugin=-1;AnyGpuCommandV1 invalid;assert(!gpu->emit(&invalid));check(96,80);auto uploads=gpu_draw::renderers[0].uploads;assert(uploads==1);check(96,80);assert(gpu_draw::renderers[0].uploads==uploads);resize(128,96);check(128,96);assert(gpu_draw::renderers[0].uploads==uploads&&platform::device11.Get()==d11&&platform::overlay_backoff.failures==0);
  platform::reset();check(128,96);assert(gpu_draw::renderers[0].uploads==uploads+1);std::cout<<"PASS: GPU command-only frames, persistent texture reuse across resize and re-upload after device reset\n";gpu_draw::renderers[0].callback=nullptr;gpu_draw::renderers[0].commands.clear();
  auto before=platform::frames.load();platform::plugins[0].callbacks.render=nullptr;assert(SUCCEEDED(swap->Present(0,0)));wait();assert(platform::frames.load()>before);std::cout<<"PASS: native-only mods retain the presentation clock without a canvas\n";
  // K42: the notice is drawn after every mod command. 128x96: box x 16..112, y 6..37; (64,8) is inside it, above the text.

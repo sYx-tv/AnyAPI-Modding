@@ -88,7 +88,7 @@ int main(){
   AnySceneTimingV2 bad;bad.version=1;assert(!frame_timing::api_v2.copy_v2(&bad));AnySceneTimingV1 v1;assert(!frame_timing::api_v2.copy(&v1));   // no v1 provider in this fixture
   AnySceneTimingV2 live;assert(frame_timing::api_v2.copy_v2(&live)&&live.frame_index==151);                                                    // fill at the real QPC time; frame count is window-independent
   AnyGpuInfoV2 g;assert(frame_timing::gpu_info_v2.copy_v2(&g)&&!g.v1.known&&g.lamp_shadows_supported==1);                                     // before any device
-  AnyGpuInfoV2 small;small.struct_size=8;assert(!frame_timing::gpu_info_v2.copy_v2(&small));
+  AnyGpuInfoV2 tiny;tiny.struct_size=8;assert(!frame_timing::gpu_info_v2.copy_v2(&tiny));   // not "small": rpcndr.h defines it as char
   scene_frame::board.pass_ms[ANY_PASS_GI].store(-1);frame_timing::clear();}
  // Timing v2 poll cost: the 2 s poll on a hooked window is one MonitorFromWindow; the full query runs for a new chain,
  // WM_DISPLAYCHANGE/settle(), or every poll on a window AnyAPI does not hook. gpu_info v2 copies gate the VRAM poll.

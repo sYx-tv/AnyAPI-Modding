@@ -6,8 +6,11 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 #include <DirectXPackedVector.h>
+#include <atomic>
 #include <cassert>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <vector>
 #include <functional>
@@ -19,9 +22,21 @@ using namespace DirectX::PackedVector;
 // through the game's tone mapping, exposure doubles the HDR value, bloom spreads
 // a bright pixel, glare needs open sky, Filmic stays finite and ordered, and
 // metering reads back a plausible luminance.
-int main(){std::cout<<std::unitbuf;
- // K39: shared WARP device with the debug layer, GPU-based validation and an InfoQueue check per case.
- gpu_test::Device test_device;assert(gpu_test::create(test_device));ComPtr<ID3D12Device> device=test_device.device;ComPtr<ID3D12CommandQueue> queue=test_device.queue;ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};
+int main(int argc,char** argv){std::cout<<std::unitbuf;
+ // Diagnostics for the laptop run of cfb6a24, killed at 626 s on WARP with no output in the report (the cloud has no
+ // WARP or debug layer to reproduce it). Every run prints a TIME line summed over its frames: setup and recording
+ // (ensure: root signature and pipelines), the GPU waits, readback and the validation check. A watchdog prints the
+ // step still running every 60 s, so a stall names its call. ctest shows both with -V or --output-on-failure, or run
+ // the exe directly. Each frame is still its own submission, as in the game.
+ static std::atomic<const char*> step{"device"};static std::atomic<int> run_no{0},frame_no{0};static std::atomic<ULONGLONG> step_at{GetTickCount64()};const ULONGLONG start=GetTickCount64();
+ auto at=[](const char* s){step=s;step_at=GetTickCount64();};
+ if(HANDLE watchdog=CreateThread(nullptr,0,[](void*)->DWORD{ULONGLONG said=0;for(;;){Sleep(1000);ULONGLONG now=GetTickCount64(),since=now-step_at;
+  if(since>=60000&&now-said>=60000){said=now;std::printf("WATCHDOG: run %d frame %d still in %s after %u s\n",run_no.load(),frame_no.load(),step.load(),unsigned(since/1000));std::fflush(stdout);}}},nullptr,0,nullptr))CloseHandle(watchdog);
+ // K39: shared WARP device with the debug layer and an InfoQueue check per case (GPU-based validation with --gbv).
+ // GPU-based validation is opt-in (--gbv): on WARP it slows these shaders to minutes per run (the laptop run of
+ // cfb6a24 was killed at 626 s; main's test never enabled it). The debug layer and the InfoQueue check stay on.
+ const bool gbv=argc>1&&std::strcmp(argv[1],"--gbv")==0;
+ gpu_test::Device test_device;assert(gpu_test::create(test_device,gbv));std::cout<<"Device: WARP, debug layer "<<(test_device.validated?"on":"off")<<", GPU-based validation "<<(test_device.validated&&gbv?"requested":"off")<<'\n';ComPtr<ID3D12Device> device=test_device.device;ComPtr<ID3D12CommandQueue> queue=test_device.queue;ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};
  auto wait=[&]{assert(SUCCEEDED(queue->Signal(fence.Get(),++serial)));assert(SUCCEEDED(fence->SetEventOnCompletion(serial,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);};
  ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));assert(SUCCEEDED(list->Close()));
  const UINT W=64,H=48;
@@ -33,8 +48,9 @@ int main(){std::cout<<std::unitbuf;
  // colour(x,y) -> rgb; sky(x,y) -> depth 0 (open sky) instead of 0.5. Options: cloud(x,y) -> gbuffer_1.w = 1,
  // sea(x,y) -> gbuffer_ocean.xy = 1 (each bound only when given); keep: no reset on the first frame.
  struct Options{std::function<bool(UINT,UINT)> cloud,sea;bool keep{};};
- auto run=[&](scene_effects_gpu::Frame f,auto colour,auto sky,int frames=1,Options o={}){std::vector<float> out(W*H*4);
-  for(int n=0;n<frames;++n){wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));auto color=texture(DXGI_FORMAT_R16G16B16A16_FLOAT),depth=texture(DXGI_FORMAT_R32_FLOAT);assert(gpu.ensure(device.Get(),queue.Get(),color.desc));
+ auto run=[&](scene_effects_gpu::Frame f,auto colour,auto sky,int frames=1,Options o={}){std::vector<float> out(W*H*4);++run_no;const ULONGLONG t0=GetTickCount64();ULONGLONG ensured=0,recorded=0,gpu_ms=0;
+  for(int n=0;n<frames;++n){frame_no=n;at("setup");ULONGLONG t=GetTickCount64();wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));auto color=texture(DXGI_FORMAT_R16G16B16A16_FLOAT),depth=texture(DXGI_FORMAT_R32_FLOAT);
+   {const ULONGLONG e=GetTickCount64();at("ensure");assert(gpu.ensure(device.Get(),queue.Get(),color.desc));ensured+=GetTickCount64()-e;at("setup");}
    Texture normals,ocean;if(o.cloud)normals=texture(DXGI_FORMAT_R16G16B16A16_FLOAT);if(o.sea)ocean=texture(DXGI_FORMAT_R16G16B16A16_FLOAT);
    for(auto item:{&color,&depth,&normals,&ocean}){if(!item->resource)continue;unsigned char* data{};D3D12_RANGE none{0,0};assert(SUCCEEDED(item->upload->Map(0,&none,(void**)&data)));
     for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){auto p=data+item->footprint.Offset+y*item->footprint.Footprint.RowPitch;
@@ -45,12 +61,13 @@ int main(){std::cout<<std::unitbuf;
    D3D12_RESOURCE_BARRIER b[4]={scene_effects_gpu::barrier(color.resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_RENDER_TARGET),scene_effects_gpu::barrier(depth.resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)};UINT nb=2;
    for(auto item:{&normals,&ocean})if(item->resource)b[nb++]=scene_effects_gpu::barrier(item->resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);list->ResourceBarrier(nb,b);
    using I=scene_effects_gpu::Gpu::Input;const auto psr=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-   assert(gpu.record(list.Get(),color.resource.Get(),depth.resource.Get(),psr,f,n==0&&!o.keep,I{normals.resource.Get(),psr},I{ocean.resource.Get(),psr}));
-   b[0]=scene_effects_gpu::barrier(color.resource.Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE);list->ResourceBarrier(1,b);copy(color,false);assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);wait();
+   at("record");assert(gpu.record(list.Get(),color.resource.Get(),depth.resource.Get(),psr,f,n==0&&!o.keep,I{normals.resource.Get(),psr},I{ocean.resource.Get(),psr}));
+   b[0]=scene_effects_gpu::barrier(color.resource.Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE);list->ResourceBarrier(1,b);copy(color,false);assert(SUCCEEDED(list->Close()));recorded+=GetTickCount64()-t;t=GetTickCount64();at("execute and wait");ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);wait();gpu_ms+=GetTickCount64()-t;at("readback");
    unsigned char* pixels{};D3D12_RANGE range{0,SIZE_T(color.bytes)};assert(SUCCEEDED(color.readback->Map(0,&range,(void**)&pixels)));
    for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){auto h=(const HALF*)(pixels+color.footprint.Offset+y*color.footprint.Footprint.RowPitch)+x*4;for(int i=0;i<4;++i)out[(y*W+x)*4+i]=XMConvertHalfToFloat(h[i]);}
    D3D12_RANGE none{0,0};color.readback->Unmap(0,&none);}
-  gpu_test::expect_clean(test_device,"effects run");return out;};
+  at("validation check");gpu_test::expect_clean(test_device,"effects run");const ULONGLONG t3=GetTickCount64();at("test");
+  std::printf("TIME run %d frames=%d setup+record=%u ms (ensure %u ms) gpu=%u ms readback+check=%u ms t=%.1f s\n",run_no.load(),frames,unsigned(recorded),unsigned(ensured),unsigned(gpu_ms),unsigned(t3-t0-recorded-gpu_ms),(t3-start)/1000.0);std::fflush(stdout);return out;};
  // The game's display chain applied to a written HDR value, to read back the display colour.
  auto aces=[](float x){return std::clamp(x*(2.51f*x+.03f)/(x*(2.43f*x+.59f)+.14f),0.f,1.f);};
  auto display=[&](const std::vector<float>& o,UINT x,UINT y){std::array<float,3> g{};for(int i=0;i<3;++i){g[i]=(std::pow(aces(.85f*o[(y*W+x)*4+i]),1/2.2f)-.45f)*1.12f+.45f;}
@@ -96,6 +113,6 @@ int main(){std::cout<<std::unitbuf;
   float mean=sum/(40*56);std::cout<<"Dither range "<<(lo-p)*255<<".."<<(hi-p)*255<<" LSB mean "<<(mean-p)*255<<'\n';assert(hi>lo&&(hi-p)*255<1.6f&&(p-lo)*255<1.6f&&std::abs(mean-p)*255<.3f);++cases;}
  // K09/XC-3: release() drops everything; the next record re-creates and resets on its own.
  {gpu.release();assert(!gpu.loaded());auto grey=[](UINT,UINT){return std::array<float,3>{.25f,.25f,.25f};};auto f=base();f.exposure={1,.5f,.05f,1.5f};auto o=run(f,grey,ground,10,{{},{},true});for(auto v:o)assert(std::isfinite(v));auto m=gpu.measured();assert(m.valid&&std::abs(m.fast+2)<.1f);std::cout<<"Released and re-created\n";++cases;}
- auto bad=base();bad.grading[0]=7;wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));assert(!gpu.record(list.Get(),nullptr,nullptr,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,bad,true));assert(SUCCEEDED(list->Close()));
- std::cout<<"PASS: scene effects "<<cases<<" D3D12 cases\n";CloseHandle(event);
+ at("invalid frame");auto bad=base();bad.grading[0]=7;wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));assert(!gpu.record(list.Get(),nullptr,nullptr,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,bad,true));assert(SUCCEEDED(list->Close()));
+ std::cout<<"PASS: scene effects "<<cases<<" D3D12 cases\n";CloseHandle(event);at("teardown");
 }
