@@ -423,7 +423,7 @@ int wmain(int argc,wchar_t** argv){std::cout<<std::unitbuf;std::cerr<<std::unitb
   // K38: the docs' preset table matches profile().
   auto table=preset_table();std::cout<<"PRESET_TABLE_BEGIN\n"<<table<<"PRESET_TABLE_END"<<std::endl;
   auto docs=std::filesystem::path(__FILE__).parent_path()/".."/"docs"/"mods"/"graphics.md";std::error_code missing;
-  if(std::filesystem::exists(docs,missing)){auto text=read_file(docs);std::string begin="<!-- preset-table:begin -->\n",end="<!-- preset-table:end -->";auto a=text.find(begin),b=text.find(end);
+  if(std::filesystem::exists(docs,missing)){auto text=read_file(docs);std::erase(text,'\r');std::string begin="<!-- preset-table:begin -->\n",end="<!-- preset-table:end -->";auto a=text.find(begin),b=text.find(end);
    assert(a!=std::string::npos&&b!=std::string::npos);if(text.substr(a+begin.size(),b-a-begin.size())!=table){std::cerr<<"docs/mods/graphics.md preset table differs from profile(); paste the table printed above"<<std::endl;assert(false);}std::cout<<"DOCS_TABLE matches"<<std::endl;}
   else std::cout<<"DOCS_TABLE skipped (docs not next to the source)"<<std::endl;
   for(auto child:{L"--legacy",L"--revision",L"--fresh",L"--fresh-igpu"})run_child(argv,child);}std::cout<<"PASS: native-only Graphics section, no AnyHelpers dependency or post-FX registrations, migration, draft/apply/cancel/reset, quality levels, thirteen profiles, light colour and wind, water reflections, TAA, sharpening, beam shaping, GPU cost readout, gameplay bypass and unavailable service\n";
