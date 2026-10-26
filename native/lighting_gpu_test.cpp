@@ -15,9 +15,10 @@
 #include "tests/gpu_test_device.h"
 using Microsoft::WRL::ComPtr;
 int main(int argc,char** argv){std::cout<<std::unitbuf;
- // K39: the shared WARP device (debug layer, GPU-based validation where the Graphics Tools are installed).
- // --no-gbv keeps the debug layer and the InfoQueue check but turns GPU-based validation off, for a comparison run.
- const bool gbv=!(argc>1&&std::strcmp(argv[1],"--no-gbv")==0);
+ // K39: the shared WARP device (debug layer and the InfoQueue check where the Graphics Tools are installed).
+ // GPU-based validation is opt-in (--gbv): on WARP it slows this shader enough that a frame can pass the 10 s wait
+ // (the laptop run of cfb6a24 ended at 72 s, and main's test never enabled it).
+ const bool gbv=argc>1&&std::strcmp(argv[1],"--gbv")==0;
  gpu_test::Device dev;assert(gpu_test::create(dev,gbv));ComPtr<ID3D12Device> device=dev.device;std::cout<<"Device validated="<<dev.validated<<" GPU-based validation requested="<<(dev.validated&&gbv)<<std::endl;
  ComPtr<ID3D12CommandQueue> queue=dev.queue;ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};auto wait=[&]{assert(SUCCEEDED(queue->Signal(fence.Get(),++serial)));assert(SUCCEEDED(fence->SetEventOnCompletion(serial,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);};
  ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));assert(SUCCEEDED(list->Close()));

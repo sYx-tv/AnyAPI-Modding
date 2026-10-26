@@ -32,9 +32,10 @@ int main(int argc,char** argv){std::cout<<std::unitbuf;
  auto at=[](const char* s){step=s;step_at=GetTickCount64();};
  if(HANDLE watchdog=CreateThread(nullptr,0,[](void*)->DWORD{ULONGLONG said=0;for(;;){Sleep(1000);ULONGLONG now=GetTickCount64(),since=now-step_at;
   if(since>=60000&&now-said>=60000){said=now;std::printf("WATCHDOG: run %d frame %d still in %s after %u s\n",run_no.load(),frame_no.load(),step.load(),unsigned(since/1000));std::fflush(stdout);}}},nullptr,0,nullptr))CloseHandle(watchdog);
- // K39: shared WARP device with the debug layer, GPU-based validation and an InfoQueue check per case.
- // --no-gbv keeps the debug layer and the InfoQueue check but turns GPU-based validation off, for a comparison run.
- const bool gbv=!(argc>1&&std::strcmp(argv[1],"--no-gbv")==0);
+ // K39: shared WARP device with the debug layer and an InfoQueue check per case (GPU-based validation with --gbv).
+ // GPU-based validation is opt-in (--gbv): on WARP it slows these shaders to minutes per run (the laptop run of
+ // cfb6a24 was killed at 626 s; main's test never enabled it). The debug layer and the InfoQueue check stay on.
+ const bool gbv=argc>1&&std::strcmp(argv[1],"--gbv")==0;
  gpu_test::Device test_device;assert(gpu_test::create(test_device,gbv));std::cout<<"Device: WARP, debug layer "<<(test_device.validated?"on":"off")<<", GPU-based validation "<<(test_device.validated&&gbv?"requested":"off")<<'\n';ComPtr<ID3D12Device> device=test_device.device;ComPtr<ID3D12CommandQueue> queue=test_device.queue;ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};
  auto wait=[&]{assert(SUCCEEDED(queue->Signal(fence.Get(),++serial)));assert(SUCCEEDED(fence->SetEventOnCompletion(serial,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);};
  ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));assert(SUCCEEDED(list->Close()));
