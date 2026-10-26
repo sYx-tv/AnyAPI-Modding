@@ -2,64 +2,58 @@
 
 > AnyLights hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
-> Prototype: not in the catalog yet.
+> Prototype: not in the catalog yet. Ships as its own mod (`AnyLights.dll`).
 
-AnyLights gives spot, omni and rotating lights a colour and a flash pattern.
+AnyLights turns the stock paint tools into one paint tool for every colour, and makes lights glow the colour
+they are painted.
 
-## Properties Tool
+## One paint tool
 
-Left click a light while holding the Properties Tool. Beside the Properties window an **AnyLights** panel
-opens with:
+The game gives every palette colour its own paint tool. With AnyLights, hold **any** paint tool and right
+click. A panel opens with:
 
-- **Colour**: Stock (the light's own colour) or eleven swatches, plus red, green and blue sliders
-- **Pattern**: Steady, Blink, Strobe, Double flash, Pulse, Alternate A, Alternate B, Colour cycle
-- **Speed**: 0.25 to 6 Hz
-- A live preview dot
+- **The whole palette** (84 colours) as real swatches, in the game's order. Hovering a swatch previews it.
+- **A large preview** of the colour with its hex code, and the glow a light painted that colour gets.
+- **Modes**: Fill, Flood, Brush, Pencil, Erase brush and Erase pencil, with a one-line hint for each.
 
-Alternate A and B are opposite halves of the same flash, so two lights on A and B take turns. The choice is
-saved in the light's **name** as a short tag on the end, for example `Left beacon ALff220032`. The game
-saves names with the vehicle, so lights keep their colour and pattern. Pick Stock and Steady to remove it.
+Click a swatch or a mode, then right click or press Esc to close the panel. The pick applies to every paint
+tool you hold and is remembered between sessions (`anylights_paint.txt` in the mods folder).
 
-## Data port and microcontroller
+**Ctrl+Z** undoes your last click with the paint tool on parts and on whole plate sides, one click per press.
+Edges, links and brush or pencil pixel strokes can't be undone yet: Ctrl+Z after one of those does nothing
+(it never reaches back to the click before). Undo history starts fresh in each world.
 
-On a host running AnyLights every light has extra data channels you can wire from a data port, a data link
-or a microcontroller:
+## Lights
 
-| Channel | Direction | Value |
-| --- | --- | --- |
-| `colour_r`, `colour_g`, `colour_b` | Input | 0-1 (or 0-255). Overrides the Properties colour while connected. All 0 means stock |
-| `pattern` | Input | 0 Steady, 1 Blink, 2 Strobe, 3 Double flash, 4 Pulse, 5 Alternate A, 6 Alternate B, 7 Colour cycle |
-| `pattern_speed` | Input | Hz; snaps to the nearest of 0.25, 0.5, 1, 1.5, 2, 3, 4, 6 |
-| `pattern_lit` | Output | 1 while the pattern is in its on phase, else 0 |
+Paint a light with Fill or Flood (AnyLights paints the light part itself, even where the stock tool finds no
+paintable surface on it). Spot, omni and rotating lights glow the colour of their paint, at full brightness so dark paints still light
+up. Greys, black and white paint give white light. Unpainted lights keep the stock warm white.
 
-Unconnected inputs leave the Properties choice in charge. The panel says when logic is driving the light.
-The channels appear on lights built or loaded after AnyLights is ready.
+## Multiplayer
 
-## Co-op
-
-The host turns each light's tag and data inputs into one number and sends it to every player, again every
-few seconds for players who join later. **The host needs AnyLights.** Players with AnyLights see the colours
-and patterns; players without it see stock lights and the tag in the light's name. Flash timing follows each
-player's own clock, so patterns are not in step between players.
+Painting sends only the game's own paint events with a palette colour, and the host accepts them as they are,
+so paint is saved with the vehicle and every player sees it, with or without AnyLights. The host doesn't need
+the mod. Light colours are worked out on each player's own game from that paint: players with AnyLights see
+coloured lights, players without it see stock lights.
 
 ## Settings (AnyHelpers)
 
 | Setting | Default |
 | --- | --- |
-| Enable AnyLights colours and patterns | On |
-| Add data channels to lights (host) | On |
-| Show the panel with the Properties tool | On |
+| One paint tool for every colour | On |
+| Lights glow their paint colour | On |
 
 ## Test plan
 
-Build `AnyLights.dll` with the native CMake project and copy it to `AnyAPI and Modding/mods/`. The lines
-tagged `anylights` in `anymaker_modding.log` are what we need.
+Build `AnyLights.dll` with the native CMake project. The lines tagged `anylights`
+in `anymaker_modding.log` are what we need.
 
-1. Load a world. Expect `Ready after N s`.
-2. Open a spot light's Properties window. Expect the panel and a `panel:` line. Pick Red and Strobe: the
-   light should flash red, the name should end in a tag, and the log should show `light name ->` and
-   `host spot light: ... word`.
-3. Repeat on an omni and a rotating light. Save and reload the vehicle: the patterns should come back.
-4. Add a microcontroller, open its data connections and look for the AnyLights channels on a light (log:
-   `light data channels:`). Wire `pattern` to a constant 4 and `pattern_lit` to an indicator.
-5. Co-op: a second player with AnyLights joins and should see the same colours.
+1. Load a world. Expect `Ready after N s` and, once you hold a paint tool, `palette: 84 colours` and
+   `paint tool held: ...`.
+2. Hold any paint tool and right click: the panel opens. Pick a colour far from the tool's own, close the
+   panel and fill a part, a plate and an edge: they take the picked colour. The hotbar icon follows it.
+3. Try every mode from the panel, including flood and both erasers.
+4. Ctrl+Z after a fill: the part goes back (log: `undo: repainted ...`).
+5. Paint a spot, an omni and a rotating light red: each glows red (log: `... light: N paint slots ...`).
+6. Save and reload: paint and light colours come back.
+7. Co-op: a second player (with or without AnyLights) sees the paint; with AnyLights they also see the light colours.

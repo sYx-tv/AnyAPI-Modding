@@ -42,7 +42,7 @@ Built from source only, not in the catalog yet. They use the experimental SDK.
 
 | Mod | Features | Optional integration |
 | --- | --- | --- |
-| [AnyLights](lights.md) | Light colours and flash patterns in the Properties Tool, with data port and microcontroller channels | AnyHelpers settings |
+| [AnyLights](lights.md) | One paint tool for every colour (palette panel, modes, Ctrl+Z undo); lights glow their paint colour | AnyHelpers settings |
 | [AnyEngineParts](engine-parts.md) | Exhaust-driven turbochargers (3x3x2 and 6x6x2) and superchargers with blow-off valves, wastegate antilag and boost channels, and a stretchable 1-4 rotor rotary engine, each with synthesized sounds; single player | Rotary works alongside EngineSound |
 | [AnyCombat](combat.md) | Hit markers and floating damage numbers for the hits you deal, red on a kill | AnyHelpers settings |
 | [AnyPerformance](performance.md) | Smooths the world's slow-motion and catch-up when the simulation stalls, logs what stalled it and every frame hitch, and keeps the server's 60 ticks a second evenly spaced | AnyHelpers settings |
