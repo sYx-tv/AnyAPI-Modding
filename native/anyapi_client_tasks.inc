@@ -19,9 +19,9 @@ static uint64_t post(uint64_t token,uint64_t epoch,Callback callback,void* user)
     return queue.post(token,epoch,callback,user);
 }
 static bool cancel(uint64_t token,uint64_t ticket) { return queue.cancel(token,ticket); }
-static bool invoke(const anyapi_runtime::TaskQueue<Callback>::Job* job,const AnyClientTaskFrameV1* frame) {
+static bool invoke(const anyapi_runtime::TaskQueue<Callback>::Job* job,const AnyClientTaskFrameV1* frame,uint32_t& code) {
     __try { job->callback(frame,job->user); return true; }
-    __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+    __except(code=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 static const AnyClientTasksV1 api{sizeof(AnyClientTasksV1),1,owner,post,cancel};
 }
@@ -32,7 +32,7 @@ static void anyapi_client_tasks_tick(uint64_t epoch) {
         int id=int(job.owner)-1;
         if (!anyapi_owner_active(id) || (job.epoch && job.epoch!=epoch)) continue;
         int previous=platform::current_plugin; platform::current_plugin=id;
-        bool ok=client_tasks::invoke(&job,&frame); platform::current_plugin=previous;
-        if (!ok) { anyapi_owner_fault(id); log_line(ANY_LOG_ERROR,"framework","Client task provider disabled after exception"); }
+        uint32_t code=0; bool ok=client_tasks::invoke(&job,&frame,code); platform::current_plugin=previous;
+        if (!ok) anyapi_owner_fault(id,"client_task",code);
     }
 }

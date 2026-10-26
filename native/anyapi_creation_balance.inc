@@ -2,6 +2,7 @@
 #include <array>
 #include "balance_contract.h"
 #include "runtime_call_cell.h"
+#include "aa/scene_jitter.h"
 namespace balance_runtime {
 using namespace balance_contract;
 using Overlay=void(*)(void*,void*,void*,void*,const bool*,const int32_t*,void*);
@@ -180,8 +181,10 @@ static void anyapi_creation_balance_tick(void* scene,void* actor){balance_runtim
 static void anyapi_creation_balance_render_camera(void* scene){
  if(!balance_runtime::allowed_item||!scene)return;
  balance::RenderCamera camera;
- if(!safe_read_memory(uintptr_t(scene)+8,&camera.origin,sizeof(camera.origin))||
-    !safe_read_memory(uintptr_t(scene)+0x20+0x220,camera.matrix,sizeof(camera.matrix))||!balance::finite(camera.origin))return;
+ if(!safe_read_native(uintptr_t(scene)+8,&camera.origin,sizeof(camera.origin))||
+    !safe_read_native(uintptr_t(scene)+0x20+0x220,camera.matrix,sizeof(camera.matrix))||!balance::finite(camera.origin))return;
  for(double value:camera.matrix)if(!std::isfinite(value))return;
+ // K32: drawn after AA, so remove this frame's TAA jitter (exact matrix match only).
+ scene_jitter::unjitter_view_projection(camera.matrix);
  std::lock_guard lock(balance_runtime::projection_mutex);balance_runtime::render_camera=camera;balance_runtime::render_camera_tick=GetTickCount64();
 }

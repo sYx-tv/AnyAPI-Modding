@@ -1,4 +1,4 @@
-// AnyCareer 0.0.7: a survival career. Cash, nine traders with buying, selling and job boards, delivery and kill jobs.
+// AnyCareer 0.0.8: a survival career. Cash, nine traders with buying, selling and job boards, delivery and kill jobs.
 //
 //   Cash item: a new inventory item, "Cash", added to the game's item definitions right after the game adds its
 //      own (inventory_definition_container._add_definitions, on the server and the client scene). Its definition is
@@ -9,8 +9,7 @@
 //      with a paper band: a flat-colour mesh made at start-up (anycareer_cash_mesh.h) and written beside the game's
 //      part meshes; if that fails, Cash keeps the ammo box look.
 //   The Mechanic: one trader per world, at the gas station spot nearest the Survival start (gas station spots are
-//      read from the player's own rom/data/tiles at start-up). The spot is kept in "AnyAPI and Modding/mods/AnyCareer/worlds/<world seed>.txt". Far away, a line at the top of
-//      the screen gives the distance and direction; within kTradeRange, J (rebindable in Mod Controls) opens the
+//      read from the player's own rom/data/tiles at start-up). The spot is kept in "AnyAPI and Modding/mods/AnyCareer/worlds/<world seed>.txt". Traders show on AnyMap; within kTradeRange, J (rebindable in Mod Controls) opens the
 //      shop, and AnyMap (when installed) shows him as a pin through its anymap.pins service. Shop rows show the
 //      part's picture (AnyAPI item images). Mouse: click a row's Buy or Sell button, a tab or X; the wheel
 //      scrolls; right click closes. The keyboard works too. Buy: up to 16 mechanical and electrical parts that can drop at the world's loot level, 1-3 of each, picked from
@@ -20,7 +19,12 @@
 //      (a stack's count is set through its own property setter; emptied stacks are removed with
 //      server_scene.inventory.destroy_item) and drops the part at your feet; selling removes the item first and
 //      then drops the Cash. The shop's stock only exists in the mod, so there is no box to break, steal from or
-//      duplicate. Trading and jobs are the host's; joiners see every trader's pin and a note at the counter.
+//      duplicate. Co-op: joiners trade and take jobs too (anycareer_net.h over steam_messages.h, the game's own
+//      Steam sessions). A joiner's AnyCareer sends his key presses to the host; the host checks the sender against
+//      the players in the world, does the same step at the joiner's feet and from his inventory, and sends him his
+//      screen twice a second. Jobs belong to the team: one job in hand per world, any player can deliver or claim
+//      it. Without an answer from the host (no AnyCareer 0.0.8 there, or a direct-IP game), a joiner still gets
+//      every trader's pin (logic::layout_traders) and a note at the counter.
 //   The other traders (logic::kShops): Builder (building parts), Junkyard (cheap used parts, new every
 //      day; buys anything at scrap price), Grocer (food, drink, survival supplies), Medic (medical), Marine & Air (boat and plane parts) and
 //      the Mod Shop (parts other mods add: any part the game's own rom/data/vehicle_component_definitions.json
@@ -76,6 +80,8 @@
 #include "anyapi_experimental.hpp"
 #include "anycareer_bindings.h"
 #include "anycareer_logic.h"
+#include "anycareer_net.h"
+#include "steam_messages.h"
 #include "anycareer_cash_mesh.h"
 #include "anyapi_asset_json.h"
 #include "route_cell.h"
@@ -238,7 +244,8 @@ std::atomic<uint32_t> g_mode{ANY_MODE_UNKNOWN};
 
 enum class Job { give_cash, price_list, buy, sell, take, abandon, deliver, claim, test_items, teleport };
 // key: shelf row (buy), item id (sell), offer number (take), reward choice (claim: 0 Cash, 1-3 a part)
-struct Work { Job job; double yaw; ULONGLONG posted; int32_t key; int shop = 0; };   // shop: the trader (buy, sell)
+// shop: the trader (buy, sell); peer_id: a joiner's server peer id (co-op, anycareer_net.h), -1 for the host.
+struct Work { Job job; double yaw; ULONGLONG posted; int32_t key; int shop = 0; int32_t peer_id = -1; };
 std::mutex g_mutex;
 std::deque<Work> g_queue;   // key presses waiting for the next server tick
 
@@ -280,6 +287,13 @@ std::string read_string(const uint8_t* at) {
     return std::string(s.data, size_t(s.length));
 }
 
+std::string utf8w(const std::wstring& w) {
+    if (w.empty()) return {};
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.data(), int(w.size()), nullptr, 0, nullptr, nullptr);
+    std::string out(size_t(n > 0 ? n : 0), '\0');
+    if (n > 0) WideCharToMultiByte(CP_UTF8, 0, w.data(), int(w.size()), out.data(), n, nullptr, nullptr);
+    return out;
+}
 std::string utf8(const std::filesystem::path& p) {
     auto u = p.u8string();
     return std::string(u.begin(), u.end());
@@ -423,13 +437,17 @@ bool add_ours(void* container, const void* outfit, const std::string& text) {
     return ok;
 }
 
-// The Cash definitions added so far (one per definition container): the ammo_box init hook knows Cash by these.
+// The newest Cash definitions (one per definition container; each world load makes a server and a client one): the
+// ammo_box init hook knows Cash by these. A ring, so the current world's always fit however many worlds were loaded
+// in one run (a full list once left loot Cash at the ammo box's 9999 fill from the third load on).
 std::atomic<const uint8_t*> g_cash_defs[4]{};
+std::atomic<uint32_t> g_cash_next{0};
+std::mutex g_cash_mutex;
 void remember_cash(const uint8_t* def) {
-    for (auto& d : g_cash_defs) {
-        const uint8_t* empty = nullptr;
-        if (d.load() == def || d.compare_exchange_strong(empty, def)) return;
-    }
+    if (!def) return;
+    std::lock_guard lock(g_cash_mutex);
+    for (auto& d : g_cash_defs) if (d.load() == def) return;
+    g_cash_defs[g_cash_next++ % 4].store(def);
 }
 bool is_cash(const uint8_t* def) {
     for (const auto& d : g_cash_defs) if (def && d.load() == def) return true;
@@ -454,6 +472,15 @@ void hk_add_definitions(void* container, const void* file, const void* outfit) {
 uint8_t* host_peer(uint8_t* scene) {
     uint8_t* peer = nullptr;
     for (int32_t id = 0; id < 64 && !peer; ++id) peer_by_id(&peer, scene + off::server_peers, &id);   // the host joins first
+    return peer && anymaker::readable(peer + off::peer_position, 24) ? peer : nullptr;
+}
+
+// The player a job is for: the host, or the joiner who asked (by his server peer id).
+uint8_t* work_peer(uint8_t* scene, const Work& w) {
+    if (w.peer_id < 0) return host_peer(scene);
+    uint8_t* peer = nullptr;
+    int32_t id = w.peer_id;
+    peer_by_id(&peer, scene + off::server_peers, &id);
     return peer && anymaker::readable(peer + off::peer_position, 24) ? peer : nullptr;
 }
 
@@ -582,6 +609,7 @@ struct Trader {
     const uint8_t* part_item_def = nullptr;       // "vehicle_editor_add_component"
     uint32_t ticks = 0;
     std::wstring status;
+    std::unordered_map<int32_t, std::wstring> peer_status;   // each joiner's last message line, by server peer id
 };
 Trader T;
 Carried g_carried[1024];                          // server thread only; too big for its stack
@@ -725,7 +753,7 @@ int shop_here(uint8_t* peer) {
 }
 
 void buy(uint8_t* scene, const Work& w) {
-    uint8_t* peer = host_peer(scene);
+    uint8_t* peer = work_peer(scene, w);
     uint8_t* inventory = peer_inventory(peer);
     const int s = w.shop;
     auto fail = [&](const char* why, const std::wstring& say) { T.status = say; log(1, "ANYCAREER_BUY ok=0 reason=%s shop=%d row=%d", why, s, w.key); };
@@ -782,7 +810,7 @@ void buy(uint8_t* scene, const Work& w) {
 }
 
 void sell(uint8_t* scene, const Work& w) {
-    uint8_t* peer = host_peer(scene);
+    uint8_t* peer = work_peer(scene, w);
     uint8_t* inventory = peer_inventory(peer);
     const int s = w.shop;
     auto fail = [&](const char* why, const wchar_t* say) { T.status = say; log(1, "ANYCAREER_SELL ok=0 reason=%s shop=%d item=%d", why, s, w.key); };
@@ -924,7 +952,7 @@ void job_done() {
 }
 
 void take(uint8_t* scene, const Work& w) {
-    uint8_t* peer = host_peer(scene);
+    uint8_t* peer = work_peer(scene, w);
     const int s = w.shop;
     auto fail = [&](const char* why, const wchar_t* say) { T.status = say; log(1, "ANYCAREER_TAKE ok=0 reason=%s shop=%d offer=%d", why, s, w.key); };
     if (!peer) return fail("no_host_player", L"You need to be alive to take a job.");
@@ -971,8 +999,8 @@ void abandon(uint8_t*, const Work&) {
     T.status = L"Job abandoned. Today's other jobs are still on the board.";
 }
 
-void deliver(uint8_t* scene, const Work&) {
-    uint8_t* peer = host_peer(scene);
+void deliver(uint8_t* scene, const Work& w) {
+    uint8_t* peer = work_peer(scene, w);
     uint8_t* inventory = peer_inventory(peer);
     auto fail = [&](const char* why, const std::wstring& say) { T.status = say; log(1, "ANYCAREER_DELIVER ok=0 reason=%s", why); };
     if (!inventory) return fail("no_host_player", L"You need to be alive to deliver.");
@@ -1016,7 +1044,7 @@ Ref make_goods(uint8_t* scene, const Candidate& c) {
 }
 
 void claim(uint8_t* scene, const Work& w) {
-    uint8_t* peer = host_peer(scene);
+    uint8_t* peer = work_peer(scene, w);
     auto fail = [&](const char* why, const wchar_t* say) { T.status = say; log(1, "ANYCAREER_CLAIM ok=0 reason=%s choice=%d", why, w.key); };
     if (!peer) return fail("no_host_player", L"You need to be alive to take your reward.");
     if (T.world.job_state != 2) return fail("nothing_owed", L"No reward waiting.");
@@ -1101,12 +1129,20 @@ void on_zombie_hit(uint8_t* zombie, uint8_t* scene, const uint8_t* src, double b
     std::string kind = def ? read_string(def) : std::string();
     int32_t client_id = g_client_actor_id.load();
     int32_t type = src && anymaker::readable(src + off::damage_src_type, 4) ? rd<int32_t>(src, off::damage_src_type) : -1;
-    // Where it died, from the host. The final test logged sources that were neither id (28, 66, 121, 627, ...: shots
-    // can carry other ids), so a kill close to the host counts too: in Survival a zombie that drops next to you is yours.
+    // Where it died, from the nearest player. The final test logged sources that were neither id (28, 66, 121, 627,
+    // ...: shots can carry other ids), so a kill close to a player counts too: a zombie that drops next to you is
+    // yours. The job is the whole team's (co-op), so any player's kill counts.
     double metres = -1;
-    if (peer && anymaker::readable(zombie + off::server_actor_position, sizeof(Vec3))) {
-        Vec3 z = rd<Vec3>(zombie, off::server_actor_position), p = rd<Vec3>(peer, off::peer_position);
-        metres = std::hypot(z.x - p.x, z.z - p.z);
+    if (anymaker::readable(zombie + off::server_actor_position, sizeof(Vec3))) {
+        Vec3 z = rd<Vec3>(zombie, off::server_actor_position);
+        for (int32_t id = 0; id < 64; ++id) {
+            uint8_t* other = nullptr;
+            peer_by_id(&other, scene + off::server_peers, &id);
+            if (!other || !anymaker::readable(other + off::peer_position, 24)) continue;
+            Vec3 p = rd<Vec3>(other, off::peer_position);
+            double d = std::hypot(z.x - p.x, z.z - p.z);
+            if (metres < 0 || d < metres) metres = d;
+        }
     }
     bool mine = (by >= 0 && (by == host_id || by == client_id)) || (metres >= 0 && metres <= kKillReach);
     bool counts = mine && T.world.job_state == 1 && T.world.job_kill && (T.world.job_item == "any" || T.world.job_item == kind);
@@ -1236,14 +1272,15 @@ void job_rows(View& v, uint8_t* peer, int have) {
     }
 }
 
-void publish_view(uint8_t* scene) {
+// One player's screen: the trader he stands at, its shelf, what he carries that it buys (when his screen is open),
+// and the job board. The host's goes to the renderer; each joiner's is sent to him (anycareer_net.h).
+View build_view(uint8_t* scene, uint8_t* peer, bool open, const std::wstring& status) {
     View v;
     v.placed = T.world.placed;
     v.trader = T.world.trader;
     v.days = T.world.days;
-    v.status = T.status;
+    v.status = status;
     for (int s = 0; s < logic::kShopCount; ++s) v.shops[s] = {shop_placed(s), shop_at(s)};
-    uint8_t* peer = host_peer(scene);
     v.shop = peer ? shop_here(peer) : -1;
     if (v.shop >= 0) {
         int64_t period = logic::kShops[v.shop].daily ? 1 : kRestockDays;
@@ -1260,12 +1297,12 @@ void publish_view(uint8_t* scene) {
             v.buy.push_back({name, c.price, std::max(0, shelf[i].quantity - sold[i]), int32_t(i), c.id});
         }
     }
-    uint8_t* inventory = (g_shop_open || (T.world.job_state == 1 && !T.world.job_kill)) && T.cash_def ? peer_inventory(peer) : nullptr;
+    uint8_t* inventory = (open || (T.world.job_state == 1 && !T.world.job_kill)) && T.cash_def ? peer_inventory(peer) : nullptr;
     int n = inventory ? carried(inventory) : 0;
     int have = 0;
     if (T.world.job_state == 1 && !T.world.job_kill && inventory) have = job_items(n, job_def(scene));
     job_rows(v, peer, have);
-    if (inventory && g_shop_open) {
+    if (inventory && open) {
         for (int i = 0; i < n; ++i) {
             if (g_carried[i].def == T.cash_def) { v.cash += rd<int32_t>(g_carried[i].item, off::ammo_count + off::property_value); continue; }
             std::string name, id;
@@ -1274,6 +1311,11 @@ void publish_view(uint8_t* scene) {
             if (value) v.sell.push_back({wide(name) + (count > 1 ? L" x" + std::to_wstring(count) : L""), value, count, g_carried[i].id, id});
         }
     }
+    return v;
+}
+
+void publish_view(uint8_t* scene) {
+    View v = build_view(scene, host_peer(scene), g_shop_open, T.status);
     std::lock_guard lock(g_view_mutex);
     g_view = std::move(v);
 }
@@ -1388,6 +1430,153 @@ void run_job(uint8_t* scene, const Work& w) {
     } __except (EXCEPTION_EXECUTE_HANDLER) { log(2, "ANYCAREER_JOB ok=0 job=%d reason=native_exception", int(w.job)); }
 }
 
+// ------------------------------------------------------------------ co-op (anycareer_net.h, steam_messages.h)
+// Joiners run AnyCareer too. Each asks the host (poll twice a second, and buy/sell/take/... when he clicks); the host
+// does it in this server tick exactly as for itself (same checks, at the joiner's own position and inventory) and
+// sends him his screen. Jobs are the team's: one job in hand for the world, any player can deliver it or claim it.
+static_assert(net::kShops == logic::kShopCount, "the wire format carries one spot per trader");
+steam_messages::Line g_line;                      // under g_net_mutex (server tick on the host; render and input on a joiner)
+std::mutex g_net_mutex;
+
+net::View to_net(const View& v) {
+    net::View n;
+    n.placed = v.placed;
+    for (int s = 0; s < logic::kShopCount; ++s) n.shops[s] = {v.shops[s].placed, v.shops[s].at.x, v.shops[s].at.y, v.shops[s].at.z};
+    n.shop = int8_t(v.shop); n.cash = v.cash; n.days = v.days; n.restock_in = v.restock_in; n.board = v.board;
+    n.job_state = v.job_state; n.job_have = v.job_have; n.job_count = v.job_count; n.job_shop = v.job_shop; n.next_tier = v.next_tier;
+    n.job_kill = v.job_kill; n.job_at = {true, v.job_at.x, v.job_at.y, v.job_at.z};
+    n.job_text = utf8w(v.job_text); n.status = utf8w(v.status);
+    auto rows = [](const std::vector<Row>& from, std::vector<net::Row>& to) {
+        for (const auto& r : from) to.push_back({utf8w(r.name), r.id, utf8w(r.button), r.price, r.quantity, r.key, r.off});
+    };
+    rows(v.buy, n.buy); rows(v.sell, n.sell); rows(v.jobs, n.jobs);
+    return n;
+}
+View from_net(const net::View& n) {
+    View v;
+    v.placed = n.placed && n.shops[logic::kMechanic].placed;
+    v.trader = {n.shops[logic::kMechanic].x, n.shops[logic::kMechanic].y, n.shops[logic::kMechanic].z};
+    for (int s = 0; s < logic::kShopCount; ++s) v.shops[s] = {n.shops[s].placed, {n.shops[s].x, n.shops[s].y, n.shops[s].z}};
+    v.shop = n.shop; v.cash = n.cash; v.days = n.days; v.restock_in = n.restock_in; v.board = n.board;
+    v.job_state = n.job_state; v.job_have = n.job_have; v.job_count = n.job_count; v.job_shop = n.job_shop; v.next_tier = n.next_tier;
+    v.job_kill = n.job_kill; v.job_at = {n.job_at.x, n.job_at.y, n.job_at.z};
+    v.job_text = wide(n.job_text); v.status = wide(n.status);
+    auto rows = [](const std::vector<net::Row>& from, std::vector<Row>& to) {
+        for (const auto& r : from) { Row row; row.name = wide(r.name); row.price = r.price; row.quantity = r.quantity; row.key = r.key; row.id = r.id;
+                                     row.button = wide(r.button); row.off = r.off; to.push_back(std::move(row)); }
+    };
+    rows(n.buy, v.buy); rows(n.sell, v.sell); rows(n.jobs, v.jobs);
+    return v;
+}
+
+// The players in the world with a Steam id (not this PC's), as peer id -> Steam id.
+struct RosterEntry { int32_t peer_id; uint64_t steam; };
+std::vector<RosterEntry> remote_players(AnySessionPlayersV1& buffer) {
+    std::vector<RosterEntry> out;
+    buffer = AnySessionPlayersV1{};
+    uint32_t flags = 0;
+    if (!host.copy_players || !host.copy_players(&buffer, &flags)) return out;
+    for (uint32_t i = 0; i < buffer.count && i < ANYAPI_PLAYERS_CAPACITY; ++i) {
+        const auto& p = buffer.players[i];
+        if ((p.valid_fields & PLAYER_LOCAL) || !(p.valid_fields & PLAYER_STEAM_ID)) continue;
+        char id[33]{};
+        std::memcpy(id, p.steam_id, sizeof p.steam_id);
+        if (uint64_t steam = net::parse_steam_id(id)) out.push_back({p.peer_id, steam});
+    }
+    return out;
+}
+
+Job job_of(uint8_t action) {
+    switch (action) {
+    case net::kBuy: return Job::buy;
+    case net::kSell: return Job::sell;
+    case net::kTake: return Job::take;
+    case net::kAbandon: return Job::abandon;
+    case net::kDeliver: return Job::deliver;
+    default: return Job::claim;
+    }
+}
+
+// A job, with its message line kept for the player it was for (the host's screen, or that joiner's).
+void do_job(uint8_t* scene, const Work& w) {
+    std::wstring host_status = T.status;
+    T.status.clear();
+    run_job(scene, w);
+    if (w.peer_id >= 0) {
+        if (!T.status.empty()) T.peer_status[w.peer_id] = T.status;
+        T.status = host_status;
+    } else if (T.status.empty()) {
+        T.status = host_status;
+    }
+}
+
+struct Joiner { uint64_t steam = 0; int32_t peer_id = -1; bool open = false, dirty = false, logged = false; ULONGLONG last = 0, sent = 0; net::Rate rate; };
+std::vector<Joiner> g_joiners;                    // server thread
+uint8_t g_net_in[net::kMaxMessage];               // server thread
+
+void net_host_tick(uint8_t* scene) {
+    if (!T.loaded || !T.world.placed) return;
+    const ULONGLONG now = GetTickCount64();
+    static AnySessionPlayersV1 roster_buffer;     // about 21 KB; server thread only
+    static std::vector<RosterEntry> roster;
+    static ULONGLONG roster_at = 0;
+    if (now - roster_at >= 500) { roster_at = now; roster = remote_players(roster_buffer); }
+    if (roster.empty()) { g_joiners.clear(); return; }
+    std::vector<Work> asked;
+    {
+        std::lock_guard lock(g_net_mutex);
+        if (!g_line.ready(net::kChannel)) return;
+        for (int i = 0; i < 32; ++i) {
+            uint32_t size = 0;
+            uint64_t sender = 0;
+            int got = g_line.receive(g_net_in, sizeof g_net_in, size, sender);
+            if (got < 0) { log(2, "ANYCAREER_COOP ok=0 reason=steam_call_fault (co-op off for this session)"); return; }
+            if (!got) break;
+            const RosterEntry* from = nullptr;
+            for (const auto& r : roster) if (sender && r.steam == sender) from = &r;
+            net::Request req;
+            static int drops = 0;
+            if (!from || size > sizeof g_net_in || !net::decode(g_net_in, size, req)) {
+                if (drops++ < 20) log(1, "ANYCAREER_COOP dropped reason=%s size=%u", !from ? "not_in_world" : "bad_format", size);
+                continue;
+            }
+            Joiner* j = nullptr;
+            for (auto& x : g_joiners) if (x.steam == sender) j = &x;
+            if (!j) { g_joiners.push_back({}); j = &g_joiners.back(); j->steam = sender; }
+            if (!net::admit(j->rate, now)) continue;
+            j->peer_id = from->peer_id; j->open = req.open; j->last = now;
+            if (req.action != net::kPoll) {
+                asked.push_back({job_of(req.action), double(req.yaw), now, req.key, req.shop, from->peer_id});
+                j->dirty = true;
+            }
+        }
+    }
+    std::erase_if(g_joiners, [&](const Joiner& j) { return now - j.last > 5000; });
+    for (const auto& w : asked) {
+        log(0, "ANYCAREER_COOP job=%d peer=%d shop=%d key=%d", int(w.job), w.peer_id, w.shop, w.key);
+        do_job(scene, w);
+    }
+    for (auto& j : g_joiners) {
+        if (!j.dirty && now - j.sent < 500) continue;
+        Work who{};
+        who.peer_id = j.peer_id;
+        uint8_t* peer = work_peer(scene, who);
+        if (!j.logged) { j.logged = true; log(peer ? 0 : 1, "ANYCAREER_COOP joiner peer=%d found=%d", j.peer_id, peer ? 1 : 0); }
+        if (!peer) continue;
+        auto it = T.peer_status.find(j.peer_id);
+        std::vector<uint8_t> bytes = net::encode(to_net(build_view(scene, peer, j.open, it != T.peer_status.end() ? it->second : std::wstring())));
+        j.sent = now; j.dirty = false;
+        if (bytes.size() > net::kMaxMessage) { log(1, "ANYCAREER_COOP view_too_big bytes=%u", unsigned(bytes.size())); continue; }
+        std::lock_guard lock(g_net_mutex);
+        int32_t result = g_line.send(j.steam, bytes.data(), uint32_t(bytes.size()));
+        static int sends = 0;
+        if (sends++ < 5 || result != 1) log(result == 1 ? 0 : 1, "ANYCAREER_COOP view peer=%d bytes=%u result=%d", j.peer_id, unsigned(bytes.size()), result);
+    }
+}
+void run_net_host(uint8_t* scene) {
+    __try { net_host_tick(scene); } __except (EXCEPTION_EXECUTE_HANDLER) { log(2, "ANYCAREER_COOP ok=0 reason=native_exception"); }
+}
+
 void hk_tick(uint8_t* scene, uint8_t* server) {
     if (scene && !g_stop) {
         g_last_tick = GetTickCount64();
@@ -1397,8 +1586,9 @@ void hk_tick(uint8_t* scene, uint8_t* server) {
         { std::lock_guard lock(g_mutex); work.swap(g_queue); }
         for (auto& w : work) {
             if (GetTickCount64() - w.posted > 3000) { log(1, "ANYCAREER_JOB ok=0 reason=expired"); continue; }
-            run_job(scene, w);
+            do_job(scene, w);
         }
+        if (career_mode()) run_net_host(scene);
         if (T.tp_check && GetTickCount64() > T.tp_check) {
             T.tp_check = 0;
             uint8_t* peer = host_peer(scene);
@@ -1448,6 +1638,64 @@ Local local_player() {
 }
 
 bool hosting() { return GetTickCount64() - g_last_tick < 2000; }
+
+// A joiner's side of co-op (anycareer_net.h): his screen comes from the host. Until it does (or when the host runs no
+// AnyCareer), the traders' spots come from the map alone (logic::layout_traders, as the host places them): pins and a
+// note at the counter. Render and input threads, under g_ui_mutex.
+View g_joiner_layout;
+bool g_joiner_layout_done = false;
+View g_remote;                                    // the host's last screen for us
+ULONGLONG g_remote_at = 0;
+uint64_t g_host_steam = 0;
+bool remote_fresh() { return g_remote_at && GetTickCount64() - g_remote_at < 3000; }
+
+void joiner_send(const net::Request& r) {
+    std::vector<uint8_t> bytes = net::encode(r);
+    std::lock_guard lock(g_net_mutex);
+    if (g_host_steam && g_line.ready(net::kChannel)) g_line.send(g_host_steam, bytes.data(), uint32_t(bytes.size()));
+}
+
+void net_joiner_tick() {
+    const ULONGLONG now = GetTickCount64();
+    static AnySessionPlayersV1 roster_buffer;     // about 21 KB; render thread only
+    static ULONGLONG roster_at = 0, polled = 0;
+    if (now - roster_at >= 500) {
+        roster_at = now;
+        // The host is the player who joined first (the lowest peer id).
+        uint64_t host_steam = 0;
+        int32_t lowest = INT32_MAX;
+        for (const auto& r : remote_players(roster_buffer)) if (r.peer_id < lowest) { lowest = r.peer_id; host_steam = r.steam; }
+        if (host_steam != g_host_steam) { g_host_steam = host_steam; g_remote_at = 0; log(0, "ANYCAREER_COOP host_found=%d", host_steam ? 1 : 0); }
+    }
+    if (!g_host_steam) return;
+    if (now - polled >= 500) {
+        polled = now;
+        net::Request poll;
+        poll.action = net::kPoll; poll.shop = int8_t(g_open && !g_dropoff ? g_shop : -1); poll.open = g_open;
+        joiner_send(poll);
+    }
+    static uint8_t buffer[net::kMaxMessage];
+    std::lock_guard lock(g_net_mutex);
+    for (int i = 0; i < 8; ++i) {
+        uint32_t size = 0;
+        uint64_t sender = 0;
+        int got = g_line.receive(buffer, sizeof buffer, size, sender);
+        if (got <= 0) break;
+        net::View n;
+        if (sender != g_host_steam || size > sizeof buffer || !net::decode(buffer, size, n)) continue;
+        bool first = !g_remote_at;
+        g_remote = from_net(n);
+        g_remote_at = now;
+        if (first) log(0, "ANYCAREER_COOP host_screen=1 bytes=%u shop=%d", size, n.shop);
+    }
+}
+
+// The screen this PC shows: the host's own, a joiner's from the host, or a joiner's map-only pins.
+View screen_view() {
+    if (hosting()) { std::lock_guard view_lock(g_view_mutex); return g_view; }
+    if (remote_fresh()) return g_remote;
+    return g_joiner_layout;
+}
 
 // The local client scene (F2 free move), as AnyMap reaches it.
 uint8_t* local_scene() {
@@ -1759,23 +2007,20 @@ void draw(const AnyFrameV1* f, void*) {
     if (session) { AnySessionStateV1 s; if (session->copy(&s)) g_mode = s.mode; }
     std::lock_guard lock(g_ui_mutex);
     g_frame_w = float(f->width); g_frame_h = float(f->height);
-    // A joiner has no server tick: the traders' spots come from the map alone (logic::layout_traders, as the host
-    // places them). Trading stays with the host for now; a joiner gets the pins and a note at the counter.
     const bool host_here = hosting();
-    static View joiner;
-    static bool joiner_ready = false;
-    if (!host_here && !joiner_ready && g_stations_ready) {
+    if (!host_here && !g_joiner_layout_done && g_stations_ready) {
         logic::Zone at[logic::kShopCount];
         bool placed[logic::kShopCount];
         if (logic::layout_traders(g_stations, g_places, at, placed)) {
-            joiner.placed = true;
-            joiner.trader = at[logic::kMechanic];
-            for (int s = 0; s < logic::kShopCount; ++s) joiner.shops[s] = {placed[s], at[s]};
+            g_joiner_layout.placed = true;
+            g_joiner_layout.trader = at[logic::kMechanic];
+            for (int s = 0; s < logic::kShopCount; ++s) g_joiner_layout.shops[s] = {placed[s], at[s]};
             log(0, "ANYCAREER_JOINER traders=1 mechanic=(%.0f, %.0f)", at[logic::kMechanic].x, at[logic::kMechanic].z);
         }
-        joiner_ready = true;
+        g_joiner_layout_done = true;
     }
-    bool live = g_ready && f->focused && gameplay() && career_mode() && (host_here || joiner.placed);
+    if (!host_here && g_ready && gameplay() && career_mode()) net_joiner_tick();
+    bool live = g_ready && f->focused && gameplay() && career_mode() && (host_here || g_joiner_layout.placed || remote_fresh());
     if (!live) { if (g_open) close_shop(); if (!host_here) update_pin(nullptr); return; }
     ULONGLONG now = GetTickCount64();
     if (now - g_local_at > 100) {
@@ -1785,9 +2030,8 @@ void draw(const AnyFrameV1* f, void*) {
         uint8_t* actor = scene && anymaker::readable(scene + off::scene_authority_actor, 8) ? rd<uint8_t*>(scene, off::scene_authority_actor) : nullptr;
         g_client_actor_id = actor && anymaker::readable(actor + off::client_actor_id, 4) ? rd<int32_t>(actor, off::client_actor_id) : -3;
     }
-    View v;
-    if (host_here) { std::lock_guard view_lock(g_view_mutex); v = g_view; }
-    else v = joiner;
+    View v = screen_view();
+    const bool can_trade = host_here || remote_fresh();
     if (g_open && !(g_dropoff ? at_dropoff(v, g_local) : shop_in_range(v, g_local) == g_shop)) close_shop();
     update_pin(&v);
     if (v.board >= 0 && v.board != g_seen_board) {   // a new job board (not the one already there when the world loaded)
@@ -1821,7 +2065,7 @@ void draw(const AnyFrameV1* f, void*) {
         text(x, y, w, 34, g_toast, 16, 0xffe8c66a, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
     std::wstring prompt;
-    if (here >= 0 && !host_here) prompt = wide(logic::kShops[here].name) + L": only the host can trade for now";
+    if (here >= 0 && !can_trade) prompt = wide(logic::kShops[here].name) + L": waiting for the host's AnyCareer (0.0.8 or later)";
     else if (here >= 0) prompt = L"Press " + key_name() + L" to trade with " + (here == logic::kMechanic ? L"" : L"the ") + wide(logic::kShops[here].name);
     else if (at_dropoff(v, g_local)) prompt = L"Press " + key_name() + (v.job_state == 1 ? L" to deliver" : L" to pick your reward");
     if (!prompt.empty()) {
@@ -1829,19 +2073,15 @@ void draw(const AnyFrameV1* f, void*) {
         box(ANY_GPU_ROUND_RECT, x, y, w, 34, 0xd0181b20, 6);
         text(x, y, w, 34, prompt, 16, 0xfff5f7fa, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
-    if (here < 0) {
-        std::wstring hint = L"Hayzeco Autoparts: " + wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.trader.x, v.trader.z));
-        text(x, 8, w, 22, hint, 14, 0xffd8dde3, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
-    }
     if (v.job_state == 1 && v.job_kill) {
         std::wstring hint = L"Kill job: " + std::to_wstring(v.job_have) + L" of " + v.job_text + L". Then back to the " + wide(logic::kShops[v.job_shop].name) + L".";
-        text(x - 100, 30, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+        text(x - 100, 8, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     } else if (v.job_state == 1 && !at_dropoff(v, g_local)) {
         std::wstring hint = L"Delivery: " + v.job_text + L" (" + std::to_wstring(v.job_have) + L"/" + std::to_wstring(v.job_count) + L"), " +
                             wide(logic::direction_text(g_local.x, g_local.z, g_local.yaw, v.job_at.x, v.job_at.z));
-        text(x - 100, 30, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
+        text(x - 100, 8, w + 200, 22, hint, 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     } else if (v.job_state == 2) {
-        text(x - 100, 30, w + 200, 22, (v.job_kill ? L"Kill job done: pick your reward in the " : L"Delivered: pick your reward in the ") + wide(logic::kShops[v.job_shop].name) +
+        text(x - 100, 8, w + 200, 22, (v.job_kill ? L"Kill job done: pick your reward in the " : L"Delivered: pick your reward in the ") + wide(logic::kShops[v.job_shop].name) +
              L" Jobs tab", 14, 0xff9fd8ec, ANY_GPU_NOWRAP | ANY_GPU_VCENTER | ANY_GPU_CENTER);
     }
 }
@@ -1871,6 +2111,22 @@ void toggle_free_move() {
 }
 
 void post(Job job, int32_t key) {
+    if (!hosting()) {   // a joiner: the host does it (anycareer_net.h)
+        net::Request r;
+        switch (job) {
+        case Job::buy: r.action = net::kBuy; break;
+        case Job::sell: r.action = net::kSell; break;
+        case Job::take: r.action = net::kTake; break;
+        case Job::abandon: r.action = net::kAbandon; break;
+        case Job::deliver: r.action = net::kDeliver; break;
+        case Job::claim: r.action = net::kClaim; break;
+        default: return;   // the test keys are the host's
+        }
+        r.shop = int8_t(g_shop); r.open = g_open; r.key = key; r.yaw = float(g_local.yaw);
+        joiner_send(r);
+        log(0, "ANYCAREER_COOP asked action=%d shop=%d key=%d", int(r.action), g_shop, key);
+        return;
+    }
     std::lock_guard lock(g_mutex);
     if (g_queue.size() < 4) g_queue.push_back({job, g_local.yaw, GetTickCount64(), key, g_shop});
 }
@@ -1888,8 +2144,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     if (g_open) {   // the shop has the keyboard and mouse
         if (e->kind == ANY_MOUSE_MOVE) { mouse_to_frame(e->x, e->y); return 1; }
         if (e->kind == ANY_MOUSE_WHEEL || e->kind == ANY_MOUSE_DOWN) {
-            View v;
-            { std::lock_guard view_lock(g_view_mutex); v = g_view; }
+            View v = screen_view();
             const auto& rows = tab_rows(v);
             if (e->kind == ANY_MOUSE_WHEEL) {
                 int step = e->wheel > 0 ? -1 : 1;
@@ -1915,8 +2170,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
         uint32_t k = e->key;
         bool repeat = held[k];
         held[k] = true;
-        View v;
-        { std::lock_guard view_lock(g_view_mutex); v = g_view; }
+        View v = screen_view();
         const auto& rows = tab_rows(v);
         if (k == VK_ESCAPE || (k == trade && !repeat)) close_shop();
         else if (k == VK_UP || k == 'W') g_cursor = std::max(0, g_cursor - 1);
@@ -1935,9 +2189,8 @@ uint32_t on_input(const AnyInputV1* e, void*) {
     if (!g_ready || !gameplay()) return 0;
     if (was) return 1;   // a held key repeats; one press, one action
     if (e->key == trade) {
-        View v;
-        { std::lock_guard view_lock(g_view_mutex); v = g_view; }
-        if (!hosting() || !career_mode()) return 0;
+        View v = screen_view();
+        if (!career_mode() || !(hosting() || remote_fresh())) return 0;
         int shop = shop_in_range(v, g_local);
         if (shop < 0 && !at_dropoff(v, g_local)) return 0;
         was = true;

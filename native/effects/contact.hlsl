@@ -91,7 +91,7 @@ float4 Contact(Varying v) : SV_Target {
     occlusion *= fade * sun.w * toward;
     if (occlusion <= 0) return scene;
     float3 direct = a.rgb * sun_colour.rgb * lit * .4;
-    float3 floor_light = a.rgb * (sky_colour.rgb * (.5 + .5 * n.y) + back_colour.rgb * max(dot(n.xz, l.xz), 0)) * .4;
+    float3 floor_light = a.rgb * (sky_colour.rgb * (.5 + .5 * n.y) + back_colour.rgb * max(dot(n.xz, -l.xz), 0)) * .4;
     // How much sun the game left here, assuming its ambient may be up to twice
     // the estimate (cloud light): 0 where the game already shadows, so its
     // shadows are not darkened again; 1 in full sun. The pass then removes that

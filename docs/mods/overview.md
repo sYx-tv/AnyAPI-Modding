@@ -30,6 +30,7 @@ keeps working defaults when it is absent.
 | [ThirdPerson](third-person.md) | 0.1.3 | API 0.35.0 | Third-person camera on F5 with an adjustable follow distance (Alt + mouse wheel) | AnyHelpers settings and controls |
 | [MCCode](mccode.md) | 0.2.0 | API 0.38.0 | A Code view in the microcontroller editor: type the program or build it from nodes and wires, with a command list and the game's debugger | None; `</> Code` in the microcontroller editor |
 | [CustomGame](custom-game.md) | 0.1.0 | API 0.40.0 | A Custom Game page on the New Game screen: day cycle, starting tier, up to 20 players, survival, enemy and world settings saved per world | Map packs from CustomMap |
+| [AnyMoto](moto.md) | 0.0.1 (test) | API 0.40.1 | Motorcycle fork, swingarm, seat, handlebars and Lean Assist for the Motorcycle Wheel | None |
 
 All mods are in the published catalog ([`catalog.json`](../../catalog.json)).
 All versions target Anymaker 0.1.27 / Steam build 26113663. On that build every mod needs AnyAPI 0.40.1 or newer, and the experimental-SDK mods ship
@@ -42,7 +43,7 @@ Built from source only, not in the catalog yet. They use the experimental SDK.
 
 | Mod | Features | Optional integration |
 | --- | --- | --- |
-| [AnyLights](lights.md) | Light colours and flash patterns in the Properties Tool, with data port and microcontroller channels | AnyHelpers settings |
+| [AnyLights](lights.md) | One paint tool for every colour (palette panel, modes, Ctrl+Z undo); lights glow their paint colour | AnyHelpers settings |
 | [AnyEngineParts](engine-parts.md) | Exhaust-driven turbochargers (3x3x2 and 6x6x2) and superchargers with blow-off valves, wastegate antilag and boost channels, and a stretchable 1-4 rotor rotary engine, each with synthesized sounds; single player | Rotary works alongside EngineSound |
 | [AnyCombat](combat.md) | Hit markers and floating damage numbers for the hits you deal, red on a kill | AnyHelpers settings |
 | [AnyPerformance](performance.md) | Smooths the world's slow-motion and catch-up when the simulation stalls, logs what stalled it and every frame hitch, and keeps the server's 60 ticks a second evenly spaced | AnyHelpers settings |

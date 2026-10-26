@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include "effects/contact_gpu.h"
+#include "tests/gpu_test_device.h"
 using Microsoft::WRL::ComPtr;
 using namespace DirectX::PackedVector;
 // Contact shadows on WARP: a wall beside a slab darkens where the slab blocks
@@ -25,9 +26,8 @@ using namespace DirectX::PackedVector;
 // GPU tests). That is retried once on a fresh device; pixel checks never are.
 struct DeviceLost:std::runtime_error{using std::runtime_error::runtime_error;};
 static void body(){
- ComPtr<ID3D12Debug> debug;if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();
- ComPtr<IDXGIFactory4> factory;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));ComPtr<IDXGIAdapter> adapter;assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));ComPtr<ID3D12Device> device;assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));
- D3D12_COMMAND_QUEUE_DESC qd{};ComPtr<ID3D12CommandQueue> queue;assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};
+ // K39: shared WARP device with the debug layer, GPU-based validation and an InfoQueue check per case.
+ gpu_test::Device test_device;assert(gpu_test::create(test_device));ComPtr<ID3D12Device> device=test_device.device;ComPtr<ID3D12CommandQueue> queue=test_device.queue;ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};
  auto lost=[&](const char* where,HRESULT hr){char text[160];snprintf(text,sizeof(text),"%s failed hr=0x%08lx removed=0x%08lx",where,(unsigned long)hr,(unsigned long)device->GetDeviceRemovedReason());throw DeviceLost(text);};
  auto wait=[&]{if(HRESULT hr=queue->Signal(fence.Get(),++serial);FAILED(hr))lost("Signal",hr);assert(SUCCEEDED(fence->SetEventOnCompletion(serial,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);if(HRESULT hr=device->GetDeviceRemovedReason();FAILED(hr))lost("Wait",hr);};
  ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));assert(SUCCEEDED(list->Close()));
@@ -57,7 +57,7 @@ static void body(){
   b[0]=scene_contact_gpu::barrier(target.resource.Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE);list->ResourceBarrier(1,b);copy(target,false);assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);wait();
   unsigned char* pixels{};D3D12_RANGE range{0,SIZE_T(target.bytes)};if(HRESULT hr=target.readback->Map(0,&range,(void**)&pixels);FAILED(hr))lost("Map",hr);
   for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){auto h=(const HALF*)(pixels+target.footprint.Offset+y*target.footprint.Footprint.RowPitch)+x*4;for(int i=0;i<4;++i)out[(y*W+x)*4+i]=XMConvertHalfToFloat(h[i]);}
-  D3D12_RANGE none{0,0};target.readback->Unmap(0,&none);return out;};
+  D3D12_RANGE none{0,0};target.readback->Unmap(0,&none);gpu_test::expect_clean(test_device,"contact run");return out;};
  // The sun is behind the camera and to the left, so the slab shades the wall just right of it.
  auto base=[&]{scene_contact_gpu::Frame f;f.metrics={1.f/W,1.f/H,float(W),float(H)};f.right={1,0,0,.5f};f.up={0,1,0,.5f};f.forward={0,0,1,5000};f.projection={0,near_plane,1,0};f.sun={-.70710678f,0,-.70710678f,1};f.sun_colour={1,1,1,0};f.sky_colour={.2f,.2f,.2f,0};f.back_colour={0,0,0,0};f.params={.6f,.3f,0,60};return f;};
  unsigned cases=0;
@@ -74,6 +74,10 @@ static void body(){
  // The game already shadows the wall (ambient raised by cloud light): no second shadow.
  {auto o=run(base(),0,false,W,floor_colour*1.8f);for(UINT i=0;i<W*H;++i)assert(std::abs(o[i*4]-floor_colour*1.8f)<.002f);std::cout<<"Native shadow not darkened again\n";++cases;}
  {auto f=base();f.sun[3]=0;auto o=run(f);for(UINT i=0;i<W*H;++i)assert(std::abs(o[i*4]-lit_colour)<.002f);std::cout<<"Strength 0 unchanged\n";++cases;}
+ // CSG-6: the floor-light estimate uses the game's back light sign (dot(N.xz,-L.xz)); with a back light the shadow beside the slab stays.
+ {auto f=base();f.back_colour={.2f,.2f,.2f,0};auto o=run(f);float beside=1;for(UINT x=33;x<36;++x)beside=std::min(beside,o[(32*W+x)*4]);std::cout<<"Back light shadow beside="<<beside<<'\n';assert(beside<lit_colour*.5f);++cases;}
+ // K09: release() drops everything; the next ensure() re-creates it.
+ {gpu.release();assert(!gpu.loaded());auto o=run(base());assert(o[(32*W+60)*4]>0);std::cout<<"Released and re-created\n";++cases;}
  auto bad=base();bad.params[0]=0;wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));using I=scene_contact_gpu::Gpu::Input;assert(!gpu.record(list.Get(),nullptr,I{},I{},I{},I{},bad));assert(SUCCEEDED(list->Close()));
  std::cout<<"PASS: contact shadows "<<cases<<" D3D12 cases\n";CloseHandle(event);
 }

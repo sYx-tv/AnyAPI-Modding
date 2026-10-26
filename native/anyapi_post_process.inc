@@ -43,13 +43,11 @@ static bool set(uint64_t token,const AnyPostParametersV1* value){
 }
 static bool status(AnyPostStatusV1* value){std::lock_guard<std::recursive_mutex> lock(platform::render_mutex);if(!value||value->struct_size!=sizeof(*value)||value->version!=1)return false;*value=snapshot;return true;}
 static void reset(){back_targets.clear();scene.Reset();scene_view.Reset();vertex.Reset();copy_shader.Reset();frame_buffer.Reset();user_buffer.Reset();sampler.Reset();raster.Reset();for(auto& p:passes){p.shader.Reset();p.texture.Reset();p.view.Reset();p.target.Reset();}snapshot.ready=0;snapshot.width=snapshot.height=0;snapshot.error[0]=0;failed=false;}
+// OVL-6: a resize drops only what is sized to (or views) the back buffer; shaders, buffers and states stay on the device.
+static void release_targets(){back_targets.clear();scene.Reset();scene_view.Reset();for(auto& p:passes){p.texture.Reset();p.view.Reset();p.target.Reset();}snapshot.ready=0;snapshot.width=snapshot.height=0;snapshot.error[0]=0;failed=false;}
 static bool active(){snapshot.active_passes=0;if(failed)return false;for(auto& p:passes)if(p.parameters.enabled&&p.downsample==1&&!platform::plugins[p.owner].faulted)return true;return false;}
-static bool initialize(ID3D11Texture2D* back){
- auto device=platform::device11.Get();D3D11_TEXTURE2D_DESC desc{};back->GetDesc(&desc);
- if(desc.SampleDesc.Count!=1||desc.Width>8192||desc.Height>8192||(desc.Format!=DXGI_FORMAT_R8G8B8A8_UNORM&&desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM)){problem("Unsupported backbuffer format; effects bypassed");return false;}
- format=desc.Format;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;desc.CPUAccessFlags=0;desc.MiscFlags=0;desc.ArraySize=1;desc.MipLevels=1;
- if(FAILED(device->CreateTexture2D(&desc,nullptr,&scene))||FAILED(device->CreateShaderResourceView(scene.Get(),nullptr,&scene_view))){problem("Scene copy allocation failed");return false;}
- ComPtr<ID3DBlob> code;std::string error;
+// The fullscreen pipeline, built once per D3D11 device (kept across resizes).
+static bool pipeline(){if(vertex&&copy_shader&&frame_buffer&&user_buffer&&sampler&&raster)return true;auto device=platform::device11.Get();ComPtr<ID3DBlob> code;std::string error;
  if(!compile(vertex_source,strlen(vertex_source),"vs_5_0",code,error)||FAILED(device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&vertex))){problem("Fullscreen vertex shader unavailable");return false;}
  if(!compile(copy_source,strlen(copy_source),"ps_5_0",code,error)||FAILED(device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&copy_shader))){problem("Copy shader unavailable");return false;}
  D3D11_BUFFER_DESC bd{};bd.ByteWidth=32;bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
@@ -57,6 +55,13 @@ static bool initialize(ID3D11Texture2D* back){
  D3D11_SAMPLER_DESC sd{};sd.Filter=D3D11_FILTER_MIN_MAG_MIP_LINEAR;sd.AddressU=sd.AddressV=sd.AddressW=D3D11_TEXTURE_ADDRESS_CLAMP;sd.MaxLOD=D3D11_FLOAT32_MAX;
  D3D11_RASTERIZER_DESC rd{};rd.FillMode=D3D11_FILL_SOLID;rd.CullMode=D3D11_CULL_NONE;rd.DepthClipEnable=TRUE;
  if(FAILED(device->CreateSamplerState(&sd,&sampler))||FAILED(device->CreateRasterizerState(&rd,&raster))){problem("Fullscreen pipeline unavailable");return false;}
+ return true;}
+static bool initialize(ID3D11Texture2D* back){
+ auto device=platform::device11.Get();D3D11_TEXTURE2D_DESC desc{};back->GetDesc(&desc);
+ if(desc.SampleDesc.Count!=1||desc.Width>8192||desc.Height>8192||(desc.Format!=DXGI_FORMAT_R8G8B8A8_UNORM&&desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM)){problem("Unsupported backbuffer format; effects bypassed");return false;}
+ if(!pipeline())return false;
+ format=desc.Format;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;desc.CPUAccessFlags=0;desc.MiscFlags=0;desc.ArraySize=1;desc.MipLevels=1;
+ if(FAILED(device->CreateTexture2D(&desc,nullptr,&scene))||FAILED(device->CreateShaderResourceView(scene.Get(),nullptr,&scene_view))){problem("Scene copy allocation failed");return false;}
  snapshot.width=desc.Width;snapshot.height=desc.Height;++snapshot.resource_generation;snapshot.ready=1;log_line(ANY_LOG_INFO,"post_process",("GPU_READY size="+std::to_string(desc.Width)+"x"+std::to_string(desc.Height)+" frame_copy=GPU_ONLY").c_str());return true;
 }
 static bool prepare(Pass& p,bool texture_needed=true){auto device=platform::device11.Get();if(!p.shader&&FAILED(device->CreatePixelShader(p.code->GetBufferPointer(),p.code->GetBufferSize(),nullptr,&p.shader)))return false;if(!texture_needed||p.texture)return true;
