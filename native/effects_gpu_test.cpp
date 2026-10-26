@@ -22,7 +22,7 @@ using namespace DirectX::PackedVector;
 int main(){std::cout<<std::unitbuf;
  // K39: shared WARP device with the debug layer, GPU-based validation and an InfoQueue check per case.
  gpu_test::Device test_device;assert(gpu_test::create(test_device));ComPtr<ID3D12Device> device=test_device.device;ComPtr<ID3D12CommandQueue> queue=test_device.queue;ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};
- auto wait=[&]{assert(SUCCEEDED(queue->Signal(fence.Get(),++serial)));assert(SUCCEEDED(fence->SetEventOnCompletion(serial,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);};
+ auto wait=[&](DWORD ms=10000){assert(SUCCEEDED(queue->Signal(fence.Get(),++serial)));assert(SUCCEEDED(fence->SetEventOnCompletion(serial,event)));assert(WaitForSingleObject(event,ms)==WAIT_OBJECT_0);};
  ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));assert(SUCCEEDED(list->Close()));
  const UINT W=64,H=48;
  struct Texture{ComPtr<ID3D12Resource> resource,upload,readback;D3D12_RESOURCE_DESC desc{};D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes{};};
@@ -32,9 +32,12 @@ int main(){std::cout<<std::unitbuf;
  scene_effects_gpu::Gpu gpu;
  // colour(x,y) -> rgb; sky(x,y) -> depth 0 (open sky) instead of 0.5. Options: cloud(x,y) -> gbuffer_1.w = 1,
  // sea(x,y) -> gbuffer_ocean.xy = 1 (each bound only when given); keep: no reset on the first frame.
+ // A run makes its targets once and records all its frames into one command list, restoring the colour before
+ // each frame, as in the game, where the targets persist (27 submissions). On WARP with GPU-based validation, one
+ // submission over fresh targets per frame (105 in all) did not finish in 10 minutes.
  struct Options{std::function<bool(UINT,UINT)> cloud,sea;bool keep{};};
  auto run=[&](scene_effects_gpu::Frame f,auto colour,auto sky,int frames=1,Options o={}){std::vector<float> out(W*H*4);
-  for(int n=0;n<frames;++n){wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));auto color=texture(DXGI_FORMAT_R16G16B16A16_FLOAT),depth=texture(DXGI_FORMAT_R32_FLOAT);assert(gpu.ensure(device.Get(),queue.Get(),color.desc));
+  {wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));auto color=texture(DXGI_FORMAT_R16G16B16A16_FLOAT),depth=texture(DXGI_FORMAT_R32_FLOAT);
    Texture normals,ocean;if(o.cloud)normals=texture(DXGI_FORMAT_R16G16B16A16_FLOAT);if(o.sea)ocean=texture(DXGI_FORMAT_R16G16B16A16_FLOAT);
    for(auto item:{&color,&depth,&normals,&ocean}){if(!item->resource)continue;unsigned char* data{};D3D12_RANGE none{0,0};assert(SUCCEEDED(item->upload->Map(0,&none,(void**)&data)));
     for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){auto p=data+item->footprint.Offset+y*item->footprint.Footprint.RowPitch;
@@ -45,8 +48,11 @@ int main(){std::cout<<std::unitbuf;
    D3D12_RESOURCE_BARRIER b[4]={scene_effects_gpu::barrier(color.resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_RENDER_TARGET),scene_effects_gpu::barrier(depth.resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)};UINT nb=2;
    for(auto item:{&normals,&ocean})if(item->resource)b[nb++]=scene_effects_gpu::barrier(item->resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);list->ResourceBarrier(nb,b);
    using I=scene_effects_gpu::Gpu::Input;const auto psr=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-   assert(gpu.record(list.Get(),color.resource.Get(),depth.resource.Get(),psr,f,n==0&&!o.keep,I{normals.resource.Get(),psr},I{ocean.resource.Get(),psr}));
-   b[0]=scene_effects_gpu::barrier(color.resource.Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE);list->ResourceBarrier(1,b);copy(color,false);assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);wait();
+   for(int n=0;n<frames;++n){
+    if(n){b[0]=scene_effects_gpu::barrier(color.resource.Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_DEST);list->ResourceBarrier(1,b);copy(color,true);b[0]=scene_effects_gpu::barrier(color.resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_RENDER_TARGET);list->ResourceBarrier(1,b);}
+    assert(gpu.ensure(device.Get(),queue.Get(),color.desc));
+    assert(gpu.record(list.Get(),color.resource.Get(),depth.resource.Get(),psr,f,n==0&&!o.keep,I{normals.resource.Get(),psr},I{ocean.resource.Get(),psr}));}
+   b[0]=scene_effects_gpu::barrier(color.resource.Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE);list->ResourceBarrier(1,b);copy(color,false);assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);wait(DWORD(10000*frames));
    unsigned char* pixels{};D3D12_RANGE range{0,SIZE_T(color.bytes)};assert(SUCCEEDED(color.readback->Map(0,&range,(void**)&pixels)));
    for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){auto h=(const HALF*)(pixels+color.footprint.Offset+y*color.footprint.Footprint.RowPitch)+x*4;for(int i=0;i<4;++i)out[(y*W+x)*4+i]=XMConvertHalfToFloat(h[i]);}
    D3D12_RANGE none{0,0};color.readback->Unmap(0,&none);}
