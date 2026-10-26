@@ -8,6 +8,16 @@ Update AnyAPI and your mods in the manager, then restart the game.
 
 - **AnyAPI 0.40.2**
 - **AnyGraphics bundle 1.1.0** with AnyGraphics 0.33.0 and ThirdPerson (needs AnyAPI 0.40.2)
+- **AnyHelpers bundle 1.1.0**: Heal fix in the admin tab, bent windows split cleanly (AnyMirror 1.2.0),
+  hidden struts and frameless windows, and MCCode 0.3.1 lists modded parts in the Parts tab
+- **AnyMap bundle 1.0.2**: markers and the waypoint are saved per world
+- **AnyPerformance 0.1.2**: wreck loot spread over several frames, no autosave freeze while it fills,
+  faster water checks and fewer updates for far-away loose items
+- **AnyCareer 0.0.8**: co-op joiners trade and take jobs through the host, loot Cash no longer
+  fills to 9999 after a few world loads, and the direction line at the top of the screen is gone
+- **AnyMoto 0.0.1** (new): motorcycle fork, swingarm, seat, handlebars and Lean Assist, in loot
+  after the first bunker
+- **AnyLights 0.2.0** (new): one paint tool for every colour, and lights glow their paint colour
 
 Everything new that changes the look is either a clear bug fix or a row that starts off. Each
 default change has a hidden revert in `AnyGraphics/settings.tsv` (see
