@@ -32,7 +32,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
-#include <unordered_set>
+#include <unordered_map>
 
 namespace anylights {
 namespace {
@@ -70,6 +70,8 @@ namespace off {
 constexpr ptrdiff_t paint_colour = 0x38 + 8;          // m_color (s32 palette index)
 constexpr ptrdiff_t paint_mode = 0x48 + 8;            // m_mode (e_mode)
 constexpr ptrdiff_t paint_hovered_vehicle = 0x68;     // _m_hovered_vehicle_id
+constexpr ptrdiff_t paint_hovered_component = 0xc0;   // _m_hovered_component_id
+constexpr ptrdiff_t scene_authority_actor = 0x188;    // client_scene m_actors.m_authority_actor (ptr<client_scene.actor>): our own player
 // client_scene.vehicle_component.m_colors: array<replication.slave.property_s32>
 constexpr ptrdiff_t component_colours = 0x30;         // buffer +0, count +8, element size +0xc (16), value +8 in each
 // client_scene.vehicle_plate
@@ -157,6 +159,10 @@ const uint8_t* g_undo_scene;                 // the world g_undo belongs to (gam
 std::atomic<bool> g_left_world{false};       // main menu or a loading screen seen: the next world reuses vehicle ids
 constexpr int32_t kUiMainMenu = 5, kUiLoadingScreen = 25;   // frontend_ui.e_ui_state
 bool g_lmb_was_down;
+// Lights seen this session, by (vehicle id, part id) -> last tick seen. Game thread only.
+std::unordered_map<uint64_t, uint64_t> g_light_ids;
+uint64_t light_key(int32_t vehicle, int32_t component) { return uint64_t(uint32_t(vehicle)) << 32 | uint32_t(component); }
+std::atomic<int> g_light_click_logs{12};
 std::atomic<bool> g_panel_shown{false};      // clicks on the panel are not paint clicks
 std::atomic<int> g_paint_logs{4};
 
@@ -200,7 +206,10 @@ void run_undo(uint8_t* client, const uint8_t* scene) {
 
 void hk_paint_tick(uint8_t* item, uint8_t* client, uint8_t* scene, void* actor, const void* transform, const bool* active,
                    const int32_t* location, const double* dt) {
-    if (g_ready && item && anymaker::readable(item, off::paint_hovered_vehicle + 4)) {
+    // Every player's paint tool ticks on every client: only the one our own actor holds is ours to drive.
+    uint8_t* own_actor = scene && anymaker::readable(scene + off::scene_authority_actor, 8) ? rd<uint8_t*>(scene, off::scene_authority_actor) : nullptr;
+    bool ours = own_actor && actor == own_actor;
+    if (g_ready && ours && item && anymaker::readable(item, off::paint_hovered_vehicle + 4)) {
         refresh_settings();
         if (g_palette_count == 0) copy_palette();
         g_paint_seen = GetTickCount64();
@@ -226,6 +235,18 @@ void hk_paint_tick(uint8_t* item, uint8_t* client, uint8_t* scene, void* actor, 
                 Snapshot s;
                 int32_t vehicle = rd<int32_t>(item, off::paint_hovered_vehicle);
                 if (vehicle > 0 && read_vehicle_paint(scene, vehicle, s)) { g_undo.push(std::move(s)); g_undo_done = -1; }
+                // A light's mesh may have no paintable surface, so the stock fill can skip it. Paint its first slot
+                // directly with the stock fill event: it syncs and saves like any paint, and the light glows from it.
+                int32_t component = rd<int32_t>(item, off::paint_hovered_component);
+                int32_t use_mode = mode >= 0 ? mode : own_mode, use_colour = colour >= 0 && colour < g_palette_count ? colour : own_colour;
+                bool is_light = vehicle > 0 && component >= 0 && g_light_ids.count(light_key(vehicle, component));
+                if (g_light_click_logs.load() > 0 && g_light_click_logs.fetch_sub(1) > 0)
+                    log(0, "click: vehicle %d part %d (%s), mode %d, colour %d", vehicle, component, is_light ? "light" : "not a light", use_mode, use_colour);
+                if (is_light && (use_mode == kFill || use_mode == kFlood) && use_colour >= 0 && client && g_push_component_cell && *g_push_component_cell) {
+                    int32_t slot = 0;
+                    reinterpret_cast<push_fill_component_t>(*g_push_component_cell)(client + off::client_peer_data, &use_colour, &vehicle, &component, &slot);
+                    log(0, "light painted: vehicle %d part %d slot 0 -> colour %d", vehicle, component, use_colour);
+                }
             }
             g_lmb_was_down = lmb;
             for (int n = g_undo_requests.exchange(0); n > 0; --n) run_undo(client, scene);
@@ -240,8 +261,8 @@ const char* const kKindNames[kKindCount] = {"spot", "omni", "rotating"};
 constexpr ptrdiff_t kLightColour[kKindCount] = {off::light_colour_spot, off::light_colour_omni, off::light_colour_rotate};
 using light_tick_t = void (*)(uint8_t* light, void* client, uint8_t* vehicle, void* scene, const double* dt);
 anymaker::cell_hook h_light_tick[kKindCount];
-std::unordered_set<const uint8_t*> g_logged_lights;
-std::atomic<int> g_light_logs{8};
+std::unordered_map<const uint8_t*, int32_t> g_light_index;   // last glow index logged per light
+std::atomic<int> g_light_logs{24};
 
 void colour_light(int kind, uint8_t* light) {
     if (!light || !anymaker::readable(light, kLightColour[kind] + 4)) return;
@@ -251,15 +272,32 @@ void colour_light(int kind, uint8_t* light) {
         int n = read_slots(light, slots, 16);
         int32_t index = light_paint_index(slots, n, g_palette_count);
         if (index >= 0) c = light_from_paint(g_palette[index]);
-        if (n > 0 && g_light_logs.load() > 0 && g_logged_lights.insert(light).second && g_light_logs.fetch_sub(1) > 0)
-            log(0, "%s light: %d paint slots, first %d %d %d, glows index %d", kKindNames[kind], n, slots[0], n > 1 ? slots[1] : -1, n > 2 ? slots[2] : -1, index);
+        // Log each light when first seen and whenever its glow changes (bounded).
+        auto seen = g_light_index.find(light);
+        if ((seen == g_light_index.end() || seen->second != index) && g_light_logs.load() > 0) {
+            g_light_index[light] = index;
+            if (g_light_logs.fetch_sub(1) > 0)
+                log(0, "%s light: %d paint slots, first %d %d %d, glows index %d as %d %d %d", kKindNames[kind], n, n > 0 ? slots[0] : -1,
+                    n > 1 ? slots[1] : -1, n > 2 ? slots[2] : -1, index, c.r, c.g, c.b);
+        }
     }
     uint32_t alpha = rd<uint32_t>(light, kLightColour[kind]) & 0xff000000u;
     wr<uint32_t>(light, kLightColour[kind], uint32_t(c.r) | uint32_t(c.g) << 8 | uint32_t(c.b) << 16 | alpha);
 }
 void light_tick(int kind, uint8_t* light, void* client, uint8_t* vehicle, void* scene, const double* dt) {
+    if (g_ready && light && vehicle && anymaker::readable(vehicle, 16) && anymaker::readable(light, 16)) {
+        uint64_t now = GetTickCount64();
+        g_light_ids[light_key(rd<int32_t>(vehicle, vehicle_reads::off::vehicle_id), rd<int32_t>(light, vehicle_reads::off::component_id))] = now;
+        if (g_light_ids.size() > 8192) for (auto it = g_light_ids.begin(); it != g_light_ids.end();) it = now - it->second > 10000 ? g_light_ids.erase(it) : std::next(it);
+        if (g_light_index.size() > 8192) g_light_index.clear();
+    }
     if (g_ready) colour_light(kind, light);
+    uint32_t written = g_ready && light && anymaker::readable(light, kLightColour[kind] + 4) ? rd<uint32_t>(light, kLightColour[kind]) : 0;
     reinterpret_cast<light_tick_t>(h_light_tick[kind].original)(light, client, vehicle, scene, dt);
+    // Diagnostic: the game should never rewrite the colour; say so once if it does.
+    static std::atomic<int> overwritten_logs{3};
+    if (written && rd<uint32_t>(light, kLightColour[kind]) != written && overwritten_logs.fetch_sub(1) > 0)
+        log(1, "%s light colour was rewritten by the game during its tick (0x%08x -> 0x%08x)", kKindNames[kind], written, rd<uint32_t>(light, kLightColour[kind]));
 }
 void hk_spot(uint8_t* l, void* c, uint8_t* v, void* s, const double* d) { light_tick(kSpot, l, c, v, s, d); }
 void hk_omni(uint8_t* l, void* c, uint8_t* v, void* s, const double* d) { light_tick(kOmni, l, c, v, s, d); }
