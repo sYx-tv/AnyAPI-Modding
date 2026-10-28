@@ -20,7 +20,7 @@
 // crate spawned, was filled and reached this client, and every inspect call on a zombie or creature.
 // 0.1.0 had an F7 body toggle; it is gone, since in the first test the bodies were inspected while it was off.
 //
-// EXPERIMENTAL. Experimental SDK bindings (anyloot_bindings.h): Anymaker 0.1.27 / Steam build 26113663 only.
+// EXPERIMENTAL. Experimental SDK bindings (anyloot_bindings.h): Anymaker 0.1.28 / Steam build 26277967 only.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -51,7 +51,7 @@ namespace {
 constexpr const char* kModId = "anyloot";
 using vehicle_reads::rd;
 
-// Layouts from the 0.1.27 reference (metadata; unchanged since 0.1.25).
+// Layouts from the 0.1.28 reference (metadata; unchanged since 0.1.25).
 namespace off {
 // server_scene
 constexpr ptrdiff_t server_peers = 0xa8;            // m_peers (server_scene.peer.container)
