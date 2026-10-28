@@ -1,7 +1,7 @@
 # AnyLights
 
 > AnyLights hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
 > Prototype: not in the catalog yet. Ships as its own mod (`AnyLights.dll`).
 
 AnyLights turns the stock paint tools into one paint tool for every colour, and makes lights glow the colour
@@ -25,7 +25,8 @@ Edges, links and brush or pencil pixel strokes can't be undone yet: Ctrl+Z after
 
 ## Lights
 
-Spot, omni and rotating lights glow the colour of their paint, at full brightness so dark paints still light
+Paint a light with Fill or Flood (AnyLights paints the light part itself, even where the stock tool finds no
+paintable surface on it). Spot, omni and rotating lights glow the colour of their paint, at full brightness so dark paints still light
 up. Greys, black and white paint give white light. Unpainted lights keep the stock warm white.
 
 ## Multiplayer
@@ -55,4 +56,4 @@ in `anymaker_modding.log` are what we need.
 4. Ctrl+Z after a fill: the part goes back (log: `undo: repainted ...`).
 5. Paint a spot, an omni and a rotating light red: each glows red (log: `... light: N paint slots ...`).
 6. Save and reload: paint and light colours come back.
-7. Co-op: a second player (with or without AnyLights) sees the paint; with AnyLights they also see the light colours.
+7. Co-op: a second player (with or without AnyLights) sees the paint; with AnyLights they also see the light colours. While another player holds a paint tool, right-click without one must not open the palette.

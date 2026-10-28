@@ -1,6 +1,6 @@
 # AnyStorage
 
-Separate Windows x64 DLL mod for Anymaker 0.1.27 / Steam build 26113663.
+Separate Windows x64 DLL mod for Anymaker 0.1.28 / Steam build 26277967.
 Requires AnyAPI 0.27.0 or newer. AnyInventory is optional; AnyHelpers provides
 optional settings. The toolbar is built with native game widgets under each
 external storage header. It scrolls with that inventory and shares its layout
