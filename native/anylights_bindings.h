@@ -1,5 +1,5 @@
 #pragma once
-// AnyLights game bindings, generated for Anymaker 0.1.27 / Steam build 26113663 with
+// AnyLights game bindings, generated for Anymaker 0.1.28 / Steam build 26277967 with
 //   python tools/bind.py --reference reference --signature "<signature>" --out <file>.hpp
 // run from the extracted AnyAPI-Experimental-SDK sdk/experimental folder, one --signature per binding below.
 // Experimental: located by code signature, call-cell route or typeinfo slot, not reviewed as an AnyAPI service.

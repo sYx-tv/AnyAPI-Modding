@@ -1,5 +1,5 @@
 #pragma once
-// AnyCareer game bindings, generated for Anymaker 0.1.27 / Steam build 26113663 with
+// AnyCareer game bindings, generated for Anymaker 0.1.28 / Steam build 26277967 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the SDK reference root (reference-0.1.27), one --signature per binding below.
 // Experimental: located by code signature, not reviewed as an AnyAPI service.
