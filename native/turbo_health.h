@@ -2,7 +2,7 @@
 // Turbo upkeep: oil feed, heat, air filter, wear, hot boost air and the intercooler. Pure logic, no game calls,
 // so tests/turbo_logic_test.cpp can check it. turbo_mod.cpp feeds it from the game and applies the results.
 //
-// Game facts this is tuned to (game.gcl 0.1.25, see /mnt/project-files/turbo/research):
+// Game facts this is tuned to (game.gcl 0.1.25):
 // - Engines put their exhaust out at a fixed 300 C, and overheat (damage) above 160 C.
 // - An engine's boost factor is remap(clamp(intake pressure, 1, 10), 1, 10, 1, 2); intake temperature is never read.
 //   AnyEngineParts scales the boost part of that factor by the intake air's density (cold air, more boost).

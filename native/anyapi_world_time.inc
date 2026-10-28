@@ -1,13 +1,19 @@
 #include "world_time_state.h"
 #include "runtime_call_cell.h"
 namespace world_time_runtime {
-static world_time::Store store;static anyapi_runtime::CallCellHook hook;
+static world_time::Store& store=world_time::shared;static anyapi_runtime::CallCellHook hook;
 static std::atomic<uintptr_t> scene{},slot{UINTPTR_MAX};static std::atomic<bool> attached{};static std::atomic<uint64_t> samples{};
 // GCL f64 return uses an output pointer in RCX; remaining arguments shift right.
 using GetCycle=void(*)(double*,void*,const int32_t*,const int32_t*);
+// tick: the s32 the game passes (client_scene.m_version, the shared world tick; likely). Weather (K18 v1): the
+// camera rain/snow factors and wind next to the time object, read with the in-process SEH read, never written.
 static void observe(double* out,void* self,const int32_t* mode,const int32_t* tick){
  ((GetCycle)hook.original())(out,self,mode,tick);
- if(uintptr_t(self)==scene.load()+0x2168){store.sample(*out,GetTickCount64());if(++samples==1)log_line(ANY_LOG_INFO,"framework",("WORLD_TIME sampled=1 cycle="+std::to_string(*out)+" source=native_day_night_cycle").c_str());}
+ auto client=scene.load();
+ if(client&&uintptr_t(self)==client+world_time::TIME_OF_DAY){int32_t ticks{};bool has_tick=tick&&scene_frame::read_value(uintptr_t(tick),ticks);auto now=GetTickCount64();
+  store.sample(*out,now,has_tick?int64_t(ticks):-1);
+  double weather[4]{};bool read=scene_frame::read(client+world_time::WEATHER_RAIN,weather,world_time::WEATHER_BYTES);store.sample_weather(client,weather,read,now);
+  if(++samples==1)log_line(ANY_LOG_INFO,"framework",("WORLD_TIME sampled=1 cycle="+std::to_string(*out)+" tick="+(has_tick?std::to_string(ticks):std::string("unknown"))+" weather_read="+std::to_string(read)+" source=native_day_night_cycle").c_str());}
 }
 static const unsigned char BUILD[]={0x53,0x55,0x56,0x48,0x81,0xec,0xf0,0x01,0,0,0x48,0x89,0x8c,0x24,0xb8,0,0,0,0x48,0x89,0x94,0x24,0xc0,0,0,0,0x4c,0x89,0x84,0x24,0xc8,0};
 static const unsigned char GET[]={0x53,0x55,0x56,0x48,0x81,0xec,0x80,0,0,0,0x48,0x89,0x4c,0x24,0x40,0x48,0x89,0x54,0x24,0x48,0x4c,0x89,0x44,0x24,0x50,0x4c,0x89,0x4c,0x24,0x58,0x48,0x8d};

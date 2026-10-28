@@ -34,6 +34,7 @@ inline constexpr func_desc creature_tick{"() client_scene.actor_creature.tick (c
 
 namespace off {
 constexpr ptrdiff_t client_scene = 0xf50;              // client.m_scene (client_scene, embedded)
+constexpr ptrdiff_t scene_world_seed = 0x10 + 8;       // client_scene.m_world_seed (replicated property_s32) value
 constexpr ptrdiff_t scene_actors = 344 + 8;            // client_scene.m_actors -> _m_elements vector<ref<actor>>
 constexpr ptrdiff_t actor_incapacitated = 0x28 + 8;    // actor._m_is_incapacitated (property_bool) value
 constexpr ptrdiff_t actor_position = 0x188 + 72;       // actor.m_transform (mat34) .t
@@ -49,7 +50,7 @@ constexpr size_t kMaxBlips = 2048;
 struct State {
     std::atomic<uint8_t**> client_ref{};               // address of g_client (ref<client>: control, ptr)
     std::atomic<const uint8_t*> zombie_type{}, creature_type{};
-    std::atomic<bool> ready{}, stop{}, pending{};
+    std::atomic<bool> ready{}, stop{}, pending{}, want_blips{true};
     std::atomic<uint64_t> posted_at{};
     const AnyClientTasksV1* tasks{};
     uint64_t owner{};
@@ -57,6 +58,7 @@ struct State {
     std::vector<Blip> blips;
     uint64_t epoch{}, sampled_at{};
     unsigned vehicles{}, zombies{}, creatures{};
+    int32_t seed{};                                    // the world seed of `epoch`; 0 until the scene has it
 };
 inline State state;
 
@@ -97,10 +99,12 @@ inline void sample(const AnyClientTaskFrameV1* frame, void*) {
     using vehicle_reads::rd;
     std::vector<Blip> out;
     unsigned vehicles = 0, zombies = 0, creatures = 0;
+    int32_t seed = 0;
     uint8_t** ref = state.client_ref.load();
     uint8_t* client = ref && anymaker::readable(ref, 16) ? ref[1] : nullptr;
     uint8_t* scene = client && anymaker::readable(client + off::client_scene, 13440) ? client + off::client_scene : nullptr;
-    if (scene) {
+    if (scene) seed = rd<int32_t>(scene, off::scene_world_seed);
+    if (scene && state.want_blips) {
         out.reserve(256);
         const uint8_t *zombie = state.zombie_type, *creature = state.creature_type;
         vehicle_reads::for_each_ref(scene + off::scene_actors, kMaxActors, [&](uint8_t* actor) {
@@ -134,7 +138,7 @@ inline void sample(const AnyClientTaskFrameV1* frame, void*) {
     {
         std::lock_guard<std::mutex> hold(state.lock);
         state.blips.swap(out); state.epoch = frame ? frame->world_epoch : 0; state.sampled_at = GetTickCount64();
-        state.vehicles = vehicles; state.zombies = zombies; state.creatures = creatures;
+        state.vehicles = vehicles; state.zombies = zombies; state.creatures = creatures; state.seed = seed;
     }
     state.pending = false;
 }
@@ -148,6 +152,14 @@ inline void request(uint64_t world_epoch, uint64_t interval_ms) {
     { std::lock_guard<std::mutex> hold(state.lock); if (state.sampled_at && now - state.sampled_at < interval_ms && state.epoch == world_epoch) return; }
     state.pending = true; state.posted_at = now;
     if (!state.tasks->post(state.owner, world_epoch, sample, nullptr)) state.pending = false;
+}
+
+// The world seed sampled in `world_epoch`: it tells saves apart, also for players who joined. False until known.
+inline bool world_seed(uint64_t world_epoch, int32_t& out) {
+    std::lock_guard<std::mutex> hold(state.lock);
+    if (state.epoch != world_epoch || !state.sampled_at || !state.seed) return false;
+    out = state.seed;
+    return true;
 }
 
 // Blips for the current world, or none when the last sample is stale or from another world.

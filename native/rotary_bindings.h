@@ -1,5 +1,5 @@
 #pragma once
-// Rotary game bindings, generated for Anymaker 0.1.27 / Steam build 26113663 with
+// Rotary game bindings, generated for Anymaker 0.1.28 / Steam build 26277967 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the regenerated SDK reference (rebind_mod_bindings.py checks them per build), one --signature per binding below. The definition-file five and
 // the world transform are the same as Turbo's; the client engine tick and the voice update are the same as

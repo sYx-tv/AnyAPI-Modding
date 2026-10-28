@@ -1,7 +1,7 @@
 # AnyPerformance
 
 > AnyPerformance hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
 > It is a prototype: built from source, not in the catalog yet. It is a standalone mod, not part of a bundle.
 
 AnyPerformance finds out where hitches come from and smooths out the ones it can.
@@ -43,8 +43,64 @@ step's nested steps count inside it too), for example `| server steps: bunker st
 world 2100 ms, bunker save file parse 280 ms`. The steps are the pieces of `server_scene.dungeon_manager.tick_loading`:
 entrance load/create/physics, the bunker's static load (save file parse, objects into the world), physics shape,
 navmesh, objects load, layers (load and populate with loot, creatures and vehicles), and the saves and unloads when a
-player leaves. Terrain streaming steps are the tile's objects and loot zones going into the world, wreck loot,
-navmesh tiles, and the save and unload of tiles left behind.
+player leaves. Terrain streaming steps are the tile's objects and loot zones going into the world, the tile's terrain, path and
+tree bodies going into physics (with `physics bodies added` counting every body the server adds), creature spawn zones,
+sleeping creatures, keycards and dead-drop loot in wrecks, wreck loot (with its loot tables, required loot, floor loot and furniture loot timed on their own, and the furniture's loot table, placement, item creation and storing), navmesh tiles, the pieces of creatures and players (creature separation, player characters, animals, basic zombies) and of items (loose items, item ticks, inside-bunker checks, water volume checks, loose item streaming), and the save and unload of tiles
+left behind.
+
+## Wreck loot on new terrain
+
+When a terrain tile loads on the host, the game fills every wreck on it with loot (`server_scene.vehicle.generate_loot`:
+required, floor and furniture items) in one server tick, about 7 ms a wreck. A tile with 80 wrecks held the server for
+over 600 ms, the biggest cause of slow motion while driving. **Spread wreck loot** (on by default) lets 8 ms of wreck
+loot run per server tick and queues the rest by vehicle id, filling it over the next ticks (80 wrecks take about 1.3 s,
+on tiles at the edge of the loaded area). A wreck that is gone by then is skipped. An autosave waits (up to a minute) until no wreck is waiting, since it saves every loaded tile and would fill them all in one tick; the log shows `autosave waits for N wrecks` and `autosave ran after waiting S s`. Any other world save on the server thread
+fills the whole queue first, and a tile save fills that tile's own waiting wrecks (logged as `tile X,Y,Z was saved`). One wreck can cost 100-280 ms on its own in towns; every millisecond over the budget is paid back at 4 ms a tick before the next queued wreck runs, so heavy wrecks are spaced out and the world catches up between them. Only a save from the pause menu in that second can miss queued loot; the log
+says so when it happens. Each batch logs `Spread wreck loot: N wrecks filled over M server ticks`.
+
+## Fast furniture loot
+
+A heavy town wreck spends most of its loot time placing items in its cabinets and shelves: the game picks random
+items and, for each, tests every slot of the container in two rotations (40,000 searches and 240 ms for one wreck).
+A search that finds nothing changes nothing, not even the random numbers. Whether an item fits depends only on
+whether its kind can go in containers at all and on its size, so while one wreck's furniture fills (items are only
+added), the mod answers two cases itself: an item that can never go in a container, and an item at least as big
+(either way round) as one that already found no place in that container. Every 30 s the log shows
+`Fast furniture loot: N placement searches answered from memory, M run (P% saved)`.
+
+## Fast navmesh cleanup
+
+When a terrain tile unloads, the server checks every navmesh cell around it, about 8,300 of them, and each check
+first lists the terrain tiles in range (56 ms for one unload in a town log). Most cells have no navmesh tile, and then
+the check changes nothing. With **Fast navmesh cleanup** on, the mod keeps a set of the cells that have one and answers
+the empty ones itself; the rest go to the game as before. Every 30 s the log shows
+`Fast navmesh cleanup: N empty cells answered by the mod, M left to the game`.
+
+## Distant container items
+
+Every frame the game places every item inside every container of every loaded vehicle, including wrecks full of
+loot far away. In the 0.1.2 profile that was 13% of the main thread. With **Distant container items** on, a
+container on a vehicle more than 50 m from you that has not moved is updated every 8th frame, with the skipped
+frame time passed on; anything near you or moving is updated every frame. Every 30 s the log shows
+`Distant container items: N container updates, S skipped (P% saved), F far ones run, X with no player position`.
+
+## Fast water checks
+
+Everything that floats (loose items, bodies, creatures) asks the server each tick whether it is inside a vehicle's
+buoyancy volume (`server_scene.ocean_data.get_is_inside_buoyancy_volume`), and the game tests every such vehicle in
+turn: 22% of the server thread in a town log. With **Fast water checks** on, the mod first tests the point against a
+sphere around each vehicle that holds its bounds and answers "no" itself when the point is outside all of them; anything
+close goes to the game. Every 512th answer is checked against the game's, and a mismatch turns the fix off. Every 30 s
+the log shows `Fast water checks: N answered by the mod (C checked against the game, all matched), M left to the game`.
+
+## Distant loose items
+
+Every server tick the game updates every item lying in the world (`server_scene.item_floor.tick`: the item's own logic,
+everything inside it, and an inside-bunker check). With **Distant loose items** on, an item more than 100 m from every
+player is updated on one tick in 8. Player positions are the ones the server streams items around
+(`item_floor_container.replicate_stream`), so joiners count too; with no player position known every item runs. Item
+physics is untouched. Timers on far items (a burning flare, a light's battery) run slower while nobody is near. Every
+30 s the log shows `Distant loose items: N item updates, S skipped (P% saved), F far ones run, X with no player position`.
 
 ## Frame hitches
 
@@ -63,6 +119,20 @@ Every 30 seconds it also writes a summary:
 ```
 [anyperformance] 30 s: 58.2 fps avg, 1% low 41.0 fps, 1790 frames, 3 hitches (worst 142 ms) | server 60.0 ticks/s, 1.9 ms avg, 6.1 max, spacing jitter 0.4 ms, 0 late, 0 bunched | tiles 4 attached (max 11.2 ms) | timer 1.0 ms
 ```
+
+followed by where an average frame and an average server tick went in that window (not only the slow ones), with the
+biggest timed steps per frame or tick:
+
+```
+[anyperformance] Frame average (1650 frames): 18.2 ms = client tick 8.1 (simulation+physics 6.4, streaming 0.3), rendering/UI 10.1 | steps: vehicles 2.2 ms, creatures and players 1.4 ms
+[anyperformance] Server tick average (1800 ticks): 22.5 ms = loading 1.1 (tiles 0.9), simulation 18.0 (bunkers 0.0, items 6.1, vehicles 2.4, entities 0.0, physics step 2.0, other 7.5), network 3.1, autosave 0.0 | steps: creatures and players 4.2 ms, creature pathfinding 1.8 ms
+```
+
+The simulation steps are the children of `server_scene.tick` (creatures spawning, creature pathfinding, creatures and
+players, their physics, projectiles, ocean, weather, pseudo objects, collision events, explosions, radio transmissions)
+and of `client_scene.tick` (vehicles, creatures and players, particles, environment, lights, weather particles,
+inventories, daylight, interaction prompts, name tags and markers). A server tick over 16.7 ms on average means the host
+cannot keep 60 ticks a second and the world runs slow for everyone.
 
 | Part of a frame | Game function timed | What it is |
 | --- | --- | --- |
@@ -106,8 +176,31 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Precise timer | On | The 1 ms Windows timer described above. Applies at once |
 | Hitch threshold (ms) | 50 | Frames slower than this are logged (20 to 1000) |
 | FPS overlay | Off | The live readout in the top-left corner |
+| Spread wreck loot | On | Fills wrecks on newly loaded terrain a few at a time, as above |
+| Wreck loot per tick (ms) | 8 | How long Spread wreck loot may fill wrecks each server tick (2 to 30). Higher fills more wrecks at once. Applies at once |
+| Fast furniture loot | On | Remembers which loot items do not fit in a wreck's furniture while it fills, as below |
+| Fast navmesh cleanup | On | Answers the game's check of empty navmesh cells around unloading terrain itself, as below |
+| Distant container items | On | Parked vehicles over 50 m away update the items in their containers every 8th frame, as below |
+| Fast water checks | On | Answers "inside a boat's volume?" itself for points nowhere near one, as below |
+| Distant loose items | On | Loot on the ground over 100 m from every player updates every 8th server tick, as below |
+| Profiler (for testing) | Off | Samples where the main and server threads spend their time, as below |
 
 Without AnyHelpers the mod works with these defaults.
+
+## Profiler
+
+**Profiler (for testing)** is off by default and only measures. When on, a background thread pauses the main and
+server threads every 2 ms for a few microseconds, copies the top of the stack and walks it. Every 120 s it logs the
+25 functions with the most time spent in them (`self`) and the 25 with the most time under them (`total`):
+
+```
+[anyperformance] Profile server thread: 60000 samples in 120 s (every 2 ms). ...
+[anyperformance] Profile server self #1: self 12.0% total 30.0% | gcl size 648 code 48 89 5c 24 ...
+```
+
+Game logic functions are placed in memory at run time, so the log names them by size and first bytes.
+`native/tools/map_profile.py <log> <game.gcl>` turns those into function names offline (add `--db` with the SDK
+reference's `sdk_index.sqlite` to name game.exe natives too). It costs about 1% of one core while on.
 
 ## Limits
 

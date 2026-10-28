@@ -25,7 +25,9 @@
 #include <thread>
 namespace graphics::photocam {
 inline constexpr double kRange = 200, kMinSpeed = .25, kMaxSpeed = 40, kDefaultSpeed = 4;
-inline constexpr const wchar_t* kLooks[] = {L"None", L"Warm", L"Cool", L"Teal & orange", L"Moody", L"Vivid"};
+inline constexpr const wchar_t* kLooks[] = {L"None", L"Warm", L"Cool", L"Teal & orange", L"Moody", L"Vivid", L"Soft & warm"};
+// Soft & warm (look 6) needs AnyAPI 0.40.1; the mod clears this on older APIs and key 5 then cycles six looks (AG-18).
+inline bool soft_grades = true;
 inline constexpr const wchar_t* kCorners[] = {L"Off", L"Light", L"Medium", L"Strong"};
 inline constexpr const wchar_t* kGlows[] = {L"Off", L"Subtle", L"Normal", L"Strong"};
 
@@ -45,14 +47,19 @@ inline void log(const char* text) { if (host.log) host.log(0, "anygraphics", tex
 inline void show(ULONGLONG ms = 4000) { shown_until = GetTickCount64() + ms; }
 inline void changed() { show(); revision.fetch_add(1); }
 
-// Applies the photo controls to the parameters about to be sent, after photo mode's own setup.
-inline void apply(AnySceneEffectsParametersV1& e) {
+// Applies the photo controls to the parameters about to be sent, after photo mode's own setup. A tweak that turns the
+// finish pass on also replaces the game's bloom (scene controls switch it off under the finish pass), so it brings a low
+// bloom only where the game's bloom was on, and no sun glare (K31). Key 7 still picks any bloom.
+inline void apply(AnySceneEffectsParametersV1& e, bool native_bloom_on = true) {
     std::lock_guard lock(mutex);
     const Tweaks& t = tweaks;
     bool finish = t.look >= 0 || t.vignette >= 0 || t.bloom >= 0 || t.exposure != 0;
-    if (finish && !e.finish) { e.finish = 1; e.tonemap = 0; e.eye_adaptation = 0; e.look = 0; e.vignette = 0; }
+    if (finish && !e.finish) {
+        e.finish = 1; e.tonemap = 0; e.eye_adaptation = 0; e.look = 0; e.vignette = 0; e.glare = 0;
+        e.bloom = native_bloom_on ? graphics_options::scene_bloom_levels[1] : 0.f;
+    }
     if (t.dof >= 0) e.depth_of_field = float(t.dof) * .5f;
-    if (t.look >= 0) { e.look = uint32_t(t.look); if (e.look_strength < .5f) e.look_strength = 1; }
+    if (t.look >= 0) { e.look = uint32_t(t.look >= 6 && !soft_grades ? 5 : t.look); if (e.look_strength < .5f) e.look_strength = 1; }
     if (t.vignette >= 0) e.vignette = graphics_options::vignette_levels[t.vignette];
     if (t.bloom >= 0) e.bloom = graphics_options::scene_bloom_levels[t.bloom];
     e.exposure = std::clamp(e.exposure + t.exposure, -3.f, 3.f);
@@ -66,7 +73,13 @@ inline std::atomic<bool> hook_ready{false}, stop{false}, have{false};
 // headless from a free camera. Set while flying, then put back to the game's value from before any mod set it
 // (ThirdPerson sets it the same way and keeps setting it each frame while in third person).
 inline bool* head;
-inline bool head_set, head_original;
+inline std::atomic<bool> head_set{false};
+inline bool head_original;
+// OVL-2: update() stamps the heartbeat every frame. If it stops for kStaleMs while the camera flies (the plugin's render
+// callback faulted or stopped), the hook gives the game its camera back and restores the head flag until update() runs.
+inline constexpr ULONGLONG kStaleMs = 1500;
+inline std::atomic<ULONGLONG> heartbeat{0};
+inline std::atomic<bool> stale{false};
 enum : uint32_t { Forward = 1, Back = 2, Left = 4, Right = 8, Up = 16, Down = 32, Fast = 64 };
 inline std::atomic<uint32_t> keys{0};
 inline std::atomic<double> facing{0};
@@ -106,10 +119,17 @@ inline void calibrate(const double* m) {
     log(line);
 }
 
+inline void go_stale() {
+    if (stale.exchange(true)) return;
+    if (head && head_set.exchange(false)) *head = head_original;
+    log("PHOTO_CAMERA stale=1 camera_returned=1 (AnyGraphics stopped updating photo mode)");
+}
+
 inline void hk_transform(double* ret, uint8_t* scene) {
     reinterpret_cast<transform_t>(hook.original)(ret, scene);
     if (!ret || stop.load()) return;
     if (!flying.load()) { if (have.load()) { std::lock_guard lock(cam_mutex); have = false; } return; }
+    if (GetTickCount64() - heartbeat.load() > kStaleMs) { go_stale(); return; }   // the game's own camera, untouched
     std::lock_guard lock(cam_mutex);
     double* t = ret + 9;
     LARGE_INTEGER now, rate; QueryPerformanceCounter(&now); QueryPerformanceFrequency(&rate);
@@ -176,6 +196,7 @@ inline void sample_facing() {
 
 // Called once a frame from the render callback.
 inline void update(bool photo, bool gameplay) {
+    heartbeat = GetTickCount64(); stale = false;
     bool was = active.load();
     active = photo && gameplay;
     bool fly;
@@ -212,7 +233,7 @@ inline void press(uint32_t key) {
         case '2': t.dof = t.dof < 0 ? 2 : std::min(t.dof + 1, 8); break;
         case '3': t.exposure = std::max(t.exposure - .25f, -3.f); break;
         case '4': t.exposure = std::min(t.exposure + .25f, 3.f); break;
-        case '5': t.look = cycle(t.look, 6); break;
+        case '5': t.look = cycle(t.look, soft_grades ? 7 : 6); break;
         case '6': t.vignette = cycle(t.vignette, 4); break;
         case '7': t.bloom = cycle(t.bloom, 4); break;
         case 'R': t = Tweaks{}; speed = float(kDefaultSpeed); break;
@@ -222,8 +243,22 @@ inline void press(uint32_t key) {
     changed();
 }
 
+// SC-18: the photo key, latched here on the window thread so a quick tap between two slow frames still toggles; render()
+// consumes the request. The key itself is passed on. key_events tells render() it need not poll the keyboard (CPU-14).
+inline std::atomic<uint32_t> toggle_key{VK_F1};
+inline std::atomic<bool> toggle_requested{false}, toggle_held{false}, key_events{false};
+inline void latch(const AnyInputV1* e) {
+    if (e->kind == ANY_FOCUS_LOST) { toggle_held = false; return; }
+    if (e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) return;
+    key_events = true;
+    if (!e->key || e->key != toggle_key.load()) return;
+    if (e->kind == ANY_KEY_UP) toggle_held = false;
+    else if (!toggle_held.exchange(true)) toggle_requested = true;   // key repeat does not toggle again
+}
+
 inline uint32_t input(const AnyInputV1* e) {
     if (!e) return 0;
+    latch(e);
     if (e->kind == ANY_FOCUS_LOST) { keys = 0; std::fill(std::begin(held), std::end(held), false); return 0; }
     if (e->kind == ANY_KEY_UP) {
         if (uint32_t bit = movement_bit(e->key)) keys.fetch_and(~bit);

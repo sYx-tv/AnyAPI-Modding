@@ -8,6 +8,7 @@ These utilities support reviewed native contracts. The normal build needs only
 | Tool | Purpose | Required inputs |
 | --- | --- | --- |
 | `gcl_metadata.py` | Library for reading `bin/game.gcl` records, used by the other tools | Compatible game.gcl |
+| `map_profile.py` | Name the functions in AnyPerformance's `Profile` log lines | Log, compatible game.gcl; optional SDK `sdk_index.sqlite` |
 | `parse_gcl.py` | Parse native code records | Compatible game.gcl and output path |
 | `inspect_native.py` | Decode selected native bodies | Game data and parsed records |
 | `game_update.py` | Port to a new game build in one run: SDK, pattern audit, legacy routes, mod bindings, build identity, release plan. See [game updates](../../docs/development/game-updates.md) | Game files, previous SDK root; Capstone, pefile |

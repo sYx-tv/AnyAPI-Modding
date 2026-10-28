@@ -1,5 +1,6 @@
 #include "../anycareer_logic.h"
 #include "../anycareer_cash_mesh.h"
+#include "../anycareer_net.h"
 #include <cstring>
 #include <cassert>
 using namespace anycareer::logic;
@@ -291,6 +292,38 @@ int main() {
         assert(load_world(save_world(w), back));
         assert(back.shops[kMedic].placed && back.shops[kMedic].at.z == -7 && back.shops[kMedic].restock == 3 && back.shops[kMedic].sold.size() == 3 &&
                back.shops[kMedic].sold[2] == 2 && !back.shops[kJunkyard].placed && back.shops[kJunkyard].restock == 9 && !back.shops[kGrocer].placed);
+    }
+    {
+        // Co-op messages: round trips, and anything cut, padded, out of range or foreign is refused.
+        namespace net = anycareer::net;
+        net::Request q; q.action = net::kSell; q.shop = 4; q.open = true; q.key = 77; q.yaw = 1.5f;
+        auto qb = net::encode(q);
+        net::Request q2;
+        assert(net::kind_of(qb.data(), qb.size()) == net::kRequest && net::decode(qb.data(), qb.size(), q2));
+        assert(q2.action == net::kSell && q2.shop == 4 && q2.open && q2.key == 77 && q2.yaw == 1.5f);
+        for (size_t cut = 0; cut < qb.size(); ++cut) assert(!net::decode(qb.data(), cut, q2));
+        auto padded = qb; padded.push_back(0); assert(!net::decode(padded.data(), padded.size(), q2));
+        auto bad = qb; bad[7] = net::kActionCount; assert(!net::decode(bad.data(), bad.size(), q2));
+        bad = qb; bad[8] = 9; assert(!net::decode(bad.data(), bad.size(), q2));
+        bad = qb; bad[0] ^= 1; assert(!net::decode(bad.data(), bad.size(), q2) && net::kind_of(bad.data(), bad.size()) == 0);
+        net::View v; v.placed = true; v.shops[2] = {true, 1.5, 2, -3}; v.shop = 2; v.cash = 1234; v.days = 3; v.board = -1;
+        v.job_state = 1; v.job_shop = 5; v.job_text = "Bring 3 tyres"; v.status = std::string(400, 'x');
+        for (int i = 0; i < 200; ++i) v.buy.push_back({"Item " + std::to_string(i), "id", "Buy", i, 1, i, i % 2 == 0});
+        v.jobs.push_back({"Job", "", "Take", 50, 0, 9, false});
+        auto vb = net::encode(v);
+        assert(vb.size() <= net::kMaxMessage);
+        net::View v2;
+        assert(net::kind_of(vb.data(), vb.size()) == net::kView && net::decode(vb.data(), vb.size(), v2));
+        assert(v2.placed && v2.shops[2].placed && v2.shops[2].z == -3 && v2.shop == 2 && v2.cash == 1234 && v2.job_shop == 5);
+        assert(v2.status.size() == net::kMaxText && v2.buy.size() == net::kMaxRows && v2.buy[3].name == "Item 3" && !v2.buy[3].off && v2.buy[4].off);
+        assert(v2.jobs.size() == 1 && v2.jobs[0].price == 50 && v2.sell.empty());
+        for (size_t cut = 0; cut < vb.size(); cut += 97) assert(!net::decode(vb.data(), cut, v2));
+        assert(!net::decode(qb.data(), qb.size(), v2) && !net::decode(vb.data(), vb.size(), q2));
+        net::Rate rate;
+        int let = 0;
+        for (int i = 0; i < 30; ++i) let += net::admit(rate, 5000);
+        assert(let == int(net::kRate) && net::admit(rate, 6000));
+        assert(net::parse_steam_id("76561198000000001") == 76561198000000001ull && !net::parse_steam_id("12a") && !net::parse_steam_id("99999999999999999999"));
     }
     return 0;
 }

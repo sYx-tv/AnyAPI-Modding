@@ -1,5 +1,5 @@
 #pragma once
-// Dyno game bindings, generated for Anymaker 0.1.27 / Steam build 26113663 with
+// Dyno game bindings, generated for Anymaker 0.1.28 / Steam build 26277967 with
 //   python3 tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the 0.1.25 SDK reference folder, one --signature per binding below (several are the same lines as
 // rotary_bindings.h, turbo_bindings.h and gpspart_bindings.h).

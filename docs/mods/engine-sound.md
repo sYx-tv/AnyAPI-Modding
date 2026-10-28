@@ -1,7 +1,7 @@
 # EngineSound
 
 > EngineSound hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
 > Its hooks are planned to move into a reviewed AnyAPI service.
 
 EngineSound gives every engine a real, generated sound instead of a pitched game recording. Each cylinder's

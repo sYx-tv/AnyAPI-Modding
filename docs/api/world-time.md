@@ -14,6 +14,12 @@ This is a day/night-cycle service, not real-world time, a calendar or a simulati
 
 The provider observes a verified native shared call cell, forwards the original getter exactly once and exposes no native pointers. The game's executable and data fingerprints must match the reviewed build. No setter is exposed. The native clock popup was confirmed in a loaded world before publication.
 
+Internally (AnyAPI 0.40.2) the same observation also records the getter's tick
+argument and the rain and snow amounts of the game's weather particles, for
+the scene controls status and moonlight. The service structure and its fields
+are unchanged. The first observation logs
+`WORLD_TIME sampled=1 cycle=... tick=... weather_read=0|1 source=native_day_night_cycle`.
+
 ```cpp
 #include "anyapi_services_v1.h"
 #include "anyapi_world_time_v1.h"

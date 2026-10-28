@@ -1,5 +1,6 @@
 #pragma once
 #include "volumetric_frame.h"
+#include "lamp_capture.h"
 #include "../anyapi_scene_lighting_v1.h"
 #include <cstdint>
 #include <cstring>
@@ -8,14 +9,26 @@ namespace volumetric {
 struct NativeTarget {uintptr_t resource{};uint32_t state{},width{},height{},srv_format{},srv_dimension{};};
 // origin: graphics-relative positions plus origin give world positions; the
 // origin moves as the player travels, so temporal history must account for it.
-struct NativeFrame {Frame gpu;NativeTarget color,depth,shadow;std::array<NativeTarget,12> cascades{};uint32_t shadow_count{},failure{};double origin[3]{};};
+struct NativeFrame {Frame gpu;NativeTarget color,depth,shadow;std::array<NativeTarget,12> cascades{};uint32_t shadow_count{},failure{};double origin[3]{};
+ // AnyAPI 0.40.2 (appended). view: scene+0x668..0x66b as bits 0-3 (underground, underwater, night vision, thermal),
+ // 0x80000000 when unreadable. underground: a lamps-only frame. spot_maps: game shadow maps after the sun cascades.
+ // ocean: gbuffer_ocean (renderer+0x208) while scene+0xb71 m_is_ocean is 1, RGBA16F at the colour size; else unset.
+ uint32_t view{};bool underground{};uint32_t spot_maps{};lighting::LampStats lamps{};bool ocean{};NativeTarget ocean_target{};};
+// view_mask bit i set: a set byte scene+0x668+i bypasses (0xff, the default, is the 0.40.1 rule: any flag bypasses).
+// underground_lamps (V4 ANY_LAMP_UNDERGROUND, with bit 0 clear): an underground view keeps the lamps and drops the
+// sun, the fog and the daylight washout. tracker (V4 ANY_LAMP_TRACKING): lamps keep identity, hysteresis and fades.
+// ocean: also read gbuffer_ocean (never fails the capture).
+struct CaptureOptions {uint32_t view_mask{0xff};bool underground_lamps{};lighting::LampTracker* tracker{};double now{};bool ocean{};};
 // Exact 0.1.24 contract: native ref<T> is control block then object pointer.
 // target+0x10 is the D3D12 resource, +0x28 its recorded state, +0x50 its SRV.
 template<class Read> bool target(uintptr_t object,NativeTarget& out,Read read){unsigned char data[0x60]{};if(!object||!read(object,data,sizeof(data)))return false;memcpy(&out.resource,data+0x10,8);memcpy(&out.state,data+0x28,4);memcpy(&out.width,data+0x34,4);memcpy(&out.height,data+0x38,4);memcpy(&out.srv_format,data+0x50,4);memcpy(&out.srv_dimension,data+0x54,4);return out.resource&&out.width>0&&out.width<=8192&&out.height>0&&out.height<=8192&&out.srv_dimension==4;}
-template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,const AnySceneLightingParametersV1& p,NativeFrame& out,Read read,float local_strength=0,uint32_t local_budget=4,bool local_shadows=true){
- out.gpu.local_shadow_count=out.gpu.fog_color[3]=out.gpu.sun_color[3]=0;out.gpu.lights={};out.gpu.local_shadows={};
+template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,const AnySceneLightingParametersV1& p,NativeFrame& out,Read read,float local_strength=0,uint32_t local_budget=4,bool local_shadows=true,const CaptureOptions& o=CaptureOptions{}){
+ out.gpu.local_shadow_count=out.gpu.fog_color[3]=out.gpu.sun_color[3]=0;out.gpu.lights={};out.gpu.local_shadows={};out.view=0;out.underground=false;out.spot_maps=0;out.lamps={};out.ocean=false;out.ocean_target={};
  out.failure=1;if(p.quality>3||!std::isfinite(local_strength)||local_strength<0||local_strength>15||local_budget<1||local_budget>8)return false;
- out.failure=2;unsigned char special[4]{};if(!read(scene+0x668,special,4)||special[0]||special[1]||special[2]||special[3])return false;
+ out.failure=2;unsigned char special[4]{};if(!read(scene+0x668,special,4)){out.view=0x80000000u;return false;}
+ for(uint32_t i=0;i<4;++i){if(special[i]>1){out.view=0x80000000u;return false;}if(special[i])out.view|=1u<<i;}
+ for(uint32_t i=0;i<4;++i)if(special[i]&&(o.view_mask>>i&1))return false;
+ out.underground=(out.view&1)&&o.underground_lamps;
  out.failure=3;uintptr_t color{},depth{},shadows{},cameras{};uint32_t count{},camera_count{},shadow_stride{},camera_stride{};
  if(!read(renderer+0x3c0,&color,8)||!read(renderer+0x218,&depth,8)||!read(renderer+0xb8,&shadows,8)||!read(renderer+0xc0,&count,4)||!read(renderer+0xc4,&shadow_stride,4)||!read(scene+0x5c0,&cameras,8)||!read(scene+0x5c8,&camera_count,4)||!read(scene+0x5cc,&camera_stride,4)||shadow_stride!=16||camera_stride!=0x2d0||!count||count>32||!camera_count||camera_count>32||!shadows||!cameras)return false;
  out.failure=4;uintptr_t shadow{};if(!read(shadows+8,&shadow,8)||!target(color,out.color,read)||!target(depth,out.depth,read)||!target(shadow,out.shadow,read)||out.color.width!=out.depth.width||out.color.height!=out.depth.height||out.depth.srv_format!=41||(out.shadow.srv_format!=41&&out.shadow.srv_format!=56)||out.color.srv_format!=10)return false;
@@ -32,29 +45,32 @@ template<class Read> bool capture(uintptr_t renderer,uintptr_t scene,const AnySc
  }
  f.forward[3]=float(cascade_count);out.failure=8;float magnitude=0;for(size_t i=0;i<3;++i)magnitude+=f.sun[i]*f.sun[i];if(magnitude<.01f)return false;for(size_t i=0;i<3;++i)f.sun[i]=-f.sun[i]/std::sqrt(magnitude);if(!read(cameras+0x1a0,matrix,sizeof(matrix))||!std::isfinite(matrix[10])||std::abs(matrix[10])<1e-12)return false;f.sun[3]=matrix[10]<0?2.f:1.f;
  f.medium={p.fog_density,p.base_height,p.height_falloff,p.anisotropy};static constexpr float steps[]={16,24,32,48};f.controls={steps[p.quality],p.maximum_distance,p.sun_shafts,p.fog_strength};// The native light vectors are ring buffers, unlike the camera arrays.
+ // Lamp-only frames never use the sun cascades: shadow_result returns at once (identical output, K10/K25).
+ // Underground (V4): no sun shafts, no fog, no daylight washout (sun_colour rgb 0); the lamps stay.
+ if(p.sun_shafts<=0&&p.fog_strength<=0)f.sun[3]=0;
+ if(out.underground){f.sun[3]=0;f.controls[2]=f.controls[3]=0;f.sun_color[0]=f.sun_color[1]=f.sun_color[2]=0;}
+ out.spot_maps=count>cascade_count?count-cascade_count:0;
+ if(o.ocean){unsigned char is_ocean=2;uintptr_t object{};out.ocean=read(scene+0xb71,&is_ocean,1)&&is_ocean==1&&read(renderer+0x208,&object,8)&&target(object,out.ocean_target,read)&&out.ocean_target.srv_format==10&&out.ocean_target.width==out.color.width&&out.ocean_target.height==out.color.height;if(!out.ocean)out.ocean_target={};}
  if(local_strength>0){
-  struct Candidate{std::array<float,16> data{};std::array<float,16> matrix{};bool spot{};float score{};};std::vector<Candidate> lights;
-  auto gather=[&](uintptr_t address,uint32_t expected,bool spot){uintptr_t buffer{};uint32_t start{},size{},capacity{},stride{};
-   if(!read(address,&buffer,8)||!read(address+8,&start,4)||!read(address+12,&size,4)||!read(address+16,&capacity,4)||!read(address+20,&stride,4))return;
-   if(!size)return;if(!buffer||size>4096||capacity<size||capacity>1048576||start>=capacity||stride!=expected)return;
-   for(uint32_t i=0;i<size;++i){float raw[30]{};if(!read(buffer+uintptr_t((start+i)%capacity)*stride,raw,expected))continue;bool finite=true;for(uint32_t j=0;j<(spot?29u:14u);++j)finite&=std::isfinite(raw[j])&&std::abs(raw[j])<=1e8f;if(!finite)continue;
-    auto position=raw+(spot?16:0),colour=raw+(spot?24:4);float radius=position[3];if(radius<=.01f||radius>2000||colour[0]<0||colour[1]<0||colour[2]<0)continue;
-    Candidate c;c.spot=spot;for(unsigned j=0;j<4;++j)c.data[j]=position[j];for(unsigned j=0;j<3;++j)c.data[8+j]=colour[j];c.data[11]=spot?1.f:0.f;c.data[12]=-1;c.data[14]=1;
-    float d2=0;for(unsigned j=0;j<3;++j){float d=position[j]-f.camera[j];d2+=d*d;}if(d2>(radius+p.maximum_distance)*(radius+p.maximum_distance))continue;c.score=std::max({colour[0],colour[1],colour[2]})*radius*radius/(1+d2);
-    if(spot){float norm=raw[20]*raw[20]+raw[21]*raw[21]+raw[22]*raw[22];if(norm<.99f||norm>1.01f||raw[28]<0||raw[28]>=1)continue;for(unsigned j=0;j<3;++j)c.data[4+j]=raw[20+j];c.data[7]=raw[28];for(unsigned j=0;j<16;++j)c.matrix[j]=raw[j];}
-    lights.push_back(c);
-   }
-  };gather(scene+0xc48,56,false);gather(scene+0xc70,120,true);std::stable_sort(lights.begin(),lights.end(),[](auto& a,auto& b){return a.score>b.score;});
-  unsigned selected=std::min({unsigned(lights.size()),local_budget,8u}),shadow_slots=0;
-  for(unsigned i=0;i<selected;++i){auto& c=lights[i];
-   // Match the copied spotlight matrix to the current camera rather than
-   // guessing whether a shadow index is relative to the sun-cascade count.
-   if(local_shadows&&c.spot&&shadow_slots<4)for(unsigned n=cascade_count;n<camera_count&&n<count;++n){if(!read(cameras+n*720+0x220,matrix,sizeof(matrix)))continue;bool match=true;for(unsigned j=0;j<16;++j)match&=std::abs(float(matrix[j])-c.matrix[j])<=.0001f*std::max(1.f,std::abs(c.matrix[j]));if(!match)continue;
-    uintptr_t object{};NativeTarget local;if(!read(shadows+n*16+8,&object,8)||!target(object,local,read)||(local.srv_format!=41&&local.srv_format!=56))break;
-    out.cascades[8+shadow_slots]=local;f.local_shadows[shadow_slots]=c.matrix;c.data[12]=float(8+shadow_slots);if(read(cameras+n*720+0x1a0,matrix,sizeof(matrix)))c.data[13]=matrix[10]<0?2.f:1.f;++shadow_slots;break;
-   }
-   f.lights[i]=c.data;
+  static thread_local std::vector<lighting::Lamp> lamps;lighting::LampReader<Read> reader(read);reader.gather(scene,f.camera.data(),p.maximum_distance,lamps,out.lamps);
+  // Fade-outs borrow at most half the budget again (2->3, 4->6, 6->8), so a low budget stays low.
+  if(o.tracker){o.tracker->select(lamps,local_budget,std::min<uint32_t>(8,local_budget+std::max<uint32_t>(1,local_budget/2)),out.origin,o.now);out.lamps.tracked=o.tracker->active();}else lighting::select_legacy(lamps,local_budget);
+  // Spot shadows: the first 4 drawn spots with a matching shadow camera, as before. raw[29] names the game's camera
+  // (render_util: m_shadow_cameras[g_shadow_renderer_count] = the spot camera, +0x74 = that index); one matrix
+  // compare confirms it, otherwise the old scan runs. Slots are numbered by camera index, so the bound set does not
+  // reshuffle when the ranking does (fewer descriptor table changes, same image).
+  struct Pick{uint32_t lamp,camera;NativeTarget map;float mode;};std::array<Pick,4> picks{};unsigned shadow_slots=0,limit=std::min(camera_count,count);
+  auto matches=[&](unsigned n,const std::array<float,16>& m){if(!read(cameras+n*720+0x220,matrix,sizeof(matrix)))return false;bool match=true;for(unsigned j=0;j<16;++j)match&=std::abs(float(matrix[j])-m[j])<=.0001f*std::max(1.f,std::abs(m[j]));return match;};
+  for(uint32_t i=0;i<lamps.size()&&local_shadows&&shadow_slots<4;++i){auto& c=lamps[i];if(!c.spot)continue;int found=-1,g=c.game_shadow;
+   if(g>=int(cascade_count)&&g<int(limit)&&matches(unsigned(g),c.matrix)){found=g;++out.lamps.raw29_hits;}
+   else{if(g>=0)++out.lamps.raw29_misses;for(unsigned n=cascade_count;n<limit;++n)if(matches(n,c.matrix)){found=int(n);break;}}
+   if(found<0)continue;uintptr_t object{};NativeTarget local;if(!read(shadows+uintptr_t(found)*16+8,&object,8)||!target(object,local,read)||(local.srv_format!=41&&local.srv_format!=56))continue;
+   float mode=0;if(read(cameras+uintptr_t(found)*720+0x1a0,matrix,sizeof(matrix)))mode=matrix[10]<0?2.f:1.f;picks[shadow_slots++]={i,uint32_t(found),local,mode};
   }
+  std::sort(picks.begin(),picks.begin()+shadow_slots,[](const Pick& a,const Pick& b){return a.camera<b.camera;});
+  for(unsigned k=0;k<shadow_slots;++k){auto& c=lamps[picks[k].lamp];out.cascades[8+k]=picks[k].map;f.local_shadows[k]=c.matrix;c.data[12]=float(8+k);c.data[13]=picks[k].mode;}
+  for(uint32_t i=0;i<lamps.size();++i)f.lights[i]=lamps[i].data;
+  out.lamps.shadowed=shadow_slots;unsigned selected=unsigned(lamps.size());
   f.local_shadow_count=float(shadow_slots);f.fog_color[3]=float(selected);f.sun_color[3]=local_strength;
  }
  out.failure=9;if(!valid(f))return false;out.failure=0;return true;

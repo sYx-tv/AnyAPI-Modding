@@ -7,14 +7,20 @@
 #include <wrl/client.h>
 #include <DirectXPackedVector.h>
 #include <cassert>
+#include <cstring>
 #include <iostream>
 #include <vector>
 #include "lighting/volumetric_gpu.h"
 #include "aa/scene_smaa_bindings.h"
+#include "tests/gpu_test_device.h"
 using Microsoft::WRL::ComPtr;
-int main(){std::cout<<std::unitbuf;
- ComPtr<ID3D12Debug> debug;if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();ComPtr<IDXGIFactory4> factory;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));ComPtr<IDXGIAdapter> adapter;assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));ComPtr<ID3D12Device> device;assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));ComPtr<ID3D12InfoQueue> info;device.As(&info);
- D3D12_COMMAND_QUEUE_DESC qd{};ComPtr<ID3D12CommandQueue> queue;assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};auto wait=[&]{assert(SUCCEEDED(queue->Signal(fence.Get(),++serial)));assert(SUCCEEDED(fence->SetEventOnCompletion(serial,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);};
+int main(int argc,char** argv){std::cout<<std::unitbuf;
+ // K39: the shared WARP device (debug layer and the InfoQueue check where the Graphics Tools are installed).
+ // GPU-based validation is opt-in (--gbv): on WARP it slows this shader enough that a frame can pass the 10 s wait
+ // (the laptop run of cfb6a24 ended at 72 s, and main's test never enabled it).
+ const bool gbv=argc>1&&std::strcmp(argv[1],"--gbv")==0;
+ gpu_test::Device dev;assert(gpu_test::create(dev,gbv));ComPtr<ID3D12Device> device=dev.device;std::cout<<"Device validated="<<dev.validated<<" GPU-based validation requested="<<(dev.validated&&gbv)<<std::endl;
+ ComPtr<ID3D12CommandQueue> queue=dev.queue;ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);UINT64 serial{};auto wait=[&]{assert(SUCCEEDED(queue->Signal(fence.Get(),++serial)));assert(SUCCEEDED(fence->SetEventOnCompletion(serial,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);};
  ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));assert(SUCCEEDED(list->Close()));
  struct Texture{ComPtr<ID3D12Resource> resource,upload,readback;D3D12_RESOURCE_DESC desc{};D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes{};};
  auto buffer=[&](ComPtr<ID3D12Resource>& out,UINT64 bytes,D3D12_HEAP_TYPE type){D3D12_HEAP_PROPERTIES hp{};hp.Type=type;D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=bytes;d.Height=1;d.DepthOrArraySize=1;d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&d,type==D3D12_HEAP_TYPE_UPLOAD?D3D12_RESOURCE_STATE_GENERIC_READ:D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&out))));};
@@ -78,5 +84,84 @@ int main(){std::cout<<std::unitbuf;
  // there instead of counting the air as fully lit (the lit wall where cascades end).
  {float lit=run(1,100,.02f,0,48),blocked=run(0,100,.02f,0,48),edge=run(1,100,.02f,0,48,64,48,false,false,false,false,1,.35f,0,4,0,false,-.98f);
   std::cout<<"Cascade edge lit="<<lit<<" edge="<<edge<<" blocked="<<blocked<<std::endl;assert(edge<blocked+.1f*(lit-blocked));}
- if(info){for(UINT64 i=0;i<info->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T n{};info->GetMessage(i,nullptr,&n);std::vector<unsigned char> data(n);auto m=(D3D12_MESSAGE*)data.data();info->GetMessage(i,m,&n);if(m->Severity==D3D12_MESSAGE_SEVERITY_ERROR||m->Severity==D3D12_MESSAGE_SEVERITY_CORRUPTION){std::cerr<<m->pDescription<<'\n';assert(false);}}}CloseHandle(event);std::cout<<"PASS: "<<cases<<" HDR lighting GPU cases: shadow occlusion, depth-limited fog, zero-density identity, resizing, alpha and crisp restored HUD\n";
+ // ---- AnyAPI 0.40.2 (package 6) ----
+ using DirectX::PackedVector::HALF;struct Shot{std::vector<HALF> texels;float centre[4]{};};
+ auto same=[](const Shot& a,const Shot& b){return a.texels==b.texels;};
+ // One frame on fresh inputs: colour .05 (alpha as given), depth at `distance`, every shadow map `shadow_value`,
+ // gbuffer_ocean (0,1,0,0) when `ocean`. report=false leaves out Gpu::submitted (the ring then cannot see the list).
+ auto shot=[&](const volumetric::Frame& f,UINT path,float shadow_value,float distance,bool ocean=false,float alpha=1,bool report=true){const UINT w=64,h=48;
+  wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));
+  auto color=texture(w,h,DXGI_FORMAT_R16G16B16A16_FLOAT),depth=texture(w,h,DXGI_FORMAT_R32_FLOAT),shadow=texture(32,32,DXGI_FORMAT_R32_FLOAT),water=texture(w,h,DXGI_FORMAT_R16G16B16A16_FLOAT);
+  bool ready=gpu.ensure(device.Get(),queue.Get(),color.desc,path);if(!ready)std::cout<<"ensure failed path="<<path<<" hr=0x"<<std::hex<<unsigned(gpu.error())<<std::dec<<(SUCCEEDED(gpu.error())?" (no failed call recorded: the idle wait before re-creation failed)":"")<<std::endl;assert(ready);
+  for(auto item:{&color,&depth,&shadow,&water}){unsigned char* data{};D3D12_RANGE none{0,0};assert(SUCCEEDED(item->upload->Map(0,&none,(void**)&data)));
+   for(UINT y=0;y<item->desc.Height;++y)for(UINT x=0;x<item->desc.Width;++x){auto p=data+item->footprint.Offset+y*item->footprint.Footprint.RowPitch;
+    if(item==&color||item==&water){auto half=(HALF*)p+x*4;float v[4]{.05f,.05f,.05f,alpha};if(item==&water){v[0]=v[2]=v[3]=0;v[1]=1;}for(UINT c=0;c<4;++c)half[c]=DirectX::PackedVector::XMConvertFloatToHalf(v[c]);}
+    else ((float*)p)[x]=item==&shadow?shadow_value:1-.1f/distance;}
+   item->upload->Unmap(0,nullptr);copy(*item,true);auto b=volumetric::barrier(item->resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,item==&color?D3D12_RESOURCE_STATE_RENDER_TARGET:D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);list->ResourceBarrier(1,&b);}
+  std::array<ID3D12Resource*,12> shadows{};shadows.fill(shadow.resource.Get());std::array<D3D12_RESOURCE_STATES,12> states{};states.fill(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  volumetric::Ocean o;if(ocean)o.resource=water.resource.Get();
+  assert(gpu.record(list.Get(),color.resource.Get(),depth.resource.Get(),D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,shadows,states,f,o));
+  auto b=volumetric::barrier(color.resource.Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE);list->ResourceBarrier(1,&b);copy(color,false);assert(SUCCEEDED(list->Close()));
+  ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);if(report)gpu.submitted(queue.Get(),1,lists);wait();
+  Shot out;unsigned char* pixels{};D3D12_RANGE range{0,SIZE_T(color.bytes)};assert(SUCCEEDED(color.readback->Map(0,&range,(void**)&pixels)));
+  for(UINT y=0;y<h;++y){auto row=(const HALF*)(pixels+color.footprint.Offset+y*color.footprint.Footprint.RowPitch);out.texels.insert(out.texels.end(),row,row+w*4);}
+  for(UINT c=0;c<4;++c)out.centre[c]=DirectX::PackedVector::XMConvertHalfToFloat(out.texels[((h/2)*w+w/2)*4+c]);color.readback->Unmap(0,nullptr);
+  for(float v:out.centre)assert(std::isfinite(v));++cases;return out;};
+ // Sun from behind the camera, fog `fog` with extinction `density`, `lamps` lights in front (odd ones spots).
+ auto scene=[](float density,float fog,float sun,UINT lamps,bool temporal=false){volumetric::Frame f;f.sun={0,0,1,1};f.medium={density,0,0,.4f};f.controls={32,100,sun,fog};f.shadow[0]=f.shadow[5]=.01f;f.shadow[10]=.001f;f.shadow[15]=1;
+  if(lamps){f.sun_color[3]=1;f.fog_color[3]=float(lamps);for(UINT i=0;i<lamps;++i)f.lights[i]={(i&1?.75f:-.75f)*float(i),0,8+float(i),6,0,0,-1,.9f,.5f+.1f*float(i),1,1,i&1?1.f:0.f,-1,2,1,0};}
+  if(temporal){f.temporal[1][3]=1;f.temporal[1][5]=.9f;}return f;};
+ // K39/WI-1: the AMD constants path at every lamp count. LAMP_SLOTS 0/2/4 permutations are bit-identical to the
+ // 8-slot build, the branch build matches it, and both stay within fp16 noise of the marched lamps.
+ {float previous=0;for(UINT n:{0u,1u,2u,3u,4u,5u,8u}){auto f=scene(.002f,0,0,n);auto marched=shot(f,volumetric::PATH_MARCHED,1,30),fast=shot(f,volumetric::PATH_CONSTANTS,1,30);gpu.use_permutations(false);auto eight=shot(f,volumetric::PATH_CONSTANTS,1,30);auto branch=shot(f,volumetric::PATH_BRANCH,1,30);
+  std::cout<<"Constants lamps="<<n<<" marched="<<marched.centre[0]<<" permutation="<<fast.centre[0]<<" eight="<<eight.centre[0]<<" branch="<<branch.centre[0]<<std::endl;
+  if(!same(fast,eight)){size_t differ=0;for(size_t i=0;i<fast.texels.size();++i)differ+=fast.texels[i]!=eight.texels[i];std::cout<<"Constants lamps="<<n<<" permutation differs from eight in "<<differ<<" of "<<fast.texels.size()<<" channels"<<std::endl;}
+  assert(same(fast,eight)&&std::abs(branch.centre[0]-eight.centre[0])<1e-4f&&std::abs(fast.centre[0]-marched.centre[0])<2e-3f&&fast.centre[0]>=previous);previous=fast.centre[0];if(n)assert(fast.centre[0]>.0505f);}}
+ // K39: two temporal frames. The second blends the history the first wrote; a static view stays put.
+ {auto f1=scene(.004f,1,4,2,true);f1.temporal[1][4]=1;auto a=shot(f1,volumetric::PATH_MARCHED,1,100);auto f2=f1;f2.temporal[1][4]=0;f2.temporal[0]={0,0,0,1,1,0,0,1,0,1,0,1,0,0,1,1};auto b=shot(f2,volumetric::PATH_MARCHED,1,100);
+  std::cout<<"Temporal first="<<a.centre[0]<<" second="<<b.centre[0]<<std::endl;assert(std::abs(a.centre[0]-b.centre[0])<.01f&&b.centre[3]==1);
+  auto f3=f2;f3.temporal[1][4]=1;f3.temporal[0][15]=2;auto dark=shot(f3,volumetric::PATH_MARCHED,0,100),fresh=shot(scene(.004f,1,4,2),volumetric::PATH_MARCHED,0,100);assert(std::abs(dark.centre[0]-fresh.centre[0])<.02f);}
+ // K08: new inputs every frame go through the descriptor ring: no idle(), whatever the GPU is doing.
+ {auto f=scene(.002f,1,1,1);shot(f,volumetric::PATH_MARCHED,1,30);UINT idle=gpu.idle_count(),waits=gpu.ring_wait_count();for(int i=0;i<20;++i)shot(f,volumetric::PATH_MARCHED,i&1?1.f:0.f,30.f+i);assert(gpu.idle_count()==idle);
+  ComPtr<ID3D12CommandAllocator> al[4];ComPtr<ID3D12GraphicsCommandList> gl[4];UINT64 done[4]{};for(int k=0;k<4;++k){assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&al[k]))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,al[k].Get(),nullptr,IID_PPV_ARGS(&gl[k]))));assert(SUCCEEDED(gl[k]->Close()));}
+  auto color=texture(64,48,DXGI_FORMAT_R16G16B16A16_FLOAT),sm=texture(32,32,DXGI_FORMAT_R32_FLOAT);Texture depths[2]{texture(64,48,DXGI_FORMAT_R32_FLOAT),texture(64,48,DXGI_FORMAT_R32_FLOAT)};
+  wait();assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));for(auto t:{&color,&sm,&depths[0],&depths[1]}){auto b=volumetric::barrier(t->resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,t==&color?D3D12_RESOURCE_STATE_RENDER_TARGET:D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);list->ResourceBarrier(1,&b);}
+  const float black[4]{0,0,0,1};device->CreateRenderTargetView(color.resource.Get(),nullptr,rtv->GetCPUDescriptorHandleForHeapStart());list->ClearRenderTargetView(rtv->GetCPUDescriptorHandleForHeapStart(),black,0,nullptr);assert(SUCCEEDED(list->Close()));{ID3D12CommandList* l[]={list.Get()};queue->ExecuteCommandLists(1,l);}wait();
+  std::array<ID3D12Resource*,12> shadows{};shadows.fill(sm.resource.Get());std::array<D3D12_RESOURCE_STATES,12> states{};states.fill(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  for(int i=0;i<24;++i){int k=i%4;if(done[k]&&fence->GetCompletedValue()<done[k]){assert(SUCCEEDED(fence->SetEventOnCompletion(done[k],event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);}
+   assert(SUCCEEDED(al[k]->Reset()));assert(SUCCEEDED(gl[k]->Reset(al[k].Get(),nullptr)));assert(gpu.record(gl[k].Get(),color.resource.Get(),depths[i&1].resource.Get(),D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,shadows,states,f));assert(SUCCEEDED(gl[k]->Close()));
+   ID3D12CommandList* l[]={gl[k].Get()};queue->ExecuteCommandLists(1,l);gpu.submitted(queue.Get(),1,l);assert(SUCCEEDED(queue->Signal(fence.Get(),++serial)));done[k]=serial;}
+  wait();std::cout<<"Descriptor ring frames=44 idle_calls="<<gpu.idle_count()-idle<<" ring_waits="<<gpu.ring_wait_count()-waits<<std::endl;assert(gpu.idle_count()==idle);
+  // A list the ring never saw submitted: the fifth change falls back to one idle(), once.
+  UINT unconfirmed=gpu.ring_unconfirmed_count();for(int i=0;i<5;++i)shot(f,volumetric::PATH_MARCHED,1,40.f+i,false,1,false);assert(gpu.ring_unconfirmed_count()==unconfirmed+1&&gpu.idle_count()==idle+1);shot(f,volumetric::PATH_MARCHED,1,30);}
+ // K05/WI-12: the sea plane ends the ray on ocean pixels (the ocean writes no depth). The 1x1 zero texture and
+ // lamp-only mode without lamps change nothing, bit for bit; mode 1 cuts lamp light past the sea surface.
+ {auto f=scene(.02f,1,0,0);f.camera={0,0,0,10};f.forward={0,-.70710678f,.70710678f,1};f.up={0,.70710678f,.70710678f,1};
+  auto off=shot(f,volumetric::PATH_MARCHED,1,100,true);auto g=f;g.temporal[1][8]=2;auto clamped=shot(g,volumetric::PATH_MARCHED,1,100,true),dummy=shot(g,volumetric::PATH_MARCHED,1,100,false);auto m1=f;m1.temporal[1][8]=1;auto lamps_only=shot(m1,volumetric::PATH_MARCHED,1,100,true);
+  std::cout<<"Sea plane off="<<off.centre[0]<<" clamped="<<clamped.centre[0]<<std::endl;assert(same(off,dummy)&&same(off,lamps_only)&&clamped.centre[0]<off.centre[0]-.05f);
+  // A lamp under the sea surface (its whole reach past the sea hit of the centre ray): mode 1 removes it exactly.
+  auto lit=scene(.002f,0,0,1);lit.camera=f.camera;lit.forward=f.forward;lit.up=f.up;lit.lights[0]={0,-20,20,6,0,0,-1,.9f,1,1,1,0,-1,2,1,0};auto unlit=lit;unlit.fog_color[3]=0;unlit.sun_color[3]=0;
+  auto beyond=shot(lit,volumetric::PATH_MARCHED,1,100,true),none=shot(unlit,volumetric::PATH_MARCHED,1,100,true);lit.temporal[1][8]=1;auto cut=shot(lit,volumetric::PATH_MARCHED,1,100,true);
+  std::cout<<"Sea lamp beyond="<<beyond.centre[0]<<" cut="<<cut.centre[0]<<" none="<<none.centre[0]<<std::endl;assert(beyond.centre[0]>none.centre[0]+1e-3f&&cut.centre[0]==none.centre[0]);}
+ // ANY_ATMOS_FLASH_GLOW: lightning lights the fogged part of the view by glow*(1-transmittance); clear air gets none.
+ {auto f=scene(.01f,1,0,0);auto plain=shot(f,volumetric::PATH_MARCHED,1,100);auto g=f;g.temporal[1][12]=g.temporal[1][13]=g.temporal[1][14]=1;auto glow=shot(g,volumetric::PATH_MARCHED,1,100);
+  std::cout<<"Flash glow plain="<<plain.centre[0]<<" glow="<<glow.centre[0]<<std::endl;assert(std::abs((glow.centre[0]-plain.centre[0])-(1-std::exp(-1.f)))<.01f);
+  auto clear=scene(0,1,0,0);auto c0=shot(clear,volumetric::PATH_MARCHED,1,100);clear.temporal[1][12]=clear.temporal[1][13]=clear.temporal[1][14]=1;assert(same(c0,shot(clear,volumetric::PATH_MARCHED,1,100)));}
+ // K07: the blend composite never writes alpha.
+ {auto s=shot(scene(.01f,1,4,2),volumetric::PATH_MARCHED,1,100,false,.25f);assert(s.centre[3]==.25f);}
+ // K25: skipping a frame where nothing contributes (forget_history, as record() does) gives the same next frame,
+ // bit for bit, as drawing it; and the drawn nothing-frame leaves the target exactly as it was.
+ {auto rows=[](volumetric::Frame f,UINT index,bool previous){f.temporal[1][4]=index&1?0.f:1.f;if(previous)f.temporal[0]={0,0,0,1,1,0,0,1,0,1,0,1,0,0,1,0};f.temporal[0][15]=float(index);return f;};
+  auto content=scene(.01f,1,0,1,true),nothing=scene(0,0,0,0,true);
+  auto a1=shot(rows(content,0,false),volumetric::PATH_MARCHED,1,100),a2=shot(rows(nothing,1,true),volumetric::PATH_MARCHED,1,100),a3=shot(rows(content,2,true),volumetric::PATH_MARCHED,1,100);
+  auto b1=shot(rows(content,0,false),volumetric::PATH_MARCHED,1,100);gpu.forget_history();auto b3=shot(rows(content,2,true),volumetric::PATH_MARCHED,1,100);
+  HALF input[4];for(int c=0;c<4;++c)input[c]=DirectX::PackedVector::XMConvertFloatToHalf(c<3?.05f:1.f);for(size_t i=0;i<a2.texels.size();++i)assert(a2.texels[i]==input[i%4]);
+  std::cout<<"K25 drawn="<<a3.centre[0]<<" skipped="<<b3.centre[0]<<std::endl;assert(same(a1,b1)&&same(a3,b3));}
+ // K10/K25: a frame with no sun shafts and no clarity-lit fog never needs the sun cascades: sun.w 0 gives the same
+ // image bit for bit (half-lit shadow maps, so a cascade lookup would show).
+ {for(float clarity:{0.f,.85f}){auto f=scene(.002f,clarity>0?0.f:1.f,0,3);f.temporal[1][0]=clarity;auto a=shot(f,volumetric::PATH_MARCHED,.5f,30);auto g=f;g.sun[3]=0;assert(same(a,shot(g,volumetric::PATH_MARCHED,.5f,30)));}}
+ // K09: release() frees every GPU object after one queue drain; the next frame re-creates them with the same image.
+ {auto f=scene(.004f,1,4,2);auto before=shot(f,volumetric::PATH_MARCHED,1,100);UINT idle=gpu.idle_count();gpu.release();assert(!gpu.loaded()&&gpu.idle_count()==idle+1&&!gpu.current_device());
+  auto after=shot(f,volumetric::PATH_MARCHED,1,100);std::cout<<"Release before="<<before.centre[0]<<" after="<<after.centre[0]<<std::endl;assert(gpu.loaded()&&same(before,after));}
+ gpu_test::wait(dev);gpu_test::expect_clean(dev,"lighting_gpu");CloseHandle(event);std::cout<<"PASS: "<<cases<<" HDR lighting GPU cases: shadow occlusion, depth-limited fog, zero-density identity, resizing, alpha and crisp restored HUD; constants path 0-8 lamps with bit-identical permutations, two-frame temporal, descriptor ring without idle, sea plane, flash glow, blend alpha, K25 skip identity, sun-free lamp frames, release and re-create\n";
 }

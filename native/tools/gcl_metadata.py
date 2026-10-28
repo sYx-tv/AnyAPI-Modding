@@ -146,5 +146,5 @@ class Program:
 
 if __name__ == '__main__':
     import sys
-    p = Program(sys.argv[1] if len(sys.argv) > 1 else '/mnt/project-files/game.gcl')
+    p = Program(sys.argv[1] if len(sys.argv) > 1 else 'bin/game.gcl')
     print(len(p.files), 'files', len(p.globals), 'globals', len(p.functions), 'functions', len(p.types), 'types')

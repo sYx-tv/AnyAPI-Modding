@@ -23,7 +23,28 @@
 // catch up, which shows as stutter on vehicles and physics in solo and when hosting. "Precise timer" asks Windows
 // for a 1 ms timer (timeBeginPeriod(1)), as most games do. The summary's server spacing jitter shows the effect.
 //
-// Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay.
+// Fix 3, spread wreck loot (on by default): a terrain tile that loads on the host fills all its wrecks with loot in
+// one server tick (about 7 ms a wreck); the mod lets 8 ms of it run per tick and fills the rest over the next ticks.
+//
+// Fix 4, distant container items (on by default): containers on parked vehicles over 50 m away place their items
+// every 8th frame instead of every frame (see hk_inventory).
+//
+// Fix 5, fast navmesh cleanup (on by default): a terrain tile unload checks ~8,300 navmesh cells; the mod answers the
+// empty ones itself (see nav_cell_used).
+//
+// Fix 6, fast furniture loot (on by default): remembers failed loot placements in a wreck's furniture while it is
+// filled (see place_known_fail).
+//
+// Fix 7, fast water checks (on by default): answers "is this point inside a boat's air pocket" itself when the point is
+// nowhere near any boat (see water_point_outside_all).
+//
+// Fix 8, distant loose items (on by default): loot on the ground far from every player updates one tick in 8 (see
+// floor_item_far).
+//
+// Autosave waits (up to a minute) while wrecks are still waiting for their loot, so it does not fill them all at once.
+//
+// Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot,
+// profiler, distant container items, fast navmesh cleanup, fast furniture loot, wreck loot per tick, fast water checks.
 //
 // EXPERIMENTAL. Hooks game functions through the experimental SDK (anyperformance_bindings.h): Anymaker 0.1.27 /
 // Steam build 26113663 only. Read anymaker_modding.log.
@@ -45,11 +66,13 @@
 #include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <cwchar>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 #include <string>
 
 namespace anyperformance {
@@ -63,13 +86,14 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[4], g_settings_revision = ~0ull;
+uint64_t g_tokens[12], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
 std::atomic<bool> g_precise_timer{true}, g_overlay{false};
 std::atomic<double> g_hitch_ms{50};
 std::atomic<int> g_smoothing{0};         // 0 game, 1 light, 2 strong
+std::atomic<bool> g_profiler{false};      // sampling profiler (anyperformance_profiler.inc)
 bool g_timer_on;                         // timeBeginPeriod(1) is in effect (main thread)
 
 LARGE_INTEGER g_qpc_freq;
@@ -88,6 +112,7 @@ std::atomic<DWORD> g_main_thread{0};     // set by the first client.tick
 bool g_parts_loading;                    // the loading flag client.tick passed on to tick_loading this frame
 double g_frame_start = -1, g_window_start = -1;
 Window<16384> g_frames;                  // frame times of this summary window
+FrameWindow g_frame_window;              // frame parts of this summary window (not on loading screens)
 int g_hitches, g_loading_hitches, g_hitch_logs, g_tiles_window;
 double g_worst_hitch, g_tile_max_window;
 
@@ -108,6 +133,7 @@ std::atomic<double> g_server_last_ms{0};
 std::atomic<DWORD> g_server_thread{0};
 ServerParts g_tick;                      // the server tick in progress (server thread only)
 ServerParts g_worst_tick;                // the slowest tick since the main thread last took it (g_server_mutex)
+ServerWindow g_server_window;            // every tick of this summary window (g_server_mutex)
 
 // Takes the slowest server tick since the last call. Main thread.
 ServerParts take_worst_tick() {
@@ -147,6 +173,14 @@ constexpr StepSpec kSteps[] = {
     {&bind::tile_task_integrate_server, "terrain tile into the world", true},
     {&bind::tile_populate_loot_zones, "terrain loot zones", true},
     {&bind::vehicle_generate_loot, "wreck loot", true},
+    {&bind::loot_tables, "wreck loot tables", true},
+    {&bind::loot_required, "wreck required loot", true},
+    {&bind::loot_floor, "wreck floor loot", true},
+    {&bind::loot_furniture, "wreck furniture loot", true},
+    {&bind::loot_furniture_table, "furniture loot table", true},
+    {&bind::loot_position, "furniture loot placement", true},
+    {&bind::item_create, "item creation", true},
+    {&bind::item_store, "item stored in a container", true},
     {&bind::tile_loaded_event, "tile loaded event", true},
     {&bind::tile_save_level_1, "terrain tile save (near)", true},
     {&bind::tile_save_level_2, "terrain tile save (mid)", true},
@@ -155,12 +189,51 @@ constexpr StepSpec kSteps[] = {
     {&bind::nav_tile_create, "navmesh tile start", true},
     {&bind::nav_tile_destroy, "navmesh tile unload", true},
     {&bind::tiles_in_range, "tiles in range", true},
+    {&bind::tile_integrate_physics, "terrain tile physics", true},
+    {&bind::physics_add_object, "physics bodies added", true},
+    {&bind::tile_actor_spawn_zones, "creature spawn zones", true},
+    {&bind::vehicle_sleeping_actors, "sleeping creatures in wrecks", true},
+    {&bind::navmesh_add_tile, "navmesh tile add", true},
+    {&bind::vehicle_bunker_keycard, "wreck keycard", true},
+    {&bind::vehicle_loot_deaddrop, "dead-drop loot", true},
+    {&bind::save_game_inner, "world save", true},
+    {&bind::srv_creatures, "creatures (spawning)", true},
+    {&bind::srv_paths, "creature pathfinding", true},
+    {&bind::srv_actors, "creatures and players", true},
+    {&bind::srv_separation, "creature separation", true},
+    {&bind::srv_players, "player characters", true},
+    {&bind::srv_animals, "animals", true},
+    {&bind::srv_zombies, "basic zombies", true},
+    {&bind::srv_item_ticks, "item ticks", true},
+    {&bind::srv_dungeon_check, "inside-bunker checks", true},
+    {&bind::srv_buoyancy, "water volume checks", true},
+    {&bind::srv_floor_item, "loose items", true},
+    {&bind::srv_floor_stream, "loose item streaming", true},
+    {&bind::srv_actors_post, "creatures and players (physics)", true},
+    {&bind::srv_projectiles, "projectiles", true},
+    {&bind::srv_ocean, "ocean", true},
+    {&bind::srv_weather, "weather", true},
+    {&bind::srv_pseudo, "pseudo objects", true},
+    {&bind::srv_collisions, "collision events", true},
+    {&bind::srv_explosions, "explosions", true},
+    {&bind::srv_transmissions, "radio transmissions", true},
     {&bind::apply_update, "network update", false},
     {&bind::client_network_state, "network state", false},
     {&bind::client_update_ui, "UI update", false},
     {&bind::client_peers_tick, "players", false},
     {&bind::client_peer_data_tick, "player data", false},
     {&bind::client_authority_update, "authority update", false},
+    {&bind::cl_vehicles, "vehicles", false},
+    {&bind::cl_actors, "creatures and players", false},
+    {&bind::cl_particles, "particles", false},
+    {&bind::cl_environment, "environment", false},
+    {&bind::cl_lights, "lights", false},
+    {&bind::cl_weather, "weather particles", false},
+    {&bind::cl_actors_post, "creatures and players (physics)", false},
+    {&bind::cl_actor_inv, "inventories", false},
+    {&bind::cl_daylight, "daylight", false},
+    {&bind::cl_interactions, "interaction prompts", false},
+    {&bind::cl_overlay, "name tags and markers", false},
 };
 constexpr int kStepCount = int(sizeof kSteps / sizeof kSteps[0]);
 static_assert(kStepCount <= kMaxSteps, "raise kMaxSteps");
@@ -169,15 +242,406 @@ const char* const* step_names() {
     for (int i = 0; i < kStepCount; ++i) names[i] = kSteps[i].name;
     return names;
 }
-using six_t = void (*)(void*, void*, void*, void*, void*, void*);
+constexpr int step_index(const anymaker::func_desc* desc) {
+    for (int i = 0; i < kStepCount; ++i) if (kSteps[i].desc == desc) return i;
+    return -1;
+}
+constexpr int kTileStep = step_index(&bind::tile_task_integrate_server), kLootStep = step_index(&bind::vehicle_generate_loot),
+              kSaveStep = step_index(&bind::save_game_inner), kNavDestroyStep = step_index(&bind::nav_tile_destroy),
+              kFurnitureStep = step_index(&bind::loot_furniture), kPlaceStep = step_index(&bind::loot_position),
+              kStoreStep = step_index(&bind::item_store), kWaterStep = step_index(&bind::srv_buoyancy),
+              kFloorItemStep = step_index(&bind::srv_floor_item),
+              kFloorStreamStep = step_index(&bind::srv_floor_stream);
+static_assert(kTileStep >= 0 && kLootStep >= 0 && kSaveStep >= 0, "the wreck loot queue needs these steps");
+static_assert(kNavDestroyStep >= 0, "the navmesh cleanup needs its step");
+static_assert(kWaterStep >= 0, "the water checks need their step");
+static_assert(kFloorItemStep >= 0 && kFloorStreamStep >= 0, "distant loose items need their steps");
+static_assert(kFurnitureStep >= 0 && kPlaceStep >= 0 && kStoreStep >= 0, "the furniture placement cache needs these steps");
+constexpr bool is_tile_save(int i) {
+    return kSteps[i].desc == &bind::tile_save_level_1 || kSteps[i].desc == &bind::tile_save_level_2 ||
+           kSteps[i].desc == &bind::tile_save_level_3;
+}
+// Steps take up to 10 pointer arguments (the furniture loot table takes 9 and a result). A step with fewer passes
+// along whatever is in the caller's stack slots, which it never reads.
+using step_fn_t = void (*)(void*, void*, void*, void*, void*, void*, void*, void*, void*, void*);
 anymaker::cell_hook h_steps[kStepCount];
-template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void* f) {
-    auto original = reinterpret_cast<six_t>(h_steps[I].original);
-    bool mine = kSteps[I].server ? on_server_thread() : GetCurrentThreadId() == g_main_thread;
-    if (!mine) { original(a, b, c, d, e, f); return; }
+
+// Fix 4, distant container items: client_scene.vehicle_component.inventory.tick runs for every container of every
+// loaded vehicle every frame and walks every item in it to place it in the world (13% of the main thread in the
+// 0.1.2 profile). A container on a vehicle more than kInventoryNear from the local player that has not moved since its
+// last real tick is ticked every kInventoryEvery frames, with the frame times it skipped added to delta_time.
+constexpr double kInventoryNear = 50, kInventoryMoved = 0.02;
+constexpr int kInventoryEvery = 8;
+constexpr ptrdiff_t kClientVehiclePos = 0x310 + 0x48;   // client_scene.vehicle.m_transform (mat34) translation
+using inventory_tick_t = void (*)(void* self, void* client, void* vehicle, void* scene, const double* dt);
+anymaker::cell_hook h_inventory;
+std::atomic<bool> g_inventory_lod{true};
+struct InventoryLod { double pos[3]; double dt; };
+std::unordered_map<void*, InventoryLod> g_inventory;   // main thread only, keyed by the inventory component
+double g_local_pos[3];
+bool g_local_ok;
+uint32_t g_frame_no;
+long long g_inventory_ran, g_inventory_skipped, g_inventory_calls, g_inventory_no_player;
+
+// Fix 5, fast navmesh cleanup: when a terrain tile unloads, the server calls
+// environment_tile_container._try_destroy_navigation_tile for every navmesh cell around it (about 8,300 cells, 56 ms
+// in a town log). Each call first builds the list of terrain tiles in range, then looks for a navmesh tile at that cell
+// in m_navigation_tiles and destroys it. Its only caller ignores the result, and when no navmesh tile is at the cell
+// the call changes nothing, so the mod answers those calls itself from a set of the cells that have one.
+constexpr ptrdiff_t kNavTiles = 0x1e0;   // environment_tile_container.m_navigation_tiles (vector<navigation_tile>,
+                                         // m_grid_coord vec2_s32 first)
+std::atomic<bool> g_fast_navmesh{true};
+struct NavCells {
+    const void* container = nullptr; anymaker::gc_vector_raw seen{};
+    std::unordered_map<uint64_t, int> cells;   // server thread only
+    bool valid = false;
+} g_nav;
+std::atomic<long long> g_nav_skipped{0}, g_nav_run{0};
+uint64_t nav_key(int32_t x, int32_t y) { return uint64_t(uint32_t(x)) << 32 | uint32_t(y); }
+// False when the vector does not look right (then the game's own code runs).
+bool nav_cell_used(const void* container, int32_t x, int32_t y, bool& used) {
+    auto* vec = static_cast<const uint8_t*>(container) + kNavTiles;
+    if (!anymaker::readable(vec, sizeof(anymaker::gc_vector_raw))) return false;
+    anymaker::gc_vector_raw v;
+    std::memcpy(&v, vec, sizeof v);
+    if (!g_nav.valid || g_nav.container != container || g_nav.seen.buffer != v.buffer || g_nav.seen.offset != v.offset ||
+        g_nav.seen.count != v.count || g_nav.seen.capacity != v.capacity) {
+        g_nav.valid = false;
+        if (v.count < 0 || v.count > 1000000 || v.element_size < 8 || (v.count && (v.capacity < v.count || v.offset < 0 ||
+            v.offset >= v.capacity || !v.buffer || !anymaker::readable(v.buffer, size_t(v.capacity) * v.element_size))))
+            return false;
+        g_nav.cells.clear();
+        for (int32_t i = 0; i < v.count; ++i) {
+            auto* e = reinterpret_cast<const int32_t*>(v.buffer + size_t((int64_t(v.offset) + i) % v.capacity) * v.element_size);
+            ++g_nav.cells[nav_key(e[0], e[1])];
+        }
+        g_nav.container = container; g_nav.seen = v; g_nav.valid = true;
+    }
+    used = g_nav.cells.count(nav_key(x, y)) != 0;
+    return true;
+}
+
+// Fix 6, fast furniture loot: generate_loot_furniture tries random loot items in each container of a wreck and calls
+// vehicle._get_valid_loot_position_rotation_in_furniture for each, which tests every cell of the container in two
+// rotations (40,000 calls and 240 ms for one town wreck). When nothing fits it returns false without touching the
+// random generator. inventory.can_store_item_rotated fails for an item whose definition is not nestable
+// (inventory_definition.m_inventory.m_is_nestable, +0x1c8), and otherwise depends only on the item's size
+// (m_inventory.m_size, +0x170), the container's bounds and the items already in it. So inside one
+// generate_loot_furniture call, where items are only added: a non-nestable item never fits, and once a w x h item has
+// no place in a container (either way round), nothing at least that big (either way round) fits there either.
+constexpr ptrdiff_t kDefSize = 0x170, kDefNestable = 0x1c8;
+struct PlaceFail { const void* inventory; uint64_t component_size; int32_t w, h; };
+std::atomic<bool> g_place_cache_on{true};
+std::vector<PlaceFail> g_place_fails;   // server thread only, cleared around each generate_loot_furniture call
+int g_furniture_depth;
+std::atomic<long long> g_place_hits{0}, g_place_misses{0};
+bool place_known_fail(const void* inventory, uint64_t component_size, int32_t w, int32_t h) {
+    for (const auto& f : g_place_fails)
+        if (f.inventory == inventory && f.component_size == component_size &&
+            ((w >= f.w && h >= f.h) || (w >= f.h && h >= f.w))) return true;
+    return false;
+}
+
+// Fix 7, fast water checks: everything that floats (items, bodies, creatures) asks
+// server_scene.ocean_data.get_is_inside_buoyancy_volume whether a point is inside a vehicle's buoyancy volume (an
+// air pocket in a boat), up to 22% of the server thread in a town log. For each vehicle in m_vehicles_buoyancy the
+// game moves the point into the vehicle's frame, tests it against the vehicle's bounds (get_bounds: m_bounds_nodes,
+// or its merge with m_component_bounds) and only then tests the surfaces; when no vehicle matches it returns false
+// and leaves its outputs alone. The mod first tests the point against a sphere around each vehicle that holds the
+// merged bounds, which needs no frame change, and answers false itself when the point is outside all of them. Every
+// 512th answer is checked against the game's own and a mismatch turns the fix off.
+constexpr ptrdiff_t kOceanBuoyVehicles = 0x20;   // ocean_data.m_vehicles_buoyancy (vector<ptr<server_scene.vehicle>>)
+constexpr ptrdiff_t kVehicleBasis = 0x5e8, kVehicleOrigin = 0x630;   // mat34: mat33 (v0, v1, v2) then t
+constexpr ptrdiff_t kVehicleBoundsNodes = 0x9c8, kVehicleBoundsComponents = 0x9f8;   // collision.aab: min, max
+constexpr ptrdiff_t kVehicleReadEnd = 0xa28;
+std::atomic<bool> g_fast_water{true};
+bool g_water_broken;   // server thread: a checked answer differed from the game's
+struct WaterVehicles {
+    const void* ocean = nullptr; anymaker::gc_vector_raw seen{};
+    std::vector<const uint8_t*> vehicles;   // server thread only, checked readable when the vector changed
+    bool valid = false;
+} g_water;
+std::atomic<long long> g_water_answered{0}, g_water_run{0}, g_water_checked{0};
+// False when the point may be inside a vehicle's volume or the data does not look right (then the game's code runs).
+bool water_point_outside_all(const void* ocean, const double* p) {
+    auto* vec = static_cast<const uint8_t*>(ocean) + kOceanBuoyVehicles;
+    anymaker::gc_vector_raw v;
+    if (g_water.valid && g_water.ocean == ocean) std::memcpy(&v, vec, sizeof v);
+    else if (!anymaker::readable(vec, sizeof v)) return false;
+    else std::memcpy(&v, vec, sizeof v);
+    if (!g_water.valid || g_water.ocean != ocean || g_water.seen.buffer != v.buffer || g_water.seen.offset != v.offset ||
+        g_water.seen.count != v.count || g_water.seen.capacity != v.capacity) {
+        g_water.valid = false;
+        if (v.count < 0 || v.count > 100000 || v.element_size != 8 || (v.count && (v.capacity < v.count || v.offset < 0 ||
+            v.offset >= v.capacity || !v.buffer || !anymaker::readable(v.buffer, size_t(v.capacity) * 8))))
+            return false;
+        g_water.vehicles.clear();
+        for (int32_t i = 0; i < v.count; ++i) {
+            const uint8_t* veh;
+            std::memcpy(&veh, v.buffer + size_t((int64_t(v.offset) + i) % v.capacity) * 8, 8);
+            if (veh && !anymaker::readable(veh, kVehicleReadEnd)) return false;
+            g_water.vehicles.push_back(veh);
+        }
+        g_water.ocean = ocean; g_water.seen = v; g_water.valid = true;
+    }
+    for (const uint8_t* veh : g_water.vehicles) {
+        if (!veh) continue;   // the game skips null entries
+        double basis[9], t[3], box[2][6];
+        std::memcpy(basis, veh + kVehicleBasis, sizeof basis);
+        std::memcpy(t, veh + kVehicleOrigin, sizeof t);
+        std::memcpy(box[0], veh + kVehicleBoundsNodes, sizeof box[0]);
+        std::memcpy(box[1], veh + kVehicleBoundsComponents, sizeof box[1]);
+        for (int k = 0; k < 3; ++k) {   // a rigid frame keeps distances; anything else goes to the game
+            double n = basis[3 * k] * basis[3 * k] + basis[3 * k + 1] * basis[3 * k + 1] + basis[3 * k + 2] * basis[3 * k + 2];
+            if (!(std::fabs(n - 1.0) < 1e-3)) return false;
+        }
+        double r2 = 0;
+        for (int k = 0; k < 3; ++k) {
+            double lo = std::min(box[0][k], box[1][k]), hi = std::max(box[0][k + 3], box[1][k + 3]);
+            r2 += std::max(lo * lo, hi * hi);
+        }
+        double dx = p[0] - t[0], dy = p[1] - t[1], dz = p[2] - t[2], d2 = dx * dx + dy * dy + dz * dz;
+        double r = std::sqrt(r2) * 1.01 + 0.5;
+        if (!std::isfinite(d2) || !std::isfinite(r) || d2 <= r * r) return false;
+    }
+    return true;
+}
+
+// Fix 8, distant loose items: server_scene.item_floor_container.tick runs item_floor.tick for every item lying in the
+// world each server tick (item logic for it and everything inside it, and an inside-bunker check), thousands of items
+// in a town. An item more than kFloorNear from every player runs on one tick in kFloorEvery instead. Player positions
+// come from item_floor_container.replicate_stream, which the server calls for each player with the position it streams
+// items around. Item timers (a flare burning, a light's battery) run slower while nobody is near; physics is not
+// touched (that is item_floor.post_physics).
+constexpr ptrdiff_t kFloorItemPos = 0xb8;   // item_floor.m_transform (+0x70, mat34).t
+constexpr double kFloorNear = 100, kFloorPeerFreshMs = 3000;
+constexpr uint32_t kFloorEvery = 8;
+std::atomic<bool> g_floor_lod{true};
+struct FloorPeer { double pos[3]; double seen_ms = -1e18; };
+FloorPeer g_floor_peers[64];   // server thread only, by peer index
+uint32_t g_server_tick_no;     // server thread
+std::atomic<long long> g_floor_run{0}, g_floor_skipped{0}, g_floor_far_run{0}, g_floor_no_peer{0};
+// True when the item is far from every player seen in the last few seconds; false when it is near one or no player is known.
+bool floor_item_far(const uint8_t* item) {
+    double now = now_ms(); bool any = false;
+    double p[3]; std::memcpy(p, item + kFloorItemPos, sizeof p);
+    for (const auto& peer : g_floor_peers) {
+        if (now - peer.seen_ms > kFloorPeerFreshMs) continue;
+        any = true;
+        double dx = p[0] - peer.pos[0], dy = p[1] - peer.pos[1], dz = p[2] - peer.pos[2];
+        if (!(dx * dx + dy * dy + dz * dz > kFloorNear * kFloorNear)) return false;   // NaN counts as near
+    }
+    if (!any) ++g_floor_no_peer;
+    return any;
+}
+
+// ------------------------------------------------------------------ spread wreck loot (server thread)
+// When a terrain tile goes into the world, server_scene.environment_tile_task.integrate loops over every vehicle, calls
+// vehicle.generate_loot (required, floor and furniture items) for each wreck on that tile that has none yet, then marks
+// the tile's loot as done. Each call creates the wreck's items, about 7 ms in 0.1.27, so a tile with 80 wrecks held the
+// server for over 600 ms and the world went into slow motion. With "Spread wreck loot" on, wreck loot inside a tile
+// integrate runs until g_loot_budget_ms of loot has run this tick; the rest is queued by vehicle id and filled after the
+// following ticks, g_loot_budget_ms a tick (80 wrecks take about 1.3 s, on tiles at the edge of the loaded area). A
+// queued wreck that is gone by then is skipped. Before a world save on the server thread the whole queue is filled,
+// and before a tile save that tile's own wrecks are, so a save never stores a wreck as looted without its items. Only a save from the main thread (the
+// pause menu's save in the first second after a tile loads) can miss queued loot; that is logged.
+constexpr double kLootBudgetDefaultMs = 8;
+std::atomic<double> g_loot_budget_ms{kLootBudgetDefaultMs};   // setting "loot_budget_ms", 2 to 30
+constexpr ptrdiff_t kServerScene = 0xa0;      // server.m_scene, ref<server_scene> at +0x98: object pointer at +0xa0
+constexpr ptrdiff_t kSceneVehicles = 0x1b0;   // server_scene.m_vehicles (server_scene.vehicle.container)
+constexpr ptrdiff_t kVehicleId = 0x40;        // server_scene.vehicle.m_id (s32)
+using vehicle_by_id_t = void (*)(void** ret, void* container, const int32_t* id);
+// tile/grid: the tile the wreck was queued in (environment_tile_task.m_tile_loaded +0x310, m_position +0x8), so a
+// tile save fills only its own wrecks (environment_tile.m_grid_position +0x170). vehicle == nullptr: already filled.
+struct PendingLoot { void* scene; void* vehicle; int32_t id, tier; const void* tile; int32_t grid[3]; bool has_grid; };
+constexpr ptrdiff_t kTaskTile = 0x310, kTaskGrid = 0x8, kTileGrid = 0x170;
+void* g_tile_task;                            // the server tile integrate in progress
+std::atomic<bool> g_spread_loot{true};
+std::vector<PendingLoot> g_loot_queue;        // server thread only
+std::atomic<int> g_loot_pending{0};
+size_t g_loot_next;                           // first entry of g_loot_queue not filled yet
+int g_tile_depth;                             // inside a server tile integrate
+double g_loot_debt;                           // wreck loot ms over budget not yet paid back (server thread)
+constexpr double kLootRepayMs = 4;
+double g_loot_ms_tick;                        // wreck loot run in the server tick in progress
+int g_loot_queued_total, g_loot_skipped_total, g_loot_ticks;   // the batch since the queue was last empty
+vehicle_by_id_t g_vehicle_by_id;
+
+// Queues one generate_loot call from a tile integrate once this tick's budget is used. True when queued.
+bool queue_loot(void* vehicle, void* scene, const void* tier) {
+    if (!g_spread_loot || !g_vehicle_by_id || g_loot_ms_tick < g_loot_budget_ms.load()) return false;
+    auto* v = static_cast<uint8_t*>(vehicle);
+    if (!v || !scene || !anymaker::readable(v + kVehicleId, 4) || (tier && !anymaker::readable(tier, 4))) return false;
+    PendingLoot p{scene, vehicle, *reinterpret_cast<const int32_t*>(v + kVehicleId), tier ? *static_cast<const int32_t*>(tier) : 0};
+    auto* task = static_cast<const uint8_t*>(g_tile_task);
+    if (task && anymaker::readable(task + kTaskTile, 8)) p.tile = *reinterpret_cast<void* const*>(task + kTaskTile);
+    if (task && anymaker::readable(task + kTaskGrid, 12)) { std::memcpy(p.grid, task + kTaskGrid, 12); p.has_grid = true; }
+    g_loot_queue.push_back(p);
+    g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
+    ++g_loot_queued_total;
+    return true;
+}
+// Fills queued wreck loot for scene until budget_ms of loot has run this tick (all of it with budget_ms < 0).
+bool fill_one(PendingLoot& p, void* scene) {
+    auto original = reinterpret_cast<step_fn_t>(h_steps[kLootStep].original);
+    void* now = nullptr;
+    if (p.scene == scene) g_vehicle_by_id(&now, static_cast<uint8_t*>(scene) + kSceneVehicles, &p.id);
+    if (now != p.vehicle) { p.vehicle = nullptr; return false; }   // gone, or another world
     double start = now_ms();
-    original(a, b, c, d, e, f);
-    (kSteps[I].server ? g_tick.steps : g_parts.steps).add(I, now_ms() - start);
+    original(p.vehicle, scene, &p.tier, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+    double ms = now_ms() - start;
+    g_loot_ms_tick += ms;
+    g_tick.steps.add(kLootStep, ms);
+    p.vehicle = nullptr;
+    return true;
+}
+// A tile is being saved (unloaded or changing detail): fill the queued wrecks of that tile only. Wrecks queued with
+// no known tile are filled too, to be safe.
+void fill_tile_loot(const void* tile, void* scene) {
+    auto* t = static_cast<const uint8_t*>(tile);
+    int32_t grid[3]{};
+    bool has_grid = t && anymaker::readable(t + kTileGrid, 12);
+    if (has_grid) std::memcpy(grid, t + kTileGrid, 12);
+    int filled = 0;
+    for (size_t i = g_loot_next; i < g_loot_queue.size(); ++i) {
+        auto& p = g_loot_queue[i];
+        if (!p.vehicle) continue;
+        bool same = (p.tile && p.tile == tile) || (has_grid && p.has_grid && p.grid[0] == grid[0] && p.grid[1] == grid[1]) ||
+                    (!p.tile && !p.has_grid);
+        if (!same) continue;
+        if (fill_one(p, scene)) ++filled; else ++g_loot_skipped_total;
+    }
+    if (filled) log(0, "Spread wreck loot: tile %d,%d,%d was saved, so its %d waiting wrecks were filled at once", grid[0],
+                    grid[1], grid[2], filled);
+    // Diagnostics for the first saves that match nothing, to check the tile matching in game.
+    static int unmatched_logs = 0;
+    if (!filled && unmatched_logs < 5 && g_loot_next < g_loot_queue.size()) {
+        const auto& q = g_loot_queue[g_loot_next];
+        ++unmatched_logs;
+        log(0, "Spread wreck loot: tile %d,%d,%d saved with none of its wrecks waiting (first waiting wreck is from tile %d,%d,%d%s)",
+            grid[0], grid[1], grid[2], q.grid[0], q.grid[1], q.grid[2], q.tile ? "" : ", no tile pointer");
+    }
+}
+void fill_loot(void* scene, double budget_ms) {
+    while (g_loot_next < g_loot_queue.size() && (budget_ms < 0 || g_loot_ms_tick < budget_ms)) {
+        PendingLoot& p = g_loot_queue[g_loot_next++];
+        if (p.vehicle && !fill_one(p, scene)) ++g_loot_skipped_total;   // null: filled by its tile's save
+    }
+    ++g_loot_ticks;
+    if (g_loot_next >= g_loot_queue.size()) {
+        log(0, "Spread wreck loot: %d wrecks filled over %d server ticks%s", g_loot_queued_total - g_loot_skipped_total,
+            g_loot_ticks, g_loot_skipped_total ? " (some wrecks were gone by then)" : "");
+        g_loot_queue.clear(); g_loot_next = 0; g_loot_queued_total = g_loot_skipped_total = g_loot_ticks = 0;
+    }
+    g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
+}
+void* server_scene_of(void* server) {
+    auto* s = static_cast<uint8_t*>(server);
+    return s && anymaker::readable(s + kServerScene, 8) ? *reinterpret_cast<void**>(s + kServerScene) : nullptr;
+}
+
+template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void* f, void* g, void* h, void* i, void* j) {
+    auto original = reinterpret_cast<step_fn_t>(h_steps[I].original);
+    bool mine = kSteps[I].server ? on_server_thread() : GetCurrentThreadId() == g_main_thread;
+    if (!mine) {
+        if constexpr (I == kSaveStep)
+            if (int n = g_loot_pending.load(std::memory_order_relaxed))
+                log(1, "a save from outside the server thread ran with %d wrecks still waiting for their loot", n);
+        original(a, b, c, d, e, f, g, h, i, j); return;
+    }
+    if constexpr (I == kLootStep)
+        if (g_tile_depth > 0 && queue_loot(a, b, c)) return;
+    // (bool) _get_valid_loot_position_rotation_in_furniture (vehicle, random, inventory, const vec2_s32 component_size,
+    // const inventory_definition item, const vec2_s32 item_size, out pos, out rot)
+    [[maybe_unused]] PlaceFail place{};
+    [[maybe_unused]] bool place_watched = false;
+    if constexpr (I == kPlaceStep)
+        if (g_place_cache_on && g_furniture_depth > 0 && a && d && e && f && anymaker::readable(e, 8) &&
+            anymaker::readable(static_cast<const uint8_t*>(f) + kDefSize, 8) &&
+            anymaker::readable(static_cast<const uint8_t*>(f) + kDefNestable, 1)) {
+            auto* def = static_cast<const uint8_t*>(f);
+            place.inventory = d; std::memcpy(&place.component_size, e, 8);
+            std::memcpy(&place.w, def + kDefSize, 4); std::memcpy(&place.h, def + kDefSize + 4, 4);
+            if (!def[kDefNestable] || place_known_fail(place.inventory, place.component_size, place.w, place.h)) {
+                *static_cast<bool*>(a) = false; ++g_place_hits; return;
+            }
+            place_watched = true;
+        }
+    if constexpr (I == kFurnitureStep) { if (g_furniture_depth++ == 0) g_place_fails.clear(); }
+    // (bool) get_is_inside_buoyancy_volume (const ocean_data, const vec3 world_position, f64 out_height, vec3 out_velocity)
+    if constexpr (I == kWaterStep) {
+        if (g_fast_water && !g_water_broken && a && b && c && water_point_outside_all(b, static_cast<const double*>(c))) {
+            if (++g_water_answered % 512 == 0) {
+                bool game = false; double height = 0, velocity[3] = {};
+                original(&game, b, c, &height, velocity, f, g, h, i, j);
+                ++g_water_checked;
+                if (game) {
+                    g_water_broken = true;
+                    log(1, "Fast water checks: the game found a point inside a vehicle's volume that the mod ruled out, "
+                           "so the fix is off until the game restarts");
+                    original(a, b, c, d, e, f, g, h, i, j); return;
+                }
+            }
+            *static_cast<bool*>(a) = false;
+            return;
+        } else if (g_fast_water && !g_water_broken) {
+            ++g_water_run;
+        }
+    }
+    // () item_floor_container.replicate_stream (container, islands, const s32 tick, const server_peer, const s32 peer_index,
+    // const vec3 peer_position, replicator, const bool)
+    if constexpr (I == kFloorStreamStep)
+        if (e && f) {
+            int32_t index; std::memcpy(&index, e, 4);
+            if (index >= 0 && index < 64) {
+                auto& peer = g_floor_peers[index];
+                std::memcpy(peer.pos, f, sizeof peer.pos);
+                peer.seen_ms = now_ms();
+            }
+        }
+    // () item_floor.tick (item_floor, server_scene): the game reads the item right away, so it is not checked here
+    if constexpr (I == kFloorItemStep)
+        if (g_floor_lod && a) {
+            if (!floor_item_far(static_cast<const uint8_t*>(a))) ++g_floor_run;
+            else if ((g_server_tick_no + uint32_t(reinterpret_cast<uintptr_t>(a) >> 6)) % kFloorEvery) { ++g_floor_skipped; return; }
+            else ++g_floor_far_run;
+        }
+    if constexpr (I == kNavDestroyStep)   // (bool) _try_destroy_navigation_tile (container, const s32 x, const s32 y, scene)
+        if (g_fast_navmesh && a && b && c && d && anymaker::readable(c, 4) && anymaker::readable(d, 4)) {
+            bool used = true;
+            if (nav_cell_used(b, *static_cast<const int32_t*>(c), *static_cast<const int32_t*>(d), used) && !used) {
+                *static_cast<bool*>(a) = true;   // what the game returns when no navmesh tile is at the cell
+                ++g_nav_skipped;
+                return;
+            }
+            ++g_nav_run;
+        }
+    if constexpr (I == kSaveStep)   // server._save_game (server, ...)
+        if (g_loot_pending.load(std::memory_order_relaxed))
+            if (void* scene = server_scene_of(a)) fill_loot(scene, -1);
+    if constexpr (is_tile_save(I))  // environment_tile.save_level_N (tile, server_scene, ...)
+        if (g_loot_pending.load(std::memory_order_relaxed) && b) {
+            fill_tile_loot(a, b);
+            g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
+        }
+    [[maybe_unused]] void* outer_task = g_tile_task;
+    if constexpr (I == kTileStep) { ++g_tile_depth; g_tile_task = b; }   // (bool) integrate: a is the result
+    static thread_local int depth = 0;   // a step that calls itself (item ticks walk their children) counts once
+    double start = now_ms();
+    ++depth;
+    original(a, b, c, d, e, f, g, h, i, j);
+    --depth;
+    double ms = now_ms() - start;
+    if constexpr (I == kTileStep) { --g_tile_depth; g_tile_task = outer_task; }
+    if constexpr (I == kFurnitureStep) { if (--g_furniture_depth == 0) g_place_fails.clear(); }
+    if constexpr (I == kPlaceStep)
+        if (place_watched) {
+            ++g_place_misses;
+            if (!*static_cast<const bool*>(a) && g_place_fails.size() < 4096) g_place_fails.push_back(place);
+        }
+    if (depth > 0) return;
+    if constexpr (I == kLootStep) g_loot_ms_tick += ms;
+    (kSteps[I].server ? g_tick.steps : g_parts.steps).add(I, ms);
 }
 template <int... I> std::array<void*, sizeof...(I)> step_hooks(std::integer_sequence<int, I...>) {
     return {reinterpret_cast<void*>(&hk_step<I>)...};
@@ -271,6 +735,14 @@ void read_settings() {
     if (g_tokens[1] && settings->get(g_tokens[1], &v) && std::isfinite(v.number)) g_hitch_ms = std::clamp(v.number, 20.0, 1000.0);
     if (g_tokens[2] && settings->get(g_tokens[2], &v)) g_overlay = v.number != 0;
     if (g_tokens[3] && settings->get(g_tokens[3], &v) && std::isfinite(v.number)) g_smoothing = std::clamp(int(v.number), 0, 2);
+    if (g_tokens[4] && settings->get(g_tokens[4], &v)) g_spread_loot = v.number != 0;
+    if (g_tokens[5] && settings->get(g_tokens[5], &v)) g_profiler = v.number != 0;
+    if (g_tokens[6] && settings->get(g_tokens[6], &v)) g_inventory_lod = v.number != 0;
+    if (g_tokens[7] && settings->get(g_tokens[7], &v)) g_fast_navmesh = v.number != 0;
+    if (g_tokens[8] && settings->get(g_tokens[8], &v)) g_place_cache_on = v.number != 0;
+    if (g_tokens[10] && settings->get(g_tokens[10], &v)) g_fast_water = v.number != 0;
+    if (g_tokens[11] && settings->get(g_tokens[11], &v)) g_floor_lod = v.number != 0;
+    if (g_tokens[9] && settings->get(g_tokens[9], &v) && std::isfinite(v.number)) g_loot_budget_ms = std::clamp(v.number, 2.0, 30.0);
 }
 
 // Counts one hitch or slow-motion log line; false once the session's limit is used up.
@@ -379,6 +851,8 @@ void cpu_worker() {
         lock.unlock(); cpu_summary(seconds); lock.lock();
     }
 }
+#include "anyperformance_profiler.inc"
+
 void request_cpu_summary(double seconds) {
     { std::lock_guard lock(g_cpu_mutex); g_cpu_pending = seconds; }
     g_cpu_wake.notify_one();
@@ -387,10 +861,12 @@ void request_cpu_summary(double seconds) {
 void summary(double now) {
     double seconds = (now - g_window_start) / 1000.0;
     TickPacing pacing; double server_tiles;
+    static ServerWindow sw;   // static: two Steps arrays are too big for comfort on the stack
     {
         std::lock_guard lock(g_server_mutex);
         pacing = g_pacing; g_pacing = TickPacing{};
         server_tiles = g_server_tile_ms_window; g_server_tile_ms_window = 0;
+        sw = g_server_window; g_server_window = ServerWindow{};
     }
     if (g_frames.count) {
         char line[640];
@@ -403,6 +879,53 @@ void summary(double now) {
         }
         log(0, "%s", line);
     }
+    // Average breakdowns: where a normal frame and a normal server tick go, not only the slow ones.
+    if (g_frame_window.frames) {
+        const FrameWindow& w = g_frame_window; double n = w.frames;
+        char steps[320];
+        format_step_avg(steps, sizeof steps, w.sum.steps, step_names(), kStepCount, 6, w.frames, 0.1);
+        log(0, "Frame average (%d frames): %.1f ms = client tick %.1f (simulation+physics %.1f, streaming %.1f), "
+               "rendering/UI %.1f%s%s", w.frames, w.frame_ms / n, w.sum.client_tick / n, w.sum.scene_tick / n,
+            w.sum.loading / n, (w.frame_ms - w.sum.client_tick) / n, steps[0] ? " | steps: " : "", steps);
+    }
+    if (g_place_hits + g_place_misses) {
+        long long hits = g_place_hits.exchange(0), misses = g_place_misses.exchange(0);
+        log(0, "Fast furniture loot: %lld placement searches answered from memory, %lld run (%.0f%% saved)", hits, misses,
+            100.0 * double(hits) / double(hits + misses));
+    }
+    if (g_floor_run + g_floor_skipped + g_floor_far_run) {
+        long long run = g_floor_run.exchange(0), skipped = g_floor_skipped.exchange(0), far_run = g_floor_far_run.exchange(0),
+                  none = g_floor_no_peer.exchange(0), all = run + skipped + far_run;
+        log(0, "Distant loose items: %lld item updates, %lld skipped (%.0f%% saved), %lld far ones run, %lld with no player position",
+            all, skipped, all ? 100.0 * double(skipped) / double(all) : 0.0, far_run, none);
+    }
+    if (g_water_answered + g_water_run) {
+        long long answered = g_water_answered.exchange(0), run = g_water_run.exchange(0), checked = g_water_checked.exchange(0);
+        log(0, "Fast water checks: %lld answered by the mod (%lld checked against the game, all matched), %lld left to the game",
+            answered, checked, run);
+    }
+    if (g_nav_skipped + g_nav_run) {
+        long long skipped = g_nav_skipped.exchange(0), run = g_nav_run.exchange(0);
+        log(0, "Fast navmesh cleanup: %lld empty cells answered by the mod, %lld left to the game", skipped, run);
+    }
+    if (h_inventory.cell && g_inventory_lod) {
+        long long calls = g_inventory_calls;
+        log(0, "Distant container items: %lld container updates, %lld skipped (%.0f%% saved), %lld far ones run, "
+               "%lld with no player position", calls, g_inventory_skipped, calls ? 100.0 * double(g_inventory_skipped) / double(calls) : 0.0,
+            g_inventory_ran, g_inventory_no_player);
+        g_inventory_ran = g_inventory_skipped = g_inventory_calls = g_inventory_no_player = 0;
+    }
+    if (sw.ticks) {
+        const ServerParts& t = sw.sum; double n = sw.ticks;
+        char steps[400];
+        format_step_avg(steps, sizeof steps, t.steps, step_names(), kStepCount, 8, sw.ticks, 0.1);
+        log(0, "Server tick average (%d ticks): %.1f ms = loading %.1f (tiles %.1f), simulation %.1f (bunkers %.1f, items %.1f, "
+               "vehicles %.1f, entities %.1f, physics step %.1f, other %.1f), network %.1f, autosave %.1f%s%s",
+            sw.ticks, t.total / n, t.loading / n, t.tiles / n, t.scene / n, t.dungeons / n, t.items / n, t.vehicles / n,
+            t.entities / n, t.physics / n, (t.scene - t.dungeons - t.items - t.vehicles - t.entities - t.physics) / n,
+            t.network / n, t.autosave / n, steps[0] ? " | steps: " : "", steps);
+    }
+    g_frame_window = FrameWindow{};
     request_cpu_summary(seconds);
     g_frames.clear(); g_hitches = g_loading_hitches = g_tiles_window = 0; g_worst_hitch = g_tile_max_window = 0;
     g_window_start = now;
@@ -412,6 +935,7 @@ void summary(double now) {
 void frame_done(double frame_ms, const FrameParts& p, bool loading, double now) {
     if (frame_ms > kPauseMs) return;
     g_frames.add(frame_ms);
+    if (!loading) g_frame_window.add(p, frame_ms);
     g_tiles_window += p.tile_attaches; g_tile_max_window = std::max(g_tile_max_window, p.tile_attach);
     const char* cause = nullptr;
     if (frame_ms >= g_hitch_ms.load()) {
@@ -423,7 +947,7 @@ void frame_done(double frame_ms, const FrameParts& p, bool loading, double now) 
             log(0, "Hitch %.0f ms%s, mostly %s: client tick %.1f (simulation+physics %.1f, streaming %.1f: %d tile attach %.1f, "
                    "vehicle rebuild %.1f%s%s), rendering/UI %.1f | last server tick %.1f ms",
                 frame_ms, loading ? " on a loading screen" : "", cause, p.client_tick, p.scene_tick, p.loading, p.tile_attaches,
-                p.tile_attach, p.vehicle_tasks, steps[0] ? "; other: " : "", steps, std::max(0.0, frame_ms - p.client_tick),
+                p.tile_attach, p.vehicle_tasks, steps[0] ? "; steps: " : "", steps, std::max(0.0, frame_ms - p.client_tick),
                 g_server_last_ms.load());
         }
     }
@@ -459,6 +983,46 @@ anymaker::cell_hook h_physics;
 anymaker::cell_hook h_server_loading, h_server_scene, h_dungeons, h_items, h_vehicles, h_entities, h_vehicles_post, h_items_post,
     h_replicate, h_autosave;
 
+void update_local_player() {
+    static AnySessionPlayersV1 players;
+    if (g_frame_no % 4) return;
+    g_local_ok = false;
+    uint32_t ui_flags = 0;   // copy_players fails without it
+    if (!g_inventory_lod || !host.copy_players || !host.copy_players(&players, &ui_flags)) return;
+    for (uint32_t i = 0; i < players.count && i < ANYAPI_PLAYERS_CAPACITY; ++i) {
+        const auto& p = players.players[i];
+        if ((p.valid_fields & (PLAYER_LOCAL | PLAYER_POSITION)) != (PLAYER_LOCAL | PLAYER_POSITION)) continue;
+        std::copy(p.position, p.position + 3, g_local_pos);
+        g_local_ok = std::isfinite(p.position[0]) && std::isfinite(p.position[1]) && std::isfinite(p.position[2]);
+        return;
+    }
+}
+
+void hk_inventory(void* self, void* client, void* vehicle, void* scene, const double* dt) {
+    auto run = [&](const double* d) { reinterpret_cast<inventory_tick_t>(h_inventory.original)(self, client, vehicle, scene, d); };
+    auto* v = static_cast<const uint8_t*>(vehicle);
+    ++g_inventory_calls;
+    if (g_inventory_lod && !g_local_ok) ++g_inventory_no_player;
+    if (!g_inventory_lod || !g_local_ok || g_stop || !dt || !v || !anymaker::readable(v + kClientVehiclePos, 24)) return run(dt);
+    const auto* pos = reinterpret_cast<const double*>(v + kClientVehiclePos);
+    double dx = pos[0] - g_local_pos[0], dy = pos[1] - g_local_pos[1], dz = pos[2] - g_local_pos[2];
+    if (!(dx * dx + dy * dy + dz * dz > kInventoryNear * kInventoryNear)) { g_inventory.erase(self); return run(dt); }
+    if (g_inventory.size() > 20000) g_inventory.clear();
+    auto [it, fresh] = g_inventory.try_emplace(self);
+    auto& e = it->second;
+    double mx = pos[0] - e.pos[0], my = pos[1] - e.pos[1], mz = pos[2] - e.pos[2];
+    bool moved = fresh || mx * mx + my * my + mz * mz > kInventoryMoved * kInventoryMoved;
+    // Spread containers over the frames by address so the work stays even.
+    bool turn = (g_frame_no + uint32_t(reinterpret_cast<uintptr_t>(self) >> 6)) % kInventoryEvery == 0;
+    e.dt += *dt;
+    if (!moved && !turn) { ++g_inventory_skipped; return; }
+    double total = e.dt;
+    e.dt = 0;
+    std::copy(pos, pos + 3, e.pos);
+    ++g_inventory_ran;
+    run(&total);
+}
+
 void hk_client_tick(void* client, const double* dt, const bool* loading, void* frontend, void* game_settings) {
     double start = now_ms();
     auto* c = static_cast<uint8_t*>(client);
@@ -473,6 +1037,8 @@ void hk_client_tick(void* client, const double* dt, const bool* loading, void* f
         if (g_window_start < 0) g_window_start = start;
         else if (start - g_window_start >= kSummarySeconds * 1000) summary(start);
         g_frame_start = start; g_parts = FrameParts{}; g_parts_loading = loading && *loading;
+        ++g_frame_no;
+        update_local_player();
         if (!g_main_thread) {
             g_main_thread = GetCurrentThreadId();
             std::thread(cpu_worker).detach();
@@ -508,8 +1074,18 @@ void hk_update_tasks(void* container, void* client, void* scene) {
 void hk_server_tick(void* server) {
     g_server_thread.store(GetCurrentThreadId(), std::memory_order_relaxed);
     g_tick = ServerParts{};
+    ++g_server_tick_no;
+    g_loot_ms_tick = 0;
     double start = now_ms();
     reinterpret_cast<server_tick_t>(h_server_tick.original)(server);
+    if (g_loot_pending.load(std::memory_order_relaxed)) {
+        // One wreck can cost 100-280 ms on its own (towns). Every ms over the budget is paid back first at
+        // kLootRepayMs a tick, so heavy wrecks are spaced out and the world catches up between them.
+        if (g_loot_debt > 0) g_loot_debt -= kLootRepayMs;
+        else if (void* scene = server_scene_of(server)) fill_loot(scene, g_loot_budget_ms.load());
+        g_loot_debt += std::max(0.0, g_loot_ms_tick - g_loot_budget_ms.load());
+        if (!g_loot_pending.load(std::memory_order_relaxed)) g_loot_debt = 0;
+    }
     double ms = now_ms() - start;
     g_tick.total = ms;
     g_server_last_ms = ms;
@@ -519,6 +1095,7 @@ void hk_server_tick(void* server) {
     g_pacing.add(gap < kPauseMs ? gap : 0, ms);
     g_server_tile_ms_window += g_tick.tiles;
     if (ms > g_worst_tick.total) g_worst_tick = g_tick;
+    g_server_window.add(g_tick);
 }
 // Server-thread pieces add to the tick in progress. replicate_peer also runs on the main thread (client authority
 // updates), so every piece checks the thread.
@@ -546,7 +1123,27 @@ void hk_replicate(const int32_t* peer, void* data, void* object, void* buffer) {
 void hk_physics(void* scene, const double* dt) {
     TIMED(physics, reinterpret_cast<physics_update_t>(h_physics.original)(scene, dt));
 }
-void hk_autosave(bool* ret, void* server) { TIMED(autosave, reinterpret_cast<autosave_t>(h_autosave.original)(ret, server)); }
+// server.tick calls autosave_game once the autosave timer runs out and resets the timer only when it returns true, so
+// returning false asks again next tick. An autosave saves every loaded tile, which fills every waiting wreck at once
+// (1.4 s in a town log), so it waits until the loot queue is empty, up to a minute.
+constexpr double kAutosaveWaitMaxMs = 60000;
+double g_autosave_wait_start = -1;   // server thread
+void hk_autosave(bool* ret, void* server) {
+    if (ret && g_spread_loot && g_loot_pending.load(std::memory_order_relaxed)) {
+        double t = now_ms();
+        if (g_autosave_wait_start < 0) {
+            g_autosave_wait_start = t;
+            log(0, "Spread wreck loot: autosave waits for %d wrecks to get their loot", g_loot_pending.load());
+        }
+        if (t - g_autosave_wait_start < kAutosaveWaitMaxMs) { *ret = false; return; }
+        log(1, "Spread wreck loot: autosave waited a minute, saving now with %d wrecks still waiting", g_loot_pending.load());
+    }
+    if (g_autosave_wait_start >= 0) {
+        log(0, "Spread wreck loot: autosave ran after waiting %.1f s", (now_ms() - g_autosave_wait_start) / 1000.0);
+        g_autosave_wait_start = -1;
+    }
+    TIMED(autosave, reinterpret_cast<autosave_t>(h_autosave.original)(ret, server));
+}
 #undef TIMED
 
 // ------------------------------------------------------------------ overlay (render thread)
@@ -603,6 +1200,7 @@ void install_hooks() {
         {&bind::server_scene_tick, &h_server_scene, (void*)&hk_server_scene, "server simulation", false},
         {&bind::replicate_peer, &h_replicate, (void*)&hk_replicate, "network replication", false},
         {&bind::autosave_game, &h_autosave, (void*)&hk_autosave, "autosave", false},
+        {&bind::cl_inventory, &h_inventory, (void*)&hk_inventory, "vehicle inventory", false},
         {&bind::server_tick, &h_server_tick, (void*)&hk_server_tick, "server tick", false},
         {&bind::client_tick, &h_client_tick, (void*)&hk_client_tick, "client tick", false},   // last: it starts the frame clock
     };
@@ -612,6 +1210,8 @@ void install_hooks() {
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; AnyPerformance stays off"); return; }
         if (!g_client_tick_code) g_client_tick_code = static_cast<uint8_t*>(function(bind::client_tick));   // before its hook
         bool all = true;
+        if (!g_vehicle_by_id) g_vehicle_by_id = reinterpret_cast<vehicle_by_id_t>(function(bind::vehicle_by_id));
+        if (!g_vehicle_by_id) all = false;   // until found, wreck loot runs as in the game
         for (auto& h : specs) {
             if (h.done) continue;
             if (void** cell = hook_cell(*h.desc)) {
@@ -645,6 +1245,7 @@ void install_hooks() {
     }
     for (auto& h : specs) if (!h.done && !g_stop) log(1, "could not locate or hook the %s function; it is not timed", h.name);
     for (int i = 0; i < kStepCount; ++i) if (!steps_done[i] && !g_stop) log(1, "could not locate or hook the %s step; it is not timed", kSteps[i].name);
+    if (!g_vehicle_by_id && !g_stop) log(1, "could not locate the vehicle lookup; wreck loot is not spread out");
 }
 
 void shutdown(void*) {
@@ -658,7 +1259,7 @@ void shutdown(void*) {
     h_server_scene.remove((void*)&hk_server_scene); h_dungeons.remove((void*)&hk_dungeons); h_items.remove((void*)&hk_items);
     h_vehicles.remove((void*)&hk_vehicles); h_entities.remove((void*)&hk_entities); h_vehicles_post.remove((void*)&hk_vehicles_post);
     h_items_post.remove((void*)&hk_items_post); h_replicate.remove((void*)&hk_replicate); h_autosave.remove((void*)&hk_autosave);
-    h_physics.remove((void*)&hk_physics);
+    h_physics.remove((void*)&hk_physics); h_inventory.remove((void*)&hk_inventory);
     for (int i = 0; i < kStepCount; ++i) h_steps[i].remove(kStepHooks[size_t(i)]);
     if (g_timer_on) { timeEndPeriod(1); g_timer_on = false; }
 }
@@ -687,6 +1288,47 @@ void register_settings() {
     d.description = "Smooths the slow-down and speed-up after a stall. Light and Strong hide short stalls and cap the catch-up speed, "
                     "at the cost of 17 to 50 ms more delay on screen. Off is the game's own behaviour.";
     g_tokens[3] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "spread_loot"; d.label = "Spread wreck loot"; d.kind = ANY_SETTING_BOOL; d.order = 4; d.default_number = 1;
+    d.description = "Fills the wrecks on newly loaded terrain a few at a time instead of all at once, which stops the big stall "
+                    "while driving. Wrecks far ahead may get their items a second later. Host and solo only.";
+    g_tokens[4] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "profiler"; d.label = "Profiler (for testing)"; d.kind = ANY_SETTING_BOOL; d.order = 5; d.default_number = 0;
+    d.description = "Writes the game functions that use the most CPU on the main and server threads to anymaker_modding.log "
+                    "every two minutes. Costs about 1% CPU. Leave off unless asked.";
+    g_tokens[5] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "inventory_lod"; d.label = "Distant container items"; d.kind = ANY_SETTING_BOOL; d.order = 6; d.default_number = 1;
+    d.description = "Updates the items inside containers of parked vehicles more than 50 m away every 8th frame instead of "
+                    "every frame. Anything moving or near you is updated every frame.";
+    g_tokens[6] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "fast_navmesh"; d.label = "Fast navmesh cleanup"; d.kind = ANY_SETTING_BOOL; d.order = 7; d.default_number = 1;
+    d.description = "When terrain unloads, skips the game's slow check of thousands of empty navmesh cells around it. "
+                    "Cuts part of the stutter when driving into new areas. Host and solo only.";
+    g_tokens[7] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "fast_furniture_loot"; d.label = "Fast furniture loot"; d.kind = ANY_SETTING_BOOL; d.order = 8; d.default_number = 1;
+    d.description = "Remembers which loot items do not fit in a wreck's cabinets and shelves while it is being filled, instead of "
+                    "searching every slot again. Same loot, much faster. Host and solo only.";
+    g_tokens[8] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "loot_budget_ms"; d.label = "Wreck loot per tick (ms)"; d.kind = ANY_SETTING_INTEGER; d.order = 9;
+    d.default_number = kLootBudgetDefaultMs; d.minimum = 2; d.maximum = 30; d.step = 1;
+    d.description = "How long Spread wreck loot may fill wrecks each server tick. Higher fills more wrecks at once, so loot "
+                    "is ready sooner but the server has less room for everything else (a tick is 16.7 ms).";
+    g_tokens[9] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "fast_water"; d.label = "Fast water checks"; d.kind = ANY_SETTING_BOOL; d.order = 10; d.default_number = 1;
+    d.description = "Skips the game's check of every boat for things that are nowhere near one, when items, bodies and "
+                    "creatures ask whether they are inside a boat's air pocket. Same result, less server load. Host and solo only.";
+    g_tokens[10] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "floor_item_lod"; d.label = "Distant loose items"; d.kind = ANY_SETTING_BOOL; d.order = 11; d.default_number = 1;
+    d.description = "Loot lying on the ground more than 100 m from every player updates 8 times less often. Big saving in towns. "
+                    "Flares and lights left far away burn a little longer. Host and solo only.";
+    g_tokens[11] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace
@@ -708,5 +1350,6 @@ extern "C" __declspec(dllexport) void AnyAPI_ModReady() {
     if (!gpu || gpu->struct_size != sizeof(*gpu) || gpu->version != 1 || !gpu->emit || !gpu->register_renderer || !ui ||
         !gpu->register_renderer(draw, nullptr)) { gpu = nullptr; log(1, "GPU drawing unavailable; no overlay (logging still works)"); }
     register_settings();
-    std::thread(install_hooks).detach();   // resolving scans game memory; keep it off the loader and frame threads
+    std::thread(install_hooks).detach();
+    std::thread(profiler_thread).detach();   // resolving scans game memory; keep it off the loader and frame threads
 }

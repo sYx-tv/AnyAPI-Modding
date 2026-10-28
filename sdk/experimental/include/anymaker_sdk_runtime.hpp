@@ -250,8 +250,8 @@ inline void** typeinfo_cell(const func_desc& d) {
     // Shared anchor (identical code in several functions, e.g. two tools' state ctors): keep the
     // one candidate whose method cell points at this function's own unique code.
     uint8_t* entry = d.code_sig && *d.code_sig ? find_gcl_function(d.code_sig) : nullptr;
-    uint8_t* hits[16];
-    size_t n = entry ? find_gcl_functions(d.ti_anchor_sig, hits, 16) : 0;
+    uint8_t* hits[64];   // 18 vehicle_component ctors share one anchor
+    size_t n = entry ? find_gcl_functions(d.ti_anchor_sig, hits, 64) : 0;
     void** found = nullptr;
     for (size_t i = 0; i < n; ++i)
         if (void** cell = typeinfo_cell_from(hits[i], d); cell && *cell == entry) {
