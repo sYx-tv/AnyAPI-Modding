@@ -71,6 +71,7 @@ constexpr ptrdiff_t paint_colour = 0x38 + 8;          // m_color (s32 palette in
 constexpr ptrdiff_t paint_mode = 0x48 + 8;            // m_mode (e_mode)
 constexpr ptrdiff_t paint_hovered_vehicle = 0x68;     // _m_hovered_vehicle_id
 constexpr ptrdiff_t paint_hovered_component = 0xc0;   // _m_hovered_component_id
+constexpr ptrdiff_t scene_authority_actor = 0x188;    // client_scene m_actors.m_authority_actor (ptr<client_scene.actor>): our own player
 // client_scene.vehicle_component.m_colors: array<replication.slave.property_s32>
 constexpr ptrdiff_t component_colours = 0x30;         // buffer +0, count +8, element size +0xc (16), value +8 in each
 // client_scene.vehicle_plate
@@ -205,7 +206,10 @@ void run_undo(uint8_t* client, const uint8_t* scene) {
 
 void hk_paint_tick(uint8_t* item, uint8_t* client, uint8_t* scene, void* actor, const void* transform, const bool* active,
                    const int32_t* location, const double* dt) {
-    if (g_ready && item && anymaker::readable(item, off::paint_hovered_vehicle + 4)) {
+    // Every player's paint tool ticks on every client: only the one our own actor holds is ours to drive.
+    uint8_t* own_actor = scene && anymaker::readable(scene + off::scene_authority_actor, 8) ? rd<uint8_t*>(scene, off::scene_authority_actor) : nullptr;
+    bool ours = own_actor && actor == own_actor;
+    if (g_ready && ours && item && anymaker::readable(item, off::paint_hovered_vehicle + 4)) {
         refresh_settings();
         if (g_palette_count == 0) copy_palette();
         g_paint_seen = GetTickCount64();

@@ -56,4 +56,4 @@ in `anymaker_modding.log` are what we need.
 4. Ctrl+Z after a fill: the part goes back (log: `undo: repainted ...`).
 5. Paint a spot, an omni and a rotating light red: each glows red (log: `... light: N paint slots ...`).
 6. Save and reload: paint and light colours come back.
-7. Co-op: a second player (with or without AnyLights) sees the paint; with AnyLights they also see the light colours.
+7. Co-op: a second player (with or without AnyLights) sees the paint; with AnyLights they also see the light colours. While another player holds a paint tool, right-click without one must not open the palette.
