@@ -63,6 +63,7 @@ constexpr ptrdiff_t server_loot_level = 0x14d8;     // m_loot_level (s32)
 constexpr ptrdiff_t server_item_defs = 0xf80;       // m_inventory_definitions.m_definitions vector<ref<inventory_definition>>
 constexpr ptrdiff_t peer_position = 0x19f8;         // server_scene.peer position (vec3), as AnyHelpers' admin uses it
 constexpr ptrdiff_t server_object_id = 0x40;        // server_scene.vehicle.m_id and server_scene.vehicle_component.m_id
+constexpr ptrdiff_t server_vehicle_motion = 0x5a0 + 0x18;  // server_scene.vehicle motion type property _m_value (u32, 1 = static)
 // vehicle_component_definition
 constexpr ptrdiff_t def_id = 0, def_name = 0x10, def_class = 0x30, def_building_furniture = 0x1b2;
 // client
@@ -71,6 +72,8 @@ constexpr ptrdiff_t scene_vehicles = 0xa0;          // client_scene.m_vehicles (
 constexpr ptrdiff_t actor_id = 8;                   // client_scene.actor.m_id
 constexpr ptrdiff_t actor_incapacitated = 0x28 + 8; // client_scene.actor._m_is_incapacitated value (as AnyMap reads it)
 constexpr ptrdiff_t storage_items = 0xe0 + 8;       // client_scene.vehicle_component.inventory.m_items -> vector<ref<item>>
+constexpr ptrdiff_t client_vehicle_motion = 0x298 + 8;    // client_scene.vehicle.m_physics_motion_type value
+constexpr ptrdiff_t client_vehicle_in_scene = 0x2b8;      // client_scene.vehicle.m_is_added_to_scene (bool)
 }  // namespace off
 
 // Not in anyloot_bindings.h because they are only anchors: g_client, and the zombie and creature tick functions
@@ -130,7 +133,7 @@ std::wstring g_toast;
 ULONGLONG g_toast_until;
 void toast(const std::wstring& text) { std::lock_guard lock(g_toast_mutex); g_toast = text; g_toast_until = GetTickCount64() + 5000; }
 
-struct Spawn { double yaw; ULONGLONG posted; };
+struct Spawn { double yaw; ULONGLONG posted; bool dynamic; };
 std::mutex g_mutex;
 std::deque<Spawn> g_queue;   // F8 presses waiting for the next server tick
 
@@ -226,11 +229,15 @@ void spawn_crate(uint8_t* scene, const Spawn& s) {
     const uint8_t* part = pick_storage_part(scene);
     if (!part) { log(2, "ANYLOOT_SPAWN ok=0 reason=no_storage_part"); return; }
     std::string part_id = read_string(part + off::def_id);
-    // Two metres in front of you (yaw 0 faces +Z, +pi/2 faces +X) and a metre up, so it drops onto the ground.
-    Mat34 m{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {p.x + 2 * std::sin(s.yaw), p.y + 1, p.z + 2 * std::cos(s.yaw)}};
+    // Two metres in front of you (yaw 0 faces +Z, +pi/2 faces +X). F8 places it static on the ground, the way the
+    // game places a crate itself; F9 keeps the old loose crate a metre up so it drops, for comparison.
+    Mat34 m{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {p.x + 2 * std::sin(s.yaw), p.y + (s.dynamic ? 1 : 0), p.z + 2 * std::cos(s.yaw)}};
     uint8_t* vehicle = nullptr;
     vehicle_create(&vehicle, scene + off::server_vehicles, scene + off::server_physics, scene + off::server_tiles, &m);
     if (!vehicle) { log(2, "ANYLOOT_SPAWN ok=0 reason=vehicle_create_null part=%s", part_id.c_str()); return; }
+    if (!s.dynamic && anymaker::readable(vehicle + off::server_vehicle_motion, 4))
+        *reinterpret_cast<uint32_t*>(vehicle + off::server_vehicle_motion) = 1;   // static, set before any part goes in
+    uint32_t motion = anymaker::readable(vehicle + off::server_vehicle_motion, 4) ? rd<uint32_t>(vehicle, off::server_vehicle_motion) : 99;
     GridOriginDir grid{};
     Vec3i at{0, 0, 0};
     const int32_t identity[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
@@ -257,8 +264,8 @@ void spawn_crate(uint8_t* scene, const Spawn& s) {
     }
     int32_t vid = rd<int32_t>(vehicle, off::server_object_id), cid = component ? rd<int32_t>(component, off::server_object_id) : -1;
     g_crate_vehicle = vid; g_crate_component = cid; g_food_added = added;
-    log(component ? 0 : 2, "ANYLOOT_SPAWN ok=%d part=%s vehicle=%d component=%d extend=%d loot_level=%d at=(%.1f, %.1f, %.1f) food_added=%d:%s",
-        component ? 1 : 0, part_id.c_str(), vid, cid, extend.x, level, m.t[0], m.t[1], m.t[2], added, food_text.empty() ? " none" : food_text.c_str());
+    log(component ? 0 : 2, "ANYLOOT_SPAWN ok=%d motion=%u(%s) part=%s vehicle=%d component=%d extend=%d loot_level=%d at=(%.1f, %.1f, %.1f) food_added=%d:%s",
+        component ? 1 : 0, motion, s.dynamic ? "F9_dynamic" : "F8_static", part_id.c_str(), vid, cid, extend.x, level, m.t[0], m.t[1], m.t[2], added, food_text.empty() ? " none" : food_text.c_str());
 }
 
 // Kept apart from hk_tick: __try cannot share a function with objects that need unwinding.
@@ -298,6 +305,7 @@ const char* body_kind(const uint8_t* actor) {
 int32_t count(const anymaker::gc_vector_raw* v) { return v && anymaker::readable(v, sizeof *v) ? v->count : -1; }
 
 // The test crate's storage part on this client, or null with the reason. Main thread only.
+int32_t g_client_motion = -1, g_client_in_scene = -1;   // what the last client_crate saw on the crate vehicle
 uint8_t* client_crate(const char** why) {
     int32_t vid = g_crate_vehicle, cid = g_crate_component;
     if (vid < 0 || cid < 0) { *why = "no_crate"; return nullptr; }
@@ -306,6 +314,10 @@ uint8_t* client_crate(const char** why) {
     uint8_t *vehicle = nullptr, *component = nullptr;
     client_vehicle_by_id(&vehicle, scene + off::scene_vehicles, &vid);
     if (!vehicle) { *why = "crate_vehicle_not_on_client"; return nullptr; }
+    if (anymaker::readable(vehicle, off::client_vehicle_in_scene + 1)) {
+        g_client_motion = rd<uint32_t>(vehicle, off::client_vehicle_motion);
+        g_client_in_scene = rd<uint8_t>(vehicle, off::client_vehicle_in_scene);
+    }
     client_component_by_id(&component, vehicle, &cid);
     if (!component || !anymaker::readable(component, off::storage_items + sizeof(anymaker::gc_vector_raw))) { *why = "crate_part_not_on_client"; return nullptr; }
     return component;
@@ -369,8 +381,10 @@ void check_crate(const AnyClientTaskFrameV1*, void*) {
     if (GetTickCount64() < g_check_after) { post_check(); return; }
     int32_t items = -1;
     const char* why = "found";
+    g_client_motion = g_client_in_scene = -1;
     check_crate_guarded(&items, &why);
-    log(0, "ANYLOOT_CRATE_CLIENT vehicle=%d result=%s items=%d food_added=%d", g_crate_vehicle.load(), why, items, g_food_added.load());
+    log(0, "ANYLOOT_CRATE_CLIENT vehicle=%d result=%s items=%d food_added=%d client_motion=%d in_scene=%d", g_crate_vehicle.load(), why, items,
+        g_food_added.load(), g_client_motion, g_client_in_scene);
     wchar_t buf[160];
     if (items >= 0) swprintf(buf, 160, L"AnyLoot: crate spawned in front of you with %d items", items);
     else swprintf(buf, 160, L"AnyLoot: crate made on the host, but this client can't see it (%hs)", why);
@@ -392,8 +406,8 @@ void draw(const AnyFrameV1* f, void*) {
 
 // ------------------------------------------------------------------ input
 uint32_t on_input(const AnyInputV1* e, void*) {
-    static bool held;   // a consumed F8 press also consumes its release
-    if (!e || (e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) || e->key != VK_F8) return 0;
+    static bool held;   // a consumed F8/F9 press also consumes its release
+    if (!e || (e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) || (e->key != VK_F8 && e->key != VK_F9)) return 0;
     if (e->kind == ANY_KEY_UP) { bool consume = held; held = false; return consume ? 1 : 0; }
     if (!g_ready || !gameplay()) return 0;
     held = true;
@@ -411,7 +425,7 @@ uint32_t on_input(const AnyInputV1* e, void*) {
             if ((players.players[i].valid_fields & PLAYER_LOCAL) && (players.players[i].valid_fields & PLAYER_FACING))
                 yaw = players.players[i].yaw_radians;
     std::lock_guard lock(g_mutex);
-    if (g_queue.size() < 4) g_queue.push_back({yaw, GetTickCount64()});
+    if (g_queue.size() < 4) g_queue.push_back({yaw, GetTickCount64(), e->key == VK_F9});
     g_check_after = GetTickCount64() + 1500;
     post_check();
     return 1;
