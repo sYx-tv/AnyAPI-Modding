@@ -37,6 +37,11 @@ namespace AnyApiManager {
    using(var parent=Process.Start(new ProcessStartInfo(old){UseShellExecute=false,CreateNoWindow=true})){
     var waiting=new ManagerUpdateRequest{Target=old,ParentId=parent.Id,ParentStarted=parent.StartTime.ToUniversalTime().Ticks};ManagerUpdates.WaitForParent(waiting);check(parent.HasExited,"Manager helper waits for the original EXE to exit");
    }
+   using(var exited=Process.Start(new ProcessStartInfo(old){UseShellExecute=false,CreateNoWindow=true})){
+    // Keep our handle open past exit so the ID still resolves, as another program's handle does on users' PCs.
+    var gone=new ManagerUpdateRequest{Target=old,ParentId=exited.Id,ParentStarted=exited.StartTime.ToUniversalTime().Ticks};exited.WaitForExit();
+    bool finished=true;try{ManagerUpdates.WaitForParent(gone);}catch(Exception){finished=false;}check(finished,"Manager helper accepts a parent that already exited");
+   }
    using(var self=Process.GetCurrentProcess()){
     var wrong=new ManagerUpdateRequest{Target=current,ParentId=self.Id,ParentStarted=self.StartTime.ToUniversalTime().Ticks+1};reject(()=>ManagerUpdates.WaitForParent(wrong),"Manager helper rejects a reused or mismatching parent process");
    }
