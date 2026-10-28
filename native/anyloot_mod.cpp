@@ -86,6 +86,7 @@ inline constexpr func_desc zombie_tick{"() client_scene.actor_zombie.tick (clien
 inline constexpr func_desc creature_tick{"() client_scene.actor_creature.tick (client_scene.actor_creature, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 48 81 ec c8 01 00 00 48 8b 84 24 10 02 00 00 48 8b 9c 24 18 02 00 00 48 89 8c 24 e0",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 28 07 00 00 4c 8b a4 24 90 07 00 00 48 8b 84 24 98", {6848u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 fd 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",536u,4};
 }  // namespace anchor
 
+constexpr int kMotionSetSlot = 4;   // replication.master.property_enum<physics.e_motion_type>.set
 constexpr int kInspectSlot = 36;   // vehicle_component.on_inspect in the part's method table (the binding's route slot)
 
 struct Vec3 { double x, y, z; };
@@ -221,6 +222,18 @@ std::vector<const uint8_t*> pick_food(uint8_t* scene, int n) {
     return out;
 }
 
+// Sets the vehicle's motion type through the property's own setter, so it is marked changed and reaches the
+// clients (a plain write left every client at dynamic, with no visible body). 0 dynamic, 1 static, 2 kinematic.
+const char* set_motion(uint8_t* vehicle, uint32_t value) {
+    using set_t = void (*)(uint8_t* property, const uint32_t* value);
+    uint8_t* property = vehicle + off::server_vehicle_motion - 0x18;
+    void* fn = anymaker::typeinfo_of(property).method(kMotionSetSlot);
+    static const uint8_t head[] = {0x48, 0x83, 0xec, 0x48, 0x48, 0x89, 0x4c, 0x24, 0x20, 0x48, 0x89, 0x54, 0x24, 0x28, 0x8b, 0x02, 0x3b, 0x41, 0x18};
+    if (!fn || !anymaker::readable(fn, sizeof head) || std::memcmp(fn, head, sizeof head)) return "setter_not_found";
+    reinterpret_cast<set_t>(fn)(property, &value);
+    return "setter";
+}
+
 void spawn_crate(uint8_t* scene, const Spawn& s) {
     uint8_t* host_peer = nullptr;
     for (int32_t id = 0; id < 64 && !host_peer; ++id) peer_by_id(&host_peer, scene + off::server_peers, &id);   // the host joins first
@@ -235,8 +248,7 @@ void spawn_crate(uint8_t* scene, const Spawn& s) {
     uint8_t* vehicle = nullptr;
     vehicle_create(&vehicle, scene + off::server_vehicles, scene + off::server_physics, scene + off::server_tiles, &m);
     if (!vehicle) { log(2, "ANYLOOT_SPAWN ok=0 reason=vehicle_create_null part=%s", part_id.c_str()); return; }
-    if (!s.dynamic && anymaker::readable(vehicle + off::server_vehicle_motion, 4))
-        *reinterpret_cast<uint32_t*>(vehicle + off::server_vehicle_motion) = 1;   // static, set before any part goes in
+    const char* motion_how = set_motion(vehicle, s.dynamic ? 0 : 1);   // before any part goes in, as the game does
     uint32_t motion = anymaker::readable(vehicle + off::server_vehicle_motion, 4) ? rd<uint32_t>(vehicle, off::server_vehicle_motion) : 99;
     GridOriginDir grid{};
     Vec3i at{0, 0, 0};
@@ -264,8 +276,8 @@ void spawn_crate(uint8_t* scene, const Spawn& s) {
     }
     int32_t vid = rd<int32_t>(vehicle, off::server_object_id), cid = component ? rd<int32_t>(component, off::server_object_id) : -1;
     g_crate_vehicle = vid; g_crate_component = cid; g_food_added = added;
-    log(component ? 0 : 2, "ANYLOOT_SPAWN ok=%d motion=%u(%s) part=%s vehicle=%d component=%d extend=%d loot_level=%d at=(%.1f, %.1f, %.1f) food_added=%d:%s",
-        component ? 1 : 0, motion, s.dynamic ? "F9_dynamic" : "F8_static", part_id.c_str(), vid, cid, extend.x, level, m.t[0], m.t[1], m.t[2], added, food_text.empty() ? " none" : food_text.c_str());
+    log(component ? 0 : 2, "ANYLOOT_SPAWN ok=%d motion=%u(%s,%s) part=%s vehicle=%d component=%d extend=%d loot_level=%d at=(%.1f, %.1f, %.1f) food_added=%d:%s",
+        component ? 1 : 0, motion, s.dynamic ? "F9_dynamic" : "F8_static", motion_how, part_id.c_str(), vid, cid, extend.x, level, m.t[0], m.t[1], m.t[2], added, food_text.empty() ? " none" : food_text.c_str());
 }
 
 // Kept apart from hk_tick: __try cannot share a function with objects that need unwinding.
