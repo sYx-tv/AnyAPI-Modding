@@ -2,10 +2,11 @@
 // AnyBattery's Battery Pack mesh, generated in code (no game asset ships with the mod) and written into
 // rom/meshes/components at start-up, like the other part mods.
 //
-// The pack stretches like the liquid tank ("stretch" on every axis, center_stretch 0.5): the game moves every vertex
-// past the middle of the unstretched part (0.04 m on each axis, the part spanning -0.04 to 0.12) out by the added
-// cells. So the case and lid grow with it, the negative terminal stays at the near corner, the positive one rides
-// out with the far x end, and nothing sits on a middle plane.
+// The look is the stock Battery (battery_a) in its cradle, scaled up by stretching. The pack stretches like the liquid
+// tank ("stretch" on every axis, center_stretch 0.5): the game moves every vertex past the middle of the unstretched
+// part (0.04 m on each axis, the part spanning -0.04 to 0.12) out by the added cells. So the block and tray grow
+// with it, the red terminal and one strap stay at the near x end, the blue terminal and the other strap ride out with
+// the far end, and nothing sits on a middle plane.
 //
 // Mesh file layout (as the GpsPart, Rotary and AnyMoto meshes): "mesh" u32 5 u32 1 u32 name_length name, 88-byte
 // attribute header, 6 x f64 bounds, u32 vertex bytes + 36-byte vertices (f32 pos[3], u8 rgba[4], f32 uv[2],
@@ -34,12 +35,12 @@ struct MeshVertex { float pos[3]; uint8_t rgba[4]; float uv[2]; float normal[3];
 static_assert(sizeof(MeshVertex) == 36, "mesh vertex");
 
 struct Rgb { uint8_t r, g, b; };
-constexpr Rgb kPaint0{153, 0, 0};          // paint slot 0: lid and band (G_COLOR_REPLACEMENTS[0])
-constexpr Rgb kPaint1{153, 38, 0};         // paint slot 1: vent caps
-constexpr Rgb kCase{38, 38, 42};
-constexpr Rgb kLead{150, 150, 146};
-constexpr Rgb kPlusRed{204, 30, 24};
-constexpr Rgb kMinusBlack{18, 18, 20};
+// The stock battery's colours (rom/meshes/components/battery_a.mesh and battery_cradle_a.mesh): a dark grey block,
+// a rust red and a slate blue terminal, and hold-down straps in paint slot 1 like the stock cradle's.
+constexpr Rgb kDark{51, 51, 51};
+constexpr Rgb kTerminalRed{145, 30, 21};
+constexpr Rgb kTerminalBlue{58, 80, 103};
+constexpr Rgb kPaint1{153, 37, 0};         // paint slot 1 (within 2 of G_COLOR_REPLACEMENTS[1], as the stock cradle)
 
 struct Mesh {
     std::vector<MeshVertex> v;
@@ -69,37 +70,69 @@ struct Mesh {
         quad(p[0], p[1], p[5], p[4], c);   // -y
         quad(p[2], p[6], p[7], p[3], c);   // +y
     }
-    // An upright octagonal post centred on (x, z), from y0 to y1, with a flat top.
-    void post(double x, double z, double r, double y0, double y1, Rgb c) {
-        Vec3 top{x, y1, z};
-        for (int k = 0; k < 8; ++k) {
-            double a0 = kPi / 8 + 2 * kPi * k / 8, a1 = kPi / 8 + 2 * kPi * (k + 1) / 8;
-            Vec3 p0{x + r * std::cos(a0), y0, z + r * std::sin(a0)}, p1{x + r * std::cos(a1), y0, z + r * std::sin(a1)};
-            Vec3 q0{p0.x, y1, p0.z}, q1{p1.x, y1, p1.z};
-            quad(p0, q0, q1, p1, c);
-            uint32_t t = vertex(top, {0, 1, 0}, c), b = vertex(q0, {0, 1, 0}, c), d = vertex(q1, {0, 1, 0}, c);
-            tri(t, d, b);
+    // An upright block over the rectangle [x0, x1] x [z0, z1], from y0 to y1, its vertical edges cut by c and its top
+    // (and bottom, if asked) edges bevelled by c, like the stock battery's.
+    void chamfer_block(double x0, double x1, double z0, double z1, double y0, double y1, double c, Rgb col, bool bevel_bottom = false) {
+        auto ring = [&](double y, double in) {
+            double a0 = x0 + in, a1 = x1 - in, b0 = z0 + in, b1 = z1 - in, k = c;
+            return std::vector<Vec3>{{a0 + k, y, b0}, {a1 - k, y, b0}, {a1, y, b0 + k}, {a1, y, b1 - k},
+                                     {a1 - k, y, b1}, {a0 + k, y, b1}, {a0, y, b1 - k}, {a0, y, b0 + k}};
+        };
+        std::vector<std::vector<Vec3>> rings;
+        if (bevel_bottom) rings.push_back(ring(y0, c));
+        rings.push_back(ring(bevel_bottom ? y0 + c : y0, 0));
+        rings.push_back(ring(y1 - c, 0));
+        rings.push_back(ring(y1, c));
+        Vec3 centre{(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2};
+        for (size_t r = 0; r + 1 < rings.size(); ++r)
+            for (int k = 0; k < 8; ++k) quad_out(rings[r][k], rings[r][(k + 1) % 8], rings[r + 1][(k + 1) % 8], rings[r + 1][k], centre, col);
+        cap(rings.back(), {0, 1, 0}, col);
+        cap(rings.front(), {0, -1, 0}, col);
+    }
+    // A quad whose winding is chosen so its normal points away from `centre`.
+    void quad_out(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3 centre, Rgb col) {
+        Vec3 n = cross(b - a, d - a);
+        Vec3 mid{(a.x + c.x) / 2 - centre.x, (a.y + c.y) / 2 - centre.y, (a.z + c.z) / 2 - centre.z};
+        if (n.x * mid.x + n.y * mid.y + n.z * mid.z < 0) quad(a, d, c, b, col);
+        else quad(a, b, c, d, col);
+    }
+    // A flat convex polygon facing `normal`, fanned from its first corner (a centre vertex could land on a stretch
+    // plane).
+    void cap(const std::vector<Vec3>& pts, Vec3 normal, Rgb col) {
+        for (size_t k = 1; k + 1 < pts.size(); ++k) {
+            const Vec3 &a = pts[0], &p = pts[k], &q = pts[k + 1];
+            Vec3 n = cross(p - a, q - a);
+            if (n.x * n.x + n.y * n.y + n.z * n.z < 1e-18) continue;   // a corner cut of 0 repeats points
+            if (n.x * normal.x + n.y * normal.y + n.z * normal.z < 0) quad_tri(a, q, p, normal, col);
+            else quad_tri(a, p, q, normal, col);
         }
     }
+    void quad_tri(Vec3 a, Vec3 b, Vec3 c, Vec3 n, Rgb col) { tri(vertex(a, n, col), vertex(b, n, col), vertex(c, n, col)); }
 };
 
-// Case from the floor to just under the lid, a painted lid, a painted band low round the case, two terminals on
-// the lid (black negative at the near corner, red positive at the far x end), two vent caps and corner ribs.
+// The stock battery, cell for cell, sitting in the stock cradle's tray under two painted hold-down straps: a dark
+// block with cut vertical edges and a bevelled top, a channel across the front of the top with a square red terminal
+// at the near end and a slate blue one at the far x end, and straps over the top near each x end. Changes from
+// stock, so it stretches cleanly: the tray top, the terminals and the channel sit off the middle planes, and the
+// terminals sit beside the straps rather than under them.
 inline Mesh battery_pack() {
     Mesh m;
-    const double lo = -0.0365, hi = 0.1165;                         // case sides, inside the part's -0.04..0.12
-    m.box({lo, -0.04, lo}, {hi, 0.096, hi}, kCase);
-    m.box({lo - 0.002, 0.096, lo - 0.002}, {hi + 0.002, 0.106, hi + 0.002}, kPaint0);   // lid
-    m.box({lo - 0.001, -0.022, lo - 0.001}, {hi + 0.001, -0.012, hi + 0.001}, kPaint0); // band
-    for (double x : {lo - 0.0015, hi - 0.0055})                      // corner ribs on the front and back faces
-        for (double z : {lo - 0.0015, hi - 0.0055}) m.box({x, -0.04, z}, {x + 0.007, 0.096, z + 0.007}, kCase);
-    // Terminals: a coloured collar and a lead post, both in the front half (z < 0.04) so they never stretch in z.
-    m.post(-0.012, -0.012, 0.0105, 0.106, 0.110, kMinusBlack);
-    m.post(-0.012, -0.012, 0.0065, 0.110, 0.1185, kLead);
-    m.post(0.092, -0.012, 0.0105, 0.106, 0.110, kPlusRed);
-    m.post(0.092, -0.012, 0.0065, 0.110, 0.1185, kLead);
-    // Vent caps in the back half: they ride out with the far z end.
-    for (double x : {0.0, 0.08}) m.post(x, 0.085, 0.006, 0.106, 0.1115, kPaint1);
+    m.chamfer_block(-0.04, 0.12, -0.04, 0.12, -0.04, 0.035, 0.01, kDark, true);           // tray
+    m.chamfer_block(-0.03, 0.11, -0.03, 0.11, -0.03, 0.10, 0.01, kDark);                   // block
+    m.chamfer_block(-0.025, 0.105, -0.025, 0.0, 0.095, 0.11, 0.004, kDark);               // top, in front of the channel
+    m.chamfer_block(-0.025, 0.105, 0.03, 0.105, 0.095, 0.11, 0.004, kDark);                 // top, behind it
+    // Square terminals in the channel (z 0 to 0.03): a base plate and a post, as the stock ones.
+    for (auto [x, col] : {std::pair<double, Rgb>{0.0125, kTerminalRed}, {0.0675, kTerminalBlue}}) {
+        m.box({x - 0.0125, 0.10, 0.0025}, {x + 0.0125, 0.103, 0.0275}, col);
+        m.box({x - 0.0097, 0.103, 0.0053}, {x + 0.0097, 0.115, 0.0247}, col);
+    }
+    // Hold-down straps (paint slot 1) at each x end: up the front and back from the tray and over the top.
+    for (double x0 : {-0.0305, 0.0855}) {
+        double x1 = x0 + 0.025;
+        m.box({x0, 0.035, -0.04}, {x1, 0.11, -0.03}, kPaint1);
+        m.box({x0, 0.035, 0.11}, {x1, 0.11, 0.12}, kPaint1);
+        m.box({x0, 0.11, -0.04}, {x1, 0.12, 0.12}, kPaint1);
+    }
     return m;
 }
 

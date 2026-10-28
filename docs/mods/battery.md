@@ -21,7 +21,8 @@ on any axis, up to 16 cells (1.28 m) each way. Every cell adds 0.5 kWh, the stoc
 | 4 x 4 x 4 | 32 kWh |
 | 16 x 16 x 16 | 2,048 kWh |
 
-A bigger pack costs more to build, like a stretched tank. Electric ports fit on its bottom and its four sides; the
+It looks like the stock Battery sitting in its cradle, scaled up: a dark block in a tray, a red and a blue square
+terminal in a channel across the top, and two hold-down straps you can paint (paint slot 1). A bigger pack costs more to build, like a stretched tank. Electric ports fit on its bottom and its four sides; the
 top carries the terminals. The tooltip shows the charge in Wh and the power in or out, and a data port or
 microcontroller can read `energy_store`, `energy_capacity` (both in joules), `electric_consumption` (W) and
 `charge_percent` (0 to 100).
@@ -57,8 +58,8 @@ the game. A second hook adds the `charge_percent` output. Stock batteries pass t
 
 The definition is written to `AnyAPI and Modding/AnyBattery/anybattery_pack.json` and its generated mesh to
 `rom/meshes/components/anybattery_pack.mesh` when the game starts. The mesh keeps every vertex off the middle of the
-part on each axis, where the game splits a stretched mesh, so the case and lid grow with the pack and the terminals
-stay at the corners. `native/tests/anybattery_logic_test.cpp` checks the capacity, the charge kept between ticks,
+part on each axis, where the game splits a stretched mesh, so the block and tray grow with the pack, and the terminals
+and straps stay at the ends. `native/tests/anybattery_logic_test.cpp` checks the capacity, the charge kept between ticks,
 the crash and self-discharge settings, the save file, the definition and the mesh.
 
 ## Feasibility
