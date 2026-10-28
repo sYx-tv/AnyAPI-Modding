@@ -1,7 +1,7 @@
 # AnyEngineParts
 
 > AnyEngineParts hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
 > It needs AnyAPI 0.37.0 or newer. Install it from the manager.
 
 AnyEngineParts adds engine parts to the game, in one mod (`AnyEngineParts.dll`):

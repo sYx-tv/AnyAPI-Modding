@@ -1,5 +1,5 @@
 #pragma once
-// AnyMoto game bindings, generated for Anymaker 0.1.27 / Steam build 26113663 with
+// AnyMoto game bindings, generated for Anymaker 0.1.28 / Steam build 26277967 with
 //   python tools/bind.py --reference <reference-0.1.27> --signature "<signature>" --out <file>.hpp
 // run from sdk/experimental, one --signature per binding below (globals with --match <name>). The definition-file
 // six are the same as GpsPart's. Experimental: located by code signature, call-cell route or typeinfo slot, not

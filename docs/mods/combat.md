@@ -1,7 +1,7 @@
 # AnyCombat
 
 > AnyCombat hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.27 / Steam build 26113663 and turns itself off on any other build.
+> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
 > It is a prototype: built from source, not in the catalog yet.
 
 AnyCombat adds hit feedback to fights: a hit marker around the crosshair and floating damage numbers.
