@@ -2,7 +2,7 @@
 
 > AnyCVT hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
-> 0.0.1 is a test build. A tester drove the Small CVT on 2026-10-29: it shifted and drove as described and kept
+> 0.0.1 is published ([mods-2026.10.29](../releases/anycvt-0.0.1.md)). A tester drove the Small CVT on 2026-10-29: it shifted and drove as described and kept
 > its Properties settings over a save and reload. The medium and large and the outputs are untested.
 
 AnyCVT adds a belt CVT for each engine size. Each one is the stock gearbox of that size with the same case, the same
