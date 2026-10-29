@@ -197,7 +197,7 @@ inline std::string description_of(const Size& s) {
            " engine. Shift by mechanical link like a gearbox: above 0.75 steps R, N, D up, below -0.75 steps down, "
            "return to centre between shifts. In D it slides between the low and high ratio to hold the engine at the "
            "target RPM (lower at part throttle); the clutch bites at the engage RPM. R uses the low ratio backwards. "
-           "Ratios, RPMs and response set in properties. Output selector reads -1 in R, 0 in N, 1 in D.";
+           "Ratios, RPMs and response set in properties. Output current_gear reads -1 in R, 0 in N, 1 in D.";
 }
 
 inline std::string json_string(const std::string& s) {
@@ -279,7 +279,8 @@ constexpr const char* kDataDescriptors =
     "{\"type\": \"type_f64_output\", \"name\": \"engine_rpm\", \"documentation\": \"Engine speed, rpm.\"}, "
     "{\"type\": \"type_f64_output\", \"name\": \"target_rpm\", \"documentation\": \"Engine speed it is holding for now, rpm.\"}, "
     "{\"type\": \"type_f64_output\", \"name\": \"selector\", \"documentation\": \"-1 in R, 0 in N, 1 in D.\"}, "
-    "{\"type\": \"type_f64_output\", \"name\": \"clutch_factor\", \"documentation\": \"0 open to 1 closed.\"}]";
+    "{\"type\": \"type_f64_output\", \"name\": \"clutch_factor\", \"documentation\": \"0 open to 1 closed.\"}, "
+    "{\"type\": \"type_s32_output\", \"name\": \"current_gear\", \"documentation\": \"-1 in R, 0 in N, 1 in D.\"}]";
 
 inline const assetjson::Value* find_definition(const assetjson::Value& definitions, const char* id) {
     for (const assetjson::Value& d : definitions.array)

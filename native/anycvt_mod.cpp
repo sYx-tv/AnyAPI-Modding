@@ -2,7 +2,8 @@
 // same engine face, same mass) with the small gearbox's shifter link on top, and the link steps it R, N, D. In D it
 // slides between the low and high ratio to hold the engine at the target RPM (lower at part throttle) and its
 // centrifugal clutch bites at the engage RPM; R uses the low ratio backwards. Low ratio, high ratio, target RPM,
-// response and engage RPM are Properties rows; outputs ratio, engine_rpm, target_rpm, selector and clutch_factor.
+// response and engage RPM are Properties rows; outputs ratio, engine_rpm, target_rpm, selector, clutch_factor and
+// current_gear (-1 R, 0 N, 1 D, an integer like the stock gearbox's).
 //
 // How: the definitions are built from the game's own gearbox, gearbox_b and gearbox_c definitions when the game starts
 // (anycvt_logic.h), written to "AnyAPI and Modding/AnyCVT" and added to the game's part definitions after the game
@@ -241,8 +242,8 @@ void hk_add_definitions(void* container, const void* file) {
 }
 
 // ================================================================== per part (server)
-// Data slots are never freed: microcontrollers keep the pointer get_data_f64 hands them, so it must outlive a world
-// change. A new part at a reused address gets the slot back with its defaults.
+// Data slots are never freed: microcontrollers keep the pointers get_data_f64 and get_data_s32 hand them, so they must
+// outlive a world change. A new part at a reused address gets the slot back with its defaults.
 struct Live {
     int32_t vehicle = 0, component = 0;
     bool seen = false;
@@ -251,6 +252,7 @@ struct Live {
     double engine_rps = 0, throttle = 0;   // from the engine tick
     int engine_age = 1 << 20;              // ticks since an engine last drove it
     double ratio = 0, engine_rpm = 0, target_rpm = 0, selector = 0;   // outputs
+    int32_t gear = 0;                      // output current_gear: -1 R, 0 N, 1 D
 };
 std::mutex g_mutex;
 std::unordered_map<const void*, Live*> g_live;
@@ -328,7 +330,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     int32_t input = at<int32_t>(self, off::input_factor), output = at<int32_t>(self, off::output_factor);
     in.direction = (input != 0 ? double(output) / double(input) : 1.0) * (at<bool>(self, off::is_reverse) ? -1.0 : 1.0);
     Outputs o = step(settings, live->state, in);
-    live->ratio = o.ratio; live->engine_rpm = in.engine_rpm; live->target_rpm = o.goal_rpm; live->selector = selector;
+    live->ratio = o.ratio; live->engine_rpm = in.engine_rpm; live->target_rpm = o.goal_rpm; live->selector = selector; live->gear = selector;
     lock.unlock();
     // What the stock tick ends with, from AnyCVT's numbers (set_gear_ratio and set_clutch_factor only store them).
     at<double>(node, off::node_gear_ratio) = o.node_ratio;
@@ -351,6 +353,16 @@ void hk_get_f64(double** ret, void* self, const anymaker::gc_string_view* name) 
     else if (n == "engine_rpm") *ret = &live->engine_rpm;
     else if (n == "target_rpm") *ret = &live->target_rpm;
     else if (n == "selector") *ret = &live->selector;
+}
+// current_gear as an integer like the stock gearbox's, so its microcontroller programs read R, N, D as -1, 0, 1 (the
+// stock channel would give AnyCVT's own m_current_gear, always -1).
+using get_s32_t = void (*)(int32_t** ret, void* self, const anymaker::gc_string_view* name);
+anymaker::cell_hook h_get_s32;
+void hk_get_s32(int32_t** ret, void* self, const anymaker::gc_string_view* name) {
+    reinterpret_cast<get_s32_t>(h_get_s32.original)(ret, self, name);
+    if (!ret || !self || !name || name->view() != "current_gear" || component_size(self) < 0) return;
+    std::lock_guard lock(g_mutex);
+    if (Live* live = live_of(self)) *ret = &live->gear;
 }
 
 // ================================================================== Properties (server)
@@ -415,6 +427,7 @@ void remove_hooks() {
     h_row.remove((void*)&hk_row);
     h_properties.remove((void*)&hk_properties);
     h_gear_count.remove((void*)&hk_gear_count);
+    h_get_s32.remove((void*)&hk_get_s32);
     h_get_f64.remove((void*)&hk_get_f64);
     h_add_definitions.remove((void*)&hk_add_definitions);
     h_engine_tick.remove((void*)&hk_engine_tick);
@@ -464,6 +477,8 @@ void install_hooks() {
         }
         void** data = route::cell(bind::gearbox_get_data_f64);
         if (!data || !h_get_f64.install(data, (void*)&hk_get_f64)) log(1, "ratio, engine_rpm, target_rpm and selector unavailable (clutch_factor still works)");
+        void** data_s32 = route::cell(bind::gearbox_get_data_s32);
+        if (!data_s32 || !h_get_s32.install(data_s32, (void*)&hk_get_s32)) log(1, "current_gear unavailable (selector still reads -1, 0, 1)");
         void** count = route::cell(bind::gearbox_get_gear_count);
         void** props = route::cell(bind::gearbox_get_properties);
         // The gear count hook goes in only with the rows hook: without AnyCVT's rows the stock ones stay.

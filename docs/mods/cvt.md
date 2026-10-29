@@ -2,7 +2,8 @@
 
 > AnyCVT hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
-> 0.0.1 is a test build: nothing below has been tried in game yet.
+> 0.0.1 is a test build. A tester drove the Small CVT on 2026-10-29: it shifted and drove as described and kept
+> its Properties settings over a save and reload. The medium and large and the outputs are untested.
 
 AnyCVT adds a belt CVT for each engine size. Each one is the stock gearbox of that size with the same case, the same
 engine face and the same weight, so it bolts straight onto the engine where the stock gearbox goes. There are no gears:
@@ -55,7 +56,8 @@ fields, so saves need no new format; a vehicle loaded without the mod simply los
 | `ratio` | The ratio it is at (positive) |
 | `engine_rpm` | The engine's speed |
 | `target_rpm` | The engine speed it is holding for right now |
-| `selector` | -1 R, 0 N, 1 D |
+| `current_gear` | -1 R, 0 N, 1 D, as an integer (the stock gearbox's channel name, so its programs can read it) |
+| `selector` | -1 R, 0 N, 1 D, as a fractional |
 | `clutch_factor` | 0 open to 1 closed (stock) |
 
 ## How it works
@@ -79,11 +81,12 @@ stock files.
 
 | Piece | Status |
 | --- | --- |
-| New parts on the stock gearbox class that mate to the engine | Likely: the engine keeps any `gearbox` class part on its face (0.1.28 code); new parts on stock classes are proven (GpsPart, AnyBattery) |
-| Sliding ratio and clutch every tick | Likely: the solver reads the node's ratio and clutch every tick (0.1.28 code); untested in game |
-| R, N, D on the stock shifter link | Likely: read from the stock tick's own shift code |
+| New parts on the stock gearbox class that mate to the engine | Proven for the small (tester, 2026-10-29); likely for the medium and large |
+| Sliding ratio and clutch every tick | Proven (tester, 2026-10-29: "worked mechanically perfect") |
+| R, N, D on the stock shifter link | Proven (tester, 2026-10-29) |
 | Shifter face on the medium and large | Likely: the small gearbox's face and node copied onto them |
-| Properties rows and names | Likely: the same row methods as the turbo and EngineSound rows |
+| Properties rows and names | Rows and saving proven (tester changed Target and Engage RPM, kept over a reload); names likely |
+| Outputs | Likely: `current_gear` through the gearbox's own integer channel lookup, the rest through its fractional one |
 | Co-op | Likely: the CVTs run on the host; every player needs the mod for the parts to exist |
 
 ## Known limits
