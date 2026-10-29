@@ -47,6 +47,7 @@ Built from source only, not in the catalog yet. They use the experimental SDK.
 | [AnyEngineParts](engine-parts.md) | Exhaust-driven turbochargers (3x3x2 and 6x6x2) and superchargers with blow-off valves, wastegate antilag and boost channels, and a stretchable 1-4 rotor rotary engine, each with synthesized sounds; single player | Rotary works alongside EngineSound |
 | [AnyCombat](combat.md) | Hit markers and floating damage numbers for the hits you deal, red on a kill | AnyHelpers settings |
 | [AnyBattery](battery.md) | The Battery Pack: a battery you place and stretch to size like a liquid tank, placed empty and charged from the electric network; saved charge, charge_percent output | AnyHelpers settings |
+| [AnyCVT](cvt.md) | Small, Medium and Large CVTs: the stock gearbox of each size with R/N/D on the shifter link, a ratio that slides to hold a target RPM and a centrifugal clutch; ratio, engine_rpm, target_rpm and current_gear (-1/0/1) outputs | |
 | [AnyPerformance](performance.md) | Smooths the world's slow-motion and catch-up when the simulation stalls, logs what stalled it and every frame hitch, and keeps the server's 60 ticks a second evenly spaced | AnyHelpers settings |
 
 See [validation status](../development/validation.md) for tested behavior and limits,

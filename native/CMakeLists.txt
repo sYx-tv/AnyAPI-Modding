@@ -219,6 +219,9 @@ function(anyapi_version_resource target product)
   elseif(target STREQUAL "AnyBattery")
     set(ANYAPI_VERSION_COMMA "0,0,1,0")
     set(ANYAPI_VERSION_TEXT "0.0.1")
+  elseif(target STREQUAL "AnyCVT")
+    set(ANYAPI_VERSION_COMMA "0,0,1,0")
+    set(ANYAPI_VERSION_TEXT "0.0.1")
   elseif(target STREQUAL "GpsPart")
     set(ANYAPI_VERSION_COMMA "1,0,4,0")
     set(ANYAPI_VERSION_TEXT "1.0.4")
@@ -569,6 +572,16 @@ anyapi_version_resource(AnyBattery AnyBattery)
 add_executable(anybattery_logic_test tests/anybattery_logic_test.cpp)
 target_compile_options(anybattery_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME anybattery_logic COMMAND anybattery_logic_test)
+
+# AnyCVT: belt CVTs for the small, medium and large engine (the stock gearbox of each size, R/N/D on the shifter
+# link, sliding ratio to hold a target RPM, centrifugal clutch), through the experimental SDK.
+add_library(AnyCVT SHARED anycvt_mod.cpp)
+target_include_directories(AnyCVT PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
+target_compile_options(AnyCVT PRIVATE /W3 /EHsc /utf-8)
+anyapi_version_resource(AnyCVT AnyCVT)
+add_executable(anycvt_logic_test tests/anycvt_logic_test.cpp)
+target_compile_options(anycvt_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME anycvt_logic COMMAND anycvt_logic_test)
 
 # MCCode: a Code view for the microcontroller editor (type the program instead of placing blocks), through the
 # experimental SDK.
