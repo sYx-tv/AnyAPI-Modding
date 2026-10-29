@@ -80,7 +80,7 @@ static void record(void* renderer,void* scene){
  publish_flash(uintptr_t(scene));
  auto policy=copy_policy();auto& p=policy.v2.scene;auto& x=policy.extras;if(!p.enabled){pass(-1,0);release_when_off();return;}off_frames=0;
  auto list=scene_antialiasing::command_list();Microsoft::WRL::ComPtr<ID3D12Device> device;if(list)list->GetDevice(IID_PPV_ARGS(&device));
- // AMD: the single 8-slot 0.40.1 shader (amd_path 0 auto and 3; the build confirmed on a Radeon RX 6800), the
+ // AMD: the single 8-slot shader (amd_path 0 auto and 3; a Radeon RX 6800 confirmed its 0.39.2 version, lamp beams only), the
  // per-count LAMP_SLOTS builds (1, until confirmed on AMD hardware) or the uniform branch (2). Other vendors march.
  bool amd=amd_gpu(device.Get());uint32_t path=amd?(x.amd_path==2?volumetric::PATH_BRANCH:volumetric::PATH_CONSTANTS):volumetric::PATH_MARCHED;
  volumetric::CaptureOptions o;if(x.v4&&(x.flags&ANY_LAMP_UNDERGROUND)){o.view_mask=0xfe;o.underground_lamps=true;}o.ocean=x.v4&&((x.atmosphere_flags&ANY_ATMOS_SEA_PLANE)||(x.flags&ANY_LAMP_OCEAN));

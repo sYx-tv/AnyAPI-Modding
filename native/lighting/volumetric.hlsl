@@ -38,9 +38,13 @@ Texture2D<float4> history_b : register(t17);
 Texture2D<float4> ocean : register(t18);
 SamplerState linear_sampler : register(s0);
 SamplerState point_sampler : register(s1);
-// Drawn once per cascade. Matrix rows travel in immutable command-list constants.
+// Drawn once per cascade. Matrix rows travel in immutable command-list constants. Root constants
+// can't be indexed dynamically: cb0[r0.x] most likely gave every texel row 0 on AMD (SHAFT_PROBE coverage
+// 0 in every AMD log), so row 21 texel 3 (flash glow) held clarity and beam reach and fog went green. Each texel
+// picks its row with a fixed select; lighting_shader_test rejects dynamicIndexed on cb0.
 float4 Matrices(float4 position : SV_Position) : SV_Target {
-    return shadow_matrix[(uint)position.x];
+    uint i=(uint)position.x;
+    return i==0?shadow_matrix[0]:i==1?shadow_matrix[1]:i==2?shadow_matrix[2]:shadow_matrix[3];
 }
 float shadow_sample(uint cascade,float2 uv) {
     switch(cascade) {
