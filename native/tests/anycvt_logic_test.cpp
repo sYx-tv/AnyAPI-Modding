@@ -275,10 +275,10 @@ static void check_mesh() {
             for (int j = 0; j < 3; ++j) idx.push_back(base + j);
         }
     }
-    std::vector<uint8_t> small = mesh_file("gear_box_a", v, idx);
+    std::vector<uint8_t> small_mesh = mesh_file("gear_box_a", v, idx);
     MeshLayout m;
-    assert(parse_mesh(small, m) && m.vertices == v.size() && m.indices == idx.size());
-    std::vector<MeshVertex> pad = shifter_connector(small);
+    assert(parse_mesh(small_mesh, m) && m.vertices == v.size() && m.indices == idx.size());
+    std::vector<MeshVertex> pad = shifter_connector(small_mesh);
     assert(pad.size() == 24 * 3);
     for (auto& p : pad) assert(p.rgba[0] == 200);
 
@@ -296,7 +296,7 @@ static void check_mesh() {
     double bounds[6];
     std::memcpy(bounds, built.data() + b.bounds, 48);
     assert(near(bounds[4], 0.2005, 1e-5) && near(bounds[0], -0.2, 1e-6));
-    assert(std::memcmp(built.data() + b.trailer, small.data() + small.size() - 8, 8) == 0);
+    assert(std::memcmp(built.data() + b.trailer, small_mesh.data() + small_mesh.size() - 8, 8) == 0);
     assert(std::string(reinterpret_cast<const char*>(built.data()) + 16, 13) == "anycvt_medium");
     assert(build_mesh(medium, pad, kSizes[2]).empty());   // not the large's top: refused
     assert(build_mesh(medium, pad, kSizes[0]).empty());   // the small has no mesh of its own

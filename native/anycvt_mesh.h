@@ -68,11 +68,11 @@ inline float top_of(const std::vector<MeshVertex>& v) {
 // small gearbox is not the one this expects.
 constexpr float kSmallTop = 0.12f, kPadHalfWidth = 0.031f, kPadZ0 = 0.049f, kPadZ1 = 0.111f, kSmallShifterZ = 0.08f;
 constexpr size_t kMinConnectorTriangles = 20;
-inline std::vector<MeshVertex> shifter_connector(const std::vector<uint8_t>& small) {
+inline std::vector<MeshVertex> shifter_connector(const std::vector<uint8_t>& small_mesh) {
     MeshLayout m;
-    if (!parse_mesh(small, m)) return {};
-    std::vector<MeshVertex> v = vertices_of(small, m);
-    std::vector<uint32_t> idx = indices_of(small, m);
+    if (!parse_mesh(small_mesh, m)) return {};
+    std::vector<MeshVertex> v = vertices_of(small_mesh, m);
+    std::vector<uint32_t> idx = indices_of(small_mesh, m);
     if (std::fabs(top_of(v) - kSmallTop) > 0.006f) return {};
     auto on_pad = [](const MeshVertex& x) {
         return x.pos[1] >= kSmallTop - 0.0005f && std::fabs(x.pos[0]) <= kPadHalfWidth && x.pos[2] >= kPadZ0 && x.pos[2] <= kPadZ1;

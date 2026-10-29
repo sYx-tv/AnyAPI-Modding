@@ -298,10 +298,10 @@ inline std::string definitions_json(std::string_view stock_text, const std::stri
     try { root = assetjson::Parser(stock_text).parse(); } catch (...) { return fail("the stock definitions file is not valid JSON"); }
     const assetjson::Value& definitions = root.get("definitions");
     if (definitions.kind != 'a') return fail("the stock definitions file has no definitions list");
-    const assetjson::Value* small = find_definition(definitions, kSizes[0].stock_id);
-    if (!small) return fail("the stock small gearbox is missing");
-    const assetjson::Value* small_mechanical = find_of_type(small->get("surfaces"), "mechanical");
-    const assetjson::Value* small_shift = find_of_type(small->get("logic_nodes"), "mechanical_in");
+    const assetjson::Value* small_def = find_definition(definitions, kSizes[0].stock_id);
+    if (!small_def) return fail("the stock small gearbox is missing");
+    const assetjson::Value* small_mechanical = find_of_type(small_def->get("surfaces"), "mechanical");
+    const assetjson::Value* small_shift = find_of_type(small_def->get("logic_nodes"), "mechanical_in");
     std::string out = "{\n  \"definitions\": [\n";
     for (int i = 0; i < kSizeCount; ++i) {
         const Size& s = kSizes[i];
