@@ -519,7 +519,8 @@ void hk_save_engine(uint8_t* engine, uint8_t* parser) {
 }
 
 // Optional: without these hooks the sounds still work and saves hold the choice as before.
-void install_save_hooks() {
+// Returns false while the functions aren't found yet, so the caller can look again.
+bool install_save_hooks(bool last_try) {
     using namespace anymaker::experimental;
     void** engine = hook_cell(bind::server_engine_parse_save_data);
     void** vehicle = route::cell(bind::save_vehicle_parse_save_data);
@@ -527,18 +528,20 @@ void install_save_hooks() {
     g_string_ctor = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
     g_string_dtor = reinterpret_cast<string_dtor_t>(native(anymaker::sym::string_dtor_rva));
     if (!engine || !vehicle || !g_parse_s32 || !g_string_ctor || !g_string_dtor) {
-        log(1, "save functions not found (engine=%d vehicle=%d value=%d string=%d/%d); saves keep modded sounds as they are, which the game can't play without EngineSound",
-            !!engine, !!vehicle, !!g_parse_s32, !!g_string_ctor, !!g_string_dtor);
-        return;
+        if (last_try)
+            log(1, "save functions not found (engine=%d vehicle=%d value=%d string=%d/%d); saves keep modded sounds as they are, which the game can't play without EngineSound",
+                !!engine, !!vehicle, !!g_parse_s32, !!g_string_ctor, !!g_string_dtor);
+        return false;
     }
     init_saved_path();
     // The vehicle hook first: once the engine hook is in, world saves need the vehicle's id.
     if (!h_save_vehicle.install(vehicle, (void*)&hk_save_vehicle) || !h_save_engine.install(engine, (void*)&hk_save_engine)) {
         h_save_vehicle.remove((void*)&hk_save_vehicle);
         log(1, "a save hook cell was already taken or not writable; saves keep modded sounds as they are");
-        return;
+        return true;
     }
     log(0, "saves hold a stock sound; the choice is kept %s and in saved vehicles", g_saved_path.empty() ? "only in saved vehicles (no world file)" : "in the world's enginesound_sounds.json");
+    return true;
 }
 
 // ------------------------------------------------------------------ panel state (shared by threads)
@@ -639,9 +642,17 @@ void install_hooks() {
                   h_props.install(props, (void*)&hk_props) && h_row.install(row, (void*)&hk_row);
         if (!ok) { log(2, "a hook cell was already taken or not writable; EngineSound is off"); return; }
         g_sound_ok = true;
-        install_save_hooks();
         g_ready = true;
         log(0, "Ready after %d s: generated sounds %d..%d, Custom %d", attempt, kFirstPreset, kCustomIndex - 1, kCustomIndex);
+        // The save functions can resolve later than the sound ones (seen on some launches): look again for a while.
+        for (int save_try = 0; save_try < 120 && !g_stop; ++save_try) {
+            if (save_try) Sleep(1000);
+            if (install_save_hooks(save_try == 119)) {
+                if (save_try) log(0, "save functions found after looking again for %d s", save_try);
+                break;
+            }
+            if (save_try == 0) log(1, "save functions not found yet; looking again");
+        }
         return;
     }
 }
