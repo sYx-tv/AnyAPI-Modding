@@ -1,0 +1,17 @@
+{
+  "Packages": {
+    "AnyCVT": {
+      "Id": "anycvt",
+      "MinimumApi": 48,
+      "GameBuilds": [
+        {
+          "Version": "0.1.28",
+          "SteamBuild": 26277967,
+          "ExeSha256": "e503275bfad972110b393e376609d07d9045363dc40c20c20457e97c2d8ed442",
+          "GclSha256": "0e5013292547b12e2bd32513bf20a77c2115fea902b46ecce7d5c6c35f760dea"
+        }
+      ],
+      "Description": "Belt CVTs for small, medium and large engines. Each looks like the stock gearbox of its size and bolts on the same way. Shift R, N and D from a lever; in D the ratio slides to hold the engine at a target RPM, and a centrifugal clutch lets it idle while stopped. Low and high ratio, target RPM, response and engage RPM in Properties; ratio, engine_rpm, target_rpm and current_gear outputs. Found in loot from the first bunker on. Standalone mod, not part of a bundle. Anymaker 0.1.28 only."
+    }
+  }
+}
