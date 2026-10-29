@@ -214,6 +214,8 @@ static void check_definitions() {
         assert(d.get("description").text.find(kSizes[i].engine) != std::string::npos);
         const assetjson::Value& data = d.get("data_descriptors");
         assert(data.array.size() == 5 && data.array[0].get("name").text == "ratio" && data.array[4].get("name").text == "clutch_factor");
+        assert(data.array[3].get("name").text == "selector" && data.array[3].get("documentation").text == "-1 in R, 0 in N, 1 in D.");
+        assert(d.get("description").text.find("-1 in R, 0 in N, 1 in D") != std::string::npos);
         assert(d.get("zones").array.size() == 1);
         const assetjson::Value& nodes = d.get("logic_nodes");
         assert(nodes.array.size() == 1 && nodes.array[0].get("id").text == "gear_shift");
