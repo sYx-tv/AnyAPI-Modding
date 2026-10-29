@@ -570,6 +570,15 @@ add_executable(anybattery_logic_test tests/anybattery_logic_test.cpp)
 target_compile_options(anybattery_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME anybattery_logic COMMAND anybattery_logic_test)
 
+# AnyAlternator: Medium, Large and Heavy alternators, harder to spin the bigger they are, through the experimental SDK.
+add_library(AnyAlternator SHARED anyalternator_mod.cpp)
+target_include_directories(AnyAlternator PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
+target_compile_options(AnyAlternator PRIVATE /W3 /EHsc /utf-8)
+anyapi_version_resource(AnyAlternator AnyAlternator)
+add_executable(anyalternator_logic_test tests/anyalternator_logic_test.cpp)
+target_compile_options(anyalternator_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME anyalternator_logic COMMAND anyalternator_logic_test)
+
 # MCCode: a Code view for the microcontroller editor (type the program instead of placing blocks), through the
 # experimental SDK.
 add_library(MCCode SHARED mccode_mod.cpp)
