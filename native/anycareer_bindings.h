@@ -68,8 +68,8 @@ inline constexpr func_desc add_component_set{"() server_scene.item_world.vehicle
 inline constexpr func_desc add_building_component_set{"() server_scene.item_world.vehicle_editor_add_building_component.set (server_scene.item_world.vehicle_editor_add_building_component, const vehicle_component_definition, const s32)","53 55 48 83 ec 68 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 83 ba b0 02 00 00 00 0f 95 c0",{"", {}, 0},"53 55 56 57 41 54 41 55 48 81 ec 98 05 00 00 48 89 8c 24 60 04 00 00 48 89 94 24 68 04 00 00 4c",6232u,31};
 // Damage to a zombie (every hit, any source; its damage source names the attacking actor's id). Hooked: AnyCareer
 // counts a kill when the hit takes the zombie's blood to zero.
-// () server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const server_scene.actor_damage_src) | side: server
-inline constexpr func_desc zombie_damage{"() server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const server_scene.actor_damage_src)","",{"53 55 56 57 48 81 ec e8 00 00 00 48 89 4c 24 70 48 89 54 24 78 4c 89 84 24 80 00 00 00 4c 89 8c 24 88 00 00 00 48", {760u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 a5 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",448u,99};
+// () server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const f64, const server_scene.actor_damage_src) | side: server
+inline constexpr func_desc zombie_damage{"() server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const f64, const server_scene.actor_damage_src)","",{"53 55 56 57 48 81 ec e8 00 00 00 48 89 4c 24 70 48 89 54 24 78 4c 89 84 24 80 00 00 00 4c 89 8c 24 88 00 00 00 48", {760u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 a5 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",448u,99};
 // A new ammo box is filled to its definition's capacity (ammo_box.init). Hooked: Cash found as loot gets a small
 // amount instead of a full stack.
 // () server_scene.item_world.ammo_box.init (server_scene.item_world.ammo_box) | side: server

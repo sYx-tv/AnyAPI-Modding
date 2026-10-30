@@ -73,11 +73,11 @@ inline std::string stock_mesh_path(const Size& s) { return std::string("meshes/c
 struct Setting { int slot; int32_t min, max, fallback; int32_t label; const char* text; };
 enum : int { kLow, kHigh, kTarget, kResponse, kEngage, kSettingCount };
 constexpr Setting kSettings[kSettingCount] = {
-    {0, 1, 60, 24, 341, "Low ratio"},           // property_gear_ratio_1
-    {1, 1, 60, 1, 342, "High ratio"},           // property_gear_ratio_2
-    {2, 1000, 8000, 6800, 326, "Target RPM"},   // property_max
-    {3, 1, 10, 5, 351, "Response"},             // property_stiffness
-    {4, 400, 5000, 1500, 325, "Engage RPM"},    // property_min
+    {0, 1, 60, 24, 344, "Low ratio"},           // property_gear_ratio_1
+    {1, 1, 60, 1, 345, "High ratio"},           // property_gear_ratio_2
+    {2, 1000, 8000, 6800, 329, "Target RPM"},   // property_max
+    {3, 1, 10, 5, 354, "Response"},             // property_stiffness
+    {4, 400, 5000, 1500, 328, "Engage RPM"},    // property_min
 };
 constexpr int kSelectorSlot = 5, kMarkerSlot = 7, kSlots = 8;
 constexpr int32_t kMarker = 2029;               // in slot 7 once the defaults are written (the stock default there is 1)

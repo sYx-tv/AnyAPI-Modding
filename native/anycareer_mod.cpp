@@ -195,7 +195,8 @@ using ref_dtor_t = void (*)(Ref*);
 struct TeleportEvent { uint8_t header[0x10]; Vec3 position; };   // client_peer.data.event.peer_teleport, 40 bytes
 static_assert(sizeof(TeleportEvent) == 40, "peer_teleport");
 using teleport_t = void (*)(uint8_t* server, void* peer_data, const TeleportEvent* e);
-using zombie_damage_t = void (*)(uint8_t* zombie, uint8_t* scene, const double* amount, const uint8_t* src);
+// 0.2.0 added a second f64 after the amount; it is forwarded untouched.
+using zombie_damage_t = void (*)(uint8_t* zombie, uint8_t* scene, const double* amount, const double* extra, const uint8_t* src);
 using ammo_box_init_t = void (*)(uint8_t* item);
 
 AnyModHostV1 host;
@@ -1186,10 +1187,10 @@ void hk_ammo_init(uint8_t* item) {
     if (item && !g_stop) set_loot_cash(item);
 }
 
-void hk_zombie_damage(uint8_t* zombie, uint8_t* scene, const double* amount, const uint8_t* src) {
+void hk_zombie_damage(uint8_t* zombie, uint8_t* scene, const double* amount, const double* extra, const uint8_t* src) {
     bool watch = zombie && scene && !g_stop && g_ready;
     double before = watch ? blood_of(zombie) : 0;
-    reinterpret_cast<zombie_damage_t>(h_zombie_damage.original)(zombie, scene, amount, src);
+    reinterpret_cast<zombie_damage_t>(h_zombie_damage.original)(zombie, scene, amount, extra, src);
     if (watch && before > 0) run_zombie_hit(zombie, scene, src, before);
 }
 

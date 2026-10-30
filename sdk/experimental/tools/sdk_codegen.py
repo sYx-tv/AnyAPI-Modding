@@ -28,7 +28,7 @@ FUNCS = {  # C++ name -> exact gcl signature
     'entity_container_get_entity_by_id': '(ptr<server_scene.entity>) server_scene.entity.container.get_entity_by_id (const server_scene.entity.container, const s32)',
     'vehicle_container_get_vehicle_by_id': '(ptr<server_scene.vehicle>) server_scene.vehicle.container.get_vehicle_by_id (const server_scene.vehicle.container, const s32)',
     'entity_get_transform': '(mat34) server_scene.entity.get_transform (const server_scene.entity)',
-    'actor_damage': '() server_scene.actor.damage (server_scene.actor, server_scene, const f64, const server_scene.actor_damage_src)',
+    'actor_damage': '() server_scene.actor.damage (server_scene.actor, server_scene, const f64, const f64, const server_scene.actor_damage_src)',
     'actor_get_inventory': '(ptr<server_scene.inventory>) server_scene.actor.get_inventory (server_scene.actor)',
     'mm_ui_begin': '() mm_ui.begin (mm_ui)',
     'mm_ui_end': '() mm_ui.end (mm_ui)',

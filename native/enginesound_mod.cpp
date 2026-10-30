@@ -67,7 +67,7 @@ constexpr ptrdiff_t parser_format = 0, parser_mode = 4;   // server_scene.save_d
 }  // namespace off
 constexpr int32_t kParserJson = 0;               // server_scene.save_data.e_parser_format.json (binary = 1)
 constexpr int32_t kParseWrite = 1;               // e_parse_mode.write (read = 0)
-constexpr int32_t kSoundLabel = 324;             // e_localization_string.property_sound_effect (static)
+constexpr int32_t kSoundLabel = 327;             // e_localization_string.property_sound_effect (static)
 
 AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;

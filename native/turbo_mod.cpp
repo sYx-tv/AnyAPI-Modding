@@ -1329,7 +1329,7 @@ units_t g_units_flow, g_units_frequency, g_units_pressure, g_units_temperature, 
 to_pascals_t g_to_pascals;
 self_fn_t g_string_dtor;
 constexpr int kAddTooltipEntrySlot = 68;             // server_scene.peer.inspection_data.vehicle method table
-enum : int32_t { kLocCondition = 203, kLocTemperature = 212, kLocSpeed = 197, kLocFlow = 207, kLocPressure = 215, kLocBoost = 234, kLocStiffness = 351, kLocSoundEffect = 324 };   // e_localization_string
+enum : int32_t { kLocCondition = 205, kLocTemperature = 214, kLocSpeed = 199, kLocFlow = 209, kLocPressure = 217, kLocBoost = 236, kLocStiffness = 354, kLocSoundEffect = 327 };   // e_localization_string
 enum : int32_t { kIconCondition = 6, kIconFlow = 16, kIconPressure = 30, kIconSpeed = 33, kIconTemperature = 37 };         // inspection_util.e_tooltip_icon
 enum : int32_t { kColorDefault = 0, kColorMissing = 1 };   // inspection_util.e_tooltip_color (missing: the stock "no air filter" row)
 
