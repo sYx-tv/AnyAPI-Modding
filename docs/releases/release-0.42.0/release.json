@@ -93,7 +93,7 @@
           "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
         }
       ],
-      "Description": "Building and editing helpers in one mod: Mod Controls and Mod Settings, Duplicate tool favorites and a host ADMIN tab, AnyInventory's item search, AnyMirror's mirrored building, AnyBalance's centre of mass, and MCCode's Code view for microcontrollers. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only."
+      "Description": "Building and editing helpers in one mod: Mod Controls and Mod Settings, Duplicate tool favorites and a host ADMIN tab, AnyMirror's mirrored building, AnyBalance's centre of mass, and MCCode's Code view for microcontrollers. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only."
     },
     "AnyLights": {
       "MinimumApi": 49,

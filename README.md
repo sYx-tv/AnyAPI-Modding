@@ -23,7 +23,7 @@ discovered from the game's mods folder.
 | AnyAPI | DLL loading, versioned services and native integration | [native](native/) |
 | AnyAPI Manager | Installation, updates, mod discovery and launch modes | [manager](manager/) |
 | AnyHelpers | Native Mod Controls and Mod Settings | [Guide](docs/mods/helpers.md) |
-| AnyInventory | Item search, previews, favorites and mode-limited Add | [Guide](docs/mods/inventory.md) |
+| AnyInventory | Item search, previews, favorites and mode-limited Add. Retired: Anymaker 0.2.0 has its own item browser, and AnyHelpers 1.1.3 no longer ships it | [Guide](docs/mods/inventory.md) |
 | AnyStorage | Storage transfers, matching stacks and sorting | [Guide](docs/mods/storage.md) |
 | AnyMap | World map, rotating minimap, markers and road guidance | [Guide](docs/mods/map.md) |
 | AnyGraphics | Native graphics, scene AA and volumetric lighting | [Guide](docs/mods/graphics.md) |
