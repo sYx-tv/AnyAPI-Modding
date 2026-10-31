@@ -11,10 +11,13 @@ loot generation gained a value, and some method tables gained a slot. Every hook
 code pattern AnyAPI and the mods use was re-checked against the new build.
 
 - **AnyAPI 0.42.0** (API revision 49)
-- **AnyHelpers bundle 1.1.2**: rebuilt for 0.2.0. Includes MCCode 0.3.2: clicking a part in the
-  Code tab's Parts list adds that part's node in the node editor.
-- **AnyEngineParts bundle 1.0.4**, **AnyGraphics bundle 1.1.2**, **AnyMap bundle 1.0.4**:
-  rebuilt for 0.2.0, no other changes
+- **AnyHelpers bundle 1.1.3**: rebuilt for 0.2.0. Includes MCCode 0.3.2: clicking a part in the
+  Code tab's Parts list adds that part's node in the node editor. AnyInventory's item browser is
+  gone, since Anymaker 0.2.0 has its own.
+- **AnyEngineParts bundle 1.0.5**: rebuilt for 0.2.0, with EngineSound 0.4.2 (keeps looking for
+  the game's save functions for up to 2 minutes instead of giving up, so a chosen engine sound is
+  saved on every launch)
+- **AnyGraphics bundle 1.1.2**, **AnyMap bundle 1.0.4**: rebuilt for 0.2.0, no other changes
 - **AnyBattery 0.0.2**, **AnyCareer 0.0.10**, **AnyCombat 0.1.3**, **AnyCVT 0.0.2**,
   **AnyLights 0.2.3**, **AnyMoto 0.0.3**, **AnyPerformance 0.1.4**, **CustomGame 0.1.2**:
   rebuilt for 0.2.0, no other changes
