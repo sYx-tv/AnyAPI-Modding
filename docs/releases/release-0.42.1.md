@@ -1,6 +1,6 @@
-# AnyAPI 0.42.0 for Anymaker 0.2.0
+# AnyAPI 0.42.1 for Anymaker 0.2.0
 
-AnyAPI 0.42.0 ports AnyAPI and every mod to Anymaker 0.2.0 (Steam build 26328453). Mods built
+AnyAPI 0.42.1 ports AnyAPI and every mod to Anymaker 0.2.0 (Steam build 26328453). Mods built
 for 0.1.28 turn themselves off on the new game build, so update AnyAPI and your mods in the
 manager, then restart the game.
 
@@ -10,7 +10,8 @@ and field names, so the port recovered them from the 0.1.28 build. Several data 
 loot generation gained a value, and some method tables gained a slot. Every hook, offset and
 code pattern AnyAPI and the mods use was re-checked against the new build.
 
-- **AnyAPI 0.42.0** (API revision 49)
+- **AnyAPI 0.42.1** (API revision 49). Also fixes Volumetric fog turning the screen green on AMD
+  graphics cards, and sun shafts and shadowed fog now work on AMD too. Not yet checked on an AMD card.
 - **AnyHelpers bundle 1.1.3**: rebuilt for 0.2.0. Includes MCCode 0.3.2: clicking a part in the
   Code tab's Parts list adds that part's node in the node editor. AnyInventory's item browser is
   gone, since Anymaker 0.2.0 has its own.
