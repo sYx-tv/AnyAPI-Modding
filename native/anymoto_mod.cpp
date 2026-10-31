@@ -888,6 +888,7 @@ void install_hooks() {
         void** tick = route::cell(bind::gyro_tick);
         void** data = route::cell(bind::gyro_get_data_f64);
         void** props = route::cell(bind::gyro_get_properties);
+        if (!props) props = route::sibling_cell(bind::gyro_tick, bind::gyro_get_properties.method_slot);
         if (!lean || !tick || !h_gyro_tick.install(tick, (void*)&hk_gyro_tick))
             log(1, "Lean Assist inactive (physics %d/%d/%d, transforms %d/%d, tick %d)", !!g_get_angular, !!g_get_linear, !!g_set_angular,
                 !!g_server_vehicle_transform, !!g_server_component_transform, !!tick);

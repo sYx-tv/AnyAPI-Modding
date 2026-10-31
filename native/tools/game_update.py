@@ -119,6 +119,8 @@ def main():
     ap.add_argument('--api-version', help='new AnyAPI version, e.g. 0.35.0 (left unchanged when omitted)')
     ap.add_argument('--api-revision', type=int, help='new AnyAPI revision, e.g. 36')
     ap.add_argument('--skip-sdk', action='store_true', help='reuse <work>/sdk from an earlier run')
+    ap.add_argument('--accept', action='append', default=[], metavar='FILE:NAME',
+                    help='changed pattern whose offsets were re-derived by hand: --apply writes its new bytes (repeatable)')
     ap.add_argument('--apply', action='store_true', help='write the changes into the repo')
     a = ap.parse_args()
     work = a.work.resolve()
@@ -149,7 +151,7 @@ def main():
     step('audit native byte patterns')
     run([HERE / 'game_update_audit.py', '--game-dir', a.game_dir, '--previous-json', previous_json, '--out', work / 'audit']
         + (['--current-json', sdk / 'json'] if (sdk / 'json' / 'natives.json').is_file() else [])
-        + (['--apply'] if a.apply else []))
+        + (['--apply'] if a.apply else []) + [x for n in a.accept for x in ('--accept', n)])
 
     step('refresh legacy event routes')
     gcl = find_game_files(str(a.game_dir))['game.gcl']

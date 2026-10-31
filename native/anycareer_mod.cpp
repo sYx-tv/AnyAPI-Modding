@@ -114,21 +114,21 @@ constexpr ptrdiff_t server_world_seed = 72 + 24;    // m_world_seed (property_s3
 constexpr ptrdiff_t server_peers = 0xa8;            // m_peers (server_scene.peer.container)
 constexpr ptrdiff_t server_floor_items = 280;       // m_floor_items (server_scene.item_floor_container)
 constexpr ptrdiff_t server_physics = 2656;          // m_physics (physics.scene)
-constexpr ptrdiff_t server_inventory_defs = 3968;   // m_inventory_definitions; its m_definitions vector is at +0
-constexpr ptrdiff_t server_component_defs = 0x1028 + 8;  // m_component_definitions.m_definitions (as AnyLoot reads it)
-constexpr ptrdiff_t server_loot_level = 5336;       // m_loot_level (s32)
+constexpr ptrdiff_t server_inventory_defs = 4032;   // m_inventory_definitions; its m_definitions vector is at +0
+constexpr ptrdiff_t server_component_defs = 0x1068 + 8;  // m_component_definitions.m_definitions (as AnyLoot reads it)
+constexpr ptrdiff_t server_loot_level = 5400;       // m_loot_level (s32)
 // server_scene.peer
-constexpr ptrdiff_t peer_position = 0x19f8;         // position (vec3), as AnyHelpers' admin uses it
+constexpr ptrdiff_t peer_position = 0x1a18;         // position (vec3), as AnyHelpers' admin uses it
 // client (render side)
-constexpr ptrdiff_t client_scene = 0xf50;           // client.m_scene (embedded), as AnyMap reads it
+constexpr ptrdiff_t client_scene = 0xfb0;           // client.m_scene (embedded), as AnyMap reads it
 constexpr ptrdiff_t scene_free_move = 0x276;        // client_scene.m_is_free_move (bool): the game's creative-mode fly (free move)
 constexpr ptrdiff_t scene_free_move_transform = 0x280;  // m_free_move_transform (mat34): where free move flies from
 constexpr ptrdiff_t scene_authority_actor = 0x188;  // m_actors.m_authority_actor (ptr<client_scene.actor>)
 constexpr ptrdiff_t client_actor_transform = 392;   // client_scene.actor.m_transform (mat34)
 constexpr ptrdiff_t client_actor_id = 8;            // client_scene.actor.m_id (s32)
-constexpr ptrdiff_t peer_data = 0x19d0;            // server_peer.data (as AnyHelpers' admin teleport uses it)
-constexpr ptrdiff_t peer_actor_id = 6480 + 24;      // m_authority_actor_id (property_s32), its value: the id damage sources carry
-constexpr ptrdiff_t peer_actor = 6616;              // m_authority_actor (ptr<server_scene.actor>)
+constexpr ptrdiff_t peer_data = 0x19f0;            // server_peer.data (as AnyHelpers' admin teleport uses it)
+constexpr ptrdiff_t peer_actor_id = 6512 + 24;      // m_authority_actor_id (property_s32), its value: the id damage sources carry
+constexpr ptrdiff_t peer_actor = 6648;              // m_authority_actor (ptr<server_scene.actor>)
 // server_scene.actor_character
 constexpr ptrdiff_t actor_inventory = 1920;         // m_inventory (server_scene.inventory, 248 bytes, embedded)
 // inventory_definition
@@ -141,10 +141,10 @@ constexpr ptrdiff_t part_default_stack = 580;       // m_inventory_default_stack
 constexpr ptrdiff_t part_tech_tier = 728, part_spawn_probability = 736, part_loot_group = 744;
 // server_scene.item_world
 constexpr ptrdiff_t item_world_id = 64 + 24;        // m_item_id (property_s32), its value
-constexpr ptrdiff_t item_world_definition = 136;    // ptr<const inventory_definition>
-constexpr ptrdiff_t ammo_count = 144;               // server_scene.item_world.ammo_box.m_ammo_count (property_s32)
-constexpr ptrdiff_t part_stack_count = 176;         // vehicle_editor_add_component._m_stack_count (property_s32)
-constexpr ptrdiff_t part_definition = 208;          // vehicle_editor_add_component.m_component_definition
+constexpr ptrdiff_t item_world_definition = 144;    // ptr<const inventory_definition>
+constexpr ptrdiff_t ammo_count = 152;               // server_scene.item_world.ammo_box.m_ammo_count (property_s32)
+constexpr ptrdiff_t part_stack_count = 184;         // vehicle_editor_add_component._m_stack_count (property_s32)
+constexpr ptrdiff_t part_definition = 216;          // vehicle_editor_add_component.m_component_definition
 constexpr ptrdiff_t property_value = 24;            // replication.master.property_type_simple<s32>._m_value
 // server_scene.actor / actor_zombie / actor_damage_src
 constexpr ptrdiff_t actor_id = 64;                  // m_id (s32)
@@ -158,7 +158,7 @@ constexpr ptrdiff_t server_actor_position = 336 + 72;  // server_scene.actor.m_t
 constexpr int kPropertySetSlot = 5;                 // property_type_simple<T>.set in the property's method table
                                                     // (the slot AnyHelpers' property_type_simple<bool>.set binding uses)
 constexpr int32_t kStoreSystem = 1;                 // file.e_store.system (static inference; GpsPart uses it)
-constexpr uint32_t kRefDtorRva = 0x4eb00;           // N:() $ref_dtor (uptr) [metadata]
+constexpr uint32_t kRefDtorRva = 0x4e1b0;           // N:() $ref_dtor (uptr) [metadata]
 constexpr int32_t kGiveAmount = 250;
 // The test keys F2-F6: off (Nate: remove the dev stuff when it's done); test builds pass -DANYCAREER_DEV_KEYS=1.
 #ifndef ANYCAREER_DEV_KEYS

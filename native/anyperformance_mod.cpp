@@ -9,7 +9,7 @@
 // with what it spent its time on, and a summary (fps, 1% low, hitches, server tick pacing) is logged every 30 s.
 //
 // Slow motion: the client draws the world from server ticks with its own playback clock (inside client.tick:
-// client+0xec8 playback tick, +0xed0 buffer in ticks, +0xf58 newest server tick). When server ticks stop arriving
+// client+0xf28 playback tick, +0xf30 buffer in ticks, +0xfb8 newest server tick). When server ticks stop arriving
 // it slows the world down; when they arrive in a burst it speeds up, up to 4x, to catch up. Every such episode is
 // logged with the worst server tick inside it and what that tick spent its time on (tile streaming, bunkers,
 // loose items, vehicles, physics, network, autosave).
@@ -118,8 +118,8 @@ double g_worst_hitch, g_tile_max_window;
 
 // Client playback clock (client.tick). Layout read from the 0.1.25 code of client.tick (unchanged in 0.1.27), which updates it.
 namespace clock_off {
-constexpr ptrdiff_t play = 0xec8;        // f64: the server tick being shown (fractional)
-constexpr ptrdiff_t buffer = 0xed0;      // f64: how many ticks behind the newest one it aims to show (clamped 1..16)
+constexpr ptrdiff_t play = 0xf28;        // f64: the server tick being shown (fractional)
+constexpr ptrdiff_t buffer = 0xf30;      // f64: how many ticks behind the newest one it aims to show (clamped 1..16)
 }  // namespace clock_off
 SimEpisode g_episode;
 double g_episode_buffer_max;
@@ -978,9 +978,9 @@ using replicate_t = void (*)(const int32_t* peer, void* data, void* object, void
 using autosave_t = void (*)(bool* ret, void* server);
 anymaker::cell_hook h_client_tick, h_scene_tick, h_tick_loading, h_integrate, h_update_tasks, h_server_tick, h_server_tiles;
 // physics.scene.update is native (game.exe), so it has no gcl code of its own to find. Its cell is read from
-// server_scene.tick's constant table: slot 0xbf8 (dependency 31), checked against the instruction that loads it.
-constexpr uint32_t kPhysicsSlot = 0xbf8, kPhysicsUser = 0x5f3;
-constexpr const char* kPhysicsUserBytes = "48 8b 1d fe 05 00 00";   // mov rbx, [rip+0x5fe] -> slot 0xbf8
+// server_scene.tick's constant table: slot 0xc48 (dependency 32), checked against the instruction that loads it.
+constexpr uint32_t kPhysicsSlot = 0xc48, kPhysicsUser = 0x635;
+constexpr const char* kPhysicsUserBytes = "48 8b 1d 0c 06 00 00";   // mov rbx, [rip+0x60c] -> slot 0xc48
 using physics_update_t = void (*)(void* physics_scene, const double* dt);
 anymaker::cell_hook h_physics;
 anymaker::cell_hook h_server_loading, h_server_scene, h_dungeons, h_items, h_vehicles, h_entities, h_vehicles_post, h_items_post,
@@ -1029,7 +1029,7 @@ void hk_inventory(void* self, void* client, void* vehicle, void* scene, const do
 void hk_client_tick(void* client, const double* dt, const bool* loading, void* frontend, void* game_settings) {
     double start = now_ms();
     auto* c = static_cast<uint8_t*>(client);
-    bool clock_ok = c && anymaker::readable(c + clock_off::play, 0xf60 - clock_off::play);
+    bool clock_ok = c && anymaker::readable(c + clock_off::play, 0xfc0 - clock_off::play);
     double play_before = clock_ok ? *reinterpret_cast<double*>(c + clock_off::play) : 0;
     double frame_ms = g_frame_start >= 0 ? start - g_frame_start : 0;
     if (!g_stop) {

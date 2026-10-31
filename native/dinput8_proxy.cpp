@@ -2584,7 +2584,7 @@ static void server_create_hook(void* out_ref,const void* definition) {
     if(item) {
         InterlockedIncrement64(&g_server_create_nonzero);
 
-        if(safe_read_memory(item+0x88,&backlink,sizeof(backlink)) &&
+        if(safe_read_memory(item+0x90,&backlink,sizeof(backlink)) &&
            backlink==(uintptr_t)definition) {
             InterlockedIncrement64(&g_server_create_backlink_match);
         }
@@ -2601,7 +2601,7 @@ static void server_destroy_hook(void* self,void* sc) {
     InterlockedIncrement64(&g_p27_hook_calls[4]); p29_note_hook(4);
     uintptr_t definition=0;
     if(self)
-        safe_read_memory((uintptr_t)self+0x88,&definition,sizeof(definition));
+        safe_read_memory((uintptr_t)self+0x90,&definition,sizeof(definition));
 
     auto snapshot=capture_definition_snapshot(definition);
     if(snapshot.readable)

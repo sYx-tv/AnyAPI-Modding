@@ -1,7 +1,7 @@
 # AnyLights
 
 > AnyLights hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
+> so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
 > Prototype: not in the catalog yet. Ships as its own mod (`AnyLights.dll`).
 
 AnyLights turns the stock paint tools into one paint tool for every colour, and makes lights glow the colour
