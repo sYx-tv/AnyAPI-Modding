@@ -28,12 +28,12 @@ using anymaker::global_desc;
 // ref<client> g_client (python tools/bind.py --reference reference --match g_client)
 inline constexpr global_desc g_client{"g_client","48 83 ec 38 48 89 4c 24 20 48 89 54 24 28 48 8b 05 4b 00 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f",96u};
 // Typeinfo anchors only; these functions are never called or hooked.
-inline constexpr func_desc zombie_tick{"() client_scene.actor_zombie.tick (client_scene.actor_zombie, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 08 10 00 00 4c 8b a4 24 70 10 00 00 48 8b 9c 24 78",{"53 55 56 57 48 81 ec 38 01 00 00 48 8b 84 24 80 01 00 00 48 8b ac 24 88 01 00 00 48 89 4c 24 70", {536u}, 1},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 24 03 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",832u,4};
-inline constexpr func_desc creature_tick{"() client_scene.actor_creature.tick (client_scene.actor_creature, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 48 81 ec c8 01 00 00 48 8b 84 24 10 02 00 00 48 8b 9c 24 18 02 00 00 48 89 8c 24 e0",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 28 07 00 00 4c 8b a4 24 90 07 00 00 48 8b 84 24 98", {6848u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 fd 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",536u,4};
+inline constexpr func_desc zombie_tick{"() client_scene.actor_zombie.tick (client_scene.actor_zombie, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 18 10 00 00 4c 8b a4 24 80 10 00 00 48 8b 84 24 88",{"53 55 56 57 48 81 ec 38 01 00 00 48 8b 84 24 80 01 00 00 48 8b ac 24 88 01 00 00 48 89 4c 24 70", {536u}, 1},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 24 03 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",832u,4};
+inline constexpr func_desc creature_tick{"() client_scene.actor_creature.tick (client_scene.actor_creature, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 48 81 ec c8 01 00 00 48 8b 84 24 10 02 00 00 48 8b 9c 24 18 02 00 00 48 89 8c 24 e0",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 28 07 00 00 4c 8b a4 24 90 07 00 00 48 8b 9c 24 98", {6896u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 fd 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",536u,4};
 }  // namespace bind
 
 namespace off {
-constexpr ptrdiff_t client_scene = 0xf50;              // client.m_scene (client_scene, embedded)
+constexpr ptrdiff_t client_scene = 0xfb0;              // client.m_scene (client_scene, embedded)
 constexpr ptrdiff_t scene_world_seed = 0x10 + 8;       // client_scene.m_world_seed (replicated property_s32) value
 constexpr ptrdiff_t scene_actors = 344 + 8;            // client_scene.m_actors -> _m_elements vector<ref<actor>>
 constexpr ptrdiff_t actor_incapacitated = 0x28 + 8;    // actor._m_is_incapacitated (property_bool) value
@@ -102,7 +102,7 @@ inline void sample(const AnyClientTaskFrameV1* frame, void*) {
     int32_t seed = 0;
     uint8_t** ref = state.client_ref.load();
     uint8_t* client = ref && anymaker::readable(ref, 16) ? ref[1] : nullptr;
-    uint8_t* scene = client && anymaker::readable(client + off::client_scene, 13440) ? client + off::client_scene : nullptr;
+    uint8_t* scene = client && anymaker::readable(client + off::client_scene, 13472) ? client + off::client_scene : nullptr;
     if (scene) seed = rd<int32_t>(scene, off::scene_world_seed);
     if (scene && state.want_blips) {
         out.reserve(256);

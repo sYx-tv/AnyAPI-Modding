@@ -1,5 +1,5 @@
 #pragma once
-// MCCode game bindings, generated for Anymaker 0.1.28 / Steam build 26277967 with
+// MCCode game bindings, generated for Anymaker 0.2.0 / Steam build 26328453 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the SDK reference root (reference-0.1.25), one --signature per binding below.
 // Experimental: located by code signature, call-cell route or typeinfo slot, not reviewed as an AnyAPI service.

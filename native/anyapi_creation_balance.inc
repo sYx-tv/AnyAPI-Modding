@@ -28,7 +28,7 @@ static void diagnose(std::atomic<int>& last,int reason,const char* what){if(last
 static bool copy_inner(AnyCreationBalanceSnapshotV1* out,int& reason){int32_t ui=-1;
  if(!ready||faulted||!allowed_item){reason=!ready?1:faulted?2:3;return false;}
  if(GetForegroundWindow()!=platform::game_window){reason=4;return false;}
- if(!g_p34_frontend||!safe_read_memory(g_p34_frontend+0x828,&ui,4)||ui!=1){reason=5;return false;}
+ if(!g_p34_frontend||!safe_read_memory(g_p34_frontend+0x858,&ui,4)||ui!=1){reason=5;return false;}
  auto now=GetTickCount64();if(!store.copy(out,now)){reason=6;return false;}
  std::lock_guard lock(projection_mutex);
  if(now<render_camera_tick||now-render_camera_tick>150){reason=7;return false;}
@@ -54,7 +54,7 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  // The native Properties tick clears both IDs to zero and populates them only
  // for component hovers. Bare bodies/edges must use the first native hover,
  // matching get_hovered_interactible; never search through occluding objects.
- if(id<=0){int32_t type{};NativeVector hovered{};if(!safe_read_memory(uintptr_t(scene)+10672+8,&hovered,sizeof(hovered))||hovered.size!=272||hovered.count<1||hovered.count>64||hovered.capacity<hovered.count||hovered.capacity>4096||hovered.offset<0||hovered.offset>=hovered.capacity||!hovered.buffer)return fail(2);
+ if(id<=0){int32_t type{};NativeVector hovered{};if(!safe_read_memory(uintptr_t(scene)+10704+8,&hovered,sizeof(hovered))||hovered.size!=272||hovered.count<1||hovered.count>64||hovered.capacity<hovered.count||hovered.capacity>4096||hovered.offset<0||hovered.offset>=hovered.capacity||!hovered.buffer)return fail(2);
   auto interaction=hovered.buffer+uintptr_t(hovered.offset)*272;
   if(!safe_read_memory(interaction,&type,4)||(type!=1&&type!=2)||!safe_read_memory(interaction+8,&id,4)||id<=0)return fail(3);}
  auto container=uintptr_t(scene)+0xa0;
@@ -63,7 +63,7 @@ static bool capture_inner(void* item,void* camera,void* scene,void* client=nullp
  if(!vehicle)return fail(5);int32_t observed_id=-1;
  if(!safe_read_memory(vehicle+8,&observed_id,4)||observed_id!=id)return fail(6);
  AnyCreationBalanceSnapshotV1 sample;sample.vehicle_id=id;sample.context=context;sample.sampled_tick=GetTickCount64();
- bool local=false;if(client)safe_read_memory(uintptr_t(client)+3748,&local,1);
+ bool local=false;if(client)safe_read_memory(uintptr_t(client)+3844,&local,1);
  auto ids=assembly_ids(id,local);if(ids.empty())return fail(7);
  struct Body {int32_t id;double transform[12];AnyBalancePointV1 centre,bounds[2];double mass{};};
  std::vector<Body> bodies;bodies.reserve(ids.size());

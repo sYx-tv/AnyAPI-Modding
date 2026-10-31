@@ -9,7 +9,7 @@
 // with what it spent its time on, and a summary (fps, 1% low, hitches, server tick pacing) is logged every 30 s.
 //
 // Slow motion: the client draws the world from server ticks with its own playback clock (inside client.tick:
-// client+0xec8 playback tick, +0xed0 buffer in ticks, +0xf58 newest server tick). When server ticks stop arriving
+// client+0xf28 playback tick, +0xf30 buffer in ticks, +0xfb8 newest server tick). When server ticks stop arriving
 // it slows the world down; when they arrive in a burst it speeds up, up to 4x, to catch up. Every such episode is
 // logged with the worst server tick inside it and what that tick spent its time on (tile streaming, bunkers,
 // loose items, vehicles, physics, network, autosave).
@@ -118,8 +118,8 @@ double g_worst_hitch, g_tile_max_window;
 
 // Client playback clock (client.tick). Layout read from the 0.1.25 code of client.tick (unchanged in 0.1.27), which updates it.
 namespace clock_off {
-constexpr ptrdiff_t play = 0xec8;        // f64: the server tick being shown (fractional)
-constexpr ptrdiff_t buffer = 0xed0;      // f64: how many ticks behind the newest one it aims to show (clamped 1..16)
+constexpr ptrdiff_t play = 0xf28;        // f64: the server tick being shown (fractional)
+constexpr ptrdiff_t buffer = 0xf30;      // f64: how many ticks behind the newest one it aims to show (clamped 1..16)
 }  // namespace clock_off
 SimEpisode g_episode;
 double g_episode_buffer_max;
@@ -453,7 +453,8 @@ constexpr ptrdiff_t kVehicleId = 0x40;        // server_scene.vehicle.m_id (s32)
 using vehicle_by_id_t = void (*)(void** ret, void* container, const int32_t* id);
 // tile/grid: the tile the wreck was queued in (environment_tile_task.m_tile_loaded +0x310, m_position +0x8), so a
 // tile save fills only its own wrecks (environment_tile.m_grid_position +0x170). vehicle == nullptr: already filled.
-struct PendingLoot { void* scene; void* vehicle; int32_t id, tier; const void* tile; int32_t grid[3]; bool has_grid; };
+// extra: generate_loot's second s32 (0.2.0), which a tile integrate passes from the tile (environment_tile +0x27c).
+struct PendingLoot { void* scene; void* vehicle; int32_t id, tier, extra; const void* tile; int32_t grid[3]; bool has_grid; };
 constexpr ptrdiff_t kTaskTile = 0x310, kTaskGrid = 0x8, kTileGrid = 0x170;
 void* g_tile_task;                            // the server tile integrate in progress
 std::atomic<bool> g_spread_loot{true};
@@ -468,11 +469,13 @@ int g_loot_queued_total, g_loot_skipped_total, g_loot_ticks;   // the batch sinc
 vehicle_by_id_t g_vehicle_by_id;
 
 // Queues one generate_loot call from a tile integrate once this tick's budget is used. True when queued.
-bool queue_loot(void* vehicle, void* scene, const void* tier) {
+bool queue_loot(void* vehicle, void* scene, const void* tier, const void* extra) {
     if (!g_spread_loot || !g_vehicle_by_id || g_loot_ms_tick < g_loot_budget_ms.load()) return false;
     auto* v = static_cast<uint8_t*>(vehicle);
-    if (!v || !scene || !anymaker::readable(v + kVehicleId, 4) || (tier && !anymaker::readable(tier, 4))) return false;
-    PendingLoot p{scene, vehicle, *reinterpret_cast<const int32_t*>(v + kVehicleId), tier ? *static_cast<const int32_t*>(tier) : 0};
+    if (!v || !scene || !anymaker::readable(v + kVehicleId, 4) || (tier && !anymaker::readable(tier, 4)) ||
+        (extra && !anymaker::readable(extra, 4))) return false;
+    PendingLoot p{scene, vehicle, *reinterpret_cast<const int32_t*>(v + kVehicleId), tier ? *static_cast<const int32_t*>(tier) : 0,
+                  extra ? *static_cast<const int32_t*>(extra) : 0};
     auto* task = static_cast<const uint8_t*>(g_tile_task);
     if (task && anymaker::readable(task + kTaskTile, 8)) p.tile = *reinterpret_cast<void* const*>(task + kTaskTile);
     if (task && anymaker::readable(task + kTaskGrid, 12)) { std::memcpy(p.grid, task + kTaskGrid, 12); p.has_grid = true; }
@@ -488,7 +491,7 @@ bool fill_one(PendingLoot& p, void* scene) {
     if (p.scene == scene) g_vehicle_by_id(&now, static_cast<uint8_t*>(scene) + kSceneVehicles, &p.id);
     if (now != p.vehicle) { p.vehicle = nullptr; return false; }   // gone, or another world
     double start = now_ms();
-    original(p.vehicle, scene, &p.tier, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+    original(p.vehicle, scene, &p.tier, &p.extra, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
     double ms = now_ms() - start;
     g_loot_ms_tick += ms;
     g_tick.steps.add(kLootStep, ms);
@@ -550,7 +553,7 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
         original(a, b, c, d, e, f, g, h, i, j); return;
     }
     if constexpr (I == kLootStep)
-        if (g_tile_depth > 0 && queue_loot(a, b, c)) return;
+        if (g_tile_depth > 0 && queue_loot(a, b, c, d)) return;
     // (bool) _get_valid_loot_position_rotation_in_furniture (vehicle, random, inventory, const vec2_s32 component_size,
     // const inventory_definition item, const vec2_s32 item_size, out pos, out rot)
     [[maybe_unused]] PlaceFail place{};
@@ -975,9 +978,9 @@ using replicate_t = void (*)(const int32_t* peer, void* data, void* object, void
 using autosave_t = void (*)(bool* ret, void* server);
 anymaker::cell_hook h_client_tick, h_scene_tick, h_tick_loading, h_integrate, h_update_tasks, h_server_tick, h_server_tiles;
 // physics.scene.update is native (game.exe), so it has no gcl code of its own to find. Its cell is read from
-// server_scene.tick's constant table: slot 0xbf8 (dependency 31), checked against the instruction that loads it.
-constexpr uint32_t kPhysicsSlot = 0xbf8, kPhysicsUser = 0x5f3;
-constexpr const char* kPhysicsUserBytes = "48 8b 1d fe 05 00 00";   // mov rbx, [rip+0x5fe] -> slot 0xbf8
+// server_scene.tick's constant table: slot 0xc48 (dependency 32), checked against the instruction that loads it.
+constexpr uint32_t kPhysicsSlot = 0xc48, kPhysicsUser = 0x635;
+constexpr const char* kPhysicsUserBytes = "48 8b 1d 0c 06 00 00";   // mov rbx, [rip+0x60c] -> slot 0xc48
 using physics_update_t = void (*)(void* physics_scene, const double* dt);
 anymaker::cell_hook h_physics;
 anymaker::cell_hook h_server_loading, h_server_scene, h_dungeons, h_items, h_vehicles, h_entities, h_vehicles_post, h_items_post,
@@ -1026,7 +1029,7 @@ void hk_inventory(void* self, void* client, void* vehicle, void* scene, const do
 void hk_client_tick(void* client, const double* dt, const bool* loading, void* frontend, void* game_settings) {
     double start = now_ms();
     auto* c = static_cast<uint8_t*>(client);
-    bool clock_ok = c && anymaker::readable(c + clock_off::play, 0xf60 - clock_off::play);
+    bool clock_ok = c && anymaker::readable(c + clock_off::play, 0xfc0 - clock_off::play);
     double play_before = clock_ok ? *reinterpret_cast<double*>(c + clock_off::play) : 0;
     double frame_ms = g_frame_start >= 0 ? start - g_frame_start : 0;
     if (!g_stop) {

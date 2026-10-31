@@ -1329,7 +1329,7 @@ units_t g_units_flow, g_units_frequency, g_units_pressure, g_units_temperature, 
 to_pascals_t g_to_pascals;
 self_fn_t g_string_dtor;
 constexpr int kAddTooltipEntrySlot = 68;             // server_scene.peer.inspection_data.vehicle method table
-enum : int32_t { kLocCondition = 203, kLocTemperature = 212, kLocSpeed = 197, kLocFlow = 207, kLocPressure = 215, kLocBoost = 234, kLocStiffness = 351, kLocSoundEffect = 324 };   // e_localization_string
+enum : int32_t { kLocCondition = 205, kLocTemperature = 214, kLocSpeed = 199, kLocFlow = 209, kLocPressure = 217, kLocBoost = 236, kLocStiffness = 354, kLocSoundEffect = 327 };   // e_localization_string
 enum : int32_t { kIconCondition = 6, kIconFlow = 16, kIconPressure = 30, kIconSpeed = 33, kIconTemperature = 37 };         // inspection_util.e_tooltip_icon
 enum : int32_t { kColorDefault = 0, kColorMissing = 1 };   // inspection_util.e_tooltip_color (missing: the stock "no air filter" row)
 
@@ -1584,12 +1584,12 @@ void hk_add_definitions(void* container, const void* file) {
 // Each turbo and blow-off valve streams its own synthesized sound (turbo_sound.h) into a positional voice effect,
 // the way the game plays voice chat, in place of the stock impeller hum. Main thread only.
 namespace audio {
-constexpr uint32_t play_voice_rva = 0x13f240;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
-constexpr uint32_t append_rva = 0x13f9c0;           // effect_3d.append_audio_data (takes the buffer's memory)
-constexpr uint32_t set_position_velocity_rva = 0x13f9a0;
-constexpr uint32_t stop_rva = 0x13f970;
-constexpr uint32_t reset_rva = 0x13f8b0;            // effect_3d.reset (releases the handle)
-constexpr uint32_t buffer_reset_rva = 0x41a00;      // binary.buffer.reset (allocates with the game's allocator)
+constexpr uint32_t play_voice_rva = 0x13f310;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
+constexpr uint32_t append_rva = 0x13fa90;           // effect_3d.append_audio_data (takes the buffer's memory)
+constexpr uint32_t set_position_velocity_rva = 0x13fa70;
+constexpr uint32_t stop_rva = 0x13fa40;
+constexpr uint32_t reset_rva = 0x13fa50;            // effect_3d.reset (releases the handle)
+constexpr uint32_t buffer_reset_rva = 0x41b40;      // binary.buffer.reset (allocates with the game's allocator)
 constexpr int32_t kGroupVehicle = 4;                // e_audio_group.vehicle: follows the vehicle volume slider
 constexpr double kRange = 80.0;                     // metres
 constexpr double kLead = 0.08;                      // seconds of sound queued ahead

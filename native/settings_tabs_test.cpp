@@ -53,7 +53,7 @@ int main(){platform::plugin_count=2;for(int i=0;i<2;++i){platform::plugins[i].pa
  global(0xf00,&fill);global(0xf18,&fill);global(0xf40,&width);global(0xf48,&height);global(0xf50,&padding);global(0xf58,&padding);global(0xf60,&spacing);global(0xf70,&icon_height);global(0xf80,&fill);global(0xf98,&tab_width);
  fn(0xef8,(uintptr_t)begin_state);fn(0xf10,(uintptr_t)cstr);fn(0xf20,(uintptr_t)vec_ctor);fn(0xf68,(uintptr_t)layout_fixture);fn(0xf78,(uintptr_t)vec_default);fn(0xf88,(uintptr_t)string_ctor);fn(0xf90,(uintptr_t)localize);fn(0xfa0,(uintptr_t)menus::vanilla_tab_hook);fn(0xfa8,(uintptr_t)menus::vanilla_enter_hook);fn(0xfb0,(uintptr_t)menus::update_end_hook);fn(0xfb8,(uintptr_t)menus::route_general);fn(0xfc0,(uintptr_t)menus::route_graphics);fn(0xfc8,(uintptr_t)menus::route_audio);fn(0xfd0,(uintptr_t)menus::route_controls);fn(0xfd8,(uintptr_t)menus::close_hook);seal(code);menus::update=(uintptr_t)code;menus::original_update=(menus::UpdateFn)code;
  alignas(8) unsigned char ui[0x900]{},data[0x100]{};alignas(8) uint8_t region[0x40]{};*(uint64_t*)(region+0x28)=0x12345678;for(size_t offset=0x200;offset<0x800;offset+=8)*(uintptr_t*)(ui+offset)=(uintptr_t)region;
- *(int32_t*)(ui+0x828)=11;double delta=0.016;
+ *(int32_t*)(ui+0x858)=11;double delta=0.016;
  auto frame=[&](std::string target="",int native=-1){click_widget=target;click_native=native;enter_event=!target.empty()||native>=0;native_calls=0;key_rows=0;menus::update_hook(ui,&delta,nullptr,data);assert(native_calls==4&&depth==0&&!menus::drawing&&platform::current_plugin==-1);};
  frame();assert(rendered_icons==6&&custom_tabs==2);
  // Missing keyboard uses the gear, including default NONE. Missing both never builds a null-icon tab.
@@ -67,7 +67,7 @@ int main(){platform::plugin_count=2;for(int i=0;i<2;++i){platform::plugins[i].pa
  dirty_flags[1]=true;frame("anyapi.1.settings.apply");assert(owner_events[1][ANY_MENU_APPLY]==1&&!dirty_flags[1]&&dirty_flags[0]);default_flags[1]=false;frame("anyapi.1.settings.reset");assert(owner_events[1][ANY_MENU_RESET]==1&&dirty_flags[1]);
  frame("",2);assert(!menus::selected&&*(int32_t*)data==2&&owner_events[1][ANY_MENU_DEACTIVATE]==1&&vanilla_draws==2);
  frame("anyapi.0.settings.tab");menus::tabs[0]->section->faulted=true;frame();assert(!menus::selected&&vanilla_draws==3);menus::tabs[0]->section->faulted=false;
- ui[0x818]=1;frame();assert(!menus::session&&owner_events[0][ANY_MENU_CANCEL]==1&&owner_events[1][ANY_MENU_CANCEL]==1);ui[0x818]=0;frame();assert(menus::session&&owner_events[0][ANY_MENU_OPEN]==2);
+ ui[0x848]=1;frame();assert(!menus::session&&owner_events[0][ANY_MENU_CANCEL]==1&&owner_events[1][ANY_MENU_CANCEL]==1);ui[0x848]=0;frame();assert(menus::session&&owner_events[0][ANY_MENU_OPEN]==2);
  menus::ready=false;VirtualFree(code,0,MEM_RELEASE);VirtualFree(tab,0,MEM_RELEASE);VirtualFree(render,0,MEM_RELEASE);
  std::cout<<"PASS: exact native Settings update/tab/render execution with mandatory icons, NONE default and missing-icon fallback/suppression, fifth/sixth tabs, all four vanilla dispatch slots, untouched native enums, independent Apply/Reset/drafts/scroll, deactivate, fault fallback, close/reopen, 256 compact rows within scroll, footer in native parent\n";
 }

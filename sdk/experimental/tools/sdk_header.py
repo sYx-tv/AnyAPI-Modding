@@ -32,7 +32,8 @@ compl const constexpr const_cast continue decltype default delete do double dyna
 extern false float for friend goto if inline int long mutable namespace new noexcept not not_eq nullptr operator or
 or_eq private protected public register reinterpret_cast return short signed sizeof static static_assert static_cast
 struct switch template this thread_local throw true try typedef typeid typename union unsigned using virtual void
-volatile wchar_t while xor xor_eq NULL TRUE FALSE min max small near far IN OUT'''.split())
+volatile wchar_t while xor xor_eq NULL TRUE FALSE min max small near far IN OUT
+char8_t concept consteval constinit co_await co_return co_yield requires'''.split())
 
 
 def strip_const(t):

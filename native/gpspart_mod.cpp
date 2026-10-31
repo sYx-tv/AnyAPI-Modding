@@ -65,7 +65,7 @@ constexpr ptrdiff_t component_definition = 312;     // server_scene.vehicle_comp
 constexpr ptrdiff_t compass_angle_to_north = 536;   // server_scene.vehicle_component.compass_sensor.m_angle_to_north (f64)
 constexpr ptrdiff_t definition_id = 0;              // vehicle_component_definition.m_id (string)
 constexpr size_t definition_file_size = 40;         // vehicle_component_definition_file
-constexpr ptrdiff_t scene_loot_level = 5336;        // server_scene.m_loot_level (s32)
+constexpr ptrdiff_t scene_loot_level = 5400;        // server_scene.m_loot_level (s32)
 }  // namespace off
 constexpr int32_t kStoreSystem = 1;                 // file.e_store.system (static inference)
 

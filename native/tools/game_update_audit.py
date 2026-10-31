@@ -16,7 +16,9 @@ every pattern into one of these states:
                   call-site offsets still hold), but numbers inside it changed: struct field or stack
                   offsets, enum values in the constant pool. `--apply` rewrites the bytes; check the
                   listed offset hints, where our own code may hard-code one of the old numbers
-  changed       - the instructions or the dependency list changed. Review by hand: see the diff file
+  changed       - the instructions or the dependency list changed. Review by hand: see the diff file.
+                  Once every offset used with it has been re-derived, `--accept FILE:NAME` makes
+                  `--apply` write the new function's bytes for it too (same length rule as resized)
   moved         - game.exe code found at a different RVA (update the `*_RVA` constant)
   stale         - did not match the previous build either (bytes from an older game build), so
                   the update changes nothing for it
@@ -183,7 +185,10 @@ def main():
     ap.add_argument('--current-json', type=Path, help="the new build's SDK json/ folder: resolves moved game.exe natives by name")
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--apply', action='store_true', help='rewrite refreshable, resized and shifted patterns in place')
+    ap.add_argument('--accept', action='append', default=[], metavar='FILE:NAME',
+                    help='with --apply, also rewrite this changed pattern (its offsets already re-derived by hand); repeatable')
     a = ap.parse_args()
+    accept = set(a.accept)
     exe = (a.game_dir / 'game.exe').read_bytes()
     gcl_path = a.game_dir / 'bin' / 'game.gcl'
     prog = gcl.Program(str(gcl_path))
@@ -320,6 +325,10 @@ def main():
                     edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
                 if len(twins) > 1:
                     row['note'] = twin_note(twins)
+            elif '%s:%s' % (r['file'], r['name']) in accept and r['span']:
+                edits.setdefault(r['file'], []).append((r['span'], encode(new_body, r['style'])))
+                row['accepted'] = True
+                row['note'] = ('accepted: bytes rewritten. ' + row.get('note', '')).strip()
             row['constants_changed'] = sum(x != y for x, y in zip(oh['const_windows'], nh['const_windows'])) + \
                 abs(len(oh['const_windows']) - len(nh['const_windows']))
             d = list(difflib.unified_diff(normalize(old_code), normalize(new_code), 'previous', 'current', lineterm='', n=2))
@@ -423,7 +432,7 @@ def main():
                 raw = raw[:s] + lead + text + trail + raw[e:]
             # NAME_END constants that hold the old code size follow the new one.
             for x in report:
-                if x['file'] == name and 'dependency_cells' in x and x['status'] in ('resized', 'shifted'):
+                if x['file'] == name and 'dependency_cells' in x and (x['status'] in ('resized', 'shifted') or x.get('accepted')):
                     old_end, new_end, _ = x['dependency_cells']
                     raw, n = re.subn(r'(\b%s_END\s*=\s*)%d\b' % (re.escape(x['name']), old_end), r'\g<1>%d' % new_end, raw)
                     if n:

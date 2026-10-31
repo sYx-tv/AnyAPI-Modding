@@ -1,5 +1,5 @@
 #pragma once
-// AnyCareer game bindings, generated for Anymaker 0.1.28 / Steam build 26277967 with
+// AnyCareer game bindings, generated for Anymaker 0.2.0 / Steam build 26328453 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the SDK reference root (reference-0.1.27), one --signature per binding below.
 // Experimental: located by code signature, not reviewed as an AnyAPI service.
@@ -9,7 +9,7 @@ namespace anycareer::bind {
 using anymaker::func_desc;
 // Server tick: AnyCareer's queued host work runs at its start, on the server thread.
 // () server_scene.tick (server_scene, server) | side: server
-inline constexpr func_desc server_scene_tick{"() server_scene.tick (server_scene, server)","53 55 56 57 48 81 ec a8 02 00 00 48 89 8c 24 f0 00 00 00 48 89 94 24 f8 00 00 00 48 8d 84 24 00",{"", {}, 0},"53 55 48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 db 06 00 00 48 89 4c 24 30 48 89 c1 ff 12 48",1784u,13};
+inline constexpr func_desc server_scene_tick{"() server_scene.tick (server_scene, server)","53 55 56 57 48 81 ec a8 02 00 00 48 89 8c 24 f0 00 00 00 48 89 94 24 f8 00 00 00 48 8d 84 24 00",{"", {}, 0},"53 55 48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 eb 06 00 00 48 89 4c 24 30 48 89 c1 ff 12 48",1800u,13};
 
 // A connected player by peer id (server side).
 // (ptr<server_scene.peer>) server_scene.peer.container.get_peer_by_id (server_scene.peer.container, const s32) | side: server
@@ -53,30 +53,30 @@ inline constexpr func_desc item_vector_dtor{"() dtor (vector<ptr<server_scene.it
 
 // Every item a player carries: hands, worn slots and one level inside them (backpacks, pockets).
 // () server_scene.inventory.get_items (server_scene.inventory, vector<ptr<server_scene.item_world>>) | side: server
-inline constexpr func_desc inventory_get_items{"() server_scene.inventory.get_items (server_scene.inventory, vector<ptr<server_scene.item_world>>)","",{"", {}, 0},"53 48 83 ec 40 48 89 4c 24 20 48 8d 01 48 8b 15 d4 00 00 00 48 89 4c 24 30 48 89 c1 ff 12 48 8b",240u,28};
+inline constexpr func_desc inventory_get_items{"() server_scene.inventory.get_items (server_scene.inventory, vector<ptr<server_scene.item_world>>)","",{"", {}, 0},"53 48 83 ec 40 48 89 4c 24 20 48 8d 01 48 8b 15 d4 00 00 00 48 89 4c 24 30 48 89 c1 ff 12 48 8b",240u,29};
 
 // Removes one carried item by id and hands back the last reference (the caller releases it, as the game does).
 // (ref<server_scene.item_world>) server_scene.inventory.destroy_item (server_scene.inventory, const s32) | side: server
-inline constexpr func_desc inventory_destroy_item{"(ref<server_scene.item_world>) server_scene.inventory.destroy_item (server_scene.inventory, const s32)","53 55 56 57 48 83 ec 78 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 c7 44 24 38 00 00 00 00",{"", {}, 0},"53 48 83 ec 40 48 89 4c 24 20 48 8d 01 48 8b 15 d4 00 00 00 48 89 4c 24 30 48 89 c1 ff 12 48 8b",240u,20};
+inline constexpr func_desc inventory_destroy_item{"(ref<server_scene.item_world>) server_scene.inventory.destroy_item (server_scene.inventory, const s32)","53 55 56 57 48 83 ec 78 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 c7 44 24 38 00 00 00 00",{"", {}, 0},"53 48 83 ec 40 48 89 4c 24 20 48 8d 01 48 8b 15 d4 00 00 00 48 89 4c 24 30 48 89 c1 ff 12 48 8b",240u,21};
 
 // Turns a fresh vehicle_editor_add_component item into a stack of one part (dungeon loot does the same).
 // () server_scene.item_world.vehicle_editor_add_component.set (server_scene.item_world.vehicle_editor_add_component, const vehicle_component_definition, const s32) | side: server
-inline constexpr func_desc add_component_set{"() server_scene.item_world.vehicle_editor_add_component.set (server_scene.item_world.vehicle_editor_add_component, const vehicle_component_definition, const s32)","53 55 48 83 ec 58 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8d 02 48 89 81 d0 00 00 00 48",{"", {}, 0},"53 55 56 57 41 54 41 55 48 81 ec 98 05 00 00 48 89 8c 24 60 04 00 00 48 89 94 24 68 04 00 00 4c",6280u,31};
+inline constexpr func_desc add_component_set{"() server_scene.item_world.vehicle_editor_add_component.set (server_scene.item_world.vehicle_editor_add_component, const vehicle_component_definition, const s32)","53 55 48 83 ec 58 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8d 02 48 89 81 d8 00 00 00 48",{"", {}, 0},"53 55 56 57 41 54 41 55 48 81 ec 98 05 00 00 48 89 8c 24 60 04 00 00 48 89 94 24 68 04 00 00 4c",6296u,34};
 
 // The same for building parts (vehicle_editor_add_building_component).
 // () server_scene.item_world.vehicle_editor_add_building_component.set (server_scene.item_world.vehicle_editor_add_building_component, const vehicle_component_definition, const s32) | side: server
-inline constexpr func_desc add_building_component_set{"() server_scene.item_world.vehicle_editor_add_building_component.set (server_scene.item_world.vehicle_editor_add_building_component, const vehicle_component_definition, const s32)","53 55 48 83 ec 68 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 83 ba b0 02 00 00 00 0f 95 c0",{"", {}, 0},"53 55 56 57 41 54 41 55 48 81 ec 98 05 00 00 48 89 8c 24 60 04 00 00 48 89 94 24 68 04 00 00 4c",6232u,31};
+inline constexpr func_desc add_building_component_set{"() server_scene.item_world.vehicle_editor_add_building_component.set (server_scene.item_world.vehicle_editor_add_building_component, const vehicle_component_definition, const s32)","53 55 48 83 ec 68 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 83 ba b0 02 00 00 00 0f 95 c0",{"", {}, 0},"53 55 56 57 41 54 41 55 48 81 ec 98 05 00 00 48 89 8c 24 60 04 00 00 48 89 94 24 68 04 00 00 4c",6248u,34};
 // Damage to a zombie (every hit, any source; its damage source names the attacking actor's id). Hooked: AnyCareer
 // counts a kill when the hit takes the zombie's blood to zero.
-// () server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const server_scene.actor_damage_src) | side: server
-inline constexpr func_desc zombie_damage{"() server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const server_scene.actor_damage_src)","",{"53 55 56 57 48 81 ec e8 00 00 00 48 89 4c 24 70 48 89 54 24 78 4c 89 84 24 80 00 00 00 4c 89 8c 24 88 00 00 00 48", {760u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 a5 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",448u,99};
+// () server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const f64, const server_scene.actor_damage_src) | side: server
+inline constexpr func_desc zombie_damage{"() server_scene.actor_zombie.damage (server_scene.actor_zombie, server_scene, const f64, const f64, const server_scene.actor_damage_src)","",{"53 55 56 57 48 81 ec e8 00 00 00 48 8b ac 24 30 01 00 00 48 89 4c 24 70 48 89 54 24 78 4c 89 84", {768u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 a5 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",448u,100};
 // A new ammo box is filled to its definition's capacity (ammo_box.init). Hooked: Cash found as loot gets a small
 // amount instead of a full stack.
 // () server_scene.item_world.ammo_box.init (server_scene.item_world.ammo_box) | side: server
 inline constexpr func_desc ammo_box_init{"() server_scene.item_world.ammo_box.init (server_scene.item_world.ammo_box)","",{"", {}, 0},"53 55 56 48 81 ec 60 01 00 00 48 8b 9c 24 a0 01 00 00 48 8b 84 24 a8 01 00 00 48 89 8c 24 90 00",1720u,6};
 // The game's own debug teleport for a peer (as AnyHelpers' admin tab uses it): F6 test key.
 // () server.on_event (server, server_peer.data, client_peer.data.event.peer_teleport) | side: server
-inline constexpr func_desc server_on_teleport{"() server.on_event (server, server_peer.data, client_peer.data.event.peer_teleport)","53 55 48 81 ec 98 00 00 00 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8b 82 98 06 00 00 48",{"53 55 48 81 ec 68 17 00 00 48 89 8c 24 48 16 00 00 48 89 94 24 50 16 00 00 4c 89 84 24 58 16 00", {51392u}, 1},"",0u,-1};
+inline constexpr func_desc server_on_teleport{"() server.on_event (server, server_peer.data, client_peer.data.event.peer_teleport)","53 55 48 81 ec 98 00 00 00 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 48 8b 82 c8 06 00 00 48",{"53 55 48 81 ec 68 17 00 00 48 89 8c 24 48 16 00 00 48 89 94 24 50 16 00 00 4c 89 84 24 58 16 00", {51392u}, 1},"",0u,-1};
 // ref<client> g_client (as AnyMap's map_actors.h finds it): F2 test key reaches client_scene through it.
 inline constexpr anymaker::global_desc g_client{"g_client","48 83 ec 38 48 89 4c 24 20 48 89 54 24 28 48 8b 05 4b 00 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f",96u};
 } // namespace anycareer::bind

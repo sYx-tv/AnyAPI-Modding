@@ -95,8 +95,9 @@ bool gameplay() { AnyUiSnapshotV1 s; return ui && ui->copy(&s) && s.kind == ANY_
 
 // ------------------------------------------------------------------ hooks (main thread)
 using get_camera_t = void (*)(uint8_t* ret, uint8_t* scene);
-using push_damage_t = void (*)(uint8_t* data, const int32_t* actor, const double* damage, const double* position,
-                               const double* normal, const int32_t* type, const int32_t* flesh);
+// 0.2.0 added a second f64 after the damage (projectile hits pass 0.0); it is forwarded untouched.
+using push_damage_t = void (*)(uint8_t* data, const int32_t* actor, const double* damage, const double* extra,
+                               const double* position, const double* normal, const int32_t* type, const int32_t* flesh);
 using peer_actor_t = void (*)(uint8_t** ret, uint8_t* container);
 using actor_by_id_t = void (*)(uint8_t** ret, uint8_t* container, const int32_t* id);
 using incapacitated_t = void (*)(bool* ret, uint8_t* actor);
@@ -216,9 +217,9 @@ void hk_get_camera(uint8_t* ret, uint8_t* scene) {
     if (scene) { watch_kills(scene); follow_targets(scene); }
 }
 
-void hk_push_damage(uint8_t* data, const int32_t* actor, const double* damage, const double* position, const double* normal,
-                    const int32_t* type, const int32_t* flesh) {
-    reinterpret_cast<push_damage_t>(h_damage.original)(data, actor, damage, position, normal, type, flesh);
+void hk_push_damage(uint8_t* data, const int32_t* actor, const double* damage, const double* extra, const double* position,
+                    const double* normal, const int32_t* type, const int32_t* flesh) {
+    reinterpret_cast<push_damage_t>(h_damage.original)(data, actor, damage, extra, position, normal, type, flesh);
     if (g_stop || !actor || !damage || !position || !type) return;
     double dmg = *damage;
     if (!std::isfinite(dmg) || dmg <= 0) return;

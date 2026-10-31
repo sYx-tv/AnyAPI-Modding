@@ -1,0 +1,159 @@
+{
+  "Packages": {
+    "AnyAPI": {
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "Native mod framework for Anymaker 0.2.0; faster scene reads, the game's own clock and weather for sky and lights, crash-safe graphics passes, and new scene services (lighting 4, effects 3, controls 4, antialiasing 3, timing 2, GPU info 2) for graphics mods."
+    },
+    "AnyBattery": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "A Battery Pack you place and stretch like a fuel tank: 4 kWh at the smallest size, more as you stretch it. It starts empty, so charge it from an alternator or solar panels; the charge is saved with each world. Found in loot after the first bunker. Standalone mod, not part of a bundle. Anymaker 0.2.0 only."
+    },
+    "AnyCVT": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "Belt CVTs for small, medium and large engines. Each looks like the stock gearbox of its size and bolts on the same way. Shift R, N and D from a lever; in D the ratio slides to hold the engine at a target RPM, and a centrifugal clutch lets it idle while stopped. Low and high ratio, target RPM, response and engage RPM in Properties; ratio, engine_rpm, target_rpm and current_gear outputs. Found in loot from the first bunker on. Standalone mod, not part of a bundle. Anymaker 0.2.0 only."
+    },
+    "AnyCareer": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "A survival career: earn Cash from delivery and kill jobs and small finds in houses and shops, and trade with nine traders spread over the map (Hayzeco Autoparts, Builder, Junkyard, Grocer, Medic, Marine & Air, Mod Shop, Outfitter, Gunsmith). Survival only; the host runs it, and co-op joiners with AnyCareer trade and take jobs through the host. Trader map pins need AnyMap 1.0.1 or later. Standalone mod, not part of a bundle. Anymaker 0.2.0 only."
+    },
+    "AnyCombat": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "Hit markers and floating damage numbers for the hits you deal, red on a kill. Anymaker 0.2.0 only."
+    },
+    "AnyEngineParts": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "Engine parts and sound in one mod: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine; EngineSound's generated engine sounds; and the GPS Sensor part. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only."
+    },
+    "AnyGraphics": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "Graphics overhaul with ocean reflections, smoother local lights, defaults picked for your GPU and presets from Off to Cinematic plus Soft & warm and Custom, grouped in Show/Hide sub-menus: TAA, tone mapping and colour looks, light colour, shading, shadows, sky and wind in trees, depth of field, motion blur and photo mode, plus ThirdPerson's F5 third-person camera. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only."
+    },
+    "AnyHelpers": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "Building and editing helpers in one mod: Mod Controls and Mod Settings, Duplicate tool favorites and a host ADMIN tab, AnyInventory's item search, AnyMirror's mirrored building, AnyBalance's centre of mass, and MCCode's Code view for microcontrollers. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only."
+    },
+    "AnyLights": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "One paint tool for every colour: right-click any paint tool for the full palette and Fill, Flood, Brush, Pencil and erase modes, with Ctrl+Z undo. Headlights, beacon, bar and siren lights glow the colour you paint them. Standalone mod, not part of a bundle. Anymaker 0.2.0 only."
+    },
+    "AnyMap": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "World map and minimap with route placement and zoom; shows vehicles, zombies and creatures with a map key. Ready to carry more map pieces as one mod. Anymaker 0.2.0 only."
+    },
+    "AnyMoto": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "Motorcycle parts for the stock Motorcycle Wheel: a steering fork, a swingarm, a seat, handlebars and Lean Assist, which keeps the bike upright and leans it into turns (power and lean settings in the Properties tool). Found in loot after the first bunker. Standalone mod, not part of a bundle. Anymaker 0.2.0 only."
+    },
+    "AnyPerformance": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "Fixes the world slowing down and then rushing to catch up (including the stall when new terrain fills its wrecks with loot), updates the items in far-away parked vehicles less often for more FPS, and logs what causes stutters. Standalone mod, not part of a bundle. Anymaker 0.2.0 only."
+    },
+    "CustomGame": {
+      "MinimumApi": 49,
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ],
+      "Description": "A Custom Game page on the New Game screen: pick Career, Creative or Sandbox, then day speed, start time and tier, up to 20 players, survival drains, enemies, loot, weather and joint strength. Settings are saved with each world. Anymaker 0.2.0 only."
+    }
+  }
+}
