@@ -223,8 +223,14 @@ lights come from a constant buffer read in an unrolled loop instead of a texture
 lamps cast no shadow maps. That fixed the RX 6800. Other GPUs keep the original `Integrate` shader, byte for byte.
 Since 0.40.2 the AMD shader is also built for 0, 2, 4 and 8 lamps; with V4 `amd_path` 1 each frame uses the smallest
 build that holds its lamps, with the same result. Those builds have not run on AMD hardware yet, so `amd_path` 0
-(auto) stays on the single 8-lamp build (`amd_path` 3) that fixed the RX 6800. V4 `amd_path` 2 is an experiment with
-a uniform branch per lamp instead.
+(auto) stays on the single 8-lamp build (`amd_path` 3). The RX 6800 confirmed its 0.39.2 version with lamp beams;
+fog and sun shafts on AMD are not confirmed yet. V4 `amd_path` 2 is an experiment with a uniform branch per lamp instead.
+
+The `Matrices` pass writes the matrix texture from the 56 root constants (b0). Root constants can't be indexed
+dynamically, but up to AnyAPI 0.42.0 it read `shadow_matrix[(uint)position.x]`. On AMD every texel most likely got
+row 0: `SHAFT_PROBE` coverage read 0 in every AMD log, and row 21 texel 3 (flash glow) held clarity and beam reach,
+which painted fogged pixels bright green. It now picks each row with a fixed select, and `lighting_shader_test`
+fails any build that indexes cb0 dynamically.
 
 Descriptor tables live in a 4-entry ring fenced by the frame's own submission, so a change of game targets no longer
 waits for the whole GPU queue; only a resize, a device change or an AMD path change does.

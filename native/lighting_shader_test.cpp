@@ -6,6 +6,7 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+#include <string>
 #include "lighting/volumetric_frame.h"
 using Microsoft::WRL::ComPtr;
 // AnyAPI 0.40.2: IntegrateConstants is also built with LAMP_SLOTS 0/2/4 (the 8 build keeps its old name) and
@@ -18,6 +19,8 @@ int wmain(int argc,wchar_t** argv){assert(argc==2||argc==3);std::ofstream out;if
  for(auto& build:builds){auto entry=build.entry;D3D_SHADER_MACRO macros[3]{};UINT m=0;if(build.slots)macros[m++]={"LAMP_SLOTS",build.slots};if(build.branch)macros[m++]={"LAMP_BRANCH",build.branch};
   ComPtr<ID3DBlob> code,error;auto hr=D3DCompileFromFile(argv[1],macros,D3D_COMPILE_STANDARD_FILE_INCLUDE,entry,entry[0]=='V'?"vs_5_0":"ps_5_0",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&error);if(FAILED(hr)){std::cerr<<build.name<<": ";if(error)std::cerr.write((char*)error->GetBufferPointer(),error->GetBufferSize());return 1;}
   ComPtr<ID3D11ShaderReflection> r;assert(SUCCEEDED(D3DReflect(code->GetBufferPointer(),code->GetBufferSize(),IID_PPV_ARGS(&r))));D3D11_SHADER_DESC sd{};r->GetDesc(&sd);for(UINT i=0;i<sd.BoundResources;++i){D3D11_SHADER_INPUT_BIND_DESC b{};r->GetResourceBindingDesc(i,&b);if(b.Type==D3D_SIT_SAMPLER)assert(b.BindPoint==(!strcmp(b.Name,"point_sampler")?1:0));}if(entry[0]!='V'){D3D11_SHADER_BUFFER_DESC b{};assert(SUCCEEDED(r->GetConstantBufferByName("Frame")->GetDesc(&b))&&b.Size==offsetof(volumetric::Frame,additional_shadows));}
+  // b0 is root constants, which can't be indexed dynamically (Matrices read row 0 for every texel on AMD).
+  {ComPtr<ID3DBlob> text;assert(SUCCEEDED(D3DDisassemble(code->GetBufferPointer(),code->GetBufferSize(),0,nullptr,&text)));std::string s((const char*)text->GetBufferPointer(),text->GetBufferSize());auto at=s.find("dcl_constantbuffer cb0[");assert(at==std::string::npos||s.substr(at,s.find('\n',at)-at).find("dynamicIndexed")==std::string::npos);}
   // Lamp data: 8 rows of 4 float4 in b1 for every constants build except LAMP_SLOTS 0, which reads none.
   if(!strncmp(build.name,"IntegrateConstants",18)){D3D11_SHADER_BUFFER_DESC b{};bool lamps=SUCCEEDED(r->GetConstantBufferByName("Lamps")->GetDesc(&b));assert(strcmp(build.name,"IntegrateConstants0")?lamps&&b.Size==512:!lamps);
    if(!strcmp(build.name,"IntegrateConstants"))flow8=sd.DynamicFlowControlCount;else if(build.branch)flow_branch=sd.DynamicFlowControlCount;else assert(sd.DynamicFlowControlCount<=flow8);}
@@ -29,5 +32,5 @@ int wmain(int argc,wchar_t** argv){assert(argc==2||argc==3);std::ofstream out;if
  // Row 21 extras (0.40.2): lamp scale 0 or 1..4, sea mode 0..2, sea level, phase cap 0/1, flash glow 0..100.
  frame=volumetric::Frame{};auto& t=frame.temporal[1];t[6]=2.5f;t[8]=2;t[9]=0;t[10]=1;t[12]=t[13]=t[14]=3;assert(volumetric::valid(frame));
  for(auto [at,bad]:std::initializer_list<std::pair<int,float>>{{6,.5f},{6,4.5f},{7,1},{8,3},{8,1.5f},{9,-200},{10,.5f},{11,1},{12,-1},{12,101},{15,1}}){auto copy=frame;copy.temporal[1][at]=bad;assert(!volumetric::valid(copy));}
- std::cout<<"PASS: HDR volumetric integration and bilateral composite compile; exact constants and sampler slots validated; LAMP_SLOTS 0/2/4/8 and branch builds; blend composite without t0; row 21 extras\n";
+ std::cout<<"PASS: HDR volumetric integration and bilateral composite compile; exact constants and sampler slots validated; LAMP_SLOTS 0/2/4/8 and branch builds; blend composite without t0; row 21 extras; no dynamic index into root constants\n";
 }
