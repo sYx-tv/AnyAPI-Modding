@@ -882,7 +882,12 @@ uint32_t input(const AnyInputV1* e, void*) {
 // ------------------------------------------------------------------ install (background thread)
 template <class T> bool resolve(Global<T>& g, const anymaker::global_desc& d) {
     auto* p = static_cast<T*>(anymaker::experimental::global(d));
+    // On 0.2.0 a global's anchor can be missing on the first look while the game is still laying out
+    // its code (seen for g_zombie_horde_size and g_max_spawned_actors), so look again for up to 10 s.
+    int tries = 0;
+    for (; !p && tries < 20 && !g_stop; ++tries) { Sleep(500); p = static_cast<T*>(anymaker::experimental::global(d)); }
     if (!p) { log(1, "global %s not located: its setting will have no effect", d.name); return false; }
+    if (tries) log(0, "global %s found after looking again for %.1f s", d.name, tries * 0.5);
     g.p = p; g.def = *p; g.name = d.name;
     return true;
 }
