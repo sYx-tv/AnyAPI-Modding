@@ -28,7 +28,7 @@ static unsigned char server_component[600]{},tank_component[900]{};static bool t
 static void tank_in_scene(bool* out,void* physics){assert(physics==tank_component+balance_fluid_contract::FLUID_PHYSICS);*out=tank_added_to_scene;}
 static bool p34_virtual(uintptr_t object,uintptr_t slot,uintptr_t& fn){
  if(object==uintptr_t(tank_component)&&slot==balance_fluid_contract::LIQUID_TANK_TICK_SLOT*8){fn=uintptr_t(tank_tick);return true;}
- if(object==uintptr_t(server_component)&&slot==78*8){fn=uintptr_t(balance_assembly_contract::LINK_2);return true;}
+ if(object==uintptr_t(server_component)&&slot==79*8){fn=uintptr_t(balance_assembly_contract::LINK_2);return true;}
  if(object==uintptr_t(state)){fn=uintptr_t(state_overlay);return valid_state;}
  if(object==uintptr_t(scene)+0xa0){assert(slot==16);fn=uintptr_t(lookup_vehicle);return true;}
  if((object==uintptr_t(vehicle)||object==uintptr_t(vehicle_b))&&slot==104){fn=uintptr_t(get_transform);return valid_transform;}

@@ -2,7 +2,7 @@
 
 AnyInventory adds an item browser beside the native inventory. Search the complete
 catalog, filter categories, mark favorites, view item images and read descriptions.
-The current game profile has 970 definitions, including mechanical/building components.
+The current game profile has 972 definitions, including mechanical/building components.
 Parts and items that other mods add (such as the GPS Sensor) join the list once a
 world is loaded and the inventory has been opened, and their **Add** works the same way.
 
