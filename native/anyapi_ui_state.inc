@@ -5,7 +5,7 @@ static std::atomic<int32_t> observed{-1};static std::atomic<uint64_t> generation
 static bool copy(AnyUiSnapshotV1* out){
  if(!out||out->struct_size!=sizeof(*out)||out->version!=1)return false;
  *out={};int32_t state=-1;
- if(!g_p34_frontend||!scene_frame::read_value(g_p34_frontend+0x828,state)||state<0||state>=128)return false;
+ if(!g_p34_frontend||!scene_frame::read_value(g_p34_frontend+0x858,state)||state<0||state>=128)return false;
  if(observed.exchange(state)!=state)++generation;
  out->native_state=state;out->kind=state==1?ANY_UI_GAMEPLAY:state==2?ANY_UI_INVENTORY:ANY_UI_MENU;return true;
 }

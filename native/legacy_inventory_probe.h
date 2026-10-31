@@ -16,6 +16,6 @@ template<class Read> P29InventoryProbe p29_probe_handheld(uintptr_t inventory,bo
     if(!out.header_readable) return out;
     out.empty=out.item==0;
     if(out.empty) return out;
-    out.definition_readable=read(out.item+(server?0x88:0x28),&out.definition,sizeof(out.definition)) && out.definition!=0;
+    out.definition_readable=read(out.item+(server?0x90:0x28),&out.definition,sizeof(out.definition)) && out.definition!=0;
     return out;
 }

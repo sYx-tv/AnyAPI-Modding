@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <mutex>
 namespace world_time {
-// client_scene offsets (0.1.27): m_time_of_day +0x2168; m_weather_particles +0x2b48, whose m_factor_rain (+0x50),
+// client_scene offsets (0.1.27): m_time_of_day +0x2168; m_weather_particles +0x2b68, whose m_factor_rain (+0x50),
 // m_factor_snow (+0x58) and m_wind_vector (+0x60) the game fills each tick from weather_data at the camera.
-constexpr uintptr_t TIME_OF_DAY=0x2168,WEATHER_RAIN=0x2b98,WEATHER_BYTES=32;
+constexpr uintptr_t TIME_OF_DAY=0x2168,WEATHER_RAIN=0x2bb8,WEATHER_BYTES=32;
 constexpr uint64_t FRESH_MS=500;
 // What scene controls reads next to the public snapshot: the getter's tick and the camera weather.
 struct Observed {double cycle{-1};int64_t tick{-1};uint64_t sampled{};uint32_t weather_valid{},epoch{};double rain{},snow{},wind[2]{};uint64_t weather_sampled{};};

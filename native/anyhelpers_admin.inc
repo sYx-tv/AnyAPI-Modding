@@ -15,8 +15,8 @@ constexpr size_t kTick=0x40,kPeers=0xa8,kActors=0x250,kTimeOfDay=0xb10,kTodOverr
 constexpr size_t kWorldSeed=0x48+0x18;                       // server_scene.m_world_seed (master property_s32) value
 constexpr size_t kActorElements=0x18;                        // server_scene.actor.container _m_elements: vector<ref<actor>>
 constexpr size_t kActorId=0x40,kActorTransform=0xb8,kActorPeerAuthority=0x1b0;  // server_scene.actor
-constexpr size_t kPeerData=0x19d0,kPeerActor=0x19d8,kPeerPosition=0x19f8;       // server_scene.peer
-constexpr int kSlotIsCharacter=53,kSlotIsCreature=54,kSlotIsZombie=55;   // server_scene.actor method table (get_is_*)
+constexpr size_t kPeerData=0x19f0,kPeerActor=0x19f8,kPeerPosition=0x1a18;       // server_scene.peer
+constexpr int kSlotIsCharacter=54,kSlotIsCreature=55,kSlotIsZombie=56;   // server_scene.actor method table (get_is_*)
 constexpr int kMaxPeers=64;
 struct Vec3 {double x,y,z;};
 struct WeatherData {double cloud,precipitation,fog,temperature,wind_x,wind_y;};

@@ -26,7 +26,7 @@ static void scene(void*,void* s){++scenes;double v;memcpy(&v,(unsigned char*)s+0
 static bool catch_render(void* r){__try{scene_controls::renderer_hook(r);return false;}__except(EXCEPTION_EXECUTE_HANDLER){return true;}}
 int main(){using namespace scene_controls;AnySceneParametersV1 p;p.enabled=1;p.aa=1;p.bloom=2;p.bloom_intensity=.4f;p.sun=2;p.light_exposure=1;p.fog=.5f;assert(set(&p));ready=true;
  auto bad=p;bad.sun=NAN;assert(!set(&bad));bad=p;bad.aa=3;assert(!set(&bad));platform::current_plugin=-1;assert(!set(&p));platform::current_plugin=1;assert(!set(&p));platform::current_plugin=0;
- alignas(8) unsigned char renderer[0x680]{};renderer[0x638]=renderer[0x63e]=renderer[0x63f]=1;double threshold=.8,intensity=.1;memcpy(renderer+0x648,&threshold,8);memcpy(renderer+0x650,&intensity,8);unsigned char baseline[0x680];memcpy(baseline,renderer,sizeof(renderer));
+ alignas(8) unsigned char renderer[0x688]{};renderer[0x638]=renderer[0x63e]=renderer[0x63f]=1;double threshold=.8,intensity=.1;memcpy(renderer+0x648,&threshold,8);memcpy(renderer+0x650,&intensity,8);unsigned char baseline[0x688];memcpy(baseline,renderer,sizeof(renderer));
  void* cell=(void*)render;assert(renderer_cell.install(&cell,(void*)renderer_hook));renderer_hook(renderer);assert(renders==1&&!memcmp(renderer,baseline,sizeof(renderer)));raise_error=true;assert(catch_render(renderer));assert(!memcmp(renderer,baseline,sizeof(renderer)));raise_error=false;
  AnySceneParametersV2 v2;v2.scene=p;v2.clouds=v2.grass=1;v2.foliage=2;assert(set_v2(&v2));auto invalid_v2=v2;invalid_v2.grass=3;assert(!set_v2(&invalid_v2));invalid_v2=v2;invalid_v2.version=1;assert(!set_v2(&invalid_v2));platform::current_plugin=1;assert(!set_v2(&v2));platform::current_plugin=0;
  expect_details=true;renderer_hook(renderer);assert(!memcmp(renderer,baseline,sizeof(renderer)));raise_error=true;assert(catch_render(renderer));assert(!memcmp(renderer,baseline,sizeof(renderer)));raise_error=false;expect_details=false;
@@ -155,11 +155,11 @@ int main(){using namespace scene_controls;AnySceneParametersV1 p;p.enabled=1;p.a
    void* ssao_target=(void*)F::ssao;assert(ssao_cell.install(&ssao_target,(void*)ssao_hook));composite_renderer=renderer;composite_scene=d;
    ssao_hook(nullptr,nullptr);assert(native==1);seams.replace_ssao=F::yes;ssao_hook(nullptr,nullptr);assert(native==1&&seen[0]==renderer&&seen[1]==d);
    seams.replace_ssao=F::no;ssao_hook(nullptr,nullptr);assert(native==2);seams.replace_ssao=nullptr;composite_renderer=composite_scene=nullptr;assert(ssao_cell.remove());}
-  // GL-11: a cycle jump or clouds turning on asks the game for a full cloud relight (renderer+0x65c = 2).
-  {int32_t counter=0;memcpy(renderer+0x65c,&counter,4);fill(1,.3,day,.01);frame();memcpy(&counter,renderer+0x65c,4);assert(counter==0);
-   fill(1,.6,day,.01);frame();memcpy(&counter,renderer+0x65c,4);assert(counter==2);counter=0;memcpy(renderer+0x65c,&counter,4);
-   fill(1,.6001,day,.01);frame();memcpy(&counter,renderer+0x65c,4);assert(counter==0);renderer[0x63e]=0;fill(1,.6001,day,.01);frame();memcpy(&counter,renderer+0x65c,4);assert(counter==0);
-   renderer[0x63e]=1;fill(1,.6001,day,.01);frame();memcpy(&counter,renderer+0x65c,4);assert(counter==2);counter=0;memcpy(renderer+0x65c,&counter,4);}
+  // GL-11: a cycle jump or clouds turning on asks the game for a full cloud relight (renderer+0x664 = 2).
+  {int32_t counter=0;memcpy(renderer+0x664,&counter,4);fill(1,.3,day,.01);frame();memcpy(&counter,renderer+0x664,4);assert(counter==0);
+   fill(1,.6,day,.01);frame();memcpy(&counter,renderer+0x664,4);assert(counter==2);counter=0;memcpy(renderer+0x664,&counter,4);
+   fill(1,.6001,day,.01);frame();memcpy(&counter,renderer+0x664,4);assert(counter==0);renderer[0x63e]=0;fill(1,.6001,day,.01);frame();memcpy(&counter,renderer+0x664,4);assert(counter==0);
+   renderer[0x63e]=1;fill(1,.6001,day,.01);frame();memcpy(&counter,renderer+0x664,4);assert(counter==2);counter=0;memcpy(renderer+0x664,&counter,4);}
   // P0 LITERAL_PROBE: every user site's displacement lands on its literal; a synthetic body verifies and reports, a wrong byte refuses.
   {auto check=[](const LiteralSite* s,size_t n){for(size_t i=0;i<n;++i){int32_t disp;memcpy(&disp,s[i].bytes+s[i].size-4,4);assert(s[i].user+s[i].size+uint32_t(disp)==s[i].literal);}};
    check(SHADOW_SITES,std::size(SHADOW_SITES));check(TILE_SITES,std::size(TILE_SITES));

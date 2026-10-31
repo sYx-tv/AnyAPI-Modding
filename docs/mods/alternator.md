@@ -1,7 +1,7 @@
 # AnyAlternator
 
 > AnyAlternator hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
+> so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
 > 0.0.1 is a test build: nothing below has been tried in game yet.
 
 AnyAlternator adds three bigger alternators beside the stock one. The bigger they are, the more they make and the
@@ -62,7 +62,7 @@ sizes, the output curve, one tick against a model of the game's tick, the defini
 | Piece | Status |
 | --- | --- |
 | New parts on the stock alternator class | Proven route (GpsPart, AnyBattery reuse stock classes the same way) |
-| Output and drag through the buffer's room | Likely: read from the 0.1.28 tick code; untested in game |
+| Output and drag through the buffer's room | Likely: read from the 0.1.28 tick code, unchanged in 0.2.0; untested in game |
 | Port and torque face layout | Likely: copied from the stock alternator's faces and grown |
 | `enabled` input | Likely: the same data-slot method as AnyMoto's `assist` input |
 | Lower whine | Likely: the voice update hook EngineSound uses |

@@ -2,7 +2,7 @@
 // AnyAlternator pure logic: the three bigger alternators (their definitions and numbers) and what one tick of one of
 // them makes and costs. No game or Windows dependencies, so tests/anyalternator_logic_test.cpp runs it anywhere.
 //
-// Game facts this is built on (Anymaker 0.1.28, read from game.gcl and rom/data):
+// Game facts this is built on (Anymaker 0.2.0, unchanged from 0.1.28; read from game.gcl and rom/data):
 //   - The stock Alternator (alternator_motor, class "alternator") is 2 x 2 x 3 cells, 1500 W "alternator_wattage",
 //     full output at 100 rps ("alternator_max_output_rps"). Its torque face is the single cell (0, 0) on its +z end.
 //   - alternator.tick: factor = clamp(|rps| / max_rps, 0, 1); e = min(wattage x factor x dt, room in its own buffer);

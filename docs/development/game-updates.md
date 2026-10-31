@@ -22,6 +22,21 @@ You also need the SDK root of the build the repository targets now: the folder w
 `sdk-reference-2026.10.08` release. For later builds it is the `<work>/sdk` folder
 from the previous run of the script below; keep it.
 
+From 0.2.0 the game ships a stripped `game.gcl` (format 2): function records keep only a
+64-bit FNV-1a hash of their signature, and type records lose their field lists. Keep the
+previous build's `game.exe` and `bin/game.gcl` too, and pass that folder as
+`--previous-build`. The reader ([`gcl.py`](../../sdk/experimental/tools/gcl.py)) then
+names functions by matching hashes against the previous SDK (`ANYMAKER_GCL_NAMES`, set
+from `--previous-sdk`), and
+[`infer_stripped.py`](../../sdk/experimental/tools/infer_stripped.py) recovers what the
+hashes can't: signatures that changed by one parameter or type (a one-edit search over
+known types), and field layouts of types whose size changed (by lining up how the old and
+new code address each field in the same functions). Its output,
+`<work>/sdk/json/stripped_inferred.json`, is read through `ANYMAKER_GCL_INFERRED`; fields
+it fills carry the basis `carried` (type kept its size, align and parent) or `inferred`.
+Treat inferred offsets as strong evidence, not proof. Runtime-only natives whose
+neighbours moved are found in the new `game.exe` by their masked code bytes.
+
 Requirements: Python 3 with `pip install capstone pefile`. The script runs on Windows
 or Linux.
 
@@ -29,8 +44,8 @@ or Linux.
 
 ```powershell
 python native/tools/game_update.py --game-dir "C:/Program Files (x86)/Steam/steamapps/common/Anymaker" `
-    --previous-sdk <previous SDK root> --work build/game-update `
-    --api-version 0.37.0 --api-revision 40
+    --previous-sdk <previous SDK root> --previous-build <previous game files> `
+    --work build/game-update --api-version 0.37.0 --api-revision 40
 ```
 
 Run it once without `--apply` to read the report, then again with `--apply` (add

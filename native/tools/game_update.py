@@ -114,9 +114,13 @@ def main():
     ap.add_argument('--previous-sdk', type=Path, required=True, help='SDK root (json/, tools/, validation/) of the current target build')
     ap.add_argument('--work', type=Path, required=True, help='output folder; <work>/sdk becomes the new SDK root')
     ap.add_argument('--manifest', type=Path, help='appmanifest_4435340.acf when --game-dir is a copied build')
+    ap.add_argument('--previous-build', type=Path, help="folder with the previous build's game.exe and bin/game.gcl: finds "
+                    'moved runtime-only natives, and for a stripped game.gcl (0.2.0 on) infers changed signatures and layouts')
     ap.add_argument('--api-version', help='new AnyAPI version, e.g. 0.35.0 (left unchanged when omitted)')
     ap.add_argument('--api-revision', type=int, help='new AnyAPI revision, e.g. 36')
     ap.add_argument('--skip-sdk', action='store_true', help='reuse <work>/sdk from an earlier run')
+    ap.add_argument('--accept', action='append', default=[], metavar='FILE:NAME',
+                    help='changed pattern whose offsets were re-derived by hand: --apply writes its new bytes (repeatable)')
     ap.add_argument('--apply', action='store_true', help='write the changes into the repo')
     a = ap.parse_args()
     work = a.work.resolve()
@@ -124,6 +128,9 @@ def main():
     previous_json = a.previous_sdk.resolve() / 'json'
     if not (previous_json / 'functions.json').is_file():
         sys.exit('%s has no functions.json' % previous_json)
+    # A stripped (format 2) game.gcl names functions only by hash; every tool below recovers the
+    # signatures from the previous SDK (sdk/experimental/tools/gcl.py).
+    os.environ.setdefault('ANYMAKER_GCL_NAMES', str(previous_json))
 
     step('identify the build')
     ident = identify(a.game_dir, a.manifest)
@@ -136,12 +143,15 @@ def main():
         step('regenerate the experimental SDK into %s' % sdk)
         prepare_sdk(a.previous_sdk.resolve(), sdk)
         run([sdk / 'tools' / 'regenerate.py', '--game-dir', a.game_dir, '--out', sdk, '--label', 'installed-' + ident['build'],
-             '--previous-json', previous_json, '--skip-compile'] + (['--manifest', ident['manifest']] if ident['manifest'] else []))
+             '--previous-json', previous_json, '--skip-compile'] + (['--manifest', ident['manifest']] if ident['manifest'] else [])
+            + (['--previous-build', a.previous_build.resolve()] if a.previous_build else []))
+    if (sdk / 'json' / 'stripped_inferred.json').is_file():
+        os.environ.setdefault('ANYMAKER_GCL_INFERRED', str(sdk / 'json' / 'stripped_inferred.json'))
 
     step('audit native byte patterns')
     run([HERE / 'game_update_audit.py', '--game-dir', a.game_dir, '--previous-json', previous_json, '--out', work / 'audit']
         + (['--current-json', sdk / 'json'] if (sdk / 'json' / 'natives.json').is_file() else [])
-        + (['--apply'] if a.apply else []))
+        + (['--apply'] if a.apply else []) + [x for n in a.accept for x in ('--accept', n)])
 
     step('refresh legacy event routes')
     gcl = find_game_files(str(a.game_dir))['game.gcl']

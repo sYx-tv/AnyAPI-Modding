@@ -13,7 +13,7 @@
 //     lifted 6 mm onto a collar, since the end plate under it is now solid;
 //   - the end plate's opening that the stock hub filled (an octagon of radius 0.03 m about the old axis, scaled with
 //     the body) is closed with a flat octagon in the plate's paint.
-// Mesh file layout (Anymaker 0.1.28; the same reader as GpsPart and the turbos):
+// Mesh file layout (Anymaker 0.2.0; the same reader as GpsPart and the turbos):
 //   "mesh" u32 version(5) u32 (1) u32 name_length, name bytes
 //   32-byte attribute header, 56 bytes (zero), 6 x f64 bounds (min xyz, max xyz)
 //   u32 vertex_bytes, vertices of 36 bytes: f32 position[3], u8 rgba[4], f32 uv[2], f32 normal[3]

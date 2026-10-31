@@ -1,5 +1,5 @@
 #pragma once
-// Anymaker 0.1.28, Steam 26277967. Exact patterns and dependencies refreshed;
+// Anymaker 0.2.0, Steam 26328453. Exact patterns and dependencies refreshed;
 // gameplay acceptance remains a separate validation step.
-#define P27_EXPECTED_EXE_SHA256 "e503275bfad972110b393e376609d07d9045363dc40c20c20457e97c2d8ed442"
-#define P27_EXPECTED_GCL_SHA256 "0e5013292547b12e2bd32513bf20a77c2115fea902b46ecce7d5c6c35f760dea"
+#define P27_EXPECTED_EXE_SHA256 "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb"
+#define P27_EXPECTED_GCL_SHA256 "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"

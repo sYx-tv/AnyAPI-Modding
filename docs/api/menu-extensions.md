@@ -71,7 +71,7 @@ disabled buttons never activate. The mod separately refuses to restart an active
 capture. Successful capture does not re-arm from a stationary pointer.
 
 The full native activation-helper body is validated through the Controls owner's
-0x86f0 dependency. A regression executes that real current-build body with controlled
+0x86f8 dependency. A regression executes that real current-build body with controlled
 hovered-element virtual tables. It checks 300 hover-only frames, actual activation,
 disabled/not-hovered/no-target cases. A native-return-address fixture verifies 256
 rows are inserted before scroll close at 0x7726; they share the game's existing
@@ -85,10 +85,10 @@ fixtures establish row insertion; they do not replace visual checks at every scr
 `AnyMenuV1::add_section` also accepts `ANY_MENU_SETTINGS_GRAPHICS` (3).
 Its ABI is unchanged; this location requires the reviewed 0.28.0 bridge.
 Sections append inside the native Graphics scroll, before the third closing
-call at builder return offset `0x3c59`. V3 native widgets work in these draw
+call at builder return offset `0x4054`. V3 native widgets work in these draw
 callbacks. Graphics equality comparisons at `0x92` and `0x123` include the
-section's dirty/default flags; private dependency slots `0x4678`, `0x4730`,
-`0x4810` and `0x4818` route equality, container close, Reset and Apply respectively.
+section's dirty/default flags; private dependency slots `0x4ad0`, `0x4b88`,
+`0x4c70` and `0x4c78` route equality, container close, Reset and Apply respectively.
 All target bodies are validated against the pinned build before attachment.
 
 Graphics Apply/Reset events are scoped to Graphics sections; Controls events

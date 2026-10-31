@@ -14,8 +14,8 @@
 // Co-op: the alternators work on the host, like every stock part; every player needs the mod for the parts to exist
 // on their side.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (anyalternator_bindings.h): Anymaker 0.1.28 /
-// Steam build 26277967 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (anyalternator_bindings.h): Anymaker 0.2.0 /
+// Steam build 26328453 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -51,7 +51,7 @@ void log(int level, const char* fmt, ...) {
 template <class T> T& at(void* base, ptrdiff_t offset) { return *reinterpret_cast<T*>(static_cast<uint8_t*>(base) + offset); }
 bool can_read(const void* p, size_t n) { return p && anymaker::readable(p, n); }
 
-// Reference layouts (0.1.28 metadata).
+// Reference layouts (0.2.0 metadata, unchanged from 0.1.28).
 namespace off {
 constexpr ptrdiff_t component_id = 64;               // server_scene.vehicle_component.m_id (s32, saved)
 constexpr ptrdiff_t component_definition = 312;      // server_scene.vehicle_component.m_definition

@@ -42,6 +42,27 @@ inline void** cell(const anymaker::func_desc& d, int* roots = nullptr) {
     return found;
 }
 // The function a binding's route leads to, or nullptr. Tries the SDK's own resolve first (unique code first).
+// The method cell at `slot` of the type whose method table also holds `known` (a function with unique code).
+// For a method whose code is byte-identical to another type's, so it has no route of its own.
+inline void** sibling_cell(const anymaker::func_desc& known, int32_t slot) {
+    if (!anymaker::experimental::matching_build() || slot < 0 || known.method_slot < 0) return nullptr;
+    if (!known.code_sig || !*known.code_sig || !known.ti_anchor_sig || !*known.ti_anchor_sig) return nullptr;
+    uint8_t* entry = anymaker::find_gcl_function(known.code_sig);
+    uint8_t* hits[64];
+    size_t n = entry ? anymaker::find_gcl_functions(known.ti_anchor_sig, hits, 64) : 0;
+    anymaker::func_desc other = known;
+    other.method_slot = slot;
+    void** found = nullptr;
+    for (size_t i = 0; i < n; ++i) {
+        void** mine = anymaker::typeinfo_cell_from(hits[i], known);
+        if (!mine || *mine != entry) continue;
+        void** c = anymaker::typeinfo_cell_from(hits[i], other);
+        if (!c || !executable(*c)) continue;
+        if (found && found != c) return nullptr;
+        found = c;
+    }
+    return found;
+}
 inline void* function(const anymaker::func_desc& d, int* roots = nullptr) {
     if (roots) *roots = -1;
     if (!anymaker::experimental::matching_build()) return nullptr;

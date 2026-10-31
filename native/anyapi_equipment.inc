@@ -51,7 +51,7 @@ static bool capture(void* actor,void* scene,uint64_t now,void* client){__try{ret
 static void tick(void* client,void* scene,void* actor){if(!ready||faulted)return;uintptr_t local{};int32_t ui=-1;
  bool local_read=scene&&safe_read_memory(uintptr_t(scene)+0x188,&local,8);if(local_read&&!local)safe_read_memory(uintptr_t(scene)+0x190,&local,8);
  if(!local_read||!local){store.clear();tools_store.clear();last_scene=last_actor=0;return;}if(local!=uintptr_t(actor))return;
- bool gameplay=g_p34_frontend&&safe_read_memory(g_p34_frontend+0x828,&ui,4)&&ui==1;
+ bool gameplay=g_p34_frontend&&safe_read_memory(g_p34_frontend+0x858,&ui,4)&&ui==1;
  if(!gameplay||GetForegroundWindow()!=platform::game_window){store.clear();tools_store.clear();last_scene=last_actor=0;return;}
  auto now=GetTickCount64();if(last_scene!=uintptr_t(scene)||last_actor!=local){last_scene=uintptr_t(scene);last_actor=local;++context;sampled_at=0;}
  if(now-sampled_at<30)return;sampled_at=now;
