@@ -94,6 +94,12 @@
           "SteamBuild": 26277967,
           "ExeSha256": "e503275bfad972110b393e376609d07d9045363dc40c20c20457e97c2d8ed442",
           "GclSha256": "0e5013292547b12e2bd32513bf20a77c2115fea902b46ecce7d5c6c35f760dea"
+        },
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
         }
       ]
     },
@@ -182,6 +188,12 @@
           "SteamBuild": 26277967,
           "ExeSha256": "e503275bfad972110b393e376609d07d9045363dc40c20c20457e97c2d8ed442",
           "GclSha256": "0e5013292547b12e2bd32513bf20a77c2115fea902b46ecce7d5c6c35f760dea"
+        },
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
         }
       ],
       "Sha256": "8cc9f8d2642ded76e71ce704700673219ba3efd798b384e4024164d20c5e3fa8",
@@ -227,6 +239,12 @@
           "SteamBuild": 26277967,
           "ExeSha256": "e503275bfad972110b393e376609d07d9045363dc40c20c20457e97c2d8ed442",
           "GclSha256": "0e5013292547b12e2bd32513bf20a77c2115fea902b46ecce7d5c6c35f760dea"
+        },
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
         }
       ],
       "Sha256": "e10ec56dcbc9158a1318cdbed2ce8856cdc593287088344ce3cda2ed462fff3b",
