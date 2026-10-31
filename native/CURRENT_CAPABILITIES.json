@@ -410,7 +410,7 @@
   },
   "inventory_browser": {
     "owner": "AnyInventory.dll",
-    "definitions_current_build": 970,
+    "definitions_current_build": 972,
     "settings_count": 5,
     "integration": "in-process game backbuffer sidebar visible with native inventory; original inventory retained",
     "features": [
@@ -447,7 +447,7 @@
   "inventory_revision14_services": {
     "anyapi.session v1": "copied recent named native mode",
     "anyapi.inventory_actions v2": "caller mode mask checked at queue and dispatch",
-    "anyapi.item_catalog v1": "970 records; component namespaced IDs and flag",
+    "anyapi.item_catalog v1": "972 records; component namespaced IDs and flag",
     "anyapi.screen_layout v1": "signed translation including zero-origin roots"
   },
   "anystorage": {
