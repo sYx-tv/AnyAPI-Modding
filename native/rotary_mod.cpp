@@ -218,12 +218,12 @@ void hk_add_definitions(void* container, const void* file) {
 
 // ------------------------------------------------------------------------------------- sound (client, main thread)
 namespace audio {
-constexpr uint32_t play_voice_rva = 0x13f240;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
-constexpr uint32_t append_rva = 0x13f9c0;           // effect_3d.append_audio_data (takes the buffer's memory)
-constexpr uint32_t set_position_velocity_rva = 0x13f9a0;
-constexpr uint32_t stop_rva = 0x13f970;
-constexpr uint32_t reset_rva = 0x13f8b0;            // effect_3d.reset (releases the handle)
-constexpr uint32_t buffer_reset_rva = 0x41a00;      // binary.buffer.reset (allocates with the game's allocator)
+constexpr uint32_t play_voice_rva = 0x13f310;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
+constexpr uint32_t append_rva = 0x13fa90;           // effect_3d.append_audio_data (takes the buffer's memory)
+constexpr uint32_t set_position_velocity_rva = 0x13fa70;
+constexpr uint32_t stop_rva = 0x13fa40;
+constexpr uint32_t reset_rva = 0x13fa50;            // effect_3d.reset (releases the handle)
+constexpr uint32_t buffer_reset_rva = 0x41b40;      // binary.buffer.reset (allocates with the game's allocator)
 constexpr int32_t kGroupVehicle = 4;                // e_audio_group.vehicle: follows the vehicle volume slider
 constexpr double kRange = 140.0;                    // metres
 constexpr double kLead = 0.08;                      // seconds of sound queued ahead

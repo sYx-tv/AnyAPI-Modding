@@ -13,7 +13,7 @@ template <class T> inline void wr(uint8_t* p, ptrdiff_t o, T v) { std::memcpy(p 
 namespace off {
 // client_scene
 constexpr ptrdiff_t scene_vehicles = 160 + 8;        // m_vehicles (container) -> _m_elements vector<ref<vehicle>>
-constexpr ptrdiff_t scene_overlay_ui = 10088;        // m_overlay_ui (embedded)
+constexpr ptrdiff_t scene_overlay_ui = 10120;        // m_overlay_ui (embedded)
 // client_scene.vehicle
 constexpr ptrdiff_t vehicle_id = 8;                  // s32
 constexpr ptrdiff_t vehicle_grids = 16 + 8;          // m_grids -> vector<ref<vehicle_grid>>

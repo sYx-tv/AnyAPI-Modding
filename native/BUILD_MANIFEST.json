@@ -1,12 +1,12 @@
 {
-  "revision": 48,
+  "revision": 49,
   "date": "2026-10-25",
-  "game_version": "0.1.28",
-  "steam_build_id": 26277967,
+  "game_version": "0.2.0",
+  "steam_build_id": 26328453,
   "architecture": "Windows x64",
   "game_identity_sha256": {
-    "game.exe": "e503275bfad972110b393e376609d07d9045363dc40c20c20457e97c2d8ed442",
-    "bin/game.gcl": "0e5013292547b12e2bd32513bf20a77c2115fea902b46ecce7d5c6c35f760dea"
+    "game.exe": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+    "bin/game.gcl": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
   },
   "tests_passed": 67,
   "mods": [
@@ -35,7 +35,7 @@
   "graphics_version": "0.33.0",
   "helpers_sha256": "134d0aed2d8b8ff360f22654f2292398b7b9f507a745bc00939204db63b2313c",
   "graphics_settings_acceptance": "USER_CONFIRMED_NATIVE_GRAPHICS_MENU",
-  "api_version": "0.41.1",
+  "api_version": "0.42.1",
   "status": "CANDIDATE: laptop build, ctest and in-game acceptance pending",
   "new_services": [
     "anyapi.scene_controls v1/v2",

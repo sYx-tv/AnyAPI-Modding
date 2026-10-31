@@ -38,7 +38,7 @@ static void check_settings() {
         assert(r.slot == i && r.min < r.max && r.fallback >= r.min && r.fallback <= r.max && r.text && *r.text);
         assert(setting_of_row(r.label, r.min, r.max) == i);
     }
-    assert(setting_of_row(341, 1, 100) == -1 && setting_of_row(326, 1000, 8001) == -1);
+    assert(setting_of_row(344, 1, 100) == -1 && setting_of_row(329, 1000, 8001) == -1);
 }
 
 // R, N, D stepped by the link like stock gears: past 0.75 steps, back inside 0.25 re-arms, ends hold.

@@ -59,7 +59,7 @@ int main(){
         memcpy(actors[i].data()+0x1d0,pos,sizeof(pos));double basis[9]={1,0,0,0,1,0,0,0,1};memcpy(actors[i].data()+0x188,basis,sizeof(basis));
         refs[i][1]=(uintptr_t)actors[i].data();put(peers[i].data(),8,int32_t(i));put(peers[i].data(),0x48,int32_t(i));
         put(scene_peers[i].data(),8,(uintptr_t)property_class.data());put(scene_peers[i].data(),16,int32_t(i));
-        put(scene_peers[i].data(),0xba0,(uintptr_t)property_class.data());put(scene_peers[i].data(),0xba8,int32_t(i));
+        put(scene_peers[i].data(),0xbb0,(uintptr_t)property_class.data());put(scene_peers[i].data(),0xbb8,int32_t(i));
         put(peers[i].data(),0x10,GeoString16{(uintptr_t)name,sizeof(name)-1,sizeof(name)-1});
         put(peers[i].data(),0x20,GeoString16{(uintptr_t)id,sizeof(id)-1,sizeof(id)-1});
     }
@@ -114,9 +114,9 @@ int main(){
     assert(p34_native_sample(client.data(),scene.data(),&sample));assert(!(sample.players[0].valid_fields&PLAYER_NAME));
     g_p34_next=&stalled_next;sample={};assert(!p34_native_sample(client.data(),scene.data(),&sample));
     AnyPlayersChannelV1 channel{};g_p34_channel=&channel;g_p34_original=&original;
-    std::array<unsigned char,0x840> frontend{};g_p34_frontend=(uintptr_t)frontend.data();
-    put(frontend.data(),0x828,int32_t(2));p34_publish(sample);assert(channel.reserved==3);
-    put(frontend.data(),0x828,int32_t(1));p34_publish(sample);assert(channel.reserved==2);channel.sequence=0;
+    std::array<unsigned char,0x860> frontend{};g_p34_frontend=(uintptr_t)frontend.data();
+    put(frontend.data(),0x858,int32_t(2));p34_publish(sample);assert(channel.reserved==3);
+    put(frontend.data(),0x858,int32_t(1));p34_publish(sample);assert(channel.reserved==2);channel.sequence=0;
     p34_player_hook(nullptr,client.data(),scene.data(),nullptr,nullptr,nullptr);
     assert(forwards==1&&g_p34_faulted&&channel.sequence==2&&channel.snapshot.count==0);
     p34_player_hook(nullptr,client.data(),scene.data(),nullptr,nullptr,nullptr);assert(forwards==2&&channel.sequence==2);

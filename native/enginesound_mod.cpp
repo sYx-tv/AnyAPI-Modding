@@ -67,7 +67,7 @@ constexpr ptrdiff_t parser_format = 0, parser_mode = 4;   // server_scene.save_d
 }  // namespace off
 constexpr int32_t kParserJson = 0;               // server_scene.save_data.e_parser_format.json (binary = 1)
 constexpr int32_t kParseWrite = 1;               // e_parse_mode.write (read = 0)
-constexpr int32_t kSoundLabel = 324;             // e_localization_string.property_sound_effect (static)
+constexpr int32_t kSoundLabel = 327;             // e_localization_string.property_sound_effect (static)
 
 AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
@@ -136,12 +136,12 @@ int32_t extend_at(const uint8_t* base, ptrdiff_t offset) {
 
 // ------------------------------------------------------------------ generated sound (client, main thread)
 namespace audio {
-constexpr uint32_t play_voice_rva = 0x13f240;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
-constexpr uint32_t append_rva = 0x13f9c0;           // effect_3d.append_audio_data (takes the buffer's memory)
-constexpr uint32_t set_position_velocity_rva = 0x13f9a0;
-constexpr uint32_t stop_rva = 0x13f970;
-constexpr uint32_t reset_rva = 0x13f8b0;            // effect_3d.reset (releases the handle)
-constexpr uint32_t buffer_reset_rva = 0x41a00;      // binary.buffer.reset (allocates with the game's allocator)
+constexpr uint32_t play_voice_rva = 0x13f310;       // (effect_3d) application.audio.play_voice (s32 group, vec3, vec3, f64)
+constexpr uint32_t append_rva = 0x13fa90;           // effect_3d.append_audio_data (takes the buffer's memory)
+constexpr uint32_t set_position_velocity_rva = 0x13fa70;
+constexpr uint32_t stop_rva = 0x13fa40;
+constexpr uint32_t reset_rva = 0x13fa50;            // effect_3d.reset (releases the handle)
+constexpr uint32_t buffer_reset_rva = 0x41b40;      // binary.buffer.reset (allocates with the game's allocator)
 constexpr int32_t kGroupVehicle = 4;                // e_audio_group.vehicle: follows the vehicle volume slider
 constexpr double kRange = 160.0;                    // metres
 constexpr double kLead = 0.08;                      // seconds of sound queued ahead

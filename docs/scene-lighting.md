@@ -1,7 +1,7 @@
 # Scene lighting
 
 AnyAPI and AnyGraphics (0.29.0, overhauled in 0.30.0) add HDR fog, sun shafts and local-light scattering
-for Anymaker 0.1.28 / Steam build 26277967.
+for Anymaker 0.2.0 / Steam build 26328453.
 
 ## Render integration
 
@@ -227,7 +227,7 @@ build that holds its lamps, with the same result. Those builds have not run on A
 fog and sun shafts on AMD are not confirmed yet. V4 `amd_path` 2 is an experiment with a uniform branch per lamp instead.
 
 The `Matrices` pass writes the matrix texture from the 56 root constants (b0). Root constants can't be indexed
-dynamically, but up to AnyAPI 0.41.0 it read `shadow_matrix[(uint)position.x]`. On AMD every texel most likely got
+dynamically, but up to AnyAPI 0.42.0 it read `shadow_matrix[(uint)position.x]`. On AMD every texel most likely got
 row 0: `SHAFT_PROBE` coverage read 0 in every AMD log, and row 21 texel 3 (flash glow) held clarity and beam reach,
 which painted fogged pixels bright green. It now picks each row with a fixed select, and `lighting_shader_test`
 fails any build that indexes cb0 dynamically.

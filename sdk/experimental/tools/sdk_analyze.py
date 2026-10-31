@@ -370,6 +370,14 @@ def abi_check(pf, ret, params):
     return {'status': st, 'arg_locations': regs}
 
 
+FIELD_BASIS = {
+    'carried': 'carried from the previous build: a stripped game.gcl records no fields, and this type kept its size, '
+               'alignment and parent',
+    'inferred': 'inferred by infer_stripped.py from how the previous build\'s code addressed this field in the same '
+                'functions of this build (stripped_inferred.json)',
+}
+
+
 # ====================================================================================== main
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -440,7 +448,9 @@ def main(argv=None):
             hide = excluded(fn, ft)
             own.append({'id': id_field(t.name, '@0x%x' % fo if hide else fn), 'name': None if hide else fn, 'type': None if hide else ft,
                         'offset': fo, 'size': tsize(ft), 'out_of_scope': hide or None,
-                        'evidence': METADATA, 'ref': 'gcl+0x%x' % t.offset})
+                        'evidence': STATIC if t.fields_source else METADATA, 'ref': 'gcl+0x%x' % t.offset})
+            if t.fields_source:
+                own[-1]['basis'] = FIELD_BASIS[t.fields_source]
         vt = []
         for i, m in enumerate(t.methods):
             root = slot_root(t.name, i)

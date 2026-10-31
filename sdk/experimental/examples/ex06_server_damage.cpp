@@ -16,7 +16,8 @@ extern "C" void example_post_server(void (*fn)(void*), void* user);
 namespace {
 using namespace example;
 using get_by_id_t = void (*)(void** ret, void* container, const int32_t* id);
-using damage_t = void (*)(void* actor, void* scene, const double* amount, const void* src);
+// 0.2.0 added a second f64 after the amount; the game passes 0.0 for it from projectile hits.
+using damage_t = void (*)(void* actor, void* scene, const double* amount, const double* extra, const void* src);
 
 struct req { int32_t actor; double amount; };
 
@@ -34,7 +35,8 @@ void do_damage(void* u) {
     *reinterpret_cast<int32_t*>(src + sym::off_server_scene_actor_damage_src__m_actor_id_src) = -1;  // no attacker
     *reinterpret_cast<int32_t*>(src + sym::off_server_scene_actor_damage_src__m_type) = 0;            // first e_actor_damage_type
     *reinterpret_cast<int32_t*>(src + sym::off_server_scene_actor_damage_src__m_hit_flesh_effect) = -1;
-    if (auto dmg = vmethod<damage_t>(actor, sym::actor_damage_vslot)) dmg(actor, scene, &r.amount, src);
+    const double extra = 0.0;
+    if (auto dmg = vmethod<damage_t>(actor, sym::actor_damage_vslot)) dmg(actor, scene, &r.amount, &extra, src);
 }
 }  // namespace
 

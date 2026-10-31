@@ -33,21 +33,36 @@ def main():
     ap.add_argument('--out', required=True, help='SDK root to write json/, include/, docs/, reports/ into')
     ap.add_argument('--label', default=None)
     ap.add_argument('--previous-json', default=None)
+    ap.add_argument('--previous-build', default=None,
+                    help='folder with the previous build\'s game.exe and bin/game.gcl: finds moved runtime-only natives by '
+                         'their code, and infers what a stripped game.gcl dropped (infer_stripped.py)')
     ap.add_argument('--manifest', default=None, help='appmanifest_<appid>.acf when --game-dir is a copied build')
     ap.add_argument('--skip-compile', action='store_true')
     ap.add_argument('--skip-index', action='store_true')
     a = ap.parse_args()
     out = os.path.abspath(a.out)
     J = os.path.join(out, 'json')
+    if a.previous_json:
+        # a stripped (format 2) game.gcl recovers its function signatures from the previous SDK
+        os.environ.setdefault('ANYMAKER_GCL_NAMES', os.path.abspath(a.previous_json))
     T = lambda n: os.path.join(HERE, n)
     sys.path.insert(0, HERE)
     from common import find_game_files
     gf = find_game_files(a.game_dir)
     extra = ['--dll', gf['steam_api64.dll']] if gf.get('steam_api64.dll') else []
+    prev = find_game_files(a.previous_build) if a.previous_build else {}
+    if prev.get('game.gcl') and a.previous_json:
+        os.makedirs(J, exist_ok=True)
+        inferred = os.path.join(J, 'stripped_inferred.json')
+        run([T('infer_stripped.py'), '--old-gcl', prev['game.gcl'], '--old-names', a.previous_json, '--new-gcl', gf['game.gcl'],
+             '--new-names', a.previous_json, '--out', inferred], 'infer changed names and layouts')
+        os.environ['ANYMAKER_GCL_INFERRED'] = inferred
     run([T('sdk_analyze.py'), '--game-dir', a.game_dir, '--out', J] + extra + (['--label', a.label] if a.label else []) +
         (['--manifest', a.manifest] if a.manifest else []), 'analyze')
     if a.previous_json:
-        run([T('carry_natives.py'), '--old', a.previous_json, '--new', J], 'carry unmoved native RVAs')
+        run([T('carry_natives.py'), '--old', a.previous_json, '--new', J]
+            + (['--old-exe', prev['game.exe'], '--new-exe', gf['game.exe']] if prev.get('game.exe') and gf.get('game.exe') else []),
+            'carry unmoved native RVAs')
     run([T('abi_facts.py'), '--gcl', gf['game.gcl'], '--json', J], 'abi facts')
     rt = sorted(glob.glob(os.path.join(out, 'validation', 'runtime_*.json')))
     if rt:
