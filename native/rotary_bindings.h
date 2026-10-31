@@ -1,5 +1,5 @@
 #pragma once
-// Rotary game bindings, generated for Anymaker 0.1.28 / Steam build 26277967 with
+// Rotary game bindings, generated for Anymaker 0.2.0 / Steam build 26328453 with
 //   python tools/bind.py --reference . --signature "<signature>" --out <file>.hpp
 // run from the regenerated SDK reference (rebind_mod_bindings.py checks them per build), one --signature per binding below. The definition-file five and
 // the world transform are the same as Turbo's; the client engine tick and the voice update are the same as
@@ -14,9 +14,9 @@ inline constexpr func_desc definition_file_ctor{"() ctor (vehicle_component_defi
 // () dtor (vehicle_component_definition_file) | side: shared
 inline constexpr func_desc definition_file_dtor{"() dtor (vehicle_component_definition_file)","",{"53 48 81 ec e0 00 00 00 48 89 4c 24 60 48 89 54 24 68 48 8d 44 24 70 48 8b 1d 8a 01 00 00 48 89", {496u}, 1},"",0u,-1};
 // () vehicle_component_definition_container._add_definitions (vehicle_component_definition_container, const vehicle_component_definition_file) | side: shared
-inline constexpr func_desc definitions_add_definitions{"() vehicle_component_definition_container._add_definitions (vehicle_component_definition_container, const vehicle_component_definition_file)","",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec d8 03 00 00 48 89 8c 24 50 03 00 00 48 8d 81 a0 29", {5184u,248u}, 2},"",0u,-1};
+inline constexpr func_desc definitions_add_definitions{"() vehicle_component_definition_container._add_definitions (vehicle_component_definition_container, const vehicle_component_definition_file)","",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec d8 03 00 00 48 89 8c 24 50 03 00 00 48 8d 81 c0 29", {5184u,248u}, 2},"",0u,-1};
 // (bool) vehicle_component_definition_file.load (vehicle_component_definition_file, const file.path) | side: shared
-inline constexpr func_desc definition_file_load{"(bool) vehicle_component_definition_file.load (vehicle_component_definition_file, const file.path)","",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec d8 03 00 00 48 89 8c 24 50 03 00 00 48 8d 81 a0 29", {5184u,240u}, 2},"",0u,-1};
+inline constexpr func_desc definition_file_load{"(bool) vehicle_component_definition_file.load (vehicle_component_definition_file, const file.path)","",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec d8 03 00 00 48 89 8c 24 50 03 00 00 48 8d 81 c0 29", {5184u,240u}, 2},"",0u,-1};
 // (ptr<const vehicle_component_definition>) vehicle_component_definition_container.get_definition_by_id_const (const vehicle_component_definition_container, const string) | side: shared
 inline constexpr func_desc definitions_get_by_id{"(ptr<const vehicle_component_definition>) vehicle_component_definition_container.get_definition_by_id_const (const vehicle_component_definition_container, const string)","",{"53 48 81 ec a0 00 00 00 48 89 4c 24 50 48 89 54 24 58 48 8d 41 28 48 8b 1d 2b 01 00 00 48 89 4c", {368u}, 1},"",0u,-1};
 // () server_scene.vehicle_component.engine.create (server_scene.vehicle_component.engine, server_scene.vehicle) | side: server

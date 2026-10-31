@@ -26,7 +26,7 @@ static ServerUseResolvedItem resolve_server_use_item(
 
     if(peer_data) {
         if(safe_read_memory(
-            (uintptr_t)peer_data+0x698,
+            (uintptr_t)peer_data+0x6c8,
             &peer_actor_state_rpm,
             sizeof(peer_actor_state_rpm)
         )) {
@@ -34,7 +34,7 @@ static ServerUseResolvedItem resolve_server_use_item(
         }
 
         if(safe_read_native(
-            (uintptr_t)peer_data+0x698,
+            (uintptr_t)peer_data+0x6c8,
             &peer_actor_state_native,
             sizeof(peer_actor_state_native)
         )) {
@@ -49,7 +49,7 @@ static ServerUseResolvedItem resolve_server_use_item(
         InterlockedIncrement64(&g_server_use_peer_state_nonzero);
 
         if(safe_read_memory(
-            peer_actor_state+0x19d8,
+            peer_actor_state+0x19f8,
             &server_actor_rpm,
             sizeof(server_actor_rpm)
         )) {
@@ -57,7 +57,7 @@ static ServerUseResolvedItem resolve_server_use_item(
         }
 
         if(safe_read_native(
-            peer_actor_state+0x19d8,
+            peer_actor_state+0x19f8,
             &server_actor_native,
             sizeof(server_actor_native)
         )) {
@@ -181,8 +181,8 @@ static ServerUseResolvedItem resolve_server_use_item(
     InterlockedIncrement64(&g_server_use_item_resolved);
 
     uintptr_t definition=0;
-    if((safe_read_native(item+0x88,&definition,sizeof(definition)) ||
-        safe_read_memory(item+0x88,&definition,sizeof(definition))) &&
+    if((safe_read_native(item+0x90,&definition,sizeof(definition)) ||
+        safe_read_memory(item+0x90,&definition,sizeof(definition))) &&
        definition) {
         result.definition=definition;
         result.snapshot=capture_definition_snapshot(definition);

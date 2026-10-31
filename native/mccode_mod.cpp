@@ -260,7 +260,7 @@ const char* error_text(int t) {
         "Parameter used before it is defined", "Variable used before it is defined", "That member isn't part of this parameter's type",
         "That member isn't part of this variable's type", "That type can't be used here", "The two sides have different types",
         "Expected a value", "Expected true or false", "Expected an integer", "Expected a fractional number", "Expected a string",
-        "Expected a list", "Expected a number", "Expected a string or a list", "Nothing is connected to this port",
+        "Expected a list", "Expected a number", "Expected a string or a list", "Expected an input or output", "Nothing is connected to this port",
         "The connected part is broken", "This can't be written to", "This can't be read", "Can't read from the connected part",
         "Name is empty", "Names must start with a letter or _"};
     return t >= 0 && t < int(sizeof(names) / sizeof(names[0])) ? names[t] : "Error";

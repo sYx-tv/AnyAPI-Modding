@@ -48,8 +48,8 @@ static void graphics_regression(){
  AnyMenuSectionV1 section;section.id="graphics";section.title="AnyGraphics Modded";section.location=ANY_MENU_SETTINGS_GRAPHICS;section.draw=graphics_draw_fixture;section.event=graphics_event_fixture;section.dirty=dirty_fixture;section.defaults=defaults_fixture;platform::current_plugin=0;assert(menus::api.add_section(&section));platform::current_plugin=-1;
  // Execute the reviewed closing-call fragment from the real Graphics builder.
  auto code=(uint8_t*)VirtualAlloc(nullptr,0x6000,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);assert(code);memcpy(code,MENU_GRAPHICS,sizeof(MENU_GRAPHICS));
- unsigned char entry[]={0x48,0x81,0xec,0xa8,0,0,0,0x48,0x89,0x4c,0x24,0x78,0xe9};memcpy(code,entry,sizeof(entry));int32_t jump=0x3c45-17;memcpy(code+13,&jump,4);
- unsigned char end[]={0x48,0x81,0xc4,0xa8,0,0,0,0xc3};memcpy(code+0x3c6d,end,sizeof(end));uintptr_t cell=(uintptr_t)menus::graphics_end_hook;*(uintptr_t*)(code+0x4730)=(uintptr_t)&cell;DWORD old{};assert(VirtualProtect(code,0x6000,PAGE_EXECUTE_READ,&old));FlushInstructionCache(GetCurrentProcess(),code,0x6000);
+ unsigned char entry[]={0x48,0x81,0xec,0xa8,0,0,0,0x48,0x89,0x4c,0x24,0x78,0xe9};memcpy(code,entry,sizeof(entry));int32_t jump=0x4040-17;memcpy(code+13,&jump,4);
+ unsigned char end[]={0x48,0x81,0xc4,0xa8,0,0,0,0xc3};memcpy(code+0x4068,end,sizeof(end));uintptr_t cell=(uintptr_t)menus::graphics_end_hook;*(uintptr_t*)(code+0x4b88)=(uintptr_t)&cell;DWORD old{};assert(VirtualProtect(code,0x6000,PAGE_EXECUTE_READ,&old));FlushInstructionCache(GetCurrentProcess(),code,0x6000);
  menus::graphics_builder=(uintptr_t)code;menus::inside_graphics=true;track_scroll=true;container_depth=2;((void(*)(void*))code)((void*)1);assert(graphics_draws==1&&container_depth==0);track_scroll=false;
  // Run native comparison call sites with the correct return addresses.
  auto compare=[&](size_t offset){DWORD old{};assert(VirtualProtect(code,0x6000,PAGE_READWRITE,&old));memset(code,0x90,512);code[0]=0x48;code[1]=0x83;code[2]=0xec;code[3]=0x28;code[offset-12]=0x48;code[offset-11]=0xb8;auto fn=(uintptr_t)menus::graphics_equal_hook;memcpy(code+offset-10,&fn,8);code[offset-2]=0xff;code[offset-1]=0xd0;unsigned char finish[]={0x48,0x83,0xc4,0x28,0xc3};memcpy(code+offset,finish,5);assert(VirtualProtect(code,0x6000,PAGE_EXECUTE_READ,&old));FlushInstructionCache(GetCurrentProcess(),code,0x6000);uint8_t value{};((void(*)(uint8_t*,void*,void*))code)(&value,nullptr,nullptr);return value;};
@@ -72,7 +72,7 @@ int main(){assert(!services::api.query("bad/name",1));assert(!services::api.publ
  menus::session=true;menus::close_hook(nullptr,nullptr);menus::close_hook(nullptr,nullptr);assert(events[ANY_MENU_CANCEL]==2&&close_forwards==2);
  activation_regression();scroll_regression();graphics_regression();
  // OVL-9: 5 s for the first minute and while native UI data loads, then 30 s.
- assert(menus::retry_ms(0,"builder_matches_0")==5000&&menus::retry_ms(11,"dependency_contract offset=34248")==5000&&menus::retry_ms(12,"builder_matches_0")==30000
+ assert(menus::retry_ms(0,"builder_matches_0")==5000&&menus::retry_ms(11,"dependency_contract offset=34256")==5000&&menus::retry_ms(12,"builder_matches_0")==30000
   &&menus::retry_ms(500,"native_dimensions")==5000&&menus::retry_ms(12,"native_tab_dimensions")==5000);
  // K42: a faulting section disables only its owner; another owner's capture stays.
  {menus::Section crash;crash.owner=1;crash.callbacks.draw=[](const AnyMenuFrameV1*,void*){RaiseException(0xE0A10043,0,0,nullptr);};AnyMenuFrameV1 frame;platform::capture_owner.store(0);menus::invoke_draw(&crash,&frame);

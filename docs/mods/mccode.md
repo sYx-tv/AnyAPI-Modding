@@ -1,7 +1,7 @@
 # MCCode
 
 > MCCode hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
+> so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
 > [Release notes](../releases/mccode-0.2.0.md). Needs AnyAPI 0.38.0 or newer.
 
 MCCode adds a **Code view** to the microcontroller editor, so you can type the program instead of dragging

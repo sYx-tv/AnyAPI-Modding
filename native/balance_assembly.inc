@@ -43,7 +43,7 @@ static void sample_links(void* self,void* scene){
  std::vector<uintptr_t> grids;if(!vector_items(uintptr_t(self)+96,16,grids))return;
  AssemblyLinks entry;entry.tick=GetTickCount64();
  for(auto grid:grids){std::vector<uintptr_t> components;if(!vector_items(grid+96,16,components))return;
-  for(auto component:components){sample_fluid(component,entry.fluids);uintptr_t fn{};if(!p34_virtual(component,78*8,fn))continue;
+  for(auto component:components){sample_fluid(component,entry.fluids);uintptr_t fn{};if(!p34_virtual(component,79*8,fn))continue;
    auto cached=connection_offsets.find(fn);uintptr_t offset{};
    if(cached==connection_offsets.end()){unsigned char bytes[96]{};
     if(safe_read_memory(fn,bytes,sizeof(bytes)))for(auto& contract:balance_assembly_contract::LINKS)if(!memcmp(bytes,contract.bytes,contract.size)){offset=contract.offset;break;}

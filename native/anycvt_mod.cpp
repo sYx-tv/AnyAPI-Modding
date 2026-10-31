@@ -18,8 +18,8 @@
 // side. A player without the client hooks sees the rows under stock names (Gear Ratio 1, Gear Ratio 2, Max,
 // Stiffness, Min).
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (anycvt_bindings.h): Anymaker 0.1.28 / Steam build
-// 26277967 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (anycvt_bindings.h): Anymaker 0.2.0 / Steam build
+// 26328453 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"

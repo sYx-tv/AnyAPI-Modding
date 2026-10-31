@@ -77,7 +77,7 @@ constexpr ptrdiff_t component_colours = 0x30;         // buffer +0, count +8, el
 // client_scene.vehicle_plate
 constexpr ptrdiff_t plate_colour_front = 0xc0 + 8, plate_colour_back = 0xd0 + 8;
 // light colour (color8 r,g,b,a), per kind
-constexpr ptrdiff_t light_colour_spot = 0x150, light_colour_omni = 0x108, light_colour_rotate = 0x120;
+constexpr ptrdiff_t light_colour_spot = 0x160, light_colour_omni = 0x118, light_colour_rotate = 0x130;
 constexpr ptrdiff_t client_peer_data = 40 + 104;      // client.m_peers.m_data
 }  // namespace off
 
