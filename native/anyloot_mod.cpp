@@ -67,6 +67,8 @@ constexpr ptrdiff_t server_vehicle_motion = 0x5a0 + 0x18;  // server_scene.vehic
 // vehicle_component_definition
 constexpr ptrdiff_t def_id = 0, def_name = 0x10, def_class = 0x30, def_building_furniture = 0x1b2;
 // client
+constexpr ptrdiff_t client_ui_data = 0x4450;         // client.m_ui_data (0.2.0)
+constexpr ptrdiff_t ui_inspected_id = 0x40 + 0x90;  // client.ui_data.m_inventory_data.m_hovered_item_id (inventory_item_util.item_id)
 constexpr ptrdiff_t client_scene = 0xfb0;           // client.m_scene (embedded)
 constexpr ptrdiff_t scene_vehicles = 0xa0;          // client_scene.m_vehicles (client_scene.vehicle.container)
 constexpr ptrdiff_t actor_id = 8;                   // client_scene.actor.m_id
@@ -304,6 +306,15 @@ void hk_tick(uint8_t* scene, uint8_t* server) {
 }
 
 // ------------------------------------------------------------------ main thread (every player)
+struct ItemId { int32_t type, floor_item, vehicle, actor, component, item; };   // inventory_item_util.item_id, 24 bytes
+static_assert(sizeof(ItemId) == 24, "item_id");
+
+uint8_t* client_ui_data() {
+    uint8_t** ref = g_client_ref;
+    uint8_t* client = ref && anymaker::readable(ref, 16) ? ref[1] : nullptr;
+    return client && anymaker::readable(client + off::client_ui_data + off::ui_inspected_id, sizeof(ItemId)) ? client + off::client_ui_data : nullptr;
+}
+
 uint8_t* client_scene() {
     uint8_t** ref = g_client_ref;
     uint8_t* client = ref && anymaker::readable(ref, 16) ? ref[1] : nullptr;
@@ -372,10 +383,28 @@ void hk_on_inspect(uint8_t* actor, anymaker::gc_vector_raw* items) {
         bool down = rd<bool>(actor, off::actor_incapacitated);
         int32_t id = rd<int32_t>(actor, off::actor_id), before = count(items);
         const char* result = !down ? "alive" : !g_bodies ? "bodies_off" : add_crate_items(items);
+        // When you open your inventory at a body, the game copies only the type and actor id of what the body's
+        // on_inspect returned into the inspected-container id, because a body's own containers are actor
+        // containers. Ours is a vehicle part, so fill in its vehicle, part and item ids here; the game then sets
+        // the type (vehicle part) right after this hook returns. Opening your inventory anywhere else resets
+        // the whole id first, so these fields never leak into another container.
+        int ui = 0;
+        if (!std::strcmp(result, "added") && count(items) > 0) {
+            const ItemId* added = items->at<ItemId>(count(items) - 1);
+            uint8_t* ui_data = client_ui_data();
+            if (added && ui_data) {
+                auto* inspected = reinterpret_cast<ItemId*>(ui_data + off::ui_inspected_id);
+                inspected->vehicle = added->vehicle; inspected->component = added->component; inspected->item = added->item;
+                ui = 1;
+                if (logs < 60 && id != last_logged)
+                    log(0, "ANYLOOT_UI added_id type=%d vehicle=%d component=%d item=%d inspected_now type=%d vehicle=%d actor=%d component=%d",
+                        added->type, added->vehicle, added->component, added->item, inspected->type, inspected->vehicle, inspected->actor, inspected->component);
+            }
+        }
         // on_inspect runs every frame you look at something, so log each body once per change of target.
         if (logs < 60 && id != last_logged) {
             ++logs; last_logged = id;
-            log(0, "ANYLOOT_INSPECT actor=%d kind=%s down=%d items_before=%d items_after=%d result=%s", id, kind, down ? 1 : 0, before, count(items), result);
+            log(0, "ANYLOOT_INSPECT actor=%d kind=%s down=%d items_before=%d items_after=%d result=%s ui=%d", id, kind, down ? 1 : 0, before, count(items), result, ui);
             if (down) inspect_toast(kind, count(items), result);
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
