@@ -64,6 +64,9 @@ static void pass(float ms,int32_t code){scene_frame::board.pass_ms[ANY_PASS_VOLU
 // Bypass: not drawn this frame for a reason worth a warning (reason codes in docs/scene-lighting.md).
 // History survives a bypass, as before: the camera and the selector stay those of the last rendered frame.
 static void bypass(uint32_t code,const char* what,int64_t detail=0){gpu_ready=false;reason=code;bypass_reason=code;pass(-1,int32_t(code));auto n=++rejected;if(n==1||n%600==0)log_line(ANY_LOG_WARN,"framework",("SCENE_LIGHTING bypass="+std::string(what)+" reason="+std::to_string(code)+" detail="+std::to_string(detail)).c_str());}
+// 0.2.0 port check: what the main camera (scene+0x20) held when its projection was refused (failure 6).
+static void log_projection(uintptr_t scene){uint32_t mode{};double clip[2]{},fov{},m[16]{};bool ok=scene_frame::read_value(scene+0x20,mode)&&scene_frame::read(scene+0x20+0x68,clip,sizeof(clip))&&scene_frame::read_value(scene+0x20+0x2a0,fov)&&scene_frame::read(scene+0x20+0x1a0,m,sizeof(m));
+ char line[320];snprintf(line,sizeof(line),"SCENE_LIGHTING projection read=%d mode=%u near=%g far=%g fov=%g m0=%g m5=%g m10=%g m11=%g m14=%g m15=%g",int(ok),mode,clip[0],clip[1],fov,m[0],m[5],m[10],m[11],m[14],m[15]);log_line(ANY_LOG_WARN,"framework",line);}
 static double seconds(){static LARGE_INTEGER frequency{};if(!frequency.QuadPart)QueryPerformanceFrequency(&frequency);LARGE_INTEGER now;QueryPerformanceCounter(&now);return double(now.QuadPart)/double(frequency.QuadPart);}
 static uint64_t diag_frames{};
 // K09: 120 lighting frames after the pass went off (disabled, or an inactive owner) the GPU objects go, once: one
@@ -96,7 +99,7 @@ static void record(void* renderer,void* scene){
  // The ocean target must be a live resource of this device, or no sea mode is used.
  if(valid&&f.ocean){Microsoft::WRL::ComPtr<ID3D12Device> od;if(!device||!scene_frame::resource_valid(f.ocean_target.resource)||FAILED(((ID3D12Resource*)f.ocean_target.resource)->GetDevice(IID_PPV_ARGS(&od)))||od.Get()!=device.Get())f.ocean=false;}
  if(valid)atmosphere_active=extra_rows(f,x);
- if(!valid||!volumetric::valid(f.gpu)){frame_valid=false;history.valid=false;return bypass(100+f.failure,"native_frame_contract",f.failure);}
+ if(!valid||!volumetric::valid(f.gpu)){frame_valid=false;history.valid=false;if(!valid&&f.failure==6&&(rejected==0||(rejected+1)%600==0))log_projection(uintptr_t(scene));return bypass(100+f.failure,"native_frame_contract",f.failure);}
  lamps_drawn=uint32_t(f.gpu.fog_color[3]);lamps_shadowed=f.lamps.shadowed;
  if(++diag_frames==1||diag_frames%600==0)log_line(ANY_LOG_INFO,"framework",("LAMP_DIAG omni="+std::to_string(f.lamps.omni)+" spot="+std::to_string(f.lamps.spot)+" flashes="+std::to_string(f.lamps.flashes)+" rejected="+std::to_string(f.lamps.rejected)+" drawn="+std::to_string(lamps_drawn.load())+" shadowed="+std::to_string(f.lamps.shadowed)+" raw29_hits="+std::to_string(raw29_hits.load())+" raw29_misses="+std::to_string(raw29_misses.load())+" tracked="+std::to_string(f.lamps.tracked)+" spot_maps="+std::to_string(f.spot_maps)+" capture_us="+std::to_string(capture_us.load())+" path="+std::to_string(path)+" ring_waits="+std::to_string(gpu.ring_wait_count())+" idle_calls="+std::to_string(gpu.idle_count())).c_str());
  // K25, output-identical only. The sun cascades matter only to shafts and to clarity-lit fog.
