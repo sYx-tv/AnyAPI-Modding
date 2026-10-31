@@ -20,7 +20,7 @@
 // crate spawned, was filled and reached this client, and every inspect call on a zombie or creature.
 // 0.1.0 had an F7 body toggle; it is gone, since in the first test the bodies were inspected while it was off.
 //
-// EXPERIMENTAL. Experimental SDK bindings (anyloot_bindings.h): Anymaker 0.1.28 / Steam build 26277967 only.
+// EXPERIMENTAL. Experimental SDK bindings (anyloot_bindings.h): Anymaker 0.2.0 / Steam build 26328453 only.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -51,23 +51,23 @@ namespace {
 constexpr const char* kModId = "anyloot";
 using vehicle_reads::rd;
 
-// Layouts from the 0.1.28 reference (metadata; unchanged since 0.1.25).
+// Layouts from the 0.2.0 move map (server_scene, peer and client moved in 0.2.0).
 namespace off {
 // server_scene
 constexpr ptrdiff_t server_peers = 0xa8;            // m_peers (server_scene.peer.container)
 constexpr ptrdiff_t server_vehicles = 0x1b0;        // m_vehicles (server_scene.vehicle.container)
 constexpr ptrdiff_t server_physics = 0xa60;         // m_physics (physics.scene)
-constexpr ptrdiff_t server_tiles = 0xc48;           // m_tile_container (server_scene.environment_tile_container)
-constexpr ptrdiff_t server_component_defs = 0x1028 + 8;  // m_component_definitions.m_definitions vector<ref<definition>>
-constexpr ptrdiff_t server_loot_level = 0x14d8;     // m_loot_level (s32)
-constexpr ptrdiff_t server_item_defs = 0xf80;       // m_inventory_definitions.m_definitions vector<ref<inventory_definition>>
-constexpr ptrdiff_t peer_position = 0x19f8;         // server_scene.peer position (vec3), as AnyHelpers' admin uses it
+constexpr ptrdiff_t server_tiles = 0xc88;           // m_tile_container (server_scene.environment_tile_container)
+constexpr ptrdiff_t server_component_defs = 0x1068 + 8;  // m_component_definitions.m_definitions vector<ref<definition>>
+constexpr ptrdiff_t server_loot_level = 0x1518;     // m_loot_level (s32)
+constexpr ptrdiff_t server_item_defs = 0xfc0;       // m_inventory_definitions.m_definitions vector<ref<inventory_definition>>
+constexpr ptrdiff_t peer_position = 0x1a18;         // server_scene.peer position (vec3), as AnyHelpers' admin uses it
 constexpr ptrdiff_t server_object_id = 0x40;        // server_scene.vehicle.m_id and server_scene.vehicle_component.m_id
 constexpr ptrdiff_t server_vehicle_motion = 0x5a0 + 0x18;  // server_scene.vehicle motion type property _m_value (u32, 1 = static)
 // vehicle_component_definition
 constexpr ptrdiff_t def_id = 0, def_name = 0x10, def_class = 0x30, def_building_furniture = 0x1b2;
 // client
-constexpr ptrdiff_t client_scene = 0xf50;           // client.m_scene (embedded)
+constexpr ptrdiff_t client_scene = 0xfb0;           // client.m_scene (embedded)
 constexpr ptrdiff_t scene_vehicles = 0xa0;          // client_scene.m_vehicles (client_scene.vehicle.container)
 constexpr ptrdiff_t actor_id = 8;                   // client_scene.actor.m_id
 constexpr ptrdiff_t actor_incapacitated = 0x28 + 8; // client_scene.actor._m_is_incapacitated value (as AnyMap reads it)
@@ -82,8 +82,8 @@ namespace anchor {
 using anymaker::func_desc;
 using anymaker::global_desc;
 inline constexpr global_desc g_client{"g_client","48 83 ec 38 48 89 4c 24 20 48 89 54 24 28 48 8b 05 4b 00 00 00 48 83 78 08 00 0f 95 c0 3c 00 0f",96u};
-inline constexpr func_desc zombie_tick{"() client_scene.actor_zombie.tick (client_scene.actor_zombie, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 08 10 00 00 4c 8b a4 24 70 10 00 00 48 8b 9c 24 78",{"53 55 56 57 48 81 ec 38 01 00 00 48 8b 84 24 80 01 00 00 48 8b ac 24 88 01 00 00 48 89 4c 24 70", {536u}, 1},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 24 03 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",832u,4};
-inline constexpr func_desc creature_tick{"() client_scene.actor_creature.tick (client_scene.actor_creature, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 48 81 ec c8 01 00 00 48 8b 84 24 10 02 00 00 48 8b 9c 24 18 02 00 00 48 89 8c 24 e0",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 28 07 00 00 4c 8b a4 24 90 07 00 00 48 8b 84 24 98", {6848u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 fd 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",536u,4};
+inline constexpr func_desc zombie_tick{"() client_scene.actor_zombie.tick (client_scene.actor_zombie, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 18 10 00 00 4c 8b a4 24 80 10 00 00 48 8b 84 24 88",{"53 55 56 57 48 81 ec 38 01 00 00 48 8b 84 24 80 01 00 00 48 8b ac 24 88 01 00 00 48 89 4c 24 70", {536u}, 1},"53 48 83 ec 30 48 89 4c 24 20 48 8d 01 48 8b 15 24 03 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b",832u,4};
+inline constexpr func_desc creature_tick{"() client_scene.actor_creature.tick (client_scene.actor_creature, client, client_scene, const f64, const f64, const vec3)","53 55 56 57 48 81 ec c8 01 00 00 48 8b 84 24 10 02 00 00 48 8b 9c 24 18 02 00 00 48 89 8c 24 e0",{"53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 28 07 00 00 4c 8b a4 24 90 07 00 00 48 8b 9c 24 98", {6896u}, 1},"48 83 ec 38 48 89 4c 24 20 48 8d 01 48 8b 15 fd 01 00 00 48 89 4c 24 28 48 89 c1 ff 12 48 8b 05",536u,4};
 }  // namespace anchor
 
 constexpr int kMotionSetSlot = 4;   // replication.master.property_enum<physics.e_motion_type>.set
@@ -101,8 +101,11 @@ using vehicle_create_t = void (*)(uint8_t** ret, uint8_t* vehicles, uint8_t* phy
 using add_component_t = void (*)(uint8_t** ret, uint8_t* vehicle, uint8_t* scene, const GridOriginDir* grid, const Vec3i* position,
                                  const int32_t* rotation, const Vec3i* extend, const uint8_t* definition);
 using post_load_t = void (*)(uint8_t* vehicle, uint8_t* scene);
-using generate_loot_t = void (*)(uint8_t* vehicle, uint8_t* scene, const int32_t* level);
+// 0.2.0 added a second s32; server_scene.set_loot_level passes 0 for it.
+using generate_loot_t = void (*)(uint8_t* vehicle, uint8_t* scene, const int32_t* level, const int32_t* extra);
 using on_inspect_t = void (*)(uint8_t* self, anymaker::gc_vector_raw* items);
+// The part version gained an s32 in 0.2.0 (unused by the storage part, which pushes its own id).
+using part_inspect_t = void (*)(uint8_t* self, const int32_t* index, anymaker::gc_vector_raw* items);
 using spawn_item_t = void (*)(bool* ret, uint8_t* vehicle, uint8_t* scene, uint32_t* random, const uint8_t* const* definition);
 
 AnyModHostV1 host;
@@ -119,7 +122,7 @@ add_component_t add_component;
 post_load_t post_load;
 generate_loot_t generate_loot;
 spawn_item_t spawn_item;
-on_inspect_t inventory_inspect;
+part_inspect_t inventory_inspect;
 uint8_t** g_client_ref;
 const uint8_t *g_zombie_type, *g_creature_type;
 
@@ -265,7 +268,8 @@ void spawn_crate(uint8_t* scene, const Spawn& s) {
     std::string food_text;
     int added = 0;
     if (component) {
-        generate_loot(vehicle, scene, &level);
+        const int32_t extra = 0;
+        generate_loot(vehicle, scene, &level, &extra);
         uint32_t random = uint32_t(GetTickCount64()) | 1;
         for (const uint8_t* def : pick_food(scene, 3)) {
             bool ok = false;
@@ -344,7 +348,8 @@ const char* add_crate_items(anymaker::gc_vector_raw* items) {
     // mod's hook on it), never some other part's.
     void* fn = anymaker::typeinfo_of(component).method(kInspectSlot);
     if (fn != reinterpret_cast<void*>(inventory_inspect) && !route::in_other_module(fn)) return "crate_part_is_not_storage";
-    reinterpret_cast<on_inspect_t>(fn)(component, items);
+    const int32_t index = 0;
+    reinterpret_cast<part_inspect_t>(fn)(component, &index, items);
     return "added";
 }
 
@@ -480,7 +485,7 @@ void install() {
             continue;
         }
         peer_by_id = (get_by_id_t)fns[0]; vehicle_create = (vehicle_create_t)fns[1]; add_component = (add_component_t)fns[2];
-        post_load = (post_load_t)fns[3]; generate_loot = (generate_loot_t)fns[4]; inventory_inspect = (on_inspect_t)fns[5];
+        post_load = (post_load_t)fns[3]; generate_loot = (generate_loot_t)fns[4]; inventory_inspect = (part_inspect_t)fns[5];
         client_vehicle_by_id = (get_by_id_t)fns[6]; client_component_by_id = (get_by_id_t)fns[7]; spawn_item = (spawn_item_t)fns[8];
         g_client_ref = client; g_zombie_type = zombie; g_creature_type = creature;
         if (!h_tick.install(tick, (void*)&hk_tick) || !h_inspect.install(inspect, (void*)&hk_on_inspect)) {
