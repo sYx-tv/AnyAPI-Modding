@@ -216,6 +216,9 @@ function(anyapi_version_resource target product)
   elseif(target STREQUAL "AnyMoto")
     set(ANYAPI_VERSION_COMMA "0,0,3,0")
     set(ANYAPI_VERSION_TEXT "0.0.3")
+  elseif(target STREQUAL "AnyAlternator")
+    set(ANYAPI_VERSION_COMMA "0,0,1,0")
+    set(ANYAPI_VERSION_TEXT "0.0.1")
   elseif(target STREQUAL "AnyBattery")
     set(ANYAPI_VERSION_COMMA "0,0,2,0")
     set(ANYAPI_VERSION_TEXT "0.0.2")
@@ -572,6 +575,15 @@ anyapi_version_resource(AnyBattery AnyBattery)
 add_executable(anybattery_logic_test tests/anybattery_logic_test.cpp)
 target_compile_options(anybattery_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME anybattery_logic COMMAND anybattery_logic_test)
+
+# AnyAlternator: Medium, Large and Heavy alternators, harder to spin the bigger they are, through the experimental SDK.
+add_library(AnyAlternator SHARED anyalternator_mod.cpp)
+target_include_directories(AnyAlternator PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
+target_compile_options(AnyAlternator PRIVATE /W3 /EHsc /utf-8)
+anyapi_version_resource(AnyAlternator AnyAlternator)
+add_executable(anyalternator_logic_test tests/anyalternator_logic_test.cpp)
+target_compile_options(anyalternator_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME anyalternator_logic COMMAND anyalternator_logic_test)
 
 # AnyCVT: belt CVTs for the small, medium and large engine (the stock gearbox of each size, R/N/D on the shifter
 # link, sliding ratio to hold a target RPM, centrifugal clutch), through the experimental SDK.
