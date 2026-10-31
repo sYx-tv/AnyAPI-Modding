@@ -41,7 +41,7 @@ int main() {
     assert(p29_translation(matrix,translation) && translation[0]==4 && translation[2]==6);
     matrix[0]=std::numeric_limits<double>::quiet_NaN();assert(!p29_translation(matrix,translation));
     unsigned char inventory[0x60]{},item[0xA0]{};uintptr_t address=(uintptr_t)item,definition=123;
-    std::memcpy(inventory+0x48,&address,8);std::memcpy(item+0x88,&definition,8);
+    std::memcpy(inventory+0x48,&address,8);std::memcpy(item+0x90,&definition,8);
     auto read=[&](uintptr_t a,void* out,size_t n){
         for(auto pair:{std::pair{(uintptr_t)inventory,sizeof(inventory)},std::pair{(uintptr_t)item,sizeof(item)}})
             if(a>=pair.first && n<=pair.second && a-pair.first<=pair.second-n){std::memcpy(out,(void*)a,n);return true;}

@@ -40,7 +40,7 @@ static void source(int32_t* out,void* inv,const int32_t* id){assert(inv==actor+0
 static void assign(void* peer,const int32_t* slot,const equipment_runtime::InventoryId* id,const bool* activate){assert(peer==client+0x90&&!*activate);assert(id->type==2&&id->actor==10&&id->floor==-1&&id->vehicle==-1&&id->component==-1);++assign_calls;assigned_slot=*slot;assigned_id=id->item;}
 static void setup(unsigned char* item,unsigned char* def,int32_t id,const char* key,const char* name,const char* cls){uintptr_t p=uintptr_t(def);memcpy(item+0x28,&p,8);memcpy(item+16,&id,4);strings[p]=key;strings[p+16]=name;strings[p+48]=cls;}
 static void resolver_test(){using namespace equipment_runtime;using namespace equipment_tools_contract;
- static unsigned char parent[54000]{},gun[1200]{},owner[600]{},passive[600]{};
+ static unsigned char parent[56064]{},gun[1200]{},owner[600]{},passive[600]{};
  uintptr_t owner_cell=uintptr_t(owner),ctor_cell=uintptr_t(ctor),dtor_cell=uintptr_t(dtor),event_cell=uintptr_t(assign),prop=40;
  auto put=[](unsigned char* b,size_t offset,uintptr_t p){memcpy(b+offset,&p,8);};
  put(parent,ASSIGN_PARENT_OFFSET,uintptr_t(&owner_cell));put(gun,VECTOR_OWNER_END+8,uintptr_t(&ctor_cell));put(gun,VECTOR_OWNER_END+80,uintptr_t(&dtor_cell));put(gun,VECTOR_OWNER_END+72,prop);put(owner,ASSIGN_OWNER_END+16,uintptr_t(&event_cell));

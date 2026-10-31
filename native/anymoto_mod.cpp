@@ -780,8 +780,8 @@ void hk_gyro_get_f64(double** ret, void* self, const anymaker::gc_string_view* n
 using get_properties_t = void (*)(void* self, void* properties);
 using add_f64_range_t = void (*)(void* properties, const int32_t* label, double* const* value, const double* min, const double* max, const double* step);
 constexpr int kAddPropertyF64RangeSlot = 10;     // server_scene.peer.property_data method table (as AnyEngineParts)
-constexpr int32_t kLocPower = 323;               // e_localization_string property_power
-constexpr int32_t kLocRollSensitivity = 329;     // e_localization_string property_sensitivity_roll
+constexpr int32_t kLocPower = 326;               // e_localization_string property_power
+constexpr int32_t kLocRollSensitivity = 332;     // e_localization_string property_sensitivity_roll
 anymaker::cell_hook h_gyro_properties;
 void* container_method(void* container, int slot) {
     if (!container || !anymaker::readable(container, 8)) return nullptr;
@@ -888,6 +888,7 @@ void install_hooks() {
         void** tick = route::cell(bind::gyro_tick);
         void** data = route::cell(bind::gyro_get_data_f64);
         void** props = route::cell(bind::gyro_get_properties);
+        if (!props) props = route::sibling_cell(bind::gyro_tick, bind::gyro_get_properties.method_slot);
         if (!lean || !tick || !h_gyro_tick.install(tick, (void*)&hk_gyro_tick))
             log(1, "Lean Assist inactive (physics %d/%d/%d, transforms %d/%d, tick %d)", !!g_get_angular, !!g_get_linear, !!g_set_angular,
                 !!g_server_vehicle_transform, !!g_server_component_transform, !!tick);

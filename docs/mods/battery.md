@@ -1,7 +1,7 @@
 # AnyBattery
 
 > AnyBattery hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
+> so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
 > 0.0.1 is a test build: nothing below has been tried in game yet.
 
 AnyBattery adds one part, the **Battery Pack**: a battery you place and stretch to size the way you place a liquid

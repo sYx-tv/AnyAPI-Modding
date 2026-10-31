@@ -15,9 +15,9 @@ using anymaker::gc_string_view;using anymaker::gc_vector_raw;
 struct Vec2 {int32_t x,y;};
 struct LocalFile {gc_string_view file_name;void* thumbnail;};   // client.ui_data.local_vehicle_file, 24 bytes
 static_assert(sizeof(LocalFile)==24,"local_vehicle_file");
-// client.ui_data+0x380 is duplicate_paste: +0x00 active tab (0 local, 1 workshop), +0x04 local scroll,
+// client.ui_data+0x3a8 is duplicate_paste: +0x00 active tab (0 local, 1 workshop), +0x04 local scroll,
 // +0x08 local hovered grid position, +0x38 local vehicle files.
-constexpr size_t kPaste=0x380,kTab=0x00,kScroll=0x04,kHover=0x08,kLocalFiles=0x38;
+constexpr size_t kPaste=0x3a8,kTab=0x00,kScroll=0x04,kHover=0x08,kLocalFiles=0x38;
 using UpdateFn=void(*)(void*,const double*,void*,void*,void*,void*);
 using BuildFn=void(*)(void*,void*,void*,void*,void*);
 using DeleteFn=void(*)(void*,gc_vector_raw*,const int32_t*);

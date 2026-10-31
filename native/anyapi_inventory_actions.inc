@@ -43,7 +43,7 @@ static void merge_live(uintptr_t scene,uint64_t now){static uintptr_t last_scene
  std::string ids;for(auto& f:found)if(ids.size()<1500)ids+=std::string(ids.empty()?"":",")+f.metadata.id;
  if(auto added=catalog_runtime::append(found))log_line(ANY_LOG_INFO,"framework",("ITEM_CATALOG live_added="+std::to_string(added)+" source=loaded_world ids="+ids).c_str());}
 static void tick(void* client,void* scene,void* actor){if(!ready||faulted)return;uintptr_t local{};int32_t ui=-1;
- bool sampled=g_p34_frontend&&safe_read_memory(g_p34_frontend+0x828,&ui,4);
+ bool sampled=g_p34_frontend&&safe_read_memory(g_p34_frontend+0x858,&ui,4);
  bool local_read=scene&&safe_read_memory((uintptr_t)scene+0x188,&local,8);if(local_read&&!local)safe_read_memory((uintptr_t)scene+0x190,&local,8);
  bool valid=client&&scene&&actor&&local_read&&local==(uintptr_t)actor&&sampled&&ui==2;
  std::unique_lock lock(mutex,std::try_to_lock);if(!lock.owns_lock())return;auto now=GetTickCount64();if(sampled&&ui!=2){context_tick=0;context_scene=0;}if(valid){session_runtime::sample(scene);context_scene=(uintptr_t)scene;context_tick=now;merge_live((uintptr_t)scene,now);}
@@ -51,7 +51,7 @@ static void tick(void* client,void* scene,void* actor){if(!ready||faulted)return
  // and are consumed exactly once; no retries can duplicate a native event.
  for(auto& r:requests){if(r.state!=ANY_ITEM_REQUEST_QUEUED)continue;if((sampled&&ui!=2)||now-r.queued_at>2000||(valid&&r.scene!=(uintptr_t)scene)){r.state=ANY_ITEM_REQUEST_EXPIRED;continue;}if(!valid)continue;if(!permitted(r.allowed_modes)){r.state=ANY_ITEM_REQUEST_EXPIRED;continue;}r.state=dispatch(client,scene,r.id,catalog_runtime::category_is(r.id,"building"));char message[256];std::snprintf(message,sizeof(message),"INVENTORY_ACTION ticket=%llu id=%s state=%s native_instances=1 server_confirmation=NOT_OBSERVED",(unsigned long long)r.ticket,r.id,r.state==ANY_ITEM_REQUEST_SENT?"SENT":"FAILED");log_line(ANY_LOG_INFO,"framework",message);break;}
 }
-static DWORD WINAPI worker(void*){while(!ready&&!faulted){auto owners=scan_exact(INV_GIVE_OWNER,sizeof(INV_GIVE_OWNER));if(owners.size()==1){uintptr_t get{},send{},get_component{};if(p34_cell(owners[0],0xd068,get)&&p34_body(get,INV_LOOKUP)&&p34_cell(owners[0],0xd0b0,send)&&p34_body(send,INV_GIVE_EVENT)&&p34_cell(owners[0],0xd0e8,get_component)&&p34_body(get_component,INV_COMPONENT_LOOKUP)&&session_runtime::resolve()){lookup=(LookupFn)get;component_lookup=(LookupFn)get_component;give=(GiveFn)send;ready=true;log_line(ANY_LOG_INFO,"framework","INVENTORY_ACTION ready=1 mechanism=NATIVE_GIVE_EVENT thread=PLAYER_TICK direct_server_writes=0");break;}}Sleep(5000);}return 0;}
+static DWORD WINAPI worker(void*){while(!ready&&!faulted){auto owners=scan_exact(INV_GIVE_OWNER,sizeof(INV_GIVE_OWNER));if(owners.size()==1){uintptr_t get{},send{},get_component{};if(p34_cell(owners[0],0xd148,get)&&p34_body(get,INV_LOOKUP)&&p34_cell(owners[0],0xd190,send)&&p34_body(send,INV_GIVE_EVENT)&&p34_cell(owners[0],0xd1c8,get_component)&&p34_body(get_component,INV_COMPONENT_LOOKUP)&&session_runtime::resolve()){lookup=(LookupFn)get;component_lookup=(LookupFn)get_component;give=(GiveFn)send;ready=true;log_line(ANY_LOG_INFO,"framework","INVENTORY_ACTION ready=1 mechanism=NATIVE_GIVE_EVENT thread=PLAYER_TICK direct_server_writes=0");break;}}Sleep(5000);}return 0;}
 static const AnyInventoryActionsV1 api{sizeof(AnyInventoryActionsV1),1,available,add,state};
 static const AnyInventoryActionsV2 api_v2{sizeof(AnyInventoryActionsV2),2,&api,add_mask};
 }

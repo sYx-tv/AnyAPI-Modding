@@ -260,7 +260,7 @@ const char* error_text(int t) {
         "Parameter used before it is defined", "Variable used before it is defined", "That member isn't part of this parameter's type",
         "That member isn't part of this variable's type", "That type can't be used here", "The two sides have different types",
         "Expected a value", "Expected true or false", "Expected an integer", "Expected a fractional number", "Expected a string",
-        "Expected a list", "Expected a number", "Expected a string or a list", "Nothing is connected to this port",
+        "Expected a list", "Expected a number", "Expected a string or a list", "Expected an input or output", "Nothing is connected to this port",
         "The connected part is broken", "This can't be written to", "This can't be read", "Can't read from the connected part",
         "Name is empty", "Names must start with a letter or _"};
     return t >= 0 && t < int(sizeof(names) / sizeof(names[0])) ? names[t] : "Error";
@@ -848,8 +848,17 @@ void set_clipboard(const std::string& s) {
 }
 
 // Side panel rows, built the same way for drawing and clicking.
-enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode, InsertScript, TogglePart };
-struct SideRow { std::string label, help, insert; bool header = false; uint32_t color = 0xffe8ecef; SideAct act = SideAct::None; int arg = 0; };
+enum class SideAct { None, AddNode, EditParam, DeleteNode, DuplicateNode, InsertScript, TogglePart, PartChannel };
+struct SideRow {
+    std::string label, help, insert;
+    bool header = false;
+    uint32_t color = 0xffe8ecef;
+    SideAct act = SideAct::None;
+    int arg = 0;
+    // PartChannel rows: the code view inserts `insert`; the node editor adds a part node for this channel
+    std::string part, channel, type;
+    bool sets = false;
+};
 // Parts tab: the setup guide, the parts wired to this microcontroller, then every part that has channels.
 // The list is the game's parts (AnyAPI's item catalog) plus the parts mods add, read from the definition files they
 // write under "AnyAPI and Modding" (the catalog's entries for those carry no channels). It is built at startup and
@@ -968,7 +977,9 @@ void parts_rows(std::vector<SideRow>& rows) {
         if (pp.part.empty() || pp.channel.empty()) continue;
         const parts::Channel* c = find_channel(list, pp.channel);
         std::string help = std::string(pp.input ? "read" : "set") + (c && !c->type.empty() ? ", " + c->type : "");
-        rows.push_back({pp.part + "." + pp.channel, help, pp.part + "." + pp.channel, false, pp.input ? 0xff7cc8ff : 0xffffb86c});
+        SideRow r{pp.part + "." + pp.channel, help, pp.part + "." + pp.channel, false, pp.input ? 0xff7cc8ff : 0xffffb86c, SideAct::PartChannel};
+        r.part = pp.part; r.channel = pp.channel; r.type = c ? c->type : ""; r.sets = !pp.input;
+        rows.push_back(r);
         if (c && !c->doc.empty())
             for (auto& w : parts::wrap(c->doc, kWrap)) rows.push_back({"   " + w, "", "", false, kDimText});
     }
@@ -993,7 +1004,9 @@ void parts_rows(std::vector<SideRow>& rows) {
             const char* hint = parts::type_hint(c.type);
             std::string help = c.type + (*hint ? std::string(": ") + hint : std::string());
             if (c.dir != parts::Dir::Unknown) help = (c.dir == parts::Dir::Read ? "read, " : "set, ") + help;
-            rows.push_back({"   " + name + "." + c.name, help, name + "." + c.name, false, c.dir == parts::Dir::Set ? 0xffffb86c : 0xff7cc8ff});
+            SideRow r{"   " + name + "." + c.name, help, name + "." + c.name, false, c.dir == parts::Dir::Set ? 0xffffb86c : 0xff7cc8ff, SideAct::PartChannel};
+            r.part = name; r.channel = c.name; r.type = c.type; r.sets = c.dir == parts::Dir::Set;
+            rows.push_back(r);
             for (auto& w : parts::wrap(c.doc, kWrap)) rows.push_back({"      " + w, "", "", false, kDimText});
         }
     }
@@ -1614,6 +1627,21 @@ uint32_t nodes_key_down(uint32_t key) {
     }
     return 1;
 }
+// A Parts tab channel clicked in the node editor: a Part input node for a channel code reads, a Part output node
+// for one it sets, already filled in with the part, the channel and its type.
+void add_part_node(const SideRow& r) {
+    bool on_off = r.type == "bool";
+    std::string kind = r.sets ? (on_off ? "part_out_bool" : "part_out") : (on_off ? "part_in_bool" : "part_in");
+    Layout l = layout(g.frame_w, g.frame_h);
+    add_node(kind, l.editor.w, l.editor.h, canvas_z(l));
+    nodes::Node* n = g.graph.node(g.selected);
+    if (!n) return;
+    n->params["part"] = r.part;
+    n->params["channel"] = r.channel;
+    if (!on_off) n->params["type"] = r.type == "integer" ? "whole number" : "number";
+    graph_sync();
+    set_message("Added " + r.part + "." + r.channel + (r.sets ? " (set)" : " (read)") + ". Wire it up, then Apply.", 0xff8fd18f);
+}
 void nodes_side_click(const SideRow& r) {
     switch (r.act) {
     case SideAct::AddNode: {
@@ -1861,6 +1889,9 @@ uint32_t input(const AnyInputV1* e, void*) {
             if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act == SideAct::InsertScript) insert_script(rows[size_t(i)].arg);
             else if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act == SideAct::TogglePart) {
                 g.part_open = g.part_open == rows[size_t(i)].arg ? -1 : rows[size_t(i)].arg;
+            }
+            else if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act == SideAct::PartChannel) {
+                if (g.nodes_mode) add_part_node(rows[size_t(i)]); else insert_snippet(rows[size_t(i)].insert);
             }
             else if (i >= 0 && i < int(rows.size()) && rows[size_t(i)].act != SideAct::None) nodes_side_click(rows[size_t(i)]);
             else if (i >= 0 && i < int(rows.size()) && !rows[size_t(i)].insert.empty() && !g.nodes_mode) insert_snippet(rows[size_t(i)].insert);

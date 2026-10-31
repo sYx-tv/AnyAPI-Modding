@@ -1,7 +1,7 @@
 # MCCode
 
 > MCCode hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
-> so it only activates on Anymaker 0.1.28 / Steam build 26277967 and turns itself off on any other build.
+> so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
 > [Release notes](../releases/mccode-0.2.0.md). Needs AnyAPI 0.38.0 or newer.
 
 MCCode adds a **Code view** to the microcontroller editor, so you can type the program instead of dragging
@@ -123,7 +123,8 @@ the nodes again replaces the hand-made changes (Ctrl+Z in the Code view brings t
 - **Parts**: a guide to setting up a microcontroller. It covers wiring and naming parts, reading and setting a
   channel, and on_tick, with examples you can click to insert. Below the guide are the channels of the parts wired
   to this microcontroller, then every part in the game that has channels, grouped by category. Click a part to see
-  each channel's type and the game's own description of it, and click a channel to insert `Part_Name.channel`.
+  each channel's type and the game's own description of it, and click a channel to insert `Part_Name.channel`
+  (in the node editor, the click adds a Part input or Part output node for it, filled in).
   The list is read at run time from your game's part definitions through AnyAPI's item catalog, plus the part
   definition files mods write under `AnyAPI and Modding` (GPS Sensor, turbos, the Dyno and so on, marked with the
   mod's folder name). It is built at startup and rebuilt when a world loads new parts or you open the tab, so it

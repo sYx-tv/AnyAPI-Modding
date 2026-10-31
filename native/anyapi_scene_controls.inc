@@ -7,7 +7,7 @@ static thread_local void* composite_renderer{};static thread_local void* composi
 static bool writable(void* pointer,size_t bytes){MEMORY_BASIC_INFORMATION m{};return pointer&&VirtualQuery(pointer,&m,sizeof(m))&&m.State==MEM_COMMIT&&!(m.Protect&(PAGE_GUARD|PAGE_NOACCESS))&&(m.Protect&(PAGE_READWRITE|PAGE_EXECUTE_READWRITE))&&uintptr_t(pointer)+bytes>=uintptr_t(pointer)&&uintptr_t(pointer)+bytes<=uintptr_t(m.BaseAddress)+m.RegionSize;}
 struct RendererSaved {unsigned char flags[9];double threshold,intensity;};
 static bool renderer_apply(void* object,const AnySceneParametersV1* p,RendererSaved* old,const uint32_t* details=nullptr){
- if(!writable(object,0x680))return false;auto b=(unsigned char*)object;
+ if(!writable(object,0x688))return false;auto b=(unsigned char*)object;
  memcpy(old->flags,b+0x638,9);memcpy(&old->threshold,b+0x648,8);memcpy(&old->intensity,b+0x650,8);
  for(auto v:old->flags)if(v>1)return false;
  if(!std::isfinite(old->threshold)||!std::isfinite(old->intensity))return false;
@@ -158,7 +158,7 @@ static Apply plan_apply(const Policy& policy,const scene_frame::Sample& s,const 
   double current=luma(s.light_main)*p.sun*std::exp2(p.light_exposure);a.moon_add=moon_w*std::max(0.,target-current);
   if(a.moon_add>0){moon.active=1;moon.added_luminance=float(a.moon_add);celestial::toward(s.sun_dir,moon.direction);}}
  return a;}
-// GL-11: renderer+0x65c m_build_cloud_lighting_counter (s32); renderer.rebuild_cloud_lighting stores 2 there.
+// GL-11: renderer+0x664 m_build_cloud_lighting_counter (s32); renderer.rebuild_cloud_lighting stores 2 there.
 // _build_scene runs before _build_cloud_particles in _build_renderables, so a write here relights this frame's clouds.
 static constexpr double CLOUD_JUMP=.003;   // of a day: 648 ticks, about 11 s of real time
 struct CloudWatch{double cycle{-1};int clouds{-1};uint64_t relights{};};
@@ -167,8 +167,8 @@ static bool relight_wanted(CloudWatch& cw,const scene_frame::Sample& s,int cloud
  if(s.valid&scene_frame::SAMPLE_CYCLE){if(cw.cycle>=0&&std::abs(cycle_delta(s.cycle,cw.cycle))>CLOUD_JUMP)want=true;cw.cycle=s.cycle;}
  if(clouds==0||clouds==1){if(cw.clouds==0&&clouds==1)want=true;cw.clouds=clouds;}return want;}
 static void rebuild_cloud_lighting(void* renderer,const scene_frame::Sample& s){unsigned char clouds=0xff;if(renderer&&!scene_frame::read_value(uintptr_t(renderer)+0x63e,clouds))clouds=0xff;
- if(!relight_wanted(cloud_watch,s,clouds<=1?int(clouds):-1)||!writable(renderer,0x680))return;
- int32_t counter{};auto at=(unsigned char*)renderer+0x65c;memcpy(&counter,at,4);if(counter<0||counter>=2)return;counter=2;memcpy(at,&counter,4);
+ if(!relight_wanted(cloud_watch,s,clouds<=1?int(clouds):-1)||!writable(renderer,0x688))return;
+ int32_t counter{};auto at=(unsigned char*)renderer+0x664;memcpy(&counter,at,4);if(counter<0||counter>=2)return;counter=2;memcpy(at,&counter,4);
  auto n=++cloud_watch.relights;if(n<=8||n%100==0)log_line(ANY_LOG_INFO,"framework",("SCENE_CLOUD_RELIGHT count="+std::to_string(n)+" cycle="+std::to_string(s.cycle)+" clouds="+std::to_string(clouds)).c_str());}
 // P0 probes: each line is logged once (source changes: the first 16); they read and never write.
 struct Probes{bool cycle{},calibrated{},uncalibrated{},mismatch{},planet{},weather{},storm[2]{},drift{},rain_depth{};uint32_t sources{},last_source{UINT32_MAX},rain_tries{};double offset[2]{};uint64_t offset_ms{};};
@@ -265,8 +265,8 @@ static void ssao_hook(void* self,void* camera){
 #endif
 }
 static void composite_hook(void* renderer,void* scene){composite_renderer=renderer;composite_scene=scene;((SceneFn)composite_cell.original())(renderer,scene);composite_renderer=composite_scene=nullptr;}
-static const unsigned char COMPOSITE[]={0x53,0x55,0x56,0x48,0x81,0xec,0x20,0x02,0,0,0x48,0x89,0x8c,0x24,0xc0,0x01,0,0,0x48,0x89,0x94,0x24,0xc8,0x01,0,0,0x48,0x8b,0x05,0xa7,0x0c,0};
-static constexpr size_t COMPOSITE_END=3272;
+static const unsigned char COMPOSITE[]={0x53,0x55,0x56,0x48,0x81,0xec,0x20,0x02,0,0,0x48,0x89,0x8c,0x24,0xc0,0x01,0,0,0x48,0x89,0x94,0x24,0xc8,0x01,0,0,0x48,0x8b,0x05,0xaf,0x0c,0};
+static constexpr size_t COMPOSITE_END=3280;
 static const unsigned char SSAO[]={0x53,0x55,0x48,0x81,0xec,0xc8,0,0,0,0x48,0x89,0x4c,0x24,0x60,0x48,0x89,0x54,0x24,0x68,0x48,0x8d,0x44,0x24,0x70,0x48,0x8d,0x19,0x48,0x8b,0x2d,0xde,0x01};
 static const unsigned char ADDITIVE[]={0x53,0x55,0x56,0x57,0x41,0x54,0x48,0x81,0xec,0x50,0x01,0,0,0x48,0x89,0x8c,0x24,0xe8,0,0,0,0x48,0x89,0x94,0x24,0xf0,0,0,0,0x48,0x8b,0x05};
 static const unsigned char RECORD_COMMANDS[]={0x53,0x55,0x56,0x48,0x81,0xec,0x10,0x02,0,0,0x48,0x89,0x8c,0x24,0xb0,0x01,0,0,0x48,0x89,0x94,0x24,0xb8,0x01,0,0,0x48,0x8b,0x05,0x07,0x0a,0};
