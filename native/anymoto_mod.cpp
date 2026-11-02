@@ -608,6 +608,37 @@ void hk_seat_destroy(void* self, void* scene) {
     }
     reinterpret_cast<seat_destroy_t>(h_seat_destroy.original)(self, scene);
 }
+// Seat definition (0.2.0). The game picks a seat part's code-side seat definition (where the rider sits) by
+// definition id and has none for ours, so the Motorcycle Seat's pointer stayed null and the game crashed reading
+// the seat position (2026-11-02: looking at the seat, the HUD's sit hint called get_seat_position). Ours get the
+// stock seat's after the game's own pass, on both sides; the stock seat sits the rider at (0, 5, 0) cells, the
+// position the Motorcycle Seat used before 0.2.0.
+namespace seat_off {
+constexpr ptrdiff_t server_seat_definition = 0x1e8;   // server_scene.vehicle_component.seat: seat definition pointer
+constexpr ptrdiff_t client_seat_definition = 0xe0;    // client_scene.vehicle_component.seat: seat definition pointer
+}
+using seat_assign_t = void (*)(void** component);
+anymaker::cell_hook h_server_seat_assign, h_client_seat_assign;
+const void* g_stock_seat;   // &g_seat_definition_bench_seat
+void give_seat_definition(void** component, bool server) {
+    void* self = component && can_read(component, 8) ? *component : nullptr;
+    if (!self || !g_stock_seat) return;
+    Kind k = server ? server_kind(self) : client_kind(self);
+    if (k != Kind::seat) return;
+    ptrdiff_t field = server ? seat_off::server_seat_definition : seat_off::client_seat_definition;
+    if (!can_read(static_cast<uint8_t*>(self) + field, 8) || at<const void*>(self, field)) return;
+    at<const void*>(self, field) = g_stock_seat;
+    static std::atomic<int> logs{4};
+    if (logs.fetch_sub(1) > 0) log(0, "%s: Motorcycle Seat given the stock seat's position", server ? "server" : "client");
+}
+void hk_server_seat_assign(void** component) {
+    reinterpret_cast<seat_assign_t>(h_server_seat_assign.original)(component);
+    give_seat_definition(component, true);
+}
+void hk_client_seat_assign(void** component) {
+    reinterpret_cast<seat_assign_t>(h_client_seat_assign.original)(component);
+    give_seat_definition(component, false);
+}
 // The capsules welded to this vehicle body. Actors don't run their seat tick every physics tick (it was missing on
 // most ticks while stopped), so a weld counts until its seat says otherwise or goes quiet for 2 s.
 int riders_of(const void* vehicle_body, void** out, int max) {
@@ -825,16 +856,17 @@ void install_hooks() {
         auto sc = reinterpret_cast<string_ctor_t>(native(anymaker::sym::string_ctor_cstr_rva));
         g_stock_tuning = static_cast<const uint8_t*>(global(bind::g_wheel_definition_wheel));
         void* tyres = global(bind::g_tyre_data_container);
+        g_stock_seat = global(bind::g_seat_definition_bench_seat);
         if (add && !route::add_cell_ok(add)) {
             static int logs = 3;
             if (logs-- > 0) log(1, "the definitions route led to %s, not _add_definitions; looking again", route::what_is(anymaker::readable(add, 8) ? *add : nullptr));
             add = nullptr;
         }
         if (load && !route::file_load_ok((void*)load)) load = nullptr;
-        if (!add || !ctor || !dtor || !load || !sc || !can_read(g_stock_tuning, off::tuning_size)) {
+        if (!add || !ctor || !dtor || !load || !sc || !can_read(g_stock_tuning, off::tuning_size) || !can_read(g_stock_seat, 0x50)) {
             if (attempt == 20 || attempt == 179)
-                log(attempt == 179 ? 2 : 1, "%s the game functions (route root matches %d, add=%d file ctor=%d dtor=%d load=%d string=%d wheel tuning=%d)",
-                    attempt == 179 ? "could not locate" : "still looking for", roots, !!add, !!ctor, !!dtor, !!load, !!sc, can_read(g_stock_tuning, off::tuning_size));
+                log(attempt == 179 ? 2 : 1, "%s the game functions (route root matches %d, add=%d file ctor=%d dtor=%d load=%d string=%d wheel tuning=%d seat=%d)",
+                    attempt == 179 ? "could not locate" : "still looking for", roots, !!add, !!ctor, !!dtor, !!load, !!sc, can_read(g_stock_tuning, off::tuning_size), can_read(g_stock_seat, 0x50));
             continue;
         }
         g_file_ctor = ctor; g_file_dtor = dtor; g_file_load = load; g_string_ctor = sc;
@@ -864,13 +896,16 @@ void install_hooks() {
         add_tyre_size(tyres);
         make_tuning();
         if (!g_tuning[0] || !g_tuning[1]) { log(2, "could not build the fork and swingarm tuning; AnyMoto is off"); return; }
-        // The wheel hooks are all or nothing: a fork without its tuning on either side would crash the game.
+        // The wheel and seat hooks are all or nothing: a fork without its tuning, or a Motorcycle Seat without its
+        // seat definition, on either side would crash the game.
         HookPlan wheel[] = {
             {&h_assign, &bind::wheel_assign_definition, (void*)&hk_assign, "server wheel tuning"},
             {&h_client_create, &bind::client_wheel_create, (void*)&hk_client_create, "client wheel create"},
             {&h_element_create, &bind::client_element_create, (void*)&hk_element_create, "client wheel element create"},
             {&h_wheel_render, &bind::client_wheel_render, (void*)&hk_wheel_render, "client wheel drawing"},
             {&h_steering_render, &bind::client_steering_render, (void*)&hk_steering_render, "client steering wheel drawing"},
+            {&h_server_seat_assign, &bind::server_seat_assign_definition, (void*)&hk_server_seat_assign, "server seat definition"},
+            {&h_client_seat_assign, &bind::client_seat_assign_definition, (void*)&hk_client_seat_assign, "client seat definition"},
             {&h_add_definitions, &bind::definitions_add_definitions, (void*)&hk_add_definitions, "part definitions"},
         };
         for (auto& p : wheel) {
@@ -915,6 +950,8 @@ void remove_hooks() {
     h_wheel_render.remove((void*)&hk_wheel_render);
     h_element_create.remove((void*)&hk_element_create);
     h_client_create.remove((void*)&hk_client_create);
+    h_client_seat_assign.remove((void*)&hk_client_seat_assign);
+    h_server_seat_assign.remove((void*)&hk_server_seat_assign);
     h_assign.remove((void*)&hk_assign);
 }
 }  // namespace
