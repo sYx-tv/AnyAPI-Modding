@@ -74,4 +74,18 @@ inline constexpr func_desc server_seat_destroy{"() server_scene.actor.seat_data.
 inline constexpr global_desc g_wheel_definition_wheel{"g_wheel_definition_wheel","53 55 56 48 81 ec 90 03 00 00 48 89 8c 24 68 01 00 00 48 89 94 24 70 01 00 00 4c 89 84 24 78 01",1872u};
 // vehicle_element_definition.wheel.tyre_data.container g_tyre_data_container: radius and width per tyre item id.
 inline constexpr global_desc g_tyre_data_container{"g_tyre_data_container","53 55 56 57 48 81 ec a8 0a 00 00 48 8b ac 24 f0 0a 00 00 48 8b b4 24 f8 0a 00 00 48 89 8c 24 00",9776u};
+// Seats (new in 0.2.0): the game gives a seat part its code-side seat definition (vehicle_element_definition.seat:
+// seat_pos and pose) by definition id and knows only its own ids, so the Motorcycle Seat got none and the game read
+// through a null pointer as soon as it asked for the seat's position (looking at it: the HUD's "sit" hint).
+// Names are stripped in 0.2.0; these are vehicle_element_definition.seat.assign_definition on each side (the
+// same shape as the wheel's): rcx points at the component pointer, and a match stores &g_seat_definition_<id> into
+// the seat component (server +0x1e8, client +0xe0).
+// () #d091751d315791f1 () | server: seat assign_definition (called from server_scene.vehicle_component.seat.create)
+inline constexpr func_desc server_seat_assign_definition{"() #d091751d315791f1 ()","53 55 48 81 ec 58 02 00 00 48 89 8c 24 30 02 00 00 48 8b 01 48 8b 98 38 01 00 00 48 8d 84 24 38",{"53 48 83 ec 40 48 89 4c 24 20 48 89 54 24 28 48 8d 01 48 8d 12 48 8b 1d 74 00 00 00 48 89 4c 24 38 48 89 c1 ff 13 48 8b 4c 24 38 48 8d 81 68", {160u}, 1},"",0u,-1};
+// () #2e96716ef41de931 () | client: seat assign_definition. Its 11 callers (the client seat and furniture seat
+// creates) share identical code, so the route root matches all of them; they all lead to the same cell.
+inline constexpr func_desc client_seat_assign_definition{"() #2e96716ef41de931 ()","53 55 48 81 ec 58 02 00 00 48 89 8c 24 30 02 00 00 48 8b 01 48 8b 98 b0 00 00 00 48 8d 84 24 38",{"53 48 83 ec 50 48 89 4c 24 20 48 89 54 24 28 4c 89 44 24 30 4c 89 4c 24 38 48 8d 01 48 8d 12 4d 8d 00 4d 8d 09 48 8b 1d 2c 00 00 00 48 89 4c 24 48", {96u}, 1},"",0u,-1};
+// vehicle_element_definition.seat.bench_seat g_seat_definition_bench_seat (80 bytes): the stock seat's, seat_pos
+// (0, 5, 0) cells, the same default the Motorcycle Seat had before 0.2.0. Slot 5 of the client assign_definition.
+inline constexpr global_desc g_seat_definition_bench_seat{"g_seat_definition_bench_seat","53 55 48 81 ec 58 02 00 00 48 89 8c 24 30 02 00 00 48 8b 01 48 8b 98 b0 00 00 00 48 8d 84 24 38",13752u};
 } // namespace anymoto::bind
