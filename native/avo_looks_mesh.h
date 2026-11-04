@@ -152,13 +152,18 @@ inline Mesh turbo(int n, int look) {
     double cover_r = d.rb + d.r1 * 0.85, flat = d.fc, xa = std::max(front + 0.012 * k, d.xc - d.r1 * flat), xb = d.xc + d.r1 * flat * 0.8;
     loft(m, 0, {{xa, circle(c, c, cover_r * 0.9, 40)}, {xa + 0.004 * k, circle(c, c, cover_r, 40)}, {xb - 0.004 * k, circle(c, c, cover_r, 40)},
                 {xb, circle(c, c, cover_r * 0.9, 40)}}, kP0);
-    double inlet_r = d.pipe * 1.45;
+    double inlet_r = d.pipe * (n >= 6 ? 1.75 : 2.2);                                       // a big inducer mouth (Nate 2026-11-04)
     loft(m, 0, {{front + 0.002, circle(c, c, inlet_r, 36)}, {front + 0.006 * k, circle(c, c, inlet_r * 1.02, 36)}, {xa + 0.001, circle(c, c, inlet_r * 1.3, 36)}}, kP0);
     rod(m, 0, c, c, front, front + 0.004, inlet_r * 1.03, L.cover_detail, 36);             // machined inlet lip
-    bore(m, 0, c, c, front, d.pipe * 1.05, -1);
+    bore(m, 0, c, c, front, inlet_r * 0.8, -1);
+    for (int i = 0; i < 6; ++i) {                                                           // the compressor wheel's blades and nose nut, down the mouth
+        double t = 2 * kPi * i / 6;
+        sweep1(m, {{front - 0.0012, c + inlet_r * 0.1 * std::cos(t), c + inlet_r * 0.1 * std::sin(t)}, {front - 0.0012, c + inlet_r * 0.74 * std::cos(t + 0.5), c + inlet_r * 0.74 * std::sin(t + 0.5)}}, 0.001 * k, kMachined, 6);
+    }
+    rod(m, 0, c, c, front - 0.0019, front - 0.001, inlet_r * 0.13, kPolish, 12);
     if (L.ported_shroud)                                                                    // anti-surge slots round the inducer
         for (int i = 0; i < 10; ++i) {
-            double t = 2 * kPi * (i + 0.5) / 10, rr = inlet_r * 0.82;
+            double t = 2 * kPi * (i + 0.5) / 10, rr = inlet_r * 0.9;
             m.prism(0, circle(c + rr * std::cos(t), c + rr * std::sin(t), 0.0025 * k, 8), front - 0.0008, front + 0.001, kBore);
         }
     if (L.recirc_boss) {                                                                    // EFR: the cast boss of its recirculation valve
