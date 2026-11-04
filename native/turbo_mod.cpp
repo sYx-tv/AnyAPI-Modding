@@ -109,6 +109,7 @@ constexpr ptrdiff_t component_grid = 328;            // vehicle_component.m_grid
 constexpr ptrdiff_t grid_origin_dir = 48;
 constexpr ptrdiff_t component_extend = 296;          // m_extend_size's value (vec3_s32): cells added by stretching
 constexpr ptrdiff_t engine_air_manifolds = 1256;     // engine.m_air_manifolds (vector<ptr<air_manifold>>)
+constexpr ptrdiff_t engine_damage = 1448;            // engine.m_damage (s32, 0-2: the game's damage steps)
 constexpr ptrdiff_t engine_damage_factor = 1456;     // engine.m_damage_factor (f64; a damage step at 1)
 constexpr ptrdiff_t engine_rps = 1424;               // engine.m_rps (f64; the tick reads it before setting the new speed)
 constexpr ptrdiff_t manifold_content = 576;          // air_manifold.m_content_gas (vehicle_gas_content)
@@ -1807,6 +1808,25 @@ using remap_t = void (*)(double* ret, const double* v, const double* a, const do
 anymaker::cell_hook h_engine_tick, h_remap;
 thread_local bool t_in_engine = false, t_fuel_cut = false;
 thread_local double t_intake_c = 0, t_intake_pressure = 0, t_boost_factor = 0;
+thread_local double t_rated = 2.0;                   // this engine's rating (engine_rating), for the remap's knock control
+thread_local Knock t_knock;                          // what knock control did to this tick's factor
+// Engines knocked to death (Nate, 2026-11-04: an over-boosted engine blows): one that reaches the game's last damage step
+// while knocking makes no power until it is repaired (the repair tool lowers m_damage). Server thread, under g_mutex.
+std::unordered_map<const void*, bool> g_blown_engines;
+constexpr double kBlowOver = 0.25;                   // knocking this far past its rating when the last step lands
+int32_t engine_damage_steps(const void* engine) {
+    const auto* d = static_cast<const uint8_t*>(engine) + off::engine_damage;
+    return anymaker::readable(d, 4) ? at<int32_t>(d, 0) : 0;
+}
+
+// An engine's rating, from its definition id and its stretch.
+double engine_rated_factor(const void* engine) {
+    size_t length = 0;
+    const char* id = definition_id_of(engine, length);
+    const auto* ext = static_cast<const uint8_t*>(engine) + off::component_extend + 8;   // z
+    int32_t extend_z = anymaker::readable(ext, 4) ? at<int32_t>(ext, 0) : 0;
+    return id ? engine_rating(id, length, extend_z).factor : EngineRating{}.factor;
+}
 
 // An engine's air manifolds (its m_air_manifolds vector): their count, 0 if it cannot be read.
 int32_t air_manifolds(const void* engine, PointerRing& entries) {
@@ -1857,8 +1877,10 @@ double engine_intake_c(const void* engine, double& pressure) {
     return n ? sum / n : NAN;
 }
 
-// The engine's boost factor: remap(clamp(pressure, 1, 10), 1, 10, 1, 2). Past 10 (only compounds get there) it carries
-// on to kMaxEnginePressure, 3x; then the boost part is scaled for the air's density.
+// The engine's boost factor: remap(clamp(pressure, 1, 10), 1, 10, 1, 2). Past 10 it carries on with no cap (up to the
+// kMaxEnginePressure safety net); then the boost part is scaled for the air's density, and knock control holds the
+// engine near its rating (knock_step, turbo_health.h).
+double t_dt() { return g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0; }
 void hk_remap(double* ret, const double* v, const double* a, const double* b, const double* c, const double* d) {
     reinterpret_cast<remap_t>(h_remap.original)(ret, v, a, b, c, d);
     if (!t_in_engine || !ret || !a || !b || !c || !d || *a != 1.0 || *b != 10.0 || *c != 1.0 || *d != 2.0) return;
@@ -1867,7 +1889,8 @@ void hk_remap(double* ret, const double* v, const double* a, const double* b, co
     if (v && *v >= kStockEnginePressure && std::isfinite(t_intake_pressure) && t_intake_pressure > kStockEnginePressure)
         factor = power_multiplier(t_intake_pressure);
     t_boost_factor = factor;
-    *ret = boost_factor_for_air(factor, t_intake_c);
+    t_knock = knock_step(boost_factor_for_air(factor, t_intake_c), t_rated, t_intake_c, t_dt());
+    *ret = t_knock.factor;
 }
 
 void hk_engine_tick(void* self, void* vehicle, void* scene) {
@@ -1877,7 +1900,17 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     t_intake_c = intake;
     t_intake_pressure = pressure;
     t_boost_factor = 0;
+    t_knock = Knock{};
     t_fuel_cut = false;
+    if (self && t_in_engine) t_rated = engine_rated_factor(self);
+    if (self) {                                     // a blown engine stays dead until it is repaired
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        auto b = g_blown_engines.find(self);
+        if (b != g_blown_engines.end()) {
+            if (engine_damage_steps(self) >= 2) t_fuel_cut = t_in_engine;
+            else { g_blown_engines.erase(b); log(0, "engine repaired: it runs again"); }
+        }
+    }
     if (self && t_in_engine) {                      // two-step: cut the fuel at the launch RPM a turbo's wastegate asks for
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
         auto l = g_launch.find(self);
@@ -1885,8 +1918,9 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
             double now = now_seconds();
             auto* rps = static_cast<uint8_t*>(self) + off::engine_rps;
             double rpm = anymaker::readable(rps, 8) ? at<double>(rps, 0) * 60.0 : NAN;
-            t_fuel_cut = two_step_cut(l->second.cutting, rpm, now - l->second.at < 0.5 ? l->second.rpm : 0.0);
-            if (t_fuel_cut) l->second.cut_at = now;
+            bool cut = two_step_cut(l->second.cutting, rpm, now - l->second.at < 0.5 ? l->second.rpm : 0.0);
+            t_fuel_cut = t_fuel_cut || cut;   // a blown engine stays cut
+            if (cut) l->second.cut_at = now;
             else if (now - l->second.at > 1.0) g_launch.erase(l);   // its input went to 0 (or the wastegate is gone)
         }
     }
@@ -1896,15 +1930,22 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     if (self) note_manifolds(self);
     if (!std::isfinite(intake) || !(t_boost_factor > 1.0)) return;
     double dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;
-    double knock = knock_damage(intake, t_boost_factor, dt);
+    (void)dt;
+    double knock = t_knock.damage;                  // knock control's damage (past the engine's rating, for its air)
     if (knock > 0 && anymaker::readable(static_cast<uint8_t*>(self) + off::engine_damage_factor, 8)) at<double>(self, off::engine_damage_factor) += knock;
     if (knock > 0) dyno::note_knock(self, knock);     // the Dyno's "Knock" row
+    if (knock > 0 && t_knock.over >= kBlowOver && engine_damage_steps(self) >= 2) {
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        if (g_blown_engines.emplace(self, true).second)
+            log(1, "engine BLEW UP: knocking %.0f%% past its rating (%.2f) at its last damage step; repair it to run again", t_knock.over * 100, t_rated);
+    }
     static std::atomic<int> logs{40};
     static std::atomic<int64_t> last_ms{-1000000};
     int64_t ms = int64_t(now_seconds() * 1000);
     if (t_boost_factor > 1.05 && ms - last_ms.load() > 10000 && logs.fetch_sub(1) > 0) {
         last_ms = ms;
-        log(0, "engine intake %.0f C: boost factor %.2f -> %.2f%s", intake, t_boost_factor, boost_factor_for_air(t_boost_factor, intake), knock > 0 ? " (knocking)" : "");
+        log(0, "engine intake %.0f C: boost factor %.2f -> %.2f (rated %.2f)%s", intake, t_boost_factor, t_knock.factor, t_rated,
+            knock > 0 ? " (knocking)" : "");
     }
 }
 

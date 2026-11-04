@@ -149,7 +149,7 @@ int main() {
     }
     assert(!spec(3).large_pipe && spec(4).large_pipe && spec(6).large_pipe);
     // Channels.
-    for (int i = 0; i < kChannelCount; ++i) assert(channel_index(kChannels[i].name, std::strlen(kChannels[i].name)) == i && kChannels[i].input == (i == kFirstInput));
+    for (int i = 0; i < kChannelCount; ++i) assert(channel_index(kChannels[i].name, std::strlen(kChannels[i].name)) == i && kChannels[i].input == (i == kFirstInput || i == kBoostTarget));
     assert(channel_index("pressure", 8) < 0);
     // Ports: inside the part, axial ones on the front and back faces. A large pipe end (2 x 2 cells) lies wholly on the
     // part's face too: it covers exactly 4 of the part's cells, all on the face it points out of.
@@ -289,22 +289,22 @@ int main() {
     // Boost limit (kPa, game scale) caps the boost the `boost` output reads (the docs: "caps boost at this pressure").
     { State st; st.slots[kBoostLimit] = 49; Plant pl; Spec s = spec(3); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.5, 20);
       assert(p < 6.05 && p > 4.5 && st.slots[kBoost] < 49.5 && st.slots[kBoost] > 35); }
-    // Compounds: the engine's boost factor carries on past the game's 10 (2x) up to 19 (3x), and no further.
-    assert(near(power_multiplier(10), 2.0) && near(power_multiplier(19), 3.0) && near(power_multiplier(40), 3.0) && near(power_multiplier(5.5), 1.5));
+    // No boost cap: the engine's boost factor carries on past the game's 10 (2x), up to the 60 safety net.
+    assert(near(power_multiplier(10), 2.0) && near(power_multiplier(19), 3.0) && near(power_multiplier(40), 1.0 + 39.0 / 9.0) && near(power_multiplier(500), 1.0 + 59.0 / 9.0) && near(power_multiplier(5.5), 1.5));
     // The boost limit is over the air outside, so a second stage whose inlet is already boosted makes only the rest.
     { State st; st.speed = 1; st.slots[kBoostLimit] = 49; assert(near(head_for(st, 1.0), 5.0, 0.01) && near(head_for(st, 4.0), 2.0, 0.01) && head_for(st, 9.0) == 0); }
     // The head is a pressure ratio that goes with the square of shaft speed: 9 units from outside air at full speed,
-    // a quarter of that at half speed, more units from a boosted inlet, never past the engine's 19.
-    { State st; st.speed = 1; assert(near(head_for(st, 1.0), kMaxHead, 0.01) && head_for(st, 5.0) > 12 && near(head_for(st, 10.0), 9.0, 1e-9));
+    // a quarter of that at half speed, more units from a boosted inlet, never past the 60 safety net.
+    { State st; st.speed = 1; assert(near(head_for(st, 1.0), kMaxHead, 0.01) && head_for(st, 5.0) > 12 && head_for(st, 10.0) > 16 && near(head_for(st, 55.0), 5.0, 1e-9));
       st.speed = 0.5; assert(near(head_for(st, 1.0), kMaxHead / 4, 0.01)); st.speed = NAN; assert(head_for(st, 1.0) == 0); }
     // A second stage heats its inlet air further; intercoolers cool towards the outside air.
     { double one = boost_air_c(20, kFullBoostRatio, kCompressorEfficiency, 0, 20);
       assert(near(one, 97.6, 0.5) && boost_air_c(one, 1.5, kCompressorEfficiency, 0, 20) > one + 40 && near(boost_air_c(one, 1.5, kCompressorEfficiency, 1, 20), 20));
       assert(near(boost_air_c(20, kFullBoostRatio, kCompressorEfficiency, 0.5, 20), (one + 20) / 2) && near(boost_air_c(NAN, 1, kCompressorEfficiency, 0, 20), 20)); }
-    // Two 3x3s compounded on a big engine reach well past one turbo's 10 (three times the power needs 19); one 3x3 on
-    // its own under the same draw stays at or under 10.
+    // Two 3x3s compounded on a big engine reach well past one turbo's 10, with no cap at 19 any more (each stage holds
+    // its spring's ratio, 1.87 x 1.87); one 3x3 on its own under the same draw stays at or under 10.
     { State a, b; CompoundPlant pl; double p = run_compound(a, b, spec(3), spec(3), pl, 50, 40, 20);
-      assert(a.spool > 0.95 && b.spool > 0.5 && p > 13 && p < 19.5 && b.slots[kPowerMultiplier] > 2.3);
+      assert(a.spool > 0.95 && b.spool > 0.5 && p > 19.5 && p < 30 && b.slots[kPowerMultiplier] > 3.0);
       assert(b.spool < a.spool);                        // breathing boosted air, the second stage needs less shaft speed
       assert(b.slots[kBoost] > 100);                    // the second stage's `boost` reads the total over the air outside
       State one; Plant single; double q = run(one, spec(3), single, 25, 40, 20); assert(q <= 10.0 && one.slots[kPowerMultiplier] <= 2.0); }
@@ -751,5 +751,27 @@ int main() {
         }
         assert(paint0 && paint1 && boss);
     }
+    // No boost cap (2026-11): the wastegate holds its spring's 12.8 psi unless a boost target asks for more, up to the
+    // compressor's best ratio; the boost limit still caps it.
+    { State st; Spec s6 = spec(6), s3 = spec(3);
+      assert(s3.max_ratio < s6.max_ratio && s6.max_speed > 1.5 && near(speed_for_ratio(kFullBoostRatio), 1.0));
+      assert(near(boost_target_pressure(st, s6, 1.0), 1.0 + kMaxHead, 0.01));
+      st.slots[kBoostTarget] = 30; double want = 1.0 + 30 / kPsiPerKpa / kKpaPerUnit;
+      assert(near(boost_target_pressure(st, s6, 1.0), want, 1e-9));
+      st.slots[kBoostTarget] = 500; assert(near(boost_target_pressure(st, s6, 1.0), 1.0 + (kAmbientKpa * s6.max_ratio - kAmbientKpa) / kKpaPerUnit, 1e-9));
+      st.slots[kBoostTarget] = 0; st.controller_psi = 20; assert(boost_target_pressure(st, s6, 1.0) > 1.0 + kMaxHead);
+      st.slots[kBoostLimit] = 49; assert(near(boost_target_pressure(st, s6, 1.0), 6.0, 1e-9));
+      State a, b; a.slots[kBoostTarget] = 30; Plant pa, pb;
+      run(a, s6, pa, s6.rated_flow * 1.6, s6.rated_flow * 0.8, 20); run(b, s6, pb, s6.rated_flow * 1.6, s6.rated_flow * 0.8, 20);
+      assert(a.slots[kBoostPsi] > 20 && b.slots[kBoostPsi] < 14 && near(a.slots[kBoostTargetSet], 30, 0.01) && a.speed <= s6.max_speed); }
+    // Engine ratings and knock control.
+    { EngineRating small = engine_rating("engine", 6, 0), v12 = engine_rating("v_engine_c", 10, 25), rot = engine_rating("rotary_engine", 13, 6);
+      assert(small.known && small.cylinders == 1 && near(small.factor, 2.15) && v12.cylinders == 12 && near(v12.factor, 2.88) && near(rot.factor, 2.3));
+      assert(!engine_rating("gearbox", 7, 0).known && engine_rating("opposed_engine_b", 16, 6).cylinders == 6 && engine_rating("engine", 6, INT32_MIN).cylinders == 1);
+      Knock k = knock_step(2.0, 2.5, 30, 1); assert(k.damage == 0 && k.factor == 2.0);
+      k = knock_step(2.0, 2.5, 120, 1); assert(k.over > 0 && k.factor < 2.0 && k.damage > 0);            // hot air knocks sooner
+      Knock k10 = knock_step(2.75, 2.5, 40, 1), k30 = knock_step(3.25, 2.5, 40, 1);   // 40 C: the rating as is
+      assert(1 / k10.damage > 400 && 1 / k10.damage < 700 && 1 / k30.damage > 70 && 1 / k30.damage < 130 && k30.factor > k10.factor && k30.factor < 3.25);
+      assert(knock_step(NAN, 2.5, 30, 1).damage == 0 && knock_step(3, 2.5, NAN, 1).damage > 0 && std::isfinite(knock_step(3, 2.5, NAN, 1).factor)); }
     return 0;
 }

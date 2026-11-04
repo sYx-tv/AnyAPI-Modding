@@ -46,11 +46,12 @@ inline bool turbo_offered(int n) { return n == 3 || n == 6; }
 constexpr const char* kIdPrefix = "turbocharger_";
 constexpr double kKpaPerUnit = 9.8;       // the game's own scale (see above)
 constexpr double kMaxHead = 9.0;          // ambient 1 + 9 = 10: the engine's full 2x boost
-// The game's engines stop at a pressure of 10 (2x power). With compound turbos (a second stage breathing the first
-// stage's boost) AnyEngineParts lets them go on to this pressure: 19 is two full stages, 3x power. One turbo still
-// tops out at 10.
+// The game's engines stop at a pressure of 10 (2x power). AnyVehicleOverhaul carries the engine's factor on past it
+// with no boost cap (Nate, 2026-11-04): boost is whatever the turbos can push into what the engine swallows, and each
+// engine's own rating (engine_rating, turbo_health.h) decides what that boost does to it. kMaxEnginePressure is only a
+// safety net against runaway numbers (pressure 60 is about 590 kPa, 85 psi, a 6.8x factor): no real setup gets there.
 constexpr double kStockEnginePressure = 10.0;
-constexpr double kMaxEnginePressure = 19.0;
+constexpr double kMaxEnginePressure = 60.0;
 constexpr double kAmbientC = 20.0;
 constexpr double kPsiPerKpa = 0.1450377;
 constexpr double kAntilagSpool = 0.8;     // antilag holds the shaft at this spool off throttle
@@ -68,7 +69,8 @@ constexpr double kCpAir = 1005.0, kCpExhaust = 1150.0;    // J/kg K
 constexpr double kAirExponent = 0.2857, kExhaustExponent = 0.248;   // (gamma - 1) / gamma, air and exhaust
 constexpr double kExhaustTemperatureScale = 3.0;           // game exhaust C -> real exhaust C
 constexpr double kFillShare = 0.1;         // share of the pipe-filling air the compressor pays for
-constexpr double kOverspeed = 1.12;        // the shaft's speed limit, over its full-boost speed
+constexpr double kOverspeed = 1.12;        // the shaft's speed limit over its default (wastegate spring) boost speed,
+                                           // before 2026-11; now each size has its own (Spec::max_speed)
 constexpr double kTurbineEfficiency = 0.72, kCompressorEfficiency = 0.74;   // at their best
 constexpr double kBestBladeSpeedRatio = 0.7;               // turbine tip speed over the gas's spouting speed, at best
 constexpr double kBypassTau = 0.08;        // the built-in wastegate's actuator, seconds
@@ -81,6 +83,10 @@ constexpr double kMaxTwoStepRpm = 8000.0;  // the game's fuel cut
 constexpr double kBlownFlowShare = 0.12;
 
 // One turbo size: N x N face, 2 cells thick (cold side cell x = 0, hot side cell x = 1).
+// Boost: the built-in wastegate's spring holds kFullBoostRatio (88 kPa, 12.8 psi) unless a boost target asks for more
+// (`boost_target_psi`, or a Boost Controller on the boost pipe). The compressor can make up to max_ratio, at
+// max_speed (its shaft's speed limit over its spring-boost speed): what a real compressor wheel of that size can do.
+// Whether it gets there is down to the exhaust: past the spring boost the shaft needs a lot more energy.
 struct Spec {
     int size = 0;
     double rated_flow = 0;        // exhaust L/s through the turbine at a 2-unit pressure drop (its size, like an A/R)
@@ -94,8 +100,14 @@ struct Spec {
     double tip_speed = 0;         // m/s, turbine tip at full-boost speed
     double friction = 0;          // N m of bearing drag at full-boost speed
     double spool_kj = 0;          // the shaft's energy at full-boost speed
+    double max_ratio = kFullBoostRatio;   // the compressor's best pressure ratio, at max_speed
+    double max_speed = 1.0;       // shaft speed limit, over the spring-boost speed
     bool large_pipe = false;
 };
+// The shaft speed (over the spring-boost speed) a stage needs for a pressure ratio: head goes with speed squared.
+inline double speed_for_ratio(double ratio) {
+    return std::sqrt(std::max(0.0, ratio - 1.0) / (kFullBoostRatio - 1.0));
+}
 // The turbine's swallowing capacity scales with the face area and the shaft's energy with size: the 6x6 suits the
 // 4-rotor (it holds full boost from about 2,500 RPM there, steady), the 3x3 the 2-rotor. At its rated flow the hot side
 // drops 2 units (1 bar), under the 4 units where engines lose power; more than that and the built-in wastegate opens.
@@ -105,6 +117,8 @@ inline Spec spec(int n) {
     static constexpr double rated[] = {10, 22, 40, 65, 65};
     static constexpr double energy_kj[] = {0.3, 0.6, 1.0, 1.5, 1.5};
     static constexpr double rpm[] = {220000, 160000, 120000, 90000, 90000};
+    // Best pressure ratio by size: a small wheel tops out near 3.3, a big one near 4.2 (real compressor maps).
+    static constexpr double ratio[] = {3.0, 3.3, 3.6, 3.9, 4.2};
     Spec s;
     s.size = n;
     s.rated_flow = rated[n - kMinSize];
@@ -122,6 +136,8 @@ inline Spec spec(int n) {
     s.tip_speed = kBestBladeSpeedRatio * std::sqrt(2.0 * dh);
     s.friction = 0.03 * kTurbineEfficiency * kKgPerLitre * s.rated_flow * dh / s.shaft_full;   // 3% of that power
     s.large_pipe = n >= 4;
+    s.max_ratio = ratio[n - kMinSize];
+    s.max_speed = speed_for_ratio(s.max_ratio);
     return s;
 }
 inline std::string definition_id(int n) { return std::string(kIdPrefix) + char('0' + n); }
@@ -154,13 +170,14 @@ enum Node { kColdIn, kColdOut, kHotIn, kHotOut, kNodeCount };
 // Data channels.
 // New channels go at the end: saved data links refer to them by position.
 enum Channel { kIntakePressure, kExhaustPressure, kPowerMultiplier, kSpool, kRpm, kExhaustFlow, kIntakeFlow, kExhaustTemperature, kSurge, kBoost, kBoostPsi, kAntilagFiring, kBoostLimit,
-               kOilFlow, kTurboTemperature, kCondition, kAirFiltered, kBoostAirTemperature, kDrivePower, kBypass, kChannelCount };
+               kOilFlow, kTurboTemperature, kCondition, kAirFiltered, kBoostAirTemperature, kDrivePower, kBypass, kBoostTarget,
+               kBoostTargetSet, kChannelCount };
 constexpr int kFirstInput = kBoostLimit;
 struct ChannelInfo { const char* name; bool input; };
 inline constexpr ChannelInfo kChannels[kChannelCount] = {
     {"intake_pressure", false},     // compressor outlet, kPa on the game's scale (98 = full boost)
     {"exhaust_pressure", false},    // turbine inlet, same scale (39 starts to cut engine power)
-    {"power_multiplier", false},    // engine power factor the intake pressure gives, 1-2 (up to 3 with compounds)
+    {"power_multiplier", false},    // engine power factor the intake pressure gives: 1 none, 2 at 88 kPa, no cap
     {"spool", false},               // 0-1
     {"rpm", false},
     {"exhaust_flow", false},        // L/s through the hot side
@@ -177,7 +194,9 @@ inline constexpr ChannelInfo kChannels[kChannelCount] = {
     {"air_filter", false},          // 1 with an air filter on the compressor intake, else 0
     {"boost_air_temperature", false},   // C, the boost air after any intercooler (what the engine breathes)
     {"drive_power", false},         // kW a supercharger takes from the engine through its belt (0 on a turbo)
-    {"wastegate", false},           // 0-1, how far the turbo's built-in wastegate is open (it holds full boost)
+    {"wastegate", false},           // 0-1, how far the turbo's built-in wastegate is open (it holds the boost target)
+    {"boost_target_psi", true},     // input: boost (psi over the air outside) the built-in wastegate holds; 0 = its spring (12.8)
+    {"boost_target", false},        // the boost target it holds now, psi (spring, this input, or a Boost Controller)
 };
 inline int channel_index(const char* name, size_t length) {
     for (int i = 0; i < kChannelCount; ++i) {
@@ -222,8 +241,9 @@ inline std::string description(int n) {
     return "Exhaust-driven turbocharger, " + std::to_string(n) + "x" + std::to_string(n) + "x2. Cold side (front): compressor intake in "
         "the middle of the face, compressor outlet at the top facing sideways - feed an air manifold. Hot side (back): turbine "
         "exhaust out in the middle - vent it; turbine inlet at the bottom facing the other side, from the exhaust manifold. Exhaust spins its shaft "
-        "and boost climbs with the square of the shaft's speed, so the more exhaust, the quicker it spools. A built-in wastegate holds full boost "
-        "(88 kPa, double engine power). " + std::string(n >= 6 ? "Suits a 3- or 4-rotor or a long small engine; on a small one it barely spools. "
+        "and boost climbs with the square of the shaft's speed, so the more exhaust, the quicker it spools. A built-in wastegate holds 88 kPa "
+        "(12.8 psi, double engine power); a Boost Controller on the boost pipe, or the boost_target_psi input, turns it up to about " +
+        fmt(std::round((s.max_ratio - 1.0) * kAmbientKpa * kPsiPerKpa)) + " psi if the exhaust can spin it that fast. Twins share the air, so a big engine holds more boost on more turbos. " + std::string(n >= 6 ? "Suits a 3- or 4-rotor or a long small engine; on a small one it barely spools. "
                                                                   : "Suits a 1- or 2-rotor or a short small engine; on a big one it chokes the exhaust. ") +
         (s.large_pipe ? "Large pipe." : "Small pipe.") +
         " Underneath: oil in (front) and oil out (back) - circulate engine oil through it with an oil cooler and oil filter. "
@@ -314,6 +334,7 @@ struct Step {
     double turbine_power = 0;    // W the exhaust gives the shaft
     double pressure_ratio = 1;   // real outlet over inlet pressure
     double efficiency = kCompressorEfficiency;   // the compressor's, where it is running (sets how hot the air gets)
+    double target_pressure = 1;  // the outlet pressure its wastegate holds (game units)
 };
 struct State {
     double spool = 0;             // share of full boost the shaft can make: (speed / full-boost speed)^2, at most 1
@@ -326,6 +347,7 @@ struct State {
     bool surging = false;
     bool antilag_firing = false;  // antilag is lighting fuel in the exhaust to hold the spool (throttle off)
     double health = 1;            // share of its head the turbo can still make (wear, clogged filter; turbo_health.h)
+    double controller_psi = 0;    // boost target from a Boost Controller on its boost pipe (0: none), set by the mod
     bool blown = false;           // worn to 0%: no boost, a choked intake (kBlownFlowShare)
     double slots[kChannelCount]{};
 };
@@ -388,6 +410,19 @@ inline double working_flow(State& st, const Inputs& in, double flow_lps, double 
     return std::clamp(flow_lps - (1.0 - kFillShare) * std::max(0.0, st.fill), 0.0, std::max(0.0, flow_lps));
 }
 
+// The outlet pressure (game units) a turbo's built-in wastegate holds, breathing from `inlet_pressure`.
+inline double boost_target_pressure(const State& st, const Spec& s, double inlet_pressure) {
+    double inlet_kpa = boost_kpa(std::max(1.0, finite_or(inlet_pressure, 1.0)));
+    auto at_ratio = [&](double ratio) { return 1.0 + (inlet_kpa * ratio - kAmbientKpa) / kKpaPerUnit; };
+    double target = at_ratio(kFullBoostRatio);
+    double psi = finite_or(st.slots[kBoostTarget], 0.0);
+    if (!(psi > 0)) psi = finite_or(st.controller_psi, 0.0);
+    if (psi > 0) target = std::min(at_ratio(s.max_ratio), 1.0 + psi / kPsiPerKpa / kKpaPerUnit);
+    double limit = finite_or(st.slots[kBoostLimit], 0.0);
+    if (limit > 0) target = std::min(target, 1.0 + limit / kKpaPerUnit);
+    return std::clamp(target, 1.0, kMaxEnginePressure);
+}
+
 inline Step step(State& st, const Spec& s, const Inputs& in) {
     Step out;
     double dt = std::clamp(finite_or(in.dt, 0.0), 0.0, 0.25);
@@ -395,7 +430,7 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
     double p[kNodeCount];
     for (int i = 0; i < kNodeCount; ++i) p[i] = std::max(0.0, finite_or(in.pressure[i], 1.0));
     bool dead = st.blown || !(st.health > 0);     // the shaft no longer turns
-    st.speed = std::clamp(finite_or(st.speed, 0.0), 0.0, kOverspeed);
+    st.speed = std::clamp(finite_or(st.speed, 0.0), 0.0, s.max_speed);
     double omega = st.speed * s.shaft_full;
     // Hot side: exhaust through the turbine wheel, and round it through the built-in wastegate.
     double wheel = turbine_flow(s, p[kHotIn], p[kHotOut]);
@@ -423,14 +458,15 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
     out.efficiency = compressor_efficiency(s, flow / density, st.speed);
     out.power = compressor_watts(paid, p[kColdIn], p[kColdOut], in.intake_temperature, out.efficiency);
     // The built-in wastegate holds the shaft at the speed that makes the target boost at this flow (the head the
-    // compressor needs is the target plus its droop at this flow), and never past its speed limit. The target is full
-    // boost (a ratio of 1.87 over its inlet) up to the engine's 3x pressure, or the boost limit input.
-    double target_out = std::min(kMaxEnginePressure, 1.0 + (boost_kpa(p[kColdIn]) * kFullBoostRatio - kAmbientKpa) / kKpaPerUnit);
-    double limit = finite_or(st.slots[kBoostLimit], 0.0);
-    if (limit > 0) target_out = std::min(target_out, 1.0 + limit / kKpaPerUnit);
+    // compressor needs is the target plus its droop at this flow), and never past its speed limit. The target is its
+    // spring's (a ratio of 1.87 over its inlet), or the boost target (psi over the outside air at its outlet, from the
+    // `boost_target_psi` input or a Boost Controller), which can ask for up to the compressor's best ratio; the boost
+    // limit input caps it.
+    out.target_pressure = boost_target_pressure(st, s, p[kColdIn]);
+    double target_out = out.target_pressure;
     double per_speed2 = boost_kpa(p[kColdIn]) / kKpaPerUnit * (kFullBoostRatio - 1.0) * std::max(0.05, std::clamp(finite_or(st.health, 1.0), 0.0, 1.0));
     double need = (std::max(0.0, target_out - p[kColdIn]) + std::max(0.0, flow) / (s.compressor_coeff * density)) / per_speed2;
-    double cap = s.shaft_full * std::min(kOverspeed, std::sqrt(std::max(0.0, need)));
+    double cap = s.shaft_full * std::min(s.max_speed, std::sqrt(std::max(0.0, need)));
     // Antilag: when the exhaust alone would let the shaft slow (off throttle), fuel burnt in the manifold gives the
     // turbine what it needs to hold its speed. It needs the engine running (some exhaust to light), or on its two-step
     // limiter, which sends its fuel into the exhaust instead of burning it in the cylinders.
@@ -475,7 +511,7 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
         out.compressor_move *= through;
         omega *= std::exp(-dt * through / kSurgeTau);
     }
-    st.speed = std::clamp(finite_or(omega / s.shaft_full, 0.0), 0.0, kOverspeed);
+    st.speed = std::clamp(finite_or(omega / s.shaft_full, 0.0), 0.0, s.max_speed);
     st.spool = std::min(1.0, st.speed * st.speed);
     double intake_lps = std::abs(out.compressor_move) / dt;
     st.intake_flow += (intake_lps - st.intake_flow) * k;
@@ -493,6 +529,7 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
     st.slots[kBoostPsi] = st.slots[kBoost] * kPsiPerKpa;
     st.slots[kAntilagFiring] = st.antilag_firing ? 1.0 : 0.0;
     st.slots[kBypass] = st.bypass;
+    st.slots[kBoostTargetSet] = (out.target_pressure - 1.0) * kKpaPerUnit * kPsiPerKpa;
     return out;
 }
 

@@ -38,8 +38,8 @@ Every number comes from the game's own engine:
   engine on the vehicle, less what [superchargers](turbo.md#superchargers) take through their belts. It is shown in hp
   (1 hp = 745.7 W).
 - **Torque** is power divided by engine speed (2π × revolutions per second), in N·m.
-- **RPM** is the fastest engine's speed. **Boost** is the engine's intake pressure factor (1 = none, 2 = the most
-  boost the game counts). **Engine** is the hottest engine's temperature.
+- **RPM** is the fastest engine's speed. **Boost** is the engine's intake pressure factor (1 = none, 2 = a turbo's
+  stock 12.8 psi; no upper cap since AnyVehicleOverhaul 2.1). **Engine** is the hottest engine's temperature.
 
 Power at the wheels is not measured yet.
 
@@ -50,7 +50,7 @@ Power at the wheels is not measured yet.
 | `rpm` | Output | Engine speed now (fastest engine) |
 | `power_hp`, `power_kw` | Output | Power now, all engines |
 | `torque_nm` | Output | Torque now |
-| `boost` | Output | Intake pressure factor, 1 to 2 |
+| `boost` | Output | Intake pressure factor: 1 none, 2 at a turbo's stock 12.8 psi, no upper cap (after knock control) |
 | `engine_temperature` | Output | Hottest engine, °C |
 | `recording` | Output | 1 while a pull is being recorded |
 | `peak_hp`, `peak_rpm` | Output | The latest pull's peak power and the RPM it came at |

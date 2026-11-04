@@ -27,8 +27,44 @@ flange block carries them across the top and bottom corners.
 Exhaust expanding through the turbine (hot inlet to hot outlet) spins the shaft, and the compressor on the same
 shaft pushes air into the engine's intake with a boost that climbs with the square of the shaft's speed. Engines
 already turn intake pressure into power: ambient gives 1x, and an intake pressure of 98 kPa (the game's scale) gives
-the full 2x. A built-in wastegate holds one turbo there, at 88 kPa of boost, and sends the exhaust the shaft does
-not need round the turbine; two in a row (a [compound](#twin-and-compound-turbos)) can take it up to 3x.
+the full 2x, and past that power keeps rising with boost: there is **no boost cap** (AnyVehicleOverhaul 2.1). A
+built-in wastegate holds 88 kPa (12.8 psi) out of the box and sends the exhaust the shaft does not need round the
+turbine. Turn it up with a boost target (see [Turning up the boost](#turning-up-the-boost)); what the engine can take
+is set by its own rating.
+
+## Turning up the boost
+
+- **Boost target:** wire a psi value into a turbo's `boost_target_psi` input (0 or unwired: the wastegate spring's
+  12.8 psi). The turbo holds that boost if its exhaust can spin it fast enough. A Boost Controller part comes in a
+  later update.
+- **Each size has a ceiling:** the 3x3's compressor tops out at a pressure ratio of about 3.3 (about 34 psi), the
+  6x6's at about 4.2 (about 47 psi). Past the spring boost the shaft needs much more exhaust energy, so big boost
+  needs a big engine at high RPM, and it lags more.
+- **Airflow decides:** engines draw air by size and RPM. Twins share the exhaust and the air. Match the total turbine
+  size to the engine: in the sim, a large V12 holds about 39 psi on four 6x6s; on one it backs up its exhaust
+  (losing more power than the boost adds), and on six each turbine gets too little exhaust. Compounds go further.
+- **Back pressure** still costs power the game's way: above 39 kPa (4 on the game's scale) of exhaust pressure before
+  the turbines.
+
+### Engine ratings and knock
+
+Every engine has a rating, the boost factor (`power_multiplier`) it takes with 40 °C charge air before it knocks:
+
+| Engine | Rating |
+| --- | --- |
+| Small / medium / large block | 2.0 / 2.5 / 3.0 |
+| Inline | +0.15 (the stoutest block) |
+| V | +0 |
+| Boxer | -0.1 (long crank) |
+| Each cylinder past 6 | -0.02 (down to -0.2) |
+| Rotary | 2.3 |
+
+Hot charge air lowers the rating: 98 °C (one turbo, no intercooler) takes about 40% of the boost part off it, so
+intercoolers matter. Past the rating the knock control pulls timing: only 30% of the extra boost still makes power,
+and the engine takes damage, faster the further past it runs (10% over: a damage step about every 9 minutes; 30%
+over: about every 100 s; 60% over: about every 30 s). An engine that is still knocking 25% or more past its rating
+when its last damage step lands **blows**: it makes no power until you repair it. The log names the engine's rating
+on its `engine intake` line.
 
 The Turbo 6x6 uses large pipes and the 3x3 small pipes. No gas tank is needed. The compressor inlet is open to the air like a real turbo intake.
 
@@ -56,8 +92,8 @@ the two turbines share it evenly, so each gets half. On a 4-rotor, one 6x6 reach
 
 **Compound turbos** (one after the other): pipe the first turbo's boost outlet into the second turbo's intake, and the
 second turbo's boost outlet to the engine. The second turbo breathes the first one's boost and adds its own on top,
-so together they pass the 2x one turbo can give: the engine's power carries on rising with intake pressure up to 3x
-at 186 kPa (19 on the game's scale), and no further. An intercooler between the two (and one after the second) keeps
+so together they pass the 2x one turbo gives on its spring: the engine's power carries on rising with intake
+pressure (two stages on their springs make about 23 on the game's scale, 3.4x), with no cap. An intercooler between the two (and one after the second) keeps
 the air cool: the second turbo heats air that is already hot.
 
 - **Run the exhaust through both turbines in a row** for quick boost, the way real compounds are plumbed: from the
@@ -283,7 +319,7 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | `boost` | Output | Boost over the air outside, kPa (full boost is about 88; a compound's second turbo reads the total) |
 | `boost_psi` | Output | The same in psi (full boost is about 12.8), for a boost gauge |
 | `exhaust_pressure` | Output | Pressure at the hot inlet, kPa |
-| `power_multiplier` | Output | The engine power multiplier this boost gives, 1 to 2 (up to 3 on a compound's second turbo), after what hot boost air costs |
+| `power_multiplier` | Output | The engine power multiplier this boost gives, 1 none, 2 at 12.8 psi, no cap, after what hot boost air costs (before the engine's knock control) |
 | `spool` | Output | The share of full boost the shaft's speed can make, 0 to 1 (its speed over full-boost speed, squared) |
 | `rpm` | Output | Shaft speed, rpm (a supercharger's impeller) |
 | `wastegate` | Output | How far the turbo's built-in wastegate is open, 0 to 1 (it opens once the shaft is fast enough for full boost) |
@@ -298,6 +334,8 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | `boost_air_temperature` | Output | The boost air after any intercooler, °C (what the engine breathes) |
 | `drive_power` | Output | Supercharger: the power its belt takes from the engine, kW (0 on a turbo) |
 | `boost_limit` | Input | A wastegate: caps boost (as the `boost` output reads it) at this pressure in kPa (0 or unwired: no cap) |
+| `boost_target_psi` | Input | The boost (psi over the air outside) its built-in wastegate holds, up to the compressor's ceiling (0 or unwired: 12.8) |
+| `boost_target` | Output | The boost target it holds now, psi |
 
 ## Getting it
 
