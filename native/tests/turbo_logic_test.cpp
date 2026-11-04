@@ -191,7 +191,7 @@ int main() {
     std::string json = definitions_json(built, bov_built, wg_built);
     size_t count = 0;
     for (size_t at = 0; (at = json.find("\"class\": \"gas_pump_centrifugal\"", at)) != std::string::npos; ++at) ++count;
-    assert(count == 7);                                    // two turbos, two blow-off valves, two centrifugal superchargers, the twin screw (no wastegate part, Roots on hold)
+    assert(count == 11);                                   // two turbos in three looks each, two blow-off valves, two centrifugal superchargers, the twin screw (no wastegate part, Roots on hold)
     assert(json.find("turbocharger_2") == std::string::npos && json.find("turbocharger_4") == std::string::npos && json.find("turbocharger_5") == std::string::npos &&
            json.find("Turbo 2x2") == std::string::npos && json.find("Turbo 4x4") == std::string::npos && json.find("5x5") == std::string::npos && json.find("2x2 and") == std::string::npos);
     assert(json.find("\"bounds_max\": [1, 5, 5]") != std::string::npos && json.find("6x6x2") != std::string::npos);   // the 6x6 is 2 deep
@@ -205,7 +205,7 @@ int main() {
         assert(full.find("turbo_turbo_air_filter_large.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_0_0_0.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_round_0_0_0.mesh") != std::string::npos && full.find("Turbo Intercooler (Tube and Fin)") != std::string::npos && full.find("turbo_turbo_intercooler_race_2_2_0.mesh") == std::string::npos && full.find("turbo_turbo_air_filter_drum_large.mesh") != std::string::npos && full.find("\"mode_x\": \"tile\"") != std::string::npos &&
                full.find("radiator_a_0_0_0.mesh") == std::string::npos);
         // the oil ports come after the four gas nodes, so saved gas links keep their meaning
-        size_t entry = full.find("\"name\": \"Turbo 3x3\"");
+        size_t entry = full.find("\"name\": \"Turbo 3x3 (G-Series)\"");
         size_t oil = full.find("oil_in", entry), gas = full.find("\"type\": \"gas\"", entry);
         size_t last_gas = gas;
         for (int k = 0; k < 3; ++k) last_gas = full.find("\"type\": \"gas\"", last_gas + 1);
@@ -216,7 +216,7 @@ int main() {
            json.find("turbo_turbo_blow_off_valve.mesh") == std::string::npos);
     assert(json.find("\"direction\": 5, \"type\": \"gas\", \"size\": 1}") != std::string::npos);   // the large valve's Air port is a large pipe
     assert(json.find("turbo_turbocharger_6.mesh") != std::string::npos && json.find("turbo_turbocharger_3.mesh") == std::string::npos && json.find("turbo_a.mesh") != std::string::npos);
-    assert(json.find("\"name\": \"Turbo 6x6\"") != std::string::npos && json.find("\"type_f64_input\", \"name\": \"boost_limit\"") != std::string::npos);
+    assert(json.find("\"name\": \"Turbo 6x6 (EFR)\"") != std::string::npos && json.find("\"type_f64_input\", \"name\": \"boost_limit\"") != std::string::npos);
     int depth = 0, square = 0; bool in_string = false;
     for (char c : json) {
         if (c == '"') in_string = !in_string;
@@ -641,8 +641,11 @@ int main() {
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
         for (const char* id : {"supercharger_twin_screw"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
-        assert(count_in(full, "\"tech_tier\": ") == 16 && count_in(full, "\"spawn_probability\": ") == 16);
+        assert(count_in(full, "\"tech_tier\": ") == 20 && count_in(full, "\"spawn_probability\": ") == 20);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
+        assert(size_from_id("turbocharger_3_precision", 24) == 3 && size_from_id("turbocharger_6_efr", 18) == 6 && size_from_id("turbocharger_3_x", 16) == 0 &&
+               turbo_look_from_id("turbocharger_6_efr", 18) == 2 && turbo_look_from_id("turbocharger_3", 14) == 0);
+        for (const char* id : {"turbocharger_3_precision", "turbocharger_3_efr"}) assert(entry(id).find("\"tech_tier\": 3,") != std::string::npos);
         // Looks v2: every filter and intercooler look is its own part, found by its id.
         assert(valve_from_id("turbo_air_filter_sock", 21) == kAirFilter && valve_from_id("turbo_air_filter_drum_large", 27) == kAirFilterLarge &&
                valve_from_id("turbo_intercooler_race", 22) == kIntercooler && valve_from_id("turbo_air_filter_x", 18) == kNoValve);

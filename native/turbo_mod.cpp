@@ -568,7 +568,11 @@ double* valve_setting(ValvePart& v) {
 // Starting colours (palette indices into rom/textures/color_palette.txtr, and their colours for the preview).
 constexpr int32_t kPaletteSteel = 81, kPaletteCastIron = 79, kPaletteBrightSteel = 83, kPaletteBrightRed = 36, kPaletteBlack = 84;
 struct StartColours { int32_t slot[2]; uint8_t rgb[2][3]; };
-constexpr StartColours kTurboColours{{kPaletteSteel, kPaletteCastIron}, {{197, 199, 196}, {55, 67, 69}}};
+constexpr int32_t kPaletteBlueAnodised = 47;
+constexpr StartColours kTurboLookColours[3]{                                                    // cold housing, wastegate can
+    {{kPaletteSteel, kPaletteBlack}, {{197, 199, 196}, {14, 14, 16}}},                        // G-series
+    {{kPaletteBlack, kPaletteBrightRed}, {{14, 14, 16}, {204, 44, 36}}},                     // Precision
+    {{kPaletteCastIron, kPaletteBlueAnodised}, {{55, 67, 69}, {0, 56, 122}}}};               // EFR
 constexpr uint8_t kRgbSteel[3]{197, 199, 196}, kRgbCast[3]{55, 67, 69}, kRgbBright[3]{236, 236, 231}, kRgbRed[3]{204, 44, 36}, kRgbBlack[3]{14, 14, 16};
 constexpr StartColours kValveColours{{kPaletteBlack, kPaletteBrightRed}, {{14, 14, 16}, {204, 44, 36}}};             // HKS: black body, red band
 constexpr StartColours kBlowerColours{{kPaletteBrightSteel, kPaletteBlack}, {{236, 236, 231}, {14, 14, 16}}};       // ProCharger: polished head, black case
@@ -582,6 +586,7 @@ constexpr StartColours kCoolerLookColours[kCoolerLooks]{
     {{kPaletteBlack, kPaletteCastIron}, {{14, 14, 16}, {55, 67, 69}}},
     {{kPaletteSteel, kPaletteSteel}, {{197, 199, 196}, {197, 199, 196}}}};
 int look_of_part(const void* component);
+int turbo_look_of(const void* component);
 inline const StartColours& filter_colours(const void* component) { return kFilterLookColours[look_of_part(component)]; }
 inline const StartColours& cooler_colours(const void* component) { return kCoolerLookColours[look_of_part(component)]; }
 
@@ -665,7 +670,8 @@ void hk_create(void* self, void* vehicle) {
     Turbo& t = g_turbos[self];
     if (t.hot) return;
     t.size = n; t.spec = spec(n);
-    default_paint(self, kTurboColours.slot[0], kTurboColours.slot[1]);
+    const StartColours& tc = kTurboLookColours[turbo_look_of(self)];
+    default_paint(self, tc.slot[0], tc.slot[1]);
     t.hot = create_hot_side(self, vehicle);
     t.oil = create_oil_side(self, vehicle);
     t.oil_ports = oil_bound(t.oil);
@@ -836,6 +842,11 @@ const char* definition_id_of(const void* component, size_t& length) {
     if (!id.data || id.length <= 0 || id.length > 64 || !anymaker::readable(id.data, size_t(id.length))) return nullptr;
     length = size_t(id.length);
     return id.data;
+}
+int turbo_look_of(const void* component) {
+    size_t length = 0;
+    const char* id = definition_id_of(component, length);
+    return id ? turbo_look_from_id(id, length) : 0;
 }
 int look_of_part(const void* component) {
     size_t length = 0;
@@ -1627,10 +1638,13 @@ bool write_definition_file() {
     std::vector<uint8_t> stock = read_file(components + L"turbo_a.mesh");
     bool built[kMaxSize - kMinSize + 1]{};
     for (int n : kTurboSizes) {
-        std::string id = definition_id(n);
-        std::vector<uint8_t> mesh = build_turbo_mesh(stock, n, id.c_str());
-        std::wstring file = components + L"turbo_" + std::wstring(id.begin(), id.end()) + L".mesh";
-        built[n - kMinSize] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
+        built[n - kMinSize] = true;
+        for (int look = 0; look < kTurboLooks; ++look) {                // avo_looks_mesh.h: G-series, Precision, EFR
+            std::string name = "turbo_" + definition_id(n, look);
+            std::vector<uint8_t> mesh = pdmesh::encode(avolook::turbo(n, look), name);
+            std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
+            built[n - kMinSize] = built[n - kMinSize] && !mesh.empty() && write_file(file, mesh.data(), mesh.size());
+        }
     }
     if (!built[3 - kMinSize] || !built[6 - kMinSize]) log(1, "impeller mesh not recognised or not writable (%zu bytes); some turbos use the stock impeller look", stock.size());
     bool bov_built[2]{};
@@ -2366,7 +2380,12 @@ void hk_push_mesh_static(void* renderer, void* layers, const void* composite, co
             int look = id.data && id.length > 0 && id.length < 64 && anymaker::readable(id.data, size_t(id.length)) ? part_look_from_id(id.data, size_t(id.length)) : 0;
             start = is_air_filter(kind) ? &kFilterLookColours[look] : &kCoolerLookColours[look];
         }
-        else if (kind >= kMinSize && kind <= kMaxSize) start = &kTurboColours;
+        else if (kind >= kMinSize && kind <= kMaxSize) {
+            const void* definition = static_cast<const uint8_t*>(composite) - off::definition_mesh_static;
+            auto& id = at<anymaker::gc_string_view>(definition, off::definition_id);
+            int look = id.data && id.length > 0 && id.length < 64 && anymaker::readable(id.data, size_t(id.length)) ? turbo_look_from_id(id.data, size_t(id.length)) : 0;
+            start = &kTurboLookColours[look];
+        }
         else if (is_blower(kind)) start = &kBlowerColours;
     }
     if (!start) { original(renderer, layers, composite, transform, a, b, c, d, colours); return; }

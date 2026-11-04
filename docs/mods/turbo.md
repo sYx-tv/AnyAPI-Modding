@@ -8,11 +8,11 @@ Turbo adds two exhaust-driven turbochargers, **Turbo 3x3** (3x3x2) and **Turbo 6
 stock Small and Large Impellers, and two belt-driven [superchargers](#superchargers), **Supercharger (Small)** and
 **Supercharger (Large)**. The Turbo 2x2, 4x4 and 5x5 are gone: the superchargers took the small ones' place and the
 5x5 grew into the 6x6 (the stock Large Impeller's size), so all four of its large pipes sit in the middle of their
-faces. A saved vehicle that had one loads without it. The front half of a turbo is the stock impeller's compressor housing, scaled to the size; the back half is the
-turbine housing, the same impeller mirrored. A new turbo starts with a steel cold side and a cast-iron hot side,
-and the paint tool colours each side on its own, like any stock part. Every opening on the housing sits exactly where
-its pipe joins: on the 6x6 the boost outlet and the turbine inlet are large pipes that span both cells, so a cast
-flange block carries them across the top and bottom corners.
+faces. A saved vehicle that had one loads without it. Each size comes in three looks that work the same: **G-Series** (steel, black
+wastegate can), **Precision** (black, red can) and **EFR** (dark cast, blue can, a heat shield over the turbine). Each
+has a big compressor mouth with the wheel showing, a turbine housing on the back, a built-in wastegate and a cast
+foot under the compressor that mounts on the bottom face. Paint colour 1 sets the compressor housing, colour 2 the
+wastegate can. Every opening sits exactly where its pipe joins.
 
 ## Hooking one up
 

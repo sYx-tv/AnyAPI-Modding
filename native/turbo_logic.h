@@ -141,7 +141,19 @@ inline Spec spec(int n) {
     s.max_speed = speed_for_ratio(s.max_ratio);
     return s;
 }
-inline std::string definition_id(int n) { return std::string(kIdPrefix) + char('0' + n); }
+// Turbo looks (Nate 2026-11-04 "add all those in as variant options"): each size comes in three looks that work the
+// same. Look 0 keeps the old id, so saved turbos load as the G-series look.
+constexpr int kTurboLooks = 3;
+inline constexpr const char* kTurboLookIds[kTurboLooks] = {"", "_precision", "_efr"};
+inline constexpr const char* kTurboLookNames[kTurboLooks] = {"G-Series", "Precision", "EFR"};
+inline std::string definition_id(int n, int look = 0) { return std::string(kIdPrefix) + char('0' + n) + kTurboLookIds[look < 0 || look >= kTurboLooks ? 0 : look]; }
+inline int turbo_look_from_id(const char* id, size_t length) {
+    for (int look = 1; look < kTurboLooks; ++look) {
+        size_t sl = std::char_traits<char>::length(kTurboLookIds[look]);
+        if (id && length > sl && std::char_traits<char>::compare(id + length - sl, kTurboLookIds[look], sl) == 0) return look;
+    }
+    return 0;
+}
 // Survival loot tiers. World loot drops a part while the world's loot level equals its tech tier; a new world starts
 // at loot level 1 and finishing each bunker raises it by one (game code, Anymaker 0.1.25). The starter parts drop
 // after the 2nd bunker and the rest after the 3rd (Nate, 2026-10-17).
@@ -159,9 +171,14 @@ inline std::string loot_lines(int tier) {
 // Returns 3 or 6 for a turbo definition id, else 0.
 inline int size_from_id(const char* id, size_t length) {
     size_t p = std::char_traits<char>::length(kIdPrefix);
-    if (!id || length != p + 1 || std::char_traits<char>::compare(id, kIdPrefix, p) != 0) return 0;
+    if (!id || length < p + 1 || std::char_traits<char>::compare(id, kIdPrefix, p) != 0) return 0;
     int n = id[p] - '0';
-    return turbo_offered(n) ? n : 0;
+    if (!turbo_offered(n)) return 0;
+    for (int look = 0; look < kTurboLooks; ++look) {
+        size_t sl = std::char_traits<char>::length(kTurboLookIds[look]);
+        if (length == p + 1 + sl && std::char_traits<char>::compare(id + p + 1, kTurboLookIds[look], sl) == 0) return n;
+    }
+    return 0;
 }
 
 // Gas logic nodes, in definition order. 0 and 1 are the stock impeller's own (inlet, outlet); 2 and 3 are
@@ -311,7 +328,7 @@ inline std::string mount_box(int cx, int cy, int cz, std::initializer_list<int> 
 }
 
 // One part definition: a resized stock impeller (class gas_pump_centrifugal) with a hot side.
-inline std::string definition_entry(int n, const std::string& mesh_path) {
+inline std::string definition_entry(int n, const std::string& mesh_path, int look = 0) {
     Spec s = spec(n);
     int top = n - 1;
     std::string pipe = s.large_pipe ? ", \"size\": 1" : "";
@@ -342,8 +359,8 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
         descriptors += std::string(i ? ",\n        " : "") + "{\"type\": \"" + (kChannels[i].input ? "type_f64_input" : "type_f64_output") + "\", \"name\": \"" + kChannels[i].name + "\"}";
     std::string box = "[1, " + std::to_string(top) + ", " + std::to_string(top) + "]";
     return std::string("    {\n") +
-        "      \"id\": \"" + definition_id(n) + "\",\n" +
-        "      \"name\": \"Turbo " + std::to_string(n) + "x" + std::to_string(n) + "\",\n" +
+        "      \"id\": \"" + definition_id(n, look) + "\",\n" +
+        "      \"name\": \"Turbo " + std::to_string(n) + "x" + std::to_string(n) + " (" + kTurboLookNames[look] + ")\",\n" +
         "      \"description\": \"" + description(n) + "\",\n" +
         "      \"class\": \"gas_pump_centrifugal\",\n" +
         "      \"zones\": [{\"bounds_min\": [0, 0, 0], \"bounds_max\": " + box + "}],\n" +
@@ -366,7 +383,7 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
         "    }";
 }
-inline std::string mesh_path(int n) { return "meshes/components/turbo_" + definition_id(n) + ".mesh"; }
+inline std::string mesh_path(int n, int look = 0) { return "meshes/components/turbo_" + definition_id(n, look) + ".mesh"; }
 constexpr const char* kStockMeshPath = "meshes/components/turbo_a.mesh";
 // ------------------------------------------------------------------------------------------- model
 struct Inputs {
@@ -1214,7 +1231,8 @@ inline std::string definitions_json(const bool built[kMaxSize - kMinSize + 1], c
                                     const bool pd_built[2] = nullptr) {
     std::string out = "{\n  \"definitions\": [\n";
     for (int n : kTurboSizes)
-        out += definition_entry(n, built[n - kMinSize] ? mesh_path(n) : std::string(kStockMeshPath)) + ",\n";
+        for (int look = 0; look < kTurboLooks; ++look)
+            out += definition_entry(n, built[n - kMinSize] ? mesh_path(n, look) : std::string(kStockMeshPath), look) + ",\n";
     for (int large = 0; large < 2; ++large)
         out += blow_off_entry(large, bov_built && bov_built[large] ? blow_off_mesh_path(large) : std::string(kValveMeshPath)) + ",\n";
     // The wastegate part is gone (Nate, 2026-11-04): every turbo's built-in wastegate holds the boost target, and the
