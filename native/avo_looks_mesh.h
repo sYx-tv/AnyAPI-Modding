@@ -91,7 +91,7 @@ inline void bolt_ring(Mesh& m, int axis, double u, double w, double a, double si
 // turbine at the back (x cell 1). Ports (turbo_logic.h port()): compressor intake axial on the front face, its outlet
 // tangential at the top leaving +z; turbine inlet tangential at the bottom from -z, its outlet axial on the back face.
 struct TurboDims {
-    double c, pipe, rb, r0, r1, xc, xt, rbt, rt0, rt1, out_x, in_x, in_y, out_y;
+    double c, pipe, rb, r0, r1, xc, xt, rbt, rt0, rt1, out_x, in_x, in_y, out_y, fc, ft;   // fc, ft: how round the scroll tubes are along x
 };
 inline TurboDims turbo_dims(int n) {
     TurboDims d{};
@@ -102,14 +102,17 @@ inline TurboDims turbo_dims(int n) {
     d.out_x = large ? kH : 0.0;
     d.in_y = large ? kH : 0.0;                         // turbine inlet centre (y), on the z- face
     d.in_x = large ? kH : kCell;
-    d.r1 = large ? 0.056 : 0.026;                      // compressor scroll: tube radius at its end, and its start
+    // Chunky (Nate 2026-11-04: "skimpy and too skinny"): the scrolls as fat as the box allows, as round as its depth allows.
+    d.r1 = large ? 0.07 : 0.034;                      // compressor scroll: tube radius at its end, and its start
     d.r0 = d.r1 * 0.35;
     d.rb = (d.out_y - d.c) - d.r1;                     // the scroll's inner radius (its end's centre sits on the outlet)
-    d.rt1 = large ? 0.05 : 0.024;                      // turbine scroll: big at the inlet, small at the end
+    d.rt1 = large ? 0.062 : 0.031;                      // turbine scroll: big at the inlet, small at the end
     d.rt0 = d.rt1 * 0.35;
     d.rbt = (d.c - d.in_y) - d.rt1;
-    d.xc = large ? 0.0 : -0.002;
-    d.xt = large ? 0.086 : 0.084;
+    d.xc = large ? -0.002 : -0.003;
+    d.xt = large ? 0.086 : 0.085;
+    d.fc = std::min(1.0, 0.035 / d.r1);
+    d.ft = std::min(1.0, 0.033 / d.rt1);
     return d;
 }
 // The compressor or turbine scroll: angle phi from a0 to a1 round the shaft at x, radius growing from ra to rz.
@@ -137,16 +140,16 @@ inline Mesh turbo(int n, int look) {
     const double k = n >= 6 ? 2.0 : 1.0;              // detail scale
     const double c = d.c, front = -kH, back = kCell + kH;
     // compressor scroll: ends at the top (phi 0: +y) heading +z, into the outlet
-    scroll(m, d.xc, c, d.rb, d.r0, d.r1, -2 * kPi + 0.35, 0.0, kP0, n >= 6 ? 0.62 : 0.85);
+    scroll(m, d.xc, c, d.rb, d.r0, d.r1, -2 * kPi + 0.35, 0.0, kP0, d.fc);
     {   // discharge: from the scroll's end straight out the z+ face, onto the outlet port
         double zf = n * kCell - kH;
         std::vector<V3> p = {{d.xc, d.out_y, c}, {d.xc, d.out_y, c + 0.02 * k}, {(d.xc + d.out_x) / 2, d.out_y, (c + zf) / 2}, {d.out_x, d.out_y, zf - 0.012 * k}, {d.out_x, d.out_y, zf - 0.004}};
-        sweep(m, p, {d.r1, d.r1 * 0.98, d.pipe * 1.12, d.pipe * 1.08, d.pipe * 1.08}, {kP0, kP0, kP0, kP0, kP0}, 22, n >= 6 ? 0.62 : 0.85, {1, 0, 0});
+        sweep(m, p, {d.r1, d.r1 * 0.98, d.pipe * 1.12, d.pipe * 1.08, d.pipe * 1.08}, {kP0, kP0, kP0, kP0, kP0}, 22, d.fc, {1, 0, 0});
         rod(m, 2, d.out_x, d.out_y, zf - 0.006 * k, zf, d.pipe * 1.22, L.cover_detail, 24);   // the hose bead
         bore(m, 2, d.out_x, d.out_y, zf, d.pipe * 0.85, 1);
     }
     // the cover: a dish over the scroll, the inlet boss, the machined lip
-    double cover_r = d.rb + d.r1 * 0.55, flat = n >= 6 ? 0.62 : 0.85, xa = std::max(front + 0.012 * k, d.xc - d.r1 * flat), xb = d.xc + d.r1 * flat * 0.8;
+    double cover_r = d.rb + d.r1 * 0.85, flat = d.fc, xa = std::max(front + 0.012 * k, d.xc - d.r1 * flat), xb = d.xc + d.r1 * flat * 0.8;
     loft(m, 0, {{xa, circle(c, c, cover_r * 0.9, 40)}, {xa + 0.004 * k, circle(c, c, cover_r, 40)}, {xb - 0.004 * k, circle(c, c, cover_r, 40)},
                 {xb, circle(c, c, cover_r * 0.9, 40)}}, kP0);
     double inlet_r = d.pipe * 1.45;
@@ -168,7 +171,7 @@ inline Mesh turbo(int n, int look) {
         pdmesh::bolt(m, 0, c + (cover_r * 0.97) * std::cos(t), c + (cover_r * 0.97) * std::sin(t), xb, 1, 0.0028 * k, kPolish);
     }
     // centre section (bearing housing) and its oil feed and drain
-    double chra_r = d.rb * 0.5;
+    double chra_r = std::max(d.rb * 0.62, d.pipe * 1.5);
     rod(m, 0, c, c, xb, d.xt - d.rt1 * 0.7, chra_r, L.chra, 28);
     rod(m, 0, c, c, (d.xc + d.xt) / 2 - 0.006 * k, (d.xc + d.xt) / 2 + 0.006 * k, chra_r * 1.12, L.chra, 28);
     for (int side = 0; side < 2; ++side) {                                                  // oil in (front), out (back), down to the bottom face
@@ -179,20 +182,20 @@ inline Mesh turbo(int n, int look) {
         m.prism(1, pdmesh::rounded(ox - 0.008 * k, oz - 0.008 * k, ox + 0.008 * k, oz + 0.008 * k, 0.002 * k, 2), -kH, -kH + 0.006 * k, kPolish, false);   // fitting
     }
     // turbine scroll: in at the bottom (phi pi: -y) heading +z, shrinking round the shaft
-    scroll(m, d.xt, c, d.rbt, d.rt1, d.rt0, kPi, kPi - 2 * kPi + 0.35, L.hot, n >= 6 ? 0.68 : 0.9);
+    scroll(m, d.xt, c, d.rbt, d.rt1, d.rt0, kPi, kPi - 2 * kPi + 0.35, L.hot, d.ft);
     {   // turbine inlet: from the z- face straight in to the scroll's start, with a 4-bolt flange
         std::vector<V3> p = {{d.in_x, d.in_y, front + 0.004}, {d.in_x, d.in_y, front + 0.014 * k}, {(d.in_x + d.xt) / 2, d.in_y, (front + c) / 2}, {d.xt, d.in_y, c - 0.01 * k}, {d.xt, d.in_y, c}};
         std::vector<Rgb> cs = {L.hot_tint, L.hot_tint, L.hot, L.hot, L.hot};
-        sweep(m, p, {d.pipe * 1.1, d.pipe * 1.12, d.rt1 * 0.98, d.rt1, d.rt1}, cs, 22, n >= 6 ? 0.68 : 0.9, {1, 0, 0});
+        sweep(m, p, {d.pipe * 1.1, d.pipe * 1.12, d.rt1 * 0.98, d.rt1, d.rt1}, cs, 22, d.ft, {1, 0, 0});
         double f = d.pipe * 1.55;
         m.prism(2, rounded(d.in_x - f, d.in_y - f, d.in_x + f, d.in_y + f, f * 0.35, 4), front, front + 0.006 * k, L.hot_tint, false);
         bolt_ring(m, 2, d.in_x, d.in_y, front + 0.006 * k, 1, f * 1.05, 4, 0.0028 * k, kPolish, kPi / 4 - kPi / 4);
         bore(m, 2, d.in_x, d.in_y, front, d.pipe * 0.9, -1);
     }
     // turbine body, outlet and its V-band
-    double tb = d.rbt + d.rt1 * 0.4;
+    double tb = d.rbt + d.rt1 * 0.85;
     loft(m, 0, {{d.xt - d.rt1 * 0.6, circle(c, c, tb * 0.85, 36)}, {d.xt - d.rt1 * 0.3, circle(c, c, tb, 36)}, {d.xt + d.rt1 * 0.5, circle(c, c, tb * 0.95, 36)}}, L.hot);
-    double out_r = d.pipe * 1.35;
+    double out_r = d.pipe * 1.5;
     loft(m, 0, {{d.xt + d.rt1 * 0.45, circle(c, c, tb * 0.7, 32)}, {back - 0.012 * k, circle(c, c, out_r, 32)}, {back - 0.004, circle(c, c, out_r, 32)}}, L.hot);
     rod(m, 0, c, c, back - 0.008 * k, back - 0.001, out_r * 1.12, kSteel, 32);                   // V-band clamp
     pdmesh::bolt(m, 1, back - 0.005 * k, c, c + out_r * 1.12, 1, 0.003 * k, kPolish);
@@ -212,16 +215,17 @@ inline Mesh turbo(int n, int look) {
         rod(m, 0, cy, cz, x0, x1, cr, L.can, 28);
         rod(m, 0, cy, cz, x0 - 0.0005, x0 + 0.004 * k, cr * 1.06, L.can, 28);                   // crimp rim
         rod(m, 0, cy, cz, x1, x1 + 0.006 * k, cr * 0.45, kSteel, 16);                           // boss
-        pdmesh::bolt(m, 0, cy, cz, x0, -1, 0.004 * k, kPolish);                                   // the boost line nipple
+        rod(m, 0, cy, cz, front + 0.0005, x0, 0.0035 * k, kPolish, 12);                          // the boost line nipple
         sweep1(m, {{x1 + 0.006 * k, cy, cz}, {d.xt, cy - 0.002, cz}}, 0.0022 * k, L.rod, 10);    // rod
         sweep1(m, {{d.xt, cy - 0.002, cz}, {d.xt, c - d.rbt * 0.2, cz + 0.006 * k}}, 0.003 * k, L.rod, 10);   // lever
         m.box({x1 - 0.004 * k, cy - cr * 0.3, cz + cr * 0.6}, {x1, cy + cr * 0.3, c - cover_r * 0.7}, kSteel);   // bracket to the cover
     }
     {   // the mounting foot: a cast pad under the compressor housing, bolted down on the bottom face (it mounts there)
         double fz = n >= 6 ? kCell : 0.0, fw = 0.03 * k, fy = -kH;
-        m.box({-fw, fy, fz - fw}, {fw, fy + 0.006 * k, fz + fw}, kP0);
+        double fx0 = std::max(-fw, front + 0.003), fx1 = std::min(fw, kH + 0.01 * k);   // inside the front cell
+        m.box({fx0, fy, fz - fw}, {fx1, fy + 0.006 * k, fz + fw}, kP0);
         m.box({-0.006 * k, fy + 0.006 * k, fz - fw * 0.8}, {0.006 * k, c - cover_r * 0.75, fz + fw * 0.8}, kP0);
-        for (double sx : {-1.0, 1.0}) for (double sz : {-1.0, 1.0}) pdmesh::bolt(m, 1, sx * fw * 0.7, fz + sz * fw * 0.7, fy + 0.006 * k, 1, 0.0028 * k);
+        for (double sx : {fx0 + 0.3 * (fx1 - fx0), fx1 - 0.3 * (fx1 - fx0)}) for (double sz : {-1.0, 1.0}) pdmesh::bolt(m, 1, sx, fz + sz * fw * 0.7, fy + 0.006 * k, 1, 0.0028 * k);
     }
     return m;
 }
