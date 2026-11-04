@@ -264,9 +264,9 @@ function(anyapi_version_resource target product)
   elseif(target STREQUAL "AnyMapBundle")
     set(ANYAPI_VERSION_COMMA "1,0,4,0")
     set(ANYAPI_VERSION_TEXT "1.0.4")
-  elseif(target STREQUAL "AnyEnginePartsBundle")
-    set(ANYAPI_VERSION_COMMA "1,0,6,0")
-    set(ANYAPI_VERSION_TEXT "1.0.6")
+  elseif(target STREQUAL "AnyVehicleOverhaulBundle")
+    set(ANYAPI_VERSION_COMMA "2,0,0,0")
+    set(ANYAPI_VERSION_TEXT "2.0.0")
   elseif(target STREQUAL "AnyClock" OR target MATCHES "Bundle$")
     set(ANYAPI_VERSION_COMMA "1,0,0,0")
     set(ANYAPI_VERSION_TEXT "1.0.0")
@@ -554,7 +554,7 @@ target_compile_options(gpspart_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME gpspart_logic COMMAND gpspart_logic_test)
 
 # AnyMoto: motorcycle fork, swingarm, seat, handlebars and lean assist for the Motorcycle Wheel, through the
-# experimental SDK.
+# experimental SDK. Ships inside the AnyVehicleOverhaul bundle; this standalone DLL is for development only.
 add_library(AnyMoto SHARED anymoto_mod.cpp)
 target_include_directories(AnyMoto PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
 target_compile_options(AnyMoto PRIVATE /W3 /EHsc /utf-8)
@@ -606,7 +606,7 @@ target_compile_options(mccode_parts_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME mccode_parts COMMAND mccode_parts_test)
 
 # AnyEngineParts: turbochargers, blow-off valves and wastegate (turbo_*), the rotary engine (rotary_*) and the Dyno (dyno_*) in one DLL,
-# through the experimental SDK.
+# through the experimental SDK. Ships inside the AnyVehicleOverhaul bundle; this standalone DLL is for development only.
 add_library(AnyEngineParts SHARED engine_parts_mod.cpp turbo_mod.cpp rotary_mod.cpp dyno_mod.cpp)
 target_include_directories(AnyEngineParts PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/experimental/include")
 target_compile_options(AnyEngineParts PRIVATE /W3 /EHsc /utf-8)
@@ -675,8 +675,10 @@ function(anyapi_bundle target output)
   target_compile_options(${target} PRIVATE /W3 /EHsc /utf-8 /bigobj)
   anyapi_version_resource(${target} ${output})
 endfunction()
-anyapi_bundle(AnyEnginePartsBundle AnyEngineParts bundles/anyengineparts_bundle.cpp
-  bundles/part_anyengineparts.cpp turbo_mod.cpp rotary_mod.cpp dyno_mod.cpp bundles/part_enginesound.cpp bundles/part_gpspart.cpp)
+# AnyVehicleOverhaul (was the AnyEngineParts bundle, 2026-11): AnyEngineParts, EngineSound, GpsPart and AnyMoto.
+anyapi_bundle(AnyVehicleOverhaulBundle AnyVehicleOverhaul bundles/anyvehicleoverhaul_bundle.cpp
+  bundles/part_anyengineparts.cpp turbo_mod.cpp rotary_mod.cpp dyno_mod.cpp bundles/part_enginesound.cpp bundles/part_gpspart.cpp
+  bundles/part_anymoto.cpp)
 anyapi_bundle(AnyHelpersBundle AnyHelpers bundles/anyhelpers_bundle.cpp bundles/part_anyhelpers.cpp
   bundles/part_anymirror.cpp bundles/part_anybalance.cpp bundles/part_mccode.cpp)
 target_link_libraries(AnyHelpersBundle PRIVATE gdiplus user32)

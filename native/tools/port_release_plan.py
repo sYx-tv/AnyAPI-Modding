@@ -54,15 +54,25 @@ def includes(src, seen=None):
 
 def shipped_targets(cmake):
     """(CMake target, catalog name, sources, DLL path under the build dir) for every mod DLL. A bundle ships under its
-    output name from bundles/<config>/; a standalone target whose product a bundle also ships is not released."""
+    output name from bundles/<config>/; a standalone target whose product a bundle also ships, or whose main source a
+    bundle compiles, is not released."""
     bundles = [(t, out, srcs.split(), 'bundles/Release/%s.dll' % out)
                for t, out, srcs in re.findall(r'anyapi_bundle\((\w+) (\w+) ([^)]*)\)', cmake)]
     outputs = {b[1] for b in bundles}
+    # Every file a bundle compiles, through its part_<id>.cpp wrappers. A standalone target whose main source is in
+    # there ships inside that bundle, even when the bundle has another name (AnyMoto and AnyEngineParts ship inside
+    # AnyVehicleOverhaul).
+    bundled = set()
+    for b in bundles:
+        for src in b[2]:
+            if src.endswith('.cpp'):
+                includes(src, bundled)
     standalone = []
     for target, srcs in re.findall(r'add_library\((\w+) SHARED ([^)]*)\)', cmake):
         product = re.search(r'anyapi_version_resource\(%s (\w+)\)' % target, cmake)
         name = product[1] if product else target
-        if target != 'dinput8' and name not in outputs:
+        main_src = next((s for s in srcs.split() if s.endswith('.cpp')), None)
+        if target != 'dinput8' and name not in outputs and main_src not in bundled:
             standalone.append((target, name, srcs.split(), 'Release/%s.dll' % name))
     return standalone + bundles
 

@@ -1,4 +1,6 @@
-// AnyMoto: motorcycle parts for the stock Motorcycle Wheel item.
+// AnyMoto: motorcycle parts for the stock Motorcycle Wheel item. Ships as the "anymoto" part of the AnyVehicleOverhaul
+// bundle (bundles/anyvehicleoverhaul_bundle.cpp); keep kModId, the moto_* part ids and the AnyMoto data folder as they
+// are, or players lose their bikes and settings.
 //
 //   Motorcycle Fork      a wheel part placed on the front face of a bike's frame: steers from the steering links,
 //                        brakes from the brake link, 14 cm of travel; raked sliding fork legs and a mudguard.

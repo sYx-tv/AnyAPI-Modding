@@ -1,8 +1,8 @@
 # Turbo (AnyEngineParts)
 
-> The turbo parts are part of [AnyEngineParts](engine-parts.md). They hook game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
+> The turbo parts are part of AnyEngineParts, inside the [AnyVehicleOverhaul](vehicle-overhaul.md) download. They hook game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
-> AnyEngineParts 0.1.0 is a prototype: it needs AnyAPI 0.37.0 or newer on that build. **Single player only** for now.
+> **Single player only** for now.
 
 Turbo adds two exhaust-driven turbochargers, **Turbo 3x3** (3x3x2) and **Turbo 6x6** (6x6x2), the faces of the
 stock Small and Large Impellers, and two belt-driven [superchargers](#superchargers), **Supercharger (Small)** and
@@ -366,8 +366,8 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
   Dyno names the boost setup from that.
 - The 2x2, 4x4 and 5x5 turbos are no longer defined, so the game drops them from a saved vehicle as it loads.
 - The hot side's gas is not saved; it refills from the pipes after loading. Saves that contain a turbo need
-  AnyEngineParts installed to load it.
+  AnyVehicleOverhaul (or the older AnyEngineParts) installed to load it.
 
-Source: [`turbo_mod.cpp`](../../native/turbo_mod.cpp) (built into `AnyEngineParts.dll`), bindings in
+Source: [`turbo_mod.cpp`](../../native/turbo_mod.cpp) (the AnyEngineParts piece of `AnyVehicleOverhaul.dll`), bindings in
 [`turbo_bindings.h`](../../native/turbo_bindings.h), tests in
 [`tests/turbo_logic_test.cpp`](../../native/tests/turbo_logic_test.cpp).

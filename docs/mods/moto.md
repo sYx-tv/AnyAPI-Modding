@@ -2,7 +2,8 @@
 
 > AnyMoto hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
-> 0.0.1 is a test build: nothing below has been tried in game yet.
+> AnyMoto ships inside the [AnyVehicleOverhaul](vehicle-overhaul.md) download (it was a separate `AnyMoto.dll` up to
+> 0.0.4). Its mod id (`anymoto`), part ids (`moto_*`) and data folder are unchanged, so bikes you built still load.
 
 The game has a **Motorcycle Wheel** item, but no part accepts it. AnyMoto adds five parts for building a real
 two-wheeler around it:
