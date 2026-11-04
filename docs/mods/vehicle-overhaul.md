@@ -2,7 +2,7 @@
 
 > AnyVehicleOverhaul hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
-> It is a [bundle](../api/bundles.md): it needs AnyAPI 0.39.0 or newer (0.42.0 or newer on 0.2.0). Install it from the manager.
+> It is a [bundle](../api/bundles.md): it needs AnyAPI 0.39.0 or newer (0.42.1 or newer on 0.2.0). Install it from the manager.
 
 AnyVehicleOverhaul is every vehicle part mod in one download (`AnyVehicleOverhaul.dll`). It replaces two earlier
 downloads: the **AnyEngineParts** bundle (AnyEngineParts, EngineSound and GpsPart) and the standalone **AnyMoto**.

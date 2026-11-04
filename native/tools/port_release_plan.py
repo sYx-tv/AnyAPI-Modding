@@ -52,6 +52,10 @@ def includes(src, seen=None):
     return seen
 
 
+# Catalog names of standalone targets whose source now ships inside a bundle with another name (set by shipped_targets).
+SUPERSEDED = set()
+
+
 def shipped_targets(cmake):
     """(CMake target, catalog name, sources, DLL path under the build dir) for every mod DLL. A bundle ships under its
     output name from bundles/<config>/; a standalone target whose product a bundle also ships, or whose main source a
@@ -68,12 +72,15 @@ def shipped_targets(cmake):
             if src.endswith('.cpp'):
                 includes(src, bundled)
     standalone = []
+    SUPERSEDED.clear()
     for target, srcs in re.findall(r'add_library\((\w+) SHARED ([^)]*)\)', cmake):
         product = re.search(r'anyapi_version_resource\(%s (\w+)\)' % target, cmake)
         name = product[1] if product else target
         main_src = next((s for s in srcs.split() if s.endswith('.cpp')), None)
         if target != 'dinput8' and name not in outputs and main_src not in bundled:
             standalone.append((target, name, srcs.split(), 'Release/%s.dll' % name))
+        elif target != 'dinput8' and name not in outputs:
+            SUPERSEDED.add(name)  # its source ships inside a bundle under another name (AnyMoto -> AnyVehicleOverhaul)
     return standalone + bundles
 
 
@@ -156,6 +163,10 @@ def main():
         overrides[name] = {'GameBuilds': [build], 'Description': entry['Description'].replace(previous, a.version)}
 
     shipped = {p['id'] for p in packages}
+    # A catalog entry whose source moved into a bundle is neither service-only nor safe to stamp with the new build:
+    # its experimental-SDK DLL hard-checks the old one. Its bundle has to be published (in the catalog) first.
+    merged = [m for m in catalog['Mods'] if m['Name'] in SUPERSEDED and m['Id'] not in shipped]
+    shipped |= {m['Id'] for m in merged}
     service_only = [m['Name'] for m in catalog['Mods'] if m['Id'] not in shipped]
     plan = dict(tag='v' + a.api_version, game_build=build, previous_game_version=previous, packages=packages,
                 release_json={'Packages': overrides}, service_only_mods=service_only, source_only=skipped)
@@ -167,6 +178,10 @@ def main():
         print('  %-12s %s%s' % (p['name'], p['version'], '  (was %s; %s)' % (p['previous'], p['reason']) if 'previous' in p else ''))
     if skipped:
         print('  not in the catalog, not released: ' + ', '.join(skipped))
+    if merged:
+        print('WARNING: %s now ship inside a bundle that is not in the catalog yet (%s). Publish that bundle before '
+              'this port, or these mods stay on the old game build.' % (', '.join(m['Name'] for m in merged),
+                                                                        ', '.join(skipped) or 'see native/bundles'))
     print('service-only mods keep their ZIPs and gain the new build at release time:')
     print('  python native/tools/add_game_build.py --version %s --steam-build %d --exe %s --gcl %s --skip %s --apply'
           % (a.version, a.steam_build, build['ExeSha256'], build['GclSha256'], ','.join(sorted(shipped - {'anyapi'}))))

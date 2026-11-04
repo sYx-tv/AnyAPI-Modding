@@ -26,6 +26,7 @@
 #include "rotary_mesh.h"
 #include "engine_parts_shared.h"
 #include "rotary_sound.h"
+#include <algorithm>
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
@@ -249,7 +250,7 @@ effect_place_t g_effect_place;
 buffer_reset_t g_buffer_reset;
 world_transform_t g_world_transform;
 anymaker::cell_hook h_client_tick, h_vol_speed;
-bool g_voices_hooked = false;                        // the voice update hook is in: the game's own voice says when it runs
+std::atomic<bool> g_voices_hooked{false};                       // the voice update hook is in: the game's own voice says when it runs
 
 struct ClientEngine {
     void* effect = nullptr;                          // application.audio.effect_3d (a handle)
@@ -364,7 +365,8 @@ void stream_sound(void* self, const double* dt) {
         v.rate_logged = true;
         log(0, "rotary sound plays %.0f samples/s, %.0f ms queued", double(v.written - queued) / (now - v.start), queued * 1000.0 / kSampleRate);
     }
-    long long want = played + (long long)(audio::kLead * kSampleRate) - v.written;
+    double lead = std::clamp(2.5 * step, audio::kLead, 0.25);   // a long frame must not drain the queue
+    long long want = played + (long long)(lead * kSampleRate) - v.written;
     if (want <= 0) return;
     int n = int(std::min<long long>(want, kSampleRate / 5));
     g_pcm.resize(size_t(n));
@@ -379,22 +381,29 @@ void stream_sound(void* self, const double* dt) {
     v.written += n;
 }
 
+void sweep_engines() {                               // engines gone from the scene stop ticking: free their voices
+    double now = now_seconds();
+    if (now - g_last_sweep <= 1.0) return;
+    g_last_sweep = now;
+    for (auto it = g_engines.begin(); it != g_engines.end();)
+        if (now - it->second.last_tick > 1.0) { release_voice(it->second); it = g_engines.erase(it); }
+        else ++it;
+}
+
 void hk_client_tick(void* self, void* client, void* vehicle, void* scene, const double* dt) {
     auto original = reinterpret_cast<engine_tick_t>(h_client_tick.original);
-    if (!self || !rotary_definition(definition_at(self, off::client_definition))) return original(self, client, vehicle, scene, dt);
+    if (!self || !rotary_definition(definition_at(self, off::client_definition))) {
+        original(self, client, vehicle, scene, dt);
+        if (!g_engines.empty()) sweep_engines();     // the last rotary may be gone: free its voice too
+        return;
+    }
     uint8_t* prev = t_rotary;
     t_rotary = static_cast<uint8_t*>(self);
     g_engines[self];                                 // so the voice hook can record this tick's power volume
     original(self, client, vehicle, scene, dt);
     t_rotary = prev;
     stream_sound(self, dt);
-    double now = now_seconds();
-    if (now - g_last_sweep > 1.0) {                  // engines gone from the scene stop ticking: free their voices
-        g_last_sweep = now;
-        for (auto it = g_engines.begin(); it != g_engines.end();)
-            if (now - it->second.last_tick > 1.0) { release_voice(it->second); it = g_engines.erase(it); }
-            else ++it;
-    }
+    sweep_engines();
 }
 
 // ------------------------------------------------------------------------------------- install (background thread)

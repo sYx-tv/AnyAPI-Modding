@@ -163,7 +163,7 @@ effect_append_t g_effect_append;
 effect_place_t g_effect_place;
 buffer_reset_t g_buffer_reset;
 world_transform_t g_world_transform;
-bool g_sound_ok = false;                            // streaming found: generated sounds play
+std::atomic<bool> g_sound_ok{false};                           // streaming found: generated sounds play
 
 struct ClientEngine {
     void* effect = nullptr;                          // application.audio.effect_3d (a handle)
@@ -269,7 +269,8 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     long long queued = voice_queued(v.effect);
     if (queued >= 0) played = v.written - queued;
     if (v.written < played) v.written = played;
-    long long want = played + (long long)(audio::kLead * synth::kSampleRate) - v.written;
+    double lead = std::clamp(2.5 * step, audio::kLead, 0.25);   // a long frame must not drain the queue
+    long long want = played + (long long)(lead * synth::kSampleRate) - v.written;
     if (want <= 0) return;
     int n = int(std::min<long long>(want, synth::kSampleRate / 5));
     g_pcm.resize(size_t(n));
@@ -301,7 +302,9 @@ void hk_tick(uint8_t* engine, void* client, void* vehicle, void* scene, const do
     if (!generated) {
         auto found = g_engines.find(engine);   // switched back to a game sound: hand the voice back
         if (found != g_engines.end()) { release_voice(found->second); g_engines.erase(found); }
-        return original(engine, client, vehicle, scene, dt);
+        original(engine, client, vehicle, scene, dt);
+        if (!g_engines.empty()) sweep_engines(now_seconds());   // the last generated engine may be gone: free its voice
+        return;
     }
     uint8_t* prev = t_engine; bool prev_generated = t_generated;
     t_engine = engine; t_generated = true;
@@ -334,7 +337,7 @@ void hk_vol_speed(uint8_t* single, const double* volume, const double* speed, co
 std::atomic<int> g_range_logs{6};
 void hk_props(uint8_t* engine, uint8_t* pd) {
     reinterpret_cast<props_t>(h_props.original)(engine, pd);
-    if (!engine || !pd || !anymaker::readable(pd + off::pd_elements, sizeof(anymaker::gc_vector_raw))) return;
+    if (!g_ready || !engine || !pd || !anymaker::readable(pd + off::pd_elements, sizeof(anymaker::gc_vector_raw))) return;
     EngineKind kind = kind_of(pointer_at(engine, off::server_definition));
     if (kind.rotary) return;                         // AnyEngineParts' rotary keeps its own ports row
     int32_t ext = extend_at(engine, off::server_extend_z);
@@ -619,6 +622,7 @@ bool find_streaming() {
     g_buffer_reset = reinterpret_cast<buffer_reset_t>(native(audio::buffer_reset_rva));
     return g_world_transform && g_play_voice && g_effect_append && g_effect_place && g_effect_stop && g_effect_reset && g_buffer_reset;
 }
+void remove_hooks();
 void install_hooks() {
     using namespace anymaker::experimental;
     for (int attempt = 0; attempt < 180 && !g_stop; ++attempt) {
@@ -640,7 +644,7 @@ void install_hooks() {
         // voices silenced.
         bool ok = h_vol_speed.install(vol, (void*)&hk_vol_speed) && h_tick.install(tick, (void*)&hk_tick) &&
                   h_props.install(props, (void*)&hk_props) && h_row.install(row, (void*)&hk_row);
-        if (!ok) { log(2, "a hook cell was already taken or not writable; EngineSound is off"); return; }
+        if (!ok) { remove_hooks(); log(2, "a hook cell was already taken or not writable; EngineSound is off"); return; }
         g_sound_ok = true;
         g_ready = true;
         log(0, "Ready after %d s: generated sounds %d..%d, Custom %d", attempt, kFirstPreset, kCustomIndex - 1, kCustomIndex);

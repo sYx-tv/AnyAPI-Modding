@@ -68,7 +68,7 @@ row with the engine's layout, size and cylinders so every player's panel names t
 ## Requirements and limits
 
 - **Everyone needs it.** The host must run EngineSound for the generated sounds to be selectable. Players
-  without it hear a game sound instead.
+  without it get no engine sound (or the wrong one) for a generated sound.
 - **Saves.** Saves only ever hold one of the game's three sounds, so a world or saved vehicle still plays
   without EngineSound (mods off, or a game update that turns them off): its engines get the game's first sound.
   The game itself has no fallback for a sound it doesn't know, so before 0.4.1 such an engine could go silent

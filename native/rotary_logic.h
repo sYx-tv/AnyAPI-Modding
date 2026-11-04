@@ -40,7 +40,8 @@ inline int32_t boosted_volume(int32_t stock_volume) {
 
 // Rotors from the component's extend size along z (cells added past the 2-cell minimum).
 inline int rotors_from_extend(int32_t extend_z) {
-    int32_t cells = extend_z < 0 ? -extend_z : extend_z;
+    int64_t cells = extend_z < 0 ? -int64_t(extend_z) : int64_t(extend_z);   // no overflow at INT32_MIN
+    if (cells > 4096) cells = 0;   // not a real stretch
     int n = 1 + int(cells / kCellsPerRotor);
     return n < kMinRotors ? kMinRotors : n > kMaxRotors ? kMaxRotors : n;
 }

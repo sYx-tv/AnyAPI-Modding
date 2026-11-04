@@ -38,7 +38,7 @@ part definitions are written to `AnyAPI and Modding/AnyMoto` and their generated
 `rom/meshes/components` (`anymoto_*.mesh`) when the game starts.
 
 Lean Assist is a gyro sensor that sets the vehicle's roll rate toward a target lean (upright when going straight,
-leaning into a turn by speed and turn rate). It gives up past 70 degrees, so a crashed bike stays down.
+leaning into a turn by speed and turn rate). It gives up past 70 degrees (85 degrees when moving faster than 3 m/s), so a crashed bike stays down.
 
 ## Feasibility
 

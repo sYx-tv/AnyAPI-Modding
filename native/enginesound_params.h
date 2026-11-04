@@ -52,7 +52,7 @@ inline EngineKind engine_kind(const char* id, size_t n) {
 }
 inline int stretch_interval(Size s) { return s == kSmall ? 2 : s == kMedium ? 3 : 5; }
 inline int cylinders(const EngineKind& k, int32_t extend_z) {
-    int32_t cells = extend_z < 0 ? -extend_z : extend_z;
+    int64_t cells = extend_z < 0 ? -int64_t(extend_z) : int64_t(extend_z);   // no overflow at INT32_MIN
     if (cells > 4096) cells = 0;   // not a real stretch
     int steps = int(cells / stretch_interval(k.size));
     int n = k.layout == synth::kInline ? 1 + steps : 2 + 2 * steps;
