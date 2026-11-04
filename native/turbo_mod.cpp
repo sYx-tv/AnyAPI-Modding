@@ -114,6 +114,9 @@ constexpr ptrdiff_t engine_damage = 1448;            // engine.m_damage (s32, 0-
 constexpr ptrdiff_t engine_damage_factor = 1456;     // engine.m_damage_factor (f64; a damage step at 1)
 constexpr ptrdiff_t engine_volume = 1416;            // engine.m_volume (s32; set in create from its zones, as Rotary reads it)
 constexpr ptrdiff_t engine_rps = 1424;               // engine.m_rps (f64; the tick reads it before setting the new speed)
+constexpr ptrdiff_t engine_exhaust_manifolds = 1336; // engine.m_exhaust_manifolds (vector<ptr<exhaust_manifold>>)
+constexpr ptrdiff_t engine_temperature = 1432;       // engine.m_temperature (f64, C)
+constexpr ptrdiff_t engine_display = 1472;           // m_display_throttle .. m_display_torque: 9 f64 the stock tooltip shows
 constexpr ptrdiff_t manifold_content = 576;          // air_manifold.m_content_gas (vehicle_gas_content)
 constexpr ptrdiff_t manifold_air_temperature = 624;  // air_manifold.m_content_gas.m_temperature
 constexpr size_t liquid_content_size = 232, liquid_node_size = 80;
@@ -250,6 +253,15 @@ std::recursive_mutex g_mutex;                        // tick, create, destroy an
                                                      // under it may come back through our hooks)
 struct VehicleTarget { double psi = 0, at = -1e9; };
 std::unordered_map<const void*, VehicleTarget> g_vehicle_targets;   // Boost Controllers' asks, by vehicle (under g_mutex)
+// ECUs (ecu_logic.h): each vehicle's tune, renewed by its ECU part's tick, and what its engines did (for its outputs).
+struct VehicleEcu { ecu::Tune tune; double at = -1e9; EcuReport report; double report_at = -1e9; };
+std::unordered_map<const void*, VehicleEcu> g_vehicle_ecus;          // under g_mutex
+std::unordered_map<const void*, bool> g_rev_limiters;                // engine -> on the ECU's rev limiter (latch)
+// The ECU tune for a vehicle when an ECU ticked on it in the last second.
+const ecu::Tune* ecu_tune(const void* vehicle, double now) {
+    auto e = vehicle ? g_vehicle_ecus.find(vehicle) : g_vehicle_ecus.end();
+    return e != g_vehicle_ecus.end() && now - e->second.at < 1.0 ? &e->second.tune : nullptr;
+}
 
 double now_seconds() {
     static LARGE_INTEGER freq = [] { LARGE_INTEGER f; QueryPerformanceFrequency(&f); return f; }();
@@ -1243,6 +1255,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     if (t.state.blown && !t.sooted) { set_paint(self, kPaletteSoot, kPaletteSoot, false); t.sooted = true; }   // also after a reload
     ValvePart* antilag = antilag_wastegate(t);
     in.antilag = antilag != nullptr;
+    if (!in.antilag) { const ecu::Tune* tune = ecu_tune(vehicle, now_s); in.antilag = tune && tune->antilag; }   // the ECU's antilag
     // Two-step: hand the engine it boosts the launch RPM a wastegate asks for; the engine tick does the limiting, and
     // while it cuts, its fuel reaches the exhaust for antilag to light.
     if (const void* engine = boosted_engine(t)) {
@@ -1884,6 +1897,7 @@ thread_local bool t_in_engine = false, t_fuel_cut = false;
 thread_local double t_intake_c = 0, t_intake_pressure = 0, t_boost_factor = 0;
 thread_local double t_rated = 2.0;                   // this engine's rating (engine_rating), for the remap's knock control
 thread_local Knock t_knock;                          // what knock control did to this tick's factor
+thread_local double t_ecu_power = 1.0;               // the ECU tune's power over stock (ecu::power_scale)
 // Engines knocked to death (Nate, 2026-11-04: an over-boosted engine blows): one that reaches the game's last damage step
 // while knocking makes no power until it is repaired (the repair tool lowers m_damage). Server thread, under g_mutex.
 std::unordered_map<const void*, bool> g_blown_engines;
@@ -1964,7 +1978,54 @@ void hk_remap(double* ret, const double* v, const double* a, const double* b, co
         factor = power_multiplier(t_intake_pressure);
     t_boost_factor = factor;
     t_knock = knock_step(boost_factor_for_air(factor, t_intake_c), t_rated, t_intake_c, t_dt());
-    *ret = t_knock.factor;
+    *ret = t_knock.factor * t_ecu_power;
+}
+
+// AVO dev build: one line per engine every 2 s with everything the game and the mod work out for it (Nate,
+// 2026-11-04: "a dev build that logs all the important things"). Tagged "AVO" for grepping.
+std::unordered_map<const void*, double> g_dev_logged;
+void dev_log_engine(void* self, void* vehicle, double rpm, double intake_c, double intake_p, double rated_stock, const ecu::Tune* tune, bool cut) {
+    double now = now_seconds();
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        double& last = g_dev_logged[self];
+        if (now - last < 2.0) return;
+        last = now;
+        if (g_dev_logged.size() > 256) g_dev_logged.clear();
+    }
+    auto* e = static_cast<uint8_t*>(self);
+    double d[9]{};                                   // throttle, air factor, air flow, air pressure factor, fuel factor, fuel flow, exhaust factor, exhaust flow, torque
+    if (anymaker::readable(e + off::engine_display, sizeof d)) std::memcpy(d, e + off::engine_display, sizeof d);
+    double temperature = anymaker::readable(e + off::engine_temperature, 8) ? at<double>(e, off::engine_temperature) : NAN;
+    int32_t volume = anymaker::readable(e + off::engine_volume, 4) ? at<int32_t>(e, off::engine_volume) : 0;
+    double exhaust_p = NAN;                          // the exhaust manifolds' pressure (backpressure)
+    {
+        PointerRing m;
+        read_ring(e + off::engine_exhaust_manifolds, 32, m);
+        double sum = 0; int n = 0;
+        for (int32_t i = 0; i < m.count; ++i) {
+            const uint8_t* x = static_cast<const uint8_t*>(m[i]);
+            if (!x || !anymaker::readable(x + off::manifold_content, off::content_capacity + 8)) continue;
+            double v = at<double>(x, off::manifold_content + off::content_volume), c = at<double>(x, off::manifold_content + off::content_capacity);
+            if (std::isfinite(v) && std::isfinite(c) && c > 0) { sum += v / c; ++n; }
+        }
+        if (n) exhaust_p = sum / n;
+    }
+    size_t length = 0;
+    const char* id = definition_id_of(self, length);
+    double psi = std::isfinite(intake_p) ? (intake_p - 1.0) * kKpaPerUnit * kPsiPerKpa : NAN;
+    char ecu_text[160] = "no ECU";
+    if (tune) std::snprintf(ecu_text, sizeof ecu_text, "ECU limit %.0f launch %s%.0f boost %.0f timing %+.0f fuel %+.0f pops %.2f antilag %d power x%.3f",
+                            tune->rev_limit, tune->launch ? "on " : "off ", tune->launch_rpm, tune->boost_psi, tune->timing, tune->fuel_trim, tune->pops,
+                            tune->antilag ? 1 : 0, ecu::power_scale(*tune));
+    log(0, "AVO engine %.*s id %d (vehicle %d, volume %d): %.0f rpm, throttle %.2f, %s | intake %.2f (%.1f psi) %.0f C, air x%.2f %.1f L/s, "
+           "pressure x%.2f | fuel x%.2f %.4f L/s | exhaust x%.2f %.1f L/s, manifold %.2f | torque %.1f, temp %.0f C | boost factor %.2f -> %.2f, "
+           "rated %.2f (stock %.2f), knock %.0f%%, damage %d (%.2f)%s | %s",
+        int(length), id ? id : "?", at<int32_t>(self, off::component_id), vehicle ? at<int32_t>(vehicle, off::vehicle_id) : -1, volume, rpm,
+        d[0], cut ? "FUEL CUT" : "firing", intake_p, psi, intake_c, d[1], d[2], d[3], d[4], d[5], d[6], d[7], exhaust_p, d[8], temperature,
+        t_boost_factor, t_knock.factor * t_ecu_power, t_rated, rated_stock, t_knock.over * 100, engine_damage_steps(self),
+        anymaker::readable(e + off::engine_damage_factor, 8) ? at<double>(e, off::engine_damage_factor) : NAN,
+        g_blown_engines.count(self) ? " BLOWN" : "", ecu_text);
 }
 
 void hk_engine_tick(void* self, void* vehicle, void* scene) {
@@ -1976,7 +2037,27 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     t_boost_factor = 0;
     t_knock = Knock{};
     t_fuel_cut = false;
+    t_ecu_power = 1.0;
     if (self && t_in_engine) t_rated = engine_rated_factor(self);
+    double rated_stock = t_rated;
+    ecu::Tune tune;
+    bool has_ecu = false;
+    if (self && t_in_engine) {                      // the ECU: power, knock limit, rev limiter and its launch two-step
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        double now = now_seconds();
+        if (const ecu::Tune* e = ecu_tune(vehicle, now)) {
+            tune = *e; has_ecu = true;
+            t_ecu_power = ecu::power_scale(tune);
+            t_rated = ecu::rated_with(t_rated, tune);
+            auto* rps = static_cast<uint8_t*>(self) + off::engine_rps;
+            double rpm = anymaker::readable(rps, 8) ? at<double>(rps, 0) * 60.0 : NAN;
+            if (ecu::limiter_cut(g_rev_limiters[self], rpm, tune.rev_limit)) t_fuel_cut = true;
+            if (tune.launch && tune.launch_rpm > 0) {   // as a wastegate's two_step input: the block below limits it
+                Launch& l = g_launch[self];
+                l.rpm = tune.launch_rpm; l.at = now;
+            }
+        } else g_rev_limiters.erase(self);
+    }
     if (self) {                                     // a blown engine stays dead until it is repaired
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
         auto b = g_blown_engines.find(self);
@@ -1998,10 +2079,27 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
             else if (now - l->second.at > 1.0) g_launch.erase(l);   // its input went to 0 (or the wastegate is gone)
         }
     }
+    bool cut_this_tick = t_fuel_cut;
     reinterpret_cast<engine_tick_t>(h_engine_tick.original)(self, vehicle, scene);
     t_in_engine = false;
     t_fuel_cut = false;
     if (self) note_manifolds(self);
+    if (self && std::isfinite(intake)) {
+        double now = now_seconds();
+        auto* rps = static_cast<uint8_t*>(self) + off::engine_rps;
+        double rpm = anymaker::readable(rps, 8) ? at<double>(rps, 0) * 60.0 : 0.0;
+        if (has_ecu) {                              // the ECU's outputs
+            std::lock_guard<std::recursive_mutex> lock(g_mutex);
+            VehicleEcu& e = g_vehicle_ecus[vehicle];
+            bool fresh = now - e.report_at > 0.25;
+            e.report.rpm = fresh ? rpm : std::max(e.report.rpm, rpm);
+            e.report.knock = fresh ? t_knock.over : std::max(e.report.knock, t_knock.over);
+            e.report.power_scale = t_ecu_power;
+            e.report.knock_limit = fresh ? t_rated : std::min(e.report.knock_limit, t_rated);
+            e.report_at = now;
+        }
+        dev_log_engine(self, vehicle, rpm, intake, pressure, rated_stock, has_ecu ? &tune : nullptr, cut_this_tick);
+    }
     if (!std::isfinite(intake) || !(t_boost_factor > 1.0)) return;
     double dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;
     (void)dt;
@@ -2262,6 +2360,35 @@ void set_boost_target(const void* vehicle, double psi) {
     g_vehicle_targets[vehicle] = {psi, now};
     if (g_vehicle_targets.size() > 64)              // vehicles gone: their asks are stale after a second
         for (auto it = g_vehicle_targets.begin(); it != g_vehicle_targets.end();) it = now - it->second.at > 5.0 ? g_vehicle_targets.erase(it) : std::next(it);
+}
+
+void set_ecu_tune(const void* vehicle, const ecu::Tune& tune) {
+    if (!vehicle) return;
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    double now = now_seconds();
+    VehicleEcu& e = g_vehicle_ecus[vehicle];
+    if (now - e.at > 5.0) log(0, "ECU tuning a vehicle (%.0f rpm limit, launch %.0f, boost %.0f psi, timing %+.0f, fuel %+.0f %%)", tune.rev_limit,
+                              tune.launch ? tune.launch_rpm : 0.0, tune.boost_psi, tune.timing, tune.fuel_trim);
+    e.tune = tune; e.at = now;
+    if (g_vehicle_ecus.size() > 64)
+        for (auto it = g_vehicle_ecus.begin(); it != g_vehicle_ecus.end();) it = now - it->second.at > 5.0 ? g_vehicle_ecus.erase(it) : std::next(it);
+}
+EcuReport ecu_report(const void* vehicle) {
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    auto e = vehicle ? g_vehicle_ecus.find(vehicle) : g_vehicle_ecus.end();
+    if (e == g_vehicle_ecus.end() || now_seconds() - e->second.report_at > 1.0) return {};
+    return e->second.report;
+}
+double ecu_saved(void* vehicle, const void* component) {
+    if (!vehicle || !component) return 1.0;
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    return wear_of('E', vehicle, component);
+}
+void ecu_save(void* vehicle, const void* component, double packed) {
+    if (!vehicle || !component || !std::isfinite(packed)) return;
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    double& v = wear_of('E', vehicle, component);
+    if (v != packed) { v = packed; g_wear_dirty = true; }
 }
 
 VehicleBoost vehicle_boost(const void* vehicle) {

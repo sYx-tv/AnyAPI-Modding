@@ -14,19 +14,20 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include "ecu_logic.h"
 
 namespace gauges {
 
-enum Kind { kNone = 0, kController = 1, kBoostGauge = 2, kOilGauge = 3 };
+enum Kind { kNone = 0, kController = 1, kBoostGauge = 2, kOilGauge = 3, kEcu = 4 };
 constexpr const char* kControllerId = "boost_controller";
 constexpr const char* kBoostGaugeId = "boost_gauge";
 constexpr const char* kOilGaugeId = "oil_gauge";
 inline Kind kind_of_id(const char* id, size_t n) {
     auto is = [&](const char* want) { size_t w = std::char_traits<char>::length(want); return id && n == w && std::char_traits<char>::compare(id, want, n) == 0; };
-    return is(kControllerId) ? kController : is(kBoostGaugeId) ? kBoostGauge : is(kOilGaugeId) ? kOilGauge : kNone;
+    return is(kControllerId) ? kController : is(kBoostGaugeId) ? kBoostGauge : is(kOilGaugeId) ? kOilGauge : is(ecu::kDefinitionId) ? kEcu : kNone;
 }
 
-constexpr int kMaxSlots = 8;
+constexpr int kMaxSlots = 16;
 struct ChannelInfo { const char* name; bool input; };
 // Data channels by part; new channels go at the end of a list (saved links refer to them by position).
 enum ControllerChannel { kTargetPsi, kScramble, kScramblePsi, kControllerBoostPsi, kTargetSet, kControllerCount };
@@ -54,9 +55,18 @@ inline constexpr ChannelInfo kOilGaugeChannels[kOilGaugeCount] = {
     {"coolant_temperature", false}, // C
     {"engine_temperature", false},  // C (over 160 the engine takes damage)
 };
-inline int channel_count(Kind k) { return k == kController ? kControllerCount : k == kBoostGauge ? kBoostGaugeCount : k == kOilGauge ? kOilGaugeCount : 0; }
+// The ECU's (ecu_logic.h, in its Channel order).
+inline constexpr ChannelInfo kEcuChannels[ecu::kChannelCount] = {
+    {"rev_limit", true}, {"launch_rpm", true}, {"launch", true}, {"boost_psi", true}, {"timing", true}, {"fuel_trim", true},
+    {"pops", true}, {"antilag", true},
+    {"rpm", false}, {"boost_psi_now", false}, {"knock", false}, {"power_scale", false}, {"knock_limit", false},
+};
+static_assert(ecu::kChannelCount <= kMaxSlots, "ECU channels fit");
+inline int channel_count(Kind k) {
+    return k == kController ? kControllerCount : k == kBoostGauge ? kBoostGaugeCount : k == kOilGauge ? kOilGaugeCount : k == kEcu ? ecu::kChannelCount : 0;
+}
 inline const ChannelInfo* channels(Kind k) {
-    return k == kController ? kControllerChannels : k == kBoostGauge ? kBoostGaugeChannels : k == kOilGauge ? kOilGaugeChannels : nullptr;
+    return k == kController ? kControllerChannels : k == kBoostGauge ? kBoostGaugeChannels : k == kOilGauge ? kOilGaugeChannels : k == kEcu ? kEcuChannels : nullptr;
 }
 inline int channel_index(Kind k, const char* name, size_t length) {
     const ChannelInfo* c = channels(k);
@@ -93,10 +103,15 @@ constexpr double kPsiPerKpa = 0.1450377;
 // The part definitions (entries for the Dyno's definitions file): 1 x 1 x 1 sensors with data ports on every face but
 // the bottom, the stock compass sensor's look until they get their own meshes. Starter loot tier (3).
 inline std::string definition_entry(Kind k, const std::string& mesh_path) {
-    const char* id = k == kController ? kControllerId : k == kBoostGauge ? kBoostGaugeId : kOilGaugeId;
-    const char* name = k == kController ? "Boost Controller" : k == kBoostGauge ? "Boost Gauge" : "Oil Gauge";
+    const char* id = k == kController ? kControllerId : k == kBoostGauge ? kBoostGaugeId : k == kEcu ? ecu::kDefinitionId : kOilGaugeId;
+    const char* name = k == kController ? "Boost Controller" : k == kBoostGauge ? "Boost Gauge" : k == kEcu ? "ECU" : "Oil Gauge";
     const char* description =
-        k == kController ? "Electronic boost controller for every turbo on this vehicle. Wire a psi value into target_psi (a microcontroller, a dial or a "
+        k == kEcu ? "Engine computer for every engine on this vehicle. Tune it on its panel (stand near it and press its key, F9 by "
+                    "default: Up/Down picks a row, Left/Right changes it) or wire its inputs (a wired input that is not 0 wins): "
+                    "rev_limit and launch_rpm (RPM), launch (above 0.5 arms the two-step), boost_psi, timing (-10 to +10 degrees: more power, "
+                    "knocks sooner), fuel_trim (-15 to +15 %: lean makes power and heat, rich is safer and pops more), pops (0-1) and antilag. "
+                    "Outputs rpm, boost_psi_now, knock, power_scale and knock_limit."
+        : k == kController ? "Electronic boost controller for every turbo on this vehicle. Wire a psi value into target_psi (a microcontroller, a dial or a "
                            "switch; 0 keeps the wastegate springs' 12.8 psi). Turbos hold it if their exhaust can spin them that fast; each engine has its "
                            "own limit and knocks past it. scramble adds scramble_psi (default 5) on top. Outputs boost_psi and target_set."
         : k == kBoostGauge ? "Boost gauge for this vehicle: boost_psi, boost_kpa and boost_bar over the air outside, target_psi and peak_psi "

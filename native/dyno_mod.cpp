@@ -102,7 +102,13 @@ struct EngineEntry {
 };
 // A Boost Controller, Boost Gauge or Oil Gauge (gauges_logic.h). Kept like the Dynos: microcontrollers hold pointers
 // into the slots.
-struct Gauge { gauges::Kind kind = gauges::kNone; double slots[gauges::kMaxSlots]{}; double peak = 0; bool reset_held = false; double last_tick = 0; };
+struct Gauge {
+    gauges::Kind kind = gauges::kNone; double slots[gauges::kMaxSlots]{}; double peak = 0; bool reset_held = false; double last_tick = 0;
+    // ECU (ecu_logic.h): its panel tune (loaded from the world's file on first tick, saved when the panel changes it)
+    ecu::Tune panel; bool panel_loaded = false, panel_dirty = false;
+    void* vehicle = nullptr;
+    double position[3]{}; bool placed = false;
+};
 struct Dyno {
     Recorder recorder;
     std::string setup;                                // Turbo's name for the boost setup ("Twin turbo", ...)
@@ -270,8 +276,10 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
 }
 
 // A Boost Controller, Boost Gauge or Oil Gauge's server tick.
+void ecu_tick(uint8_t* sensor, void* vehicle);
 void gauge_tick(uint8_t* sensor, void* vehicle, gauges::Kind kind) {
     using namespace gauges;
+    if (kind == kEcu) { ecu_tick(sensor, vehicle); return; }
     double target = 0;
     if (kind == kController) {
         { std::lock_guard lock(g_mutex); target = controller_target(g_gauges[sensor].slots); }
@@ -314,6 +322,52 @@ void gauge_tick(uint8_t* sensor, void* vehicle, gauges::Kind kind) {
         static std::atomic<int> logs{12};
         if (logs.fetch_sub(1) > 0) log(0, "%s ticking on a vehicle", kind == kController ? "Boost Controller" : kind == kBoostGauge ? "Boost Gauge" : "Oil Gauge");
     }
+}
+
+// The ECU's server tick: its tune (panel, then wired inputs) goes to every engine on its vehicle (Turbo's engine
+// tick applies it), its boost target to the turbos; its outputs show what the engines did.
+void ecu_tick(uint8_t* sensor, void* vehicle) {
+    double saved = 1.0;
+    bool load = false;
+    {
+        std::lock_guard lock(g_mutex);
+        load = !g_gauges[sensor].panel_loaded;
+    }
+    if (load) saved = turbo::ecu_saved(vehicle, sensor);   // Turbo's lock, not ours
+    ecu::Tune tune;
+    double save = 0;
+    {
+        std::lock_guard lock(g_mutex);
+        Gauge& g = g_gauges[sensor];
+        double now = now_seconds();
+        bool fresh = !(g.last_tick > 0) || now - g.last_tick > 5.0;
+        g.kind = gauges::kEcu; g.last_tick = now; g.vehicle = vehicle;
+        if (load) {
+            g.panel = ecu::unpack(saved); g.panel_loaded = true;
+            log(0, "ECU loaded its tune (%s)", saved == 1.0 ? "defaults" : "saved");
+        }
+        if (g.panel_dirty) { save = ecu::pack(g.panel); g.panel_dirty = false; }
+        tune = ecu::effective(g.panel, g.slots);
+        if (fresh) { static std::atomic<int> logs{12}; if (logs.fetch_sub(1) > 0) log(0, "ECU ticking on a vehicle"); }
+        if (g_vehicle_transform && g_component_transform) {
+            double v[12], c[12], t[3];
+            g_vehicle_transform(v, vehicle);
+            g_component_transform(c, sensor);
+            for (int i = 0; i < 3; ++i) t[i] = v[i] * c[9] + v[3 + i] * c[10] + v[6 + i] * c[11] + v[9 + i];
+            if (std::isfinite(t[0]) && std::isfinite(t[1]) && std::isfinite(t[2]) && std::abs(t[0]) < 1e7 && std::abs(t[2]) < 1e7) {
+                std::memcpy(g.position, t, sizeof t); g.placed = true;
+            }
+        }
+    }
+    if (save > 0) turbo::ecu_save(vehicle, sensor, save);
+    turbo::set_ecu_tune(vehicle, tune);
+    if (tune.boost_psi > 0) turbo::set_boost_target(vehicle, tune.boost_psi);
+    turbo::EcuReport r = turbo::ecu_report(vehicle);
+    turbo::VehicleBoost boost = turbo::vehicle_boost(vehicle);
+    std::lock_guard lock(g_mutex);
+    double* o = g_gauges[sensor].slots;
+    o[ecu::kOutRpm] = r.rpm; o[ecu::kOutBoostPsi] = std::max(0.0, boost.boost_psi); o[ecu::kOutKnock] = r.knock;
+    o[ecu::kOutPowerScale] = r.power_scale; o[ecu::kOutKnockLimit] = r.knock_limit;
 }
 
 EngineSample vehicle_sample(const void* vehicle, double now) {
@@ -437,6 +491,12 @@ const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const ModControlsV1* controls;
 uint64_t g_action;
+uint64_t g_ecu_action;                                // the ECU panel's key (F9 by default)
+// The ECU panel (ecu_logic.h): open on its key near an ECU; Up/Down pick a row, Left/Right change it (Shift: 4 steps).
+std::atomic<bool> g_ecu_open{false};
+std::atomic<int> g_ecu_row{0};
+std::atomic<bool> g_ecu_near{false};                   // an ECU within reach (render thread writes, input reads)
+constexpr double kEcuReach = 8.0;
 std::mutex g_input_mutex;
 bool g_hidden = false, g_key_down = false, g_cleared_this_hold = false;   // under g_input_mutex
 std::atomic<bool> g_near{false};                      // a Dyno's graph is in range (render thread writes, input reads)
@@ -452,8 +512,30 @@ bool gameplay() {
     return ui && ui->copy(&s) && s.kind == ANY_UI_GAMEPLAY;
 }
 
+void ecu_nudge(int steps);
+uint32_t ecu_key();
+uint32_t ecu_input(const AnyInputV1* e) {
+    if (e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) return 0;
+    uint32_t key = ecu_key();
+    if (key && e->key == key) {
+        if (e->kind == ANY_KEY_DOWN && (g_ecu_near || g_ecu_open)) { g_ecu_open = !g_ecu_open; return 1; }
+        return g_ecu_open ? 1 : 0;
+    }
+    if (!g_ecu_open) return 0;
+    bool arrow = e->key == VK_UP || e->key == VK_DOWN || e->key == VK_LEFT || e->key == VK_RIGHT;
+    if (!arrow) return 0;
+    if (e->kind == ANY_KEY_DOWN) {
+        int steps = (GetKeyState(VK_SHIFT) & 0x8000) ? 4 : 1;
+        if (e->key == VK_UP) g_ecu_row = (g_ecu_row.load() + ecu::kRowCount - 1) % ecu::kRowCount;
+        else if (e->key == VK_DOWN) g_ecu_row = (g_ecu_row.load() + 1) % ecu::kRowCount;
+        else ecu_nudge(e->key == VK_LEFT ? -steps : steps);
+    }
+    return 1;
+}
+
 uint32_t input(const AnyInputV1* e, void*) {
     if (!e) return 0;
+    if (g_ready && e->kind != ANY_FOCUS_LOST && ecu_input(e)) return 1;
     std::lock_guard lock(g_input_mutex);
     if (e->kind == ANY_FOCUS_LOST) { g_key_down = false; return 0; }
     uint32_t key = toggle_key();
@@ -537,7 +619,83 @@ std::wstring wide(const std::string& s) {           // our strings are Latin-1 (
     return w;
 }
 
+uint32_t ecu_key() {
+    if (controls && g_ecu_action) return controls->key(g_ecu_action);
+    return ecu::kPanelKeyDefault;
+}
+// The nearest ECU that ticked in the last second, within kEcuReach of the local player (under g_mutex).
+Gauge* nearest_ecu(const double player[3], bool have_player, double* distance) {
+    double now = now_seconds(), best_d = 1e30;
+    Gauge* best = nullptr;
+    for (auto& [sensor, g] : g_gauges) {
+        if (g.kind != gauges::kEcu || now - g.last_tick > 1.0) continue;
+        double d = 0;
+        if (have_player && g.placed) {
+            double dx = g.position[0] - player[0], dy = g.position[1] - player[1], dz = g.position[2] - player[2];
+            d = std::sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        if (d < best_d) { best_d = d; best = &g; }
+    }
+    if (distance) *distance = best_d;
+    return best && (!have_player || !best->placed || best_d <= kEcuReach) ? best : nullptr;
+}
+void ecu_nudge(int steps) {
+    double player[3];
+    bool have = local_player(player);
+    std::lock_guard lock(g_mutex);
+    Gauge* g = nearest_ecu(player, have, nullptr);
+    if (!g) return;
+    int row = std::clamp(g_ecu_row.load(), 0, ecu::kRowCount - 1);
+    double before = ecu::get(g->panel, row);
+    ecu::nudge(g->panel, row, steps);
+    if (ecu::get(g->panel, row) != before) {
+        g->panel_dirty = true;
+        log(0, "ECU panel: %s %s", ecu::kRows[row].label, ecu::row_text(g->panel, row).c_str());
+    }
+}
+void ecu_draw(const AnyFrameV1* f) {
+    double player[3];
+    bool have = local_player(player);
+    ecu::Tune panel, live;
+    bool wired[ecu::kRowCount]{};
+    double out[5]{};
+    {
+        std::lock_guard lock(g_mutex);
+        Gauge* g = nearest_ecu(player, have, nullptr);
+        g_ecu_near = g != nullptr;
+        if (!g) { g_ecu_open = false; return; }
+        if (!g_ecu_open) return;
+        panel = g->panel;
+        live = ecu::effective(g->panel, g->slots);
+        for (int r = 0; r < ecu::kRowCount; ++r) wired[r] = std::isfinite(g->slots[r]) && g->slots[r] != 0.0;
+        for (int i = 0; i < 5; ++i) out[i] = g->slots[ecu::kOutRpm + i];
+    }
+    Painter p;
+    p.s = std::max(0.75f, float(f->height) / 1080.f);
+    float s = p.s, row_h = 30 * s, W = 430 * s, H = 74 * s + row_h * ecu::kRowCount + 58 * s;
+    float x = 24 * s, y = std::max(8 * s, float(f->height) * .5f - H * .5f);
+    p.rect(x, y, W, H, 0xf0161b21, 8 * s);
+    p.text(x + 16 * s, y + 10 * s, W, 20 * s, L"ECU TUNING", 12 * s, 0xffaeb7c2, ANY_GPU_BOLD);
+    char key_name[32] = "F9";
+    if (controls && g_ecu_action && controls->key_name) controls->key_name(g_ecu_action, key_name, sizeof key_name);
+    p.text(x + 16 * s, y + 32 * s, W - 32 * s, 18 * s, wide(std::string("Up/Down: row   Left/Right: change (Shift x4)   ") + key_name + ": close"), 11 * s, 0xff8c96a2);
+    int sel = std::clamp(g_ecu_row.load(), 0, ecu::kRowCount - 1);
+    float ry = y + 60 * s;
+    for (int r = 0; r < ecu::kRowCount; ++r, ry += row_h) {
+        if (r == sel) p.rect(x + 8 * s, ry, W - 16 * s, row_h - 2 * s, 0xff3a4048, 4 * s);
+        p.text(x + 20 * s, ry, 200 * s, row_h, wide(ecu::kRows[r].label), 14 * s, r == sel ? 0xffedc56c : 0xffdfe4ea, r == sel ? ANY_GPU_BOLD : 0);
+        std::string v = ecu::row_text(panel, r);
+        if (wired[r]) v = ecu::row_text(live, r) + "  (wired)";
+        p.text(x + 220 * s, ry, W - 236 * s, row_h, wide(v), 14 * s, wired[r] ? 0xff7fc6ff : 0xfff5f7fa);
+    }
+    char line[160];
+    std::snprintf(line, sizeof line, "%.0f rpm   %.1f psi   knock %.0f%%   power x%.2f   knock limit %.2f", out[0], out[1], out[2] * 100, out[3], out[4]);
+    p.text(x + 16 * s, ry + 8 * s, W - 32 * s, 20 * s, wide(line), 12 * s, out[2] > 0.001 ? 0xffe05050 : 0xffaab4bd);
+}
+
 void draw(const AnyFrameV1* f, void*) {
+    if (f && gpu && f->focused && g_ready.load() && gameplay()) ecu_draw(f);
+    else g_ecu_near = false;
     if (!f || !gpu || !f->focused || !g_ready.load() || !gameplay()) { g_near = false; return; }
     bool clear = false;
     bool hidden;
@@ -739,6 +897,9 @@ void ready() {
         ModControlActionV1 d; d.mod_id = "anyengineparts"; d.mod_name = "AnyEngineParts"; d.action_id = "dyno_toggle";
         d.label = "Show / hide dyno (hold: clear pulls)"; d.default_key = VK_F6;
         g_action = controls->register_action(&d);
+        ModControlActionV1 e; e.mod_id = "anyengineparts"; e.mod_name = "AnyVehicleOverhaul"; e.action_id = "ecu_panel";
+        e.label = "ECU tuning panel (near an ECU)"; e.default_key = ecu::kPanelKeyDefault;
+        g_ecu_action = controls->register_action(&e);
     } else controls = nullptr;
     gpu = static_cast<const AnyGpuDrawV1*>(services->query("anyapi.gpu_draw", 1));
     if (gpu && (gpu->struct_size != sizeof(*gpu) || gpu->version != 1 || !gpu->register_renderer || !gpu->emit)) gpu = nullptr;

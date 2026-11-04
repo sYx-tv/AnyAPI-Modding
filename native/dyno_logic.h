@@ -240,7 +240,7 @@ inline std::string definition_json(const std::string& mesh_path = kStockMeshPath
       "gas_pump_max_output_rps": 50.0
     },
 )" + gauges::definition_entry(gauges::kController, kStockMeshPath) + ",\n" + gauges::definition_entry(gauges::kBoostGauge, kStockMeshPath) + ",\n" +
-        gauges::definition_entry(gauges::kOilGauge, kStockMeshPath) + R"(
+        gauges::definition_entry(gauges::kOilGauge, kStockMeshPath) + ",\n" + gauges::definition_entry(gauges::kEcu, kStockMeshPath) + R"(
   ]
 }
 )";
