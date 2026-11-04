@@ -261,6 +261,27 @@ inline std::string oil_node(int n, bool in) {
     return "{\"id\": \"" + std::string(in ? "oil_in" : "oil_out") + "\", \"pos\": [" + std::to_string(p.x) + ", " + std::to_string(p.y) + ", " + std::to_string(p.z) + "], \"direction\": 2, \"type\": \"liquid\"}";
 }
 
+// A plain mounting face (no type, like the stock frame faces and the air filter's): the part bolts to beams, plates
+// and other parts there. `pos` is the face's lowest cell, `size` its extent across the face: (z, y) on an x face,
+// (x, z) on a y face, (x, y) on a z face.
+inline std::string mount_face(int x, int y, int z, int dir, int su = 1, int sw = 1) {
+    return ", {\"pos\": [" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"size\": [" + std::to_string(su) + ", " +
+           std::to_string(sw) + "], \"dir\": " + std::to_string(dir) + "}";
+}
+// Every cell of a face of a box (0..cx-1, 0..cy-1, 0..cz-1) as mounting face, except one cell (skip_u, skip_w; -1 none).
+inline std::string mount_cells(int cx, int cy, int cz, int dir, int skip_u = -1, int skip_w = -1) {
+    std::string out;
+    int axis = dir / 2, hi = dir % 2;
+    int nu = axis == 0 ? cz : cx, nw = axis == 1 ? cz : cy;
+    for (int u = 0; u < nu; ++u)
+        for (int w = 0; w < nw; ++w) {
+            if (u == skip_u && w == skip_w) continue;
+            int x = axis == 0 ? (hi ? cx - 1 : 0) : u, y = axis == 1 ? (hi ? cy - 1 : 0) : w, z = axis == 2 ? (hi ? cz - 1 : 0) : axis == 0 ? u : w;
+            out += mount_face(x, y, z, dir);
+        }
+    return out;
+}
+
 // One part definition: a resized stock impeller (class gas_pump_centrifugal) with a hot side.
 inline std::string definition_entry(int n, const std::string& mesh_path) {
     Spec s = spec(n);
@@ -280,6 +301,8 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
                 if (port_covers(n, x ? kHotOut : kColdIn, x, y, z)) continue;
                 surfaces += ",\n        {\"pos\": [" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": " + std::to_string(x) + ", \"gender\": 2, \"type\": \"port\"}";
             }
+    // Mounting faces (Nate 2026-11-04): the bottom (but the torque cell), the top, the front and the back.
+    surfaces += mount_cells(2, n, n, 2, 0, n == 2 ? 0 : top) + mount_face(0, top, 0, 3, 2, n) + mount_face(0, 0, 0, 4, 2, n) + mount_face(0, 0, top, 5, 2, n);
     std::string descriptors;
     for (int i = 0; i < kChannelCount; ++i)
         descriptors += std::string(i ? ",\n        " : "") + "{\"type\": \"" + (kChannels[i].input ? "type_f64_input" : "type_f64_output") + "\", \"name\": \"" + kChannels[i].name + "\"}";
@@ -624,6 +647,8 @@ inline std::string blower_entry(bool large, const std::string& mesh_path) {
         for (int y = 0; y < n; ++y)
             for (int z = 0; z < n; ++z)
                 surfaces += ",\n        {\"pos\": [" + std::to_string(side ? top : 0) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": " + std::to_string(side) + ", \"gender\": 2, \"type\": \"port\"}";
+    // Mounting faces (Nate 2026-11-04): bottom, top, front, and the back but its torque cell (x 0, y 0).
+    surfaces += mount_face(0, 0, 0, 2, n, n) + mount_face(0, top, 0, 3, n, n) + mount_face(0, 0, 0, 4, n, n) + mount_cells(n, n, n, 5, 0, 0);
     // A large pipe is 2 x 2 cells anchored at its low corner: the intake across x and y (centred on the even face),
     // the large outlet across x and z.
     std::string in = large ? "{\"pos\": [1, 1, 0], \"direction\": 4, \"type\": \"gas\", \"size\": 1}" : "{\"pos\": [0, 0, 0], \"direction\": 4, \"type\": \"gas\", \"size\": 1}";
@@ -819,6 +844,9 @@ inline std::string pd_entry(PdKind k, const std::string& mesh_path) {
     std::string surfaces = "{\"id\": \"torque\", \"pos\": [0, 1, 0], \"dir\": 4, \"type\": \"torque\"},\n"
         "        {\"size\": [2, 2], \"gender\": 2, \"type\": \"port\"},\n"
         "        {\"pos\": [1, 0, 0], \"size\": [2, 2], \"dir\": 1, \"gender\": 2, \"type\": \"port\"}";
+    // Mounting faces (Nate 2026-11-04): it bolts down by its bottom (onto the air manifold, over its outlet) and takes
+    // parts on its top, back and the front but the torque cell (x 0, y 1).
+    surfaces += mount_face(0, 0, 0, 2, 2, 2) + mount_face(0, 1, 0, 3, 2, 2) + mount_face(0, 0, 1, 5, 2, 2) + mount_face(0, 0, 0, 4, 2, 1) + mount_face(1, 1, 0, 4);
     std::string in = roots ? "{\"pos\": [0, 1, 0], \"direction\": 3, \"type\": \"gas\", \"size\": 1}" : "{\"pos\": [0, 0, 1], \"direction\": 5, \"type\": \"gas\", \"size\": 1}";
     std::string out = "{\"pos\": [0, 0, 0], \"direction\": 2, \"type\": \"gas\", \"size\": 1}";
     std::string descriptors;
@@ -942,6 +970,10 @@ inline std::string blow_off_entry(bool large, const std::string& mesh) {
             surfaces += ", {\"pos\": [0, " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": 0, \"gender\": 2, \"type\": \"port\"}";
             surfaces += ", {\"pos\": [" + top + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": 1, \"gender\": 2, \"type\": \"port\"}";
         }
+    {   // Mounting faces (Nate 2026-11-04): top, both ends, and the bottom but its torque cell.
+        int n = large ? 2 : 1;
+        surfaces += mount_face(0, n - 1, 0, 3, n, n) + mount_face(0, 0, 0, 4, n, n) + mount_face(0, 0, n - 1, 5, n, n) + mount_cells(n, n, n, 2, 0, 0);
+    }
     std::string box = large ? "[1, 1, 1]" : "[0, 0, 0]";
     std::string description = std::string("Inline blow-off valve for a Turbo, ") + (large ? "large pipe (the 6x6 turbo)" : "small pipe (the 3x3 turbo)") +
         ". Pipe the turbo's compressor outlet into its plain end and its blue-ringed Air end into the air manifold. When you lift "
@@ -995,6 +1027,10 @@ inline std::string wastegate_entry(bool large, const std::string& mesh) {
                 if (z == 0) surfaces += ", {\"pos\": " + pos + ", \"dir\": 4, \"gender\": 2, \"type\": \"port\"}";
                 if (z == (large ? 1 : 0)) surfaces += ", {\"pos\": " + pos + ", \"dir\": 5, \"gender\": 2, \"type\": \"port\"}";
             }
+    {   // Mounting faces (Nate 2026-11-04): bottom, the outlet side, and the top but its torque cell.
+        int n = large ? 2 : 1;
+        surfaces += mount_face(0, 0, 0, 2, n, n) + mount_face(n - 1, 0, 0, 1, n, n) + mount_cells(n, n, n, 3, 0, 0);
+    }
     std::string box = large ? "[1, 1, 1]" : "[0, 0, 0]", side = large ? "[1, 0, 0]" : "[0, 0, 0]";
     return std::string("    {\n") +
         "      \"id\": \"" + (large ? kWastegateLargeId : kWastegateId) + "\",\n" +
