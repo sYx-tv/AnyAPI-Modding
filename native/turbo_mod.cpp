@@ -587,6 +587,7 @@ constexpr StartColours kCoolerLookColours[kCoolerLooks]{
     {{kPaletteSteel, kPaletteSteel}, {{197, 199, 196}, {197, 199, 196}}}};
 int look_of_part(const void* component);
 int turbo_look_of(const void* component);
+bool turbo_twin_of(const void* component);
 inline const StartColours& filter_colours(const void* component) { return kFilterLookColours[look_of_part(component)]; }
 inline const StartColours& cooler_colours(const void* component) { return kCoolerLookColours[look_of_part(component)]; }
 
@@ -669,7 +670,7 @@ void hk_create(void* self, void* vehicle) {
     if (!n) return;
     Turbo& t = g_turbos[self];
     if (t.hot) return;
-    t.size = n; t.spec = spec(n);
+    t.size = n; t.spec = spec(n, turbo_twin_of(self));
     const StartColours& tc = kTurboLookColours[turbo_look_of(self)];
     default_paint(self, tc.slot[0], tc.slot[1]);
     t.hot = create_hot_side(self, vehicle);
@@ -842,6 +843,11 @@ const char* definition_id_of(const void* component, size_t& length) {
     if (!id.data || id.length <= 0 || id.length > 64 || !anymaker::readable(id.data, size_t(id.length))) return nullptr;
     length = size_t(id.length);
     return id.data;
+}
+bool turbo_twin_of(const void* component) {
+    size_t length = 0;
+    const char* id = definition_id_of(component, length);
+    return id && turbo_twin_from_id(id, length);
 }
 int turbo_look_of(const void* component) {
     size_t length = 0;
@@ -1639,9 +1645,10 @@ bool write_definition_file() {
     bool built[kMaxSize - kMinSize + 1]{};
     for (int n : kTurboSizes) {
         built[n - kMinSize] = true;
-        for (int look = 0; look < kTurboLooks; ++look) {                // avo_looks_mesh.h: G-series, Precision, EFR
-            std::string name = "turbo_" + definition_id(n, look);
-            std::vector<uint8_t> mesh = pdmesh::encode(avolook::turbo(n, look), name);
+        for (int k = 0; k < 2 * kTurboLooks; ++k) {                    // avo_looks_mesh.h: G-series, Precision, EFR, each also twin scroll
+            int look = k % kTurboLooks; bool twin = k >= kTurboLooks;
+            std::string name = "turbo_" + definition_id(n, look, twin);
+            std::vector<uint8_t> mesh = pdmesh::encode(avolook::turbo(n, look, twin), name);
             std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
             built[n - kMinSize] = built[n - kMinSize] && !mesh.empty() && write_file(file, mesh.data(), mesh.size());
         }

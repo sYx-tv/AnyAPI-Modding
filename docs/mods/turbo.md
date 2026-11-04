@@ -14,6 +14,10 @@ has a big compressor mouth with the wheel showing, a turbine housing on the back
 foot under the compressor that mounts on the bottom face. Paint colour 1 sets the compressor housing, colour 2 the
 wastegate can. Every opening sits exactly where its pipe joins.
 
+Every look also comes as a **Twin Scroll** version (id ends `_twin`): a divided turbine housing with a split flange.
+It keeps the exhaust pulses apart, so the turbine gets more out of light exhaust: it spools about 20-30% quicker, makes
+noticeably more boost low in the revs, and its best pressure ratio is 3% lower at the very top.
+
 ## Hooking one up
 
 | Port | Where | Connect to |

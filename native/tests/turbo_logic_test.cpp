@@ -191,7 +191,7 @@ int main() {
     std::string json = definitions_json(built, bov_built, wg_built);
     size_t count = 0;
     for (size_t at = 0; (at = json.find("\"class\": \"gas_pump_centrifugal\"", at)) != std::string::npos; ++at) ++count;
-    assert(count == 11);                                   // two turbos in three looks each, two blow-off valves, two centrifugal superchargers, the twin screw (no wastegate part, Roots on hold)
+    assert(count == 17);                                   // two turbos in three looks each (and each twin scroll), two blow-off valves, two centrifugal superchargers, the twin screw (no wastegate part, Roots on hold)
     assert(json.find("turbocharger_2") == std::string::npos && json.find("turbocharger_4") == std::string::npos && json.find("turbocharger_5") == std::string::npos &&
            json.find("Turbo 2x2") == std::string::npos && json.find("Turbo 4x4") == std::string::npos && json.find("5x5") == std::string::npos && json.find("2x2 and") == std::string::npos);
     assert(json.find("\"bounds_max\": [1, 5, 5]") != std::string::npos && json.find("6x6x2") != std::string::npos);   // the 6x6 is 2 deep
@@ -234,6 +234,21 @@ int main() {
     assert(blow_off_vent(0.3, 5, 10, 1.0 / 60) == 0);                 // 2.9 kPa excess, under a 5 kPa spring
     assert(blow_off_vent(1.0, 5, 10, 1.0 / 60) > 0.9);                // 9.8 kPa excess vents
     assert(blow_off_vent(1.0, 5, 0.2, 1.0 / 60) <= 0.2);              // never more than the inlet holds
+    // Twin scroll: on part-throttle exhaust it spools quicker; at rated flow it settles at the same boost or a hair
+    // under, and its top ratio is a little lower.
+    {
+        for (int n : {3, 6}) {
+            Spec a = spec(n), b = spec(n, true);
+            State sa, sb; Plant pa, pb;
+            double q = a.rated_flow * 0.4;
+            run(sa, a, pa, q, q * 0.8, 0.6); run(sb, b, pb, q, q * 0.8, 0.6);
+            std::printf("twin %d: spool normal %.3f twin %.3f\n", n, sa.spool, sb.spool);
+            assert(sb.spool > sa.spool * 1.15);
+            assert(b.max_ratio < a.max_ratio && b.max_ratio > a.max_ratio * 0.95 && twin_pulse_gain(b, b.rated_flow) == 1.0 && twin_pulse_gain(a, 0) == 1.0);
+        }
+        assert(size_from_id("turbocharger_3_efr_twin", 23) == 3 && turbo_twin_from_id("turbocharger_3_efr_twin", 23) && turbo_look_from_id("turbocharger_3_efr_twin", 23) == 2 &&
+               size_from_id("turbocharger_6_twin", 19) == 6 && turbo_look_from_id("turbocharger_6_twin", 19) == 0 && !turbo_twin_from_id("turbocharger_6", 14));
+    }
     // Off throttle: a puff every few ticks as the spool eases down never shows the valve open; a real dump does.
     {
         double flow = 0; bool shown = false;
@@ -641,7 +656,7 @@ int main() {
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
         for (const char* id : {"supercharger_twin_screw"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
-        assert(count_in(full, "\"tech_tier\": ") == 20 && count_in(full, "\"spawn_probability\": ") == 20);
+        assert(count_in(full, "\"tech_tier\": ") == 26 && count_in(full, "\"spawn_probability\": ") == 26);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
         assert(size_from_id("turbocharger_3_precision", 24) == 3 && size_from_id("turbocharger_6_efr", 18) == 6 && size_from_id("turbocharger_3_x", 16) == 0 &&
                turbo_look_from_id("turbocharger_6_efr", 18) == 2 && turbo_look_from_id("turbocharger_3", 14) == 0);

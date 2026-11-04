@@ -104,6 +104,7 @@ struct Spec {
     double max_ratio = kFullBoostRatio;   // the compressor's best pressure ratio, at max_speed
     double max_speed = 1.0;       // shaft speed limit, over the spring-boost speed
     bool large_pipe = false;
+    bool twin_scroll = false;     // divided turbine housing: more pulse energy at low flow, a little less at the top
 };
 // The shaft speed (over the spring-boost speed) a stage needs for a pressure ratio: head goes with speed squared.
 inline double speed_for_ratio(double ratio) {
@@ -112,6 +113,15 @@ inline double speed_for_ratio(double ratio) {
 // The turbine's swallowing capacity scales with the face area and the shaft's energy with size: the 6x6 suits the
 // 4-rotor (it holds full boost from about 2,500 RPM there, steady), the 3x3 the 2-rotor. At its rated flow the hot side
 // drops 2 units (1 bar), under the 4 units where engines lose power; more than that and the built-in wastegate opens.
+// Twin scroll (Nate 2026-11-04): the divided housing keeps the cylinders' exhaust pulses apart, so at low exhaust flow
+// the turbine gets more of their energy (torque up to kTwinPulseGain more, fading out by the rated flow), and the
+// divider's extra wall costs a little of the top end (best ratio kTwinTopEnd lower).
+constexpr double kTwinPulseGain = 0.6, kTwinTopEnd = 0.97;
+inline double twin_pulse_gain(const Spec& s, double exhaust_lps) {
+    if (!s.twin_scroll || !(s.rated_flow > 0)) return 1.0;
+    double x = std::clamp(exhaust_lps / s.rated_flow, 0.0, 1.0);
+    return 1.0 + kTwinPulseGain * (1.0 - x);
+}
 inline Spec spec(int n) {
     n = std::clamp(n, kMinSize, kMaxSize);
     // 2x2 to 6x6; the 6x6 has the 5x5's numbers (it grew for its pipes, not its power).
@@ -141,13 +151,31 @@ inline Spec spec(int n) {
     s.max_speed = speed_for_ratio(s.max_ratio);
     return s;
 }
+inline Spec spec(int n, bool twin) {
+    Spec s = spec(n);
+    if (twin) {
+        s.twin_scroll = true;
+        s.max_ratio = 1.0 + (s.max_ratio - 1.0) * kTwinTopEnd;
+        s.max_speed = speed_for_ratio(s.max_ratio);
+    }
+    return s;
+}
 // Turbo looks (Nate 2026-11-04 "add all those in as variant options"): each size comes in three looks that work the
 // same. Look 0 keeps the old id, so saved turbos load as the G-series look.
 constexpr int kTurboLooks = 3;
 inline constexpr const char* kTurboLookIds[kTurboLooks] = {"", "_precision", "_efr"};
 inline constexpr const char* kTurboLookNames[kTurboLooks] = {"G-Series", "Precision", "EFR"};
-inline std::string definition_id(int n, int look = 0) { return std::string(kIdPrefix) + char('0' + n) + kTurboLookIds[look < 0 || look >= kTurboLooks ? 0 : look]; }
+// A twin-scroll version of each look adds "_twin" (it spools quicker, see twin_pulse_gain).
+constexpr const char* kTwinSuffix = "_twin";
+inline std::string definition_id(int n, int look = 0, bool twin = false) {
+    return std::string(kIdPrefix) + char('0' + n) + kTurboLookIds[look < 0 || look >= kTurboLooks ? 0 : look] + (twin ? kTwinSuffix : "");
+}
+inline bool turbo_twin_from_id(const char* id, size_t length) {
+    size_t sl = std::char_traits<char>::length(kTwinSuffix);
+    return id && length > sl && std::char_traits<char>::compare(id + length - sl, kTwinSuffix, sl) == 0;
+}
 inline int turbo_look_from_id(const char* id, size_t length) {
+    if (turbo_twin_from_id(id, length)) length -= std::char_traits<char>::length(kTwinSuffix);
     for (int look = 1; look < kTurboLooks; ++look) {
         size_t sl = std::char_traits<char>::length(kTurboLookIds[look]);
         if (id && length > sl && std::char_traits<char>::compare(id + length - sl, kTurboLookIds[look], sl) == 0) return look;
@@ -174,6 +202,7 @@ inline int size_from_id(const char* id, size_t length) {
     if (!id || length < p + 1 || std::char_traits<char>::compare(id, kIdPrefix, p) != 0) return 0;
     int n = id[p] - '0';
     if (!turbo_offered(n)) return 0;
+    if (turbo_twin_from_id(id, length)) length -= std::char_traits<char>::length(kTwinSuffix);
     for (int look = 0; look < kTurboLooks; ++look) {
         size_t sl = std::char_traits<char>::length(kTurboLookIds[look]);
         if (length == p + 1 + sl && std::char_traits<char>::compare(id + p + 1, kTurboLookIds[look], sl) == 0) return n;
@@ -328,7 +357,7 @@ inline std::string mount_box(int cx, int cy, int cz, std::initializer_list<int> 
 }
 
 // One part definition: a resized stock impeller (class gas_pump_centrifugal) with a hot side.
-inline std::string definition_entry(int n, const std::string& mesh_path, int look = 0) {
+inline std::string definition_entry(int n, const std::string& mesh_path, int look = 0, bool twin = false) {
     Spec s = spec(n);
     int top = n - 1;
     std::string pipe = s.large_pipe ? ", \"size\": 1" : "";
@@ -359,9 +388,9 @@ inline std::string definition_entry(int n, const std::string& mesh_path, int loo
         descriptors += std::string(i ? ",\n        " : "") + "{\"type\": \"" + (kChannels[i].input ? "type_f64_input" : "type_f64_output") + "\", \"name\": \"" + kChannels[i].name + "\"}";
     std::string box = "[1, " + std::to_string(top) + ", " + std::to_string(top) + "]";
     return std::string("    {\n") +
-        "      \"id\": \"" + definition_id(n, look) + "\",\n" +
-        "      \"name\": \"Turbo " + std::to_string(n) + "x" + std::to_string(n) + " (" + kTurboLookNames[look] + ")\",\n" +
-        "      \"description\": \"" + description(n) + "\",\n" +
+        "      \"id\": \"" + definition_id(n, look, twin) + "\",\n" +
+        "      \"name\": \"Turbo " + std::to_string(n) + "x" + std::to_string(n) + " (" + kTurboLookNames[look] + (twin ? ", Twin Scroll" : "") + ")\",\n" +
+        "      \"description\": \"" + description(n) + (twin ? " Twin scroll: a divided turbine housing that keeps the exhaust pulses apart, so it spools quicker and makes boost lower in the rev range, for a little less boost at the very top." : "") + "\",\n" +
         "      \"class\": \"gas_pump_centrifugal\",\n" +
         "      \"zones\": [{\"bounds_min\": [0, 0, 0], \"bounds_max\": " + box + "}],\n" +
         "      \"interaction_zones\": [],\n" +
@@ -383,7 +412,7 @@ inline std::string definition_entry(int n, const std::string& mesh_path, int loo
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
         "    }";
 }
-inline std::string mesh_path(int n, int look = 0) { return "meshes/components/turbo_" + definition_id(n, look) + ".mesh"; }
+inline std::string mesh_path(int n, int look = 0, bool twin = false) { return "meshes/components/turbo_" + definition_id(n, look, twin) + ".mesh"; }
 constexpr const char* kStockMeshPath = "meshes/components/turbo_a.mesh";
 // ------------------------------------------------------------------------------------------- model
 struct Inputs {
@@ -556,7 +585,7 @@ inline Step step(State& st, const Spec& s, const Inputs& in) {
         double turbine = 0.0;
         if (spout > 0 && exhaust_kg > 0) {
             double u = r * omega / spout, runaway = 2.0 * kBestBladeSpeedRatio;
-            turbine = std::max(0.0, kTurbineEfficiency * exhaust_kg * work * 4.0 * r / (runaway * spout) * (1.0 - u / runaway));
+            turbine = std::max(0.0, kTurbineEfficiency * exhaust_kg * work * 4.0 * r / (runaway * spout) * (1.0 - u / runaway)) * twin_pulse_gain(s, st.exhaust_flow);
         }
         double load = out.power / std::max(omega, 0.05 * s.shaft_full);
         double friction = omega > 0 ? s.friction * (0.3 + 0.7 * omega / s.shaft_full) : 0.0;
@@ -1231,8 +1260,9 @@ inline std::string definitions_json(const bool built[kMaxSize - kMinSize + 1], c
                                     const bool pd_built[2] = nullptr) {
     std::string out = "{\n  \"definitions\": [\n";
     for (int n : kTurboSizes)
-        for (int look = 0; look < kTurboLooks; ++look)
-            out += definition_entry(n, built[n - kMinSize] ? mesh_path(n, look) : std::string(kStockMeshPath), look) + ",\n";
+        for (int twin = 0; twin < 2; ++twin)
+            for (int look = 0; look < kTurboLooks; ++look)
+                out += definition_entry(n, built[n - kMinSize] ? mesh_path(n, look, twin) : std::string(kStockMeshPath), look, twin) + ",\n";
     for (int large = 0; large < 2; ++large)
         out += blow_off_entry(large, bov_built && bov_built[large] ? blow_off_mesh_path(large) : std::string(kValveMeshPath)) + ",\n";
     // The wastegate part is gone (Nate, 2026-11-04): every turbo's built-in wastegate holds the boost target, and the
