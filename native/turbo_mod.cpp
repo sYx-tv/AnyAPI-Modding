@@ -37,6 +37,8 @@
 #include "turbo_pd_mesh.h"
 #include "turbo_health.h"
 #include "turbo_wear_store.h"
+#include "exhaust_logic.h"
+#include "exhaust_mesh.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -274,6 +276,9 @@ double now_seconds() {
 constexpr int kKindBlowOff = 10, kKindWastegate = 11, kKindBlowOffLarge = 12, kKindWastegateLarge = 13;
 constexpr int kKindIntercooler = 14, kKindAirFilter = 16, kKindAirFilterLarge = 17;
 constexpr int kKindSupercharger = 20, kKindSuperchargerLarge = 21, kKindTwinScrew = 22, kKindRoots = 23;
+constexpr int kKindExhaust = 30;                      // 30.. : exhaust::Inline (mufflers, resonators, the cat, headers)
+double t_dt();
+bool is_exhaust_inline(int kind) { return kind >= kKindExhaust && kind < kKindExhaust + exhaust::kInlineCount; }
 bool is_pd(int kind) { return kind == kKindTwinScrew || kind == kKindRoots; }   // positive displacement (turbo_logic.h)
 bool is_blower(int kind) { return kind == kKindSupercharger || kind == kKindSuperchargerLarge || is_pd(kind); }
 PdKind pd_kind(int kind) { return kind == kKindRoots ? kRoots : kTwinScrew; }
@@ -314,6 +319,8 @@ int kind_of_definition(const void* definition) {
             int pd = pd_from_id(id.data, size_t(id.length));
             if (pd == kTwinScrew) n = kKindTwinScrew;
             else if (pd == kRoots) n = kKindRoots;
+            int ex = exhaust::inline_from_id(id.data, size_t(id.length));
+            if (ex >= 0) n = kKindExhaust + ex;
         }
     }
     g_definition_size[definition] = n;
@@ -935,6 +942,51 @@ void tick_valve(void* self, int kind) {
     publish_valve(self, v, litres, dt);
 }
 
+// ------------------------------------------------------------------------------------- exhaust inline parts
+// Mufflers, resonators, the cat and header collectors (exhaust_logic.h): the exhaust passes from the back port to the
+// front one at k x the pressure difference, so a restrictive part holds pressure back in the manifold (the game
+// takes power off an engine whose exhaust pressure climbs). Headers also mark their vehicle for a little power.
+struct ExhaustPart { int kind = 0; double flow = 0, logged_at = 0; };
+std::unordered_map<const void*, ExhaustPart> g_exhaust_parts;
+struct VehicleHeaders { bool equal = false, unequal = false; double at = 0; };
+std::unordered_map<const void*, VehicleHeaders> g_vehicle_headers;
+void tick_exhaust(void* self, void* vehicle, int k) {
+    ExhaustPart& part = g_exhaust_parts[self];
+    if (g_exhaust_parts.size() > 4096) { g_exhaust_parts.clear(); return; }
+    part.kind = k;
+    void* c0 = static_cast<uint8_t*>(self) + off::pump_content_0;
+    void* c1 = static_cast<uint8_t*>(self) + off::pump_content_1;
+    double dt = t_dt();
+    double v0 = at<double>(c0, off::content_volume), v1 = at<double>(c1, off::content_volume);
+    double cap0 = at<double>(c0, off::content_capacity), cap1 = at<double>(c1, off::content_capacity);
+    double move = exhaust::inline_move(k, v0, cap0, v1, cap1, dt);
+    if (move > 1e-9) g_content_move(c0, c1, &move);
+    else if (move < -1e-9) { double back = -move; g_content_move(c1, c0, &back); }
+    part.flow += (std::abs(move) / dt - part.flow) * std::min(1.0, dt / 0.15);
+    at<double>(self, off::pump_pressure) = 0;
+    at<double>(self, off::pump_display_power) = 0;
+    at<double>(self, off::pump_flow) = std::abs(move);
+    double now = now_seconds();
+    if (k == exhaust::kHeaderEqual || k == exhaust::kHeaderUnequal) {
+        VehicleHeaders& h = g_vehicle_headers[vehicle];
+        if (now - h.at > 1.0) h = VehicleHeaders{};
+        (k == exhaust::kHeaderEqual ? h.equal : h.unequal) = true;
+        h.at = now;
+    }
+    if (now - part.logged_at >= 2.0) {                // AVO dev build
+        part.logged_at = now;
+        double p0 = cap0 > 0 ? v0 / cap0 : NAN, p1 = cap1 > 0 ? v1 / cap1 : NAN;
+        log(0, "AVO exhaust %s id %d (vehicle %d): in %.3f (%.1f of %.1f L), out %.3f (%.1f of %.1f L), backpressure %.3f, flow %.1f L/s (k %.0f)",
+            exhaust::kInlineNames[k], at<int32_t>(self, off::component_id), vehicle ? at<int32_t>(vehicle, off::vehicle_id) : -1, p0, v0, cap0, p1, v1, cap1,
+            p0 - p1, part.flow, exhaust::flow_coefficient(k));
+    }
+}
+double header_power(void* vehicle, double now) {
+    auto h = g_vehicle_headers.find(vehicle);
+    if (h == g_vehicle_headers.end() || now - h->second.at > 1.0) return 1.0;
+    return exhaust::header_power(h->second.equal, h->second.unequal);
+}
+
 // Flow, open and the sound byte the clients play, from the litres that went through this tick.
 void publish_valve(void* self, ValvePart& v, double litres, double dt) {
     int kind = v.kind;
@@ -1194,6 +1246,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     std::unique_lock<std::recursive_mutex> lock(g_mutex);
     int kind = part_kind(self);
     if (is_valve(kind)) { tick_valve(self, kind); return; }
+    if (is_exhaust_inline(kind)) { tick_exhaust(self, vehicle, kind - kKindExhaust); return; }
     if (is_blower(kind)) {
         Turbo& t = g_turbos[self];                    // it has nothing to build, so one created before the hooks works too
         setup_blower(t, kind);
@@ -1636,10 +1689,29 @@ bool write_definition_file() {
         pd_built[k] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
     if (!pd_built[0] || !pd_built[1]) log(1, "twin screw or Roots meshes not written; they use the stock impeller look");
+    bool exhaust_built = true;                         // exhaust tips and inline parts (exhaust_mesh.h)
+    for (int l = 0; l < exhaust::kLookCount; ++l)
+        for (int y = 0; y < exhaust::kLayoutCount; ++y) {
+            std::string id = exhaust::tip_id(l, y);
+            std::vector<uint8_t> mesh = pdmesh::encode(exmesh::tip(l, y), id);
+            std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
+            exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
+        }
+    for (int k = 0; k < exhaust::kInlineCount; ++k) {
+        std::string id = exhaust::kInlineIds[k];
+        std::vector<uint8_t> mesh = pdmesh::encode(exmesh::inline_part(k), id);
+        std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
+        exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
+    }
+    if (!exhaust_built) log(1, "exhaust part meshes not written; the exhaust parts use stock looks");
     dir += L"\\Turbo";
     CreateDirectoryW(dir.c_str(), nullptr);
     std::wstring file = dir + L"\\turbochargers.json";
     std::string json = definitions_json(built, bov_built, wg_built, filter_built, &cooler_built, blower_built, pd_built);
+    {                                                  // the exhaust parts go in the same file, before its closing "]"
+        size_t end = json.rfind("\n  ]");
+        if (end != std::string::npos) json.insert(end, ",\n" + exhaust::entries(exhaust_built));
+    }
     bool ok = write_file(file, json.data(), json.size());
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
@@ -1872,6 +1944,7 @@ void hk_client_tick(void* self, void* network, void* vehicle, void* scene, const
         kind = kind_of_definition(at<const void*>(self, off::client_definition));
     }
     if (!kind) { reinterpret_cast<client_tick_t>(h_client_tick.original)(self, network, vehicle, scene, dt); return; }
+    if (is_exhaust_inline(kind)) return;            // mufflers and the rest make no impeller sound (EngineSound plays the exhaust)
     // The wastegate only makes a sound (antilag bangs) once it has fired.
     bool silent = is_wastegate(kind) && !g_voices.count(self) && !(at<double>(self, off::client_factor_speed) > 0);
     if (!silent) stream_sound(self, kind, dt);
@@ -1897,6 +1970,7 @@ thread_local bool t_in_engine = false, t_fuel_cut = false;
 thread_local double t_intake_c = 0, t_intake_pressure = 0, t_boost_factor = 0;
 thread_local double t_rated = 2.0;                   // this engine's rating (engine_rating), for the remap's knock control
 thread_local Knock t_knock;                          // what knock control did to this tick's factor
+thread_local double t_header_power = 1.0;           // header collectors (exhaust_logic.h header_power)
 thread_local double t_ecu_power = 1.0;               // the ECU tune's power over stock (ecu::power_scale)
 // Engines knocked to death (Nate, 2026-11-04: an over-boosted engine blows): one that reaches the game's last damage step
 // while knocking makes no power until it is repaired (the repair tool lowers m_damage). Server thread, under g_mutex.
@@ -1978,7 +2052,7 @@ void hk_remap(double* ret, const double* v, const double* a, const double* b, co
         factor = power_multiplier(t_intake_pressure);
     t_boost_factor = factor;
     t_knock = knock_step(boost_factor_for_air(factor, t_intake_c), t_rated, t_intake_c, t_dt());
-    *ret = t_knock.factor * t_ecu_power;
+    *ret = t_knock.factor * t_ecu_power * t_header_power;
 }
 
 // AVO dev build: one line per engine every 2 s with everything the game and the mod work out for it (Nate,
@@ -2018,6 +2092,7 @@ void dev_log_engine(void* self, void* vehicle, double rpm, double intake_c, doub
     if (tune) std::snprintf(ecu_text, sizeof ecu_text, "ECU limit %.0f launch %s%.0f boost %.0f timing %+.0f fuel %+.0f pops %.2f antilag %d power x%.3f",
                             tune->rev_limit, tune->launch ? "on " : "off ", tune->launch_rpm, tune->boost_psi, tune->timing, tune->fuel_trim, tune->pops,
                             tune->antilag ? 1 : 0, ecu::power_scale(*tune));
+    if (t_header_power != 1.0) std::snprintf(ecu_text + std::strlen(ecu_text), sizeof ecu_text - std::strlen(ecu_text), " | headers x%.2f", t_header_power);
     log(0, "AVO engine %.*s id %d (vehicle %d, volume %d): %.0f rpm, throttle %.2f, %s | intake %.2f (%.1f psi) %.0f C, air x%.2f %.1f L/s, "
            "pressure x%.2f | fuel x%.2f %.4f L/s | exhaust x%.2f %.1f L/s, manifold %.2f | torque %.1f, temp %.0f C | boost factor %.2f -> %.2f, "
            "rated %.2f (stock %.2f), knock %.0f%%, damage %d (%.2f)%s | %s",
@@ -2038,6 +2113,7 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     t_knock = Knock{};
     t_fuel_cut = false;
     t_ecu_power = 1.0;
+    t_header_power = 1.0;
     if (self && t_in_engine) t_rated = engine_rated_factor(self);
     double rated_stock = t_rated;
     ecu::Tune tune;
@@ -2078,6 +2154,10 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
             if (cut) l->second.cut_at = now;
             else if (now - l->second.at > 1.0) g_launch.erase(l);   // its input went to 0 (or the wastegate is gone)
         }
+    }
+    if (self && t_in_engine) {                      // header collectors on the vehicle (exhaust_logic.h)
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        t_header_power = header_power(vehicle, now_seconds());
     }
     bool cut_this_tick = t_fuel_cut;
     reinterpret_cast<engine_tick_t>(h_engine_tick.original)(self, vehicle, scene);
