@@ -78,9 +78,11 @@ Run it once without `--apply` to read the report, then again with `--apply` (add
    `Packages` overrides and the `add_game_build.py` command for the other mods.
    Bundles count as one mod each, under their release name: a bundle is rebuilt when any
    of its parts must be, ships from `build/bundles/<config>/`, and gets its own version block
-   if it had none. A standalone target with the same release name (AnyHelpers, AnyGraphics,
-   AnyEngineParts, AnyMap) is never released, because the bundle replaces it. Before 0.1.27
-   the plan ignored bundles and bumped the standalone versions instead.
+   if it had none. A standalone target that a bundle carries (same release name, like
+   AnyHelpers, AnyGraphics and AnyMap, or a main source a bundle's part wrapper compiles, like
+   AnyEngineParts, EngineSound, GpsPart and AnyMoto inside AnyVehicleOverhaul) is never
+   released, because the bundle replaces it. Before 0.1.27 the plan ignored bundles and
+   bumped the standalone versions instead.
 
 Re-running it is safe: a second `--apply` on an up-to-date tree changes nothing.
 

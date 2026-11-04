@@ -1,4 +1,6 @@
-// AnyEngineParts: engine parts for Anymaker in one mod. It carries three parts sets, each in its own file:
+// AnyEngineParts: engine parts for Anymaker in one mod. Ships as the "anyengineparts" part of the AnyVehicleOverhaul
+// bundle (bundles/anyvehicleoverhaul_bundle.cpp); keep the "anyengineparts" mod id, which keys players' settings and
+// keybinds. It carries three parts sets, each in its own file:
 //   - turbo_mod.cpp: exhaust-driven turbochargers (2x2x2 to 5x5x2), inline blow-off valves and a wastegate with
 //     antilag (docs/mods/turbo.md);
 //   - rotary_mod.cpp: a stretchable 1-4 rotor rotary engine with its own sound (docs/mods/rotary.md);

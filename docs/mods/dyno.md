@@ -1,6 +1,6 @@
 # Dyno
 
-> Part of [AnyEngineParts](engine-parts.md). It hooks game functions directly through the
+> Part of AnyEngineParts, inside the [AnyVehicleOverhaul](vehicle-overhaul.md) download. It hooks game functions directly through the
 > [experimental SDK](../../sdk/experimental/README.md), so it only activates on Anymaker 0.2.0 / Steam build
 > 26328453. **Single player / host only** for now.
 

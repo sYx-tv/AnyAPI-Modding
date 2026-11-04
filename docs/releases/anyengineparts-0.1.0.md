@@ -1,6 +1,6 @@
 # AnyEngineParts 0.1.0
 
-**New mod.** AnyEngineParts adds engine parts to Anymaker 0.1.25 in one mod. Guide: [AnyEngineParts](../mods/engine-parts.md).
+**New mod.** AnyEngineParts adds engine parts to Anymaker 0.1.25 in one mod. Guide: [AnyEngineParts](../mods/vehicle-overhaul.md).
 
 - **Turbochargers** in four sizes (2x2x2 to 5x5x2), spooled by the engine's exhaust, with turbo lag, boost data channels and their own whistle and surge sounds. [Turbo guide](../mods/turbo.md).
 - **Blow-off valves** (Small and Large) with a spring and sound picked in the Properties Tool, and a **wastegate** with microcontroller-controlled antilag.

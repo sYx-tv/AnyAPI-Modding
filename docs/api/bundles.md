@@ -11,13 +11,16 @@ files in [native/bundles](../../native/bundles/):
 
 | Bundle DLL | Parts (mod id) |
 | --- | --- |
-| `AnyEngineParts.dll` | `anyengineparts` (turbo, superchargers, rotary, Dyno), `enginesound`, `gpspart` |
+| `AnyVehicleOverhaul.dll` (was `AnyEngineParts.dll` until 2026-11) | `anyengineparts` (turbo, superchargers, rotary, Dyno), `enginesound`, `gpspart`, `anymoto` (was the standalone `AnyMoto.dll`) |
 | `AnyHelpers.dll` | `anyhelpers` (required), `anyinventory`, `anymirror`, `anybalance`, `mccode` |
 | `AnyGraphics.dll` | `anygraphics`, `thirdperson` |
 | `AnyMap.dll` | `anymap` |
 
 Parts keep their mod ids, settings ids, keybind ids, data folders and game part ids,
-so settings, keybinds, saved vehicles and worlds carry over from the standalone mods.
+so settings, keybinds, saved vehicles and worlds carry over from the standalone mods. A bundle can be
+renamed the same way (AnyEngineParts became AnyVehicleOverhaul): the part ids stay, the new
+catalog entry lists the old bundle under `Replaces`, and the old bundle's DLL goes in the matching
+part's `legacy_file`. See [AnyVehicleOverhaul](../mods/vehicle-overhaul.md).
 
 ## Writing a bundle
 

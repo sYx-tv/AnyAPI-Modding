@@ -1,8 +1,8 @@
 # Rotary engine (AnyEngineParts)
 
-> The rotary engine is part of [AnyEngineParts](engine-parts.md). It hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
+> The rotary engine is part of AnyEngineParts, inside the [AnyVehicleOverhaul](vehicle-overhaul.md) download. It hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
-> **Prototype, single player only** for now: built from source, not in the catalog yet.
+> **Single player only** for now.
 
 Rotary adds a new part, the **Rotary Engine**. It is the stock small engine cell for cell (same size, ports,
 manifolds, gearboxes and engine wheels, same air, fuel, oil and coolant needs, starts at 6 rps), with a rounded
