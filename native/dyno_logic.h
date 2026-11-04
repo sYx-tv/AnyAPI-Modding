@@ -16,6 +16,7 @@
 // bins (Nate's first rotary pulls, 2026-10-15). The next pull starts once the throttle has come off. The mod gives each
 // sample the RPM the engine had when it made that power (read before the game's engine tick): read after, the
 // bounce showed up as power at 8,600 to 8,900 RPM.
+#include "gauges_logic.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -237,7 +238,9 @@ inline std::string definition_json(const std::string& mesh_path = kStockMeshPath
       "liquid_pump_max_output_rps": 50.0,
       "gas_pump_wattage": 1000.0,
       "gas_pump_max_output_rps": 50.0
-    }
+    },
+)" + gauges::definition_entry(gauges::kController, kStockMeshPath) + ",\n" + gauges::definition_entry(gauges::kBoostGauge, kStockMeshPath) + ",\n" +
+        gauges::definition_entry(gauges::kOilGauge, kStockMeshPath) + R"(
   ]
 }
 )";

@@ -13,8 +13,10 @@ std::mutex& install_mutex();
 namespace turbo {
 // The boost on a vehicle's engines, from the turbos and superchargers that ticked on it in the last second: Turbo's
 // name for the setup ("Single turbo", "Twincharged", ...) and the power its superchargers take through their belts.
-struct VehicleBoost { std::string setup = "Naturally aspirated"; double drive_watts = 0; };
+struct VehicleBoost { std::string setup = "Naturally aspirated"; double drive_watts = 0, boost_psi = 0, target_psi = 0; };
 VehicleBoost vehicle_boost(const void* vehicle);
+// A Boost Controller's ask (psi over the air outside) for every turbo on a vehicle, renewed each tick; 0 clears it.
+void set_boost_target(const void* vehicle, double psi);
 }  // namespace turbo
 
 namespace dyno {

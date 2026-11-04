@@ -69,6 +69,10 @@ constexpr ptrdiff_t engine_temperature = 1432;       // m_temperature (f64, C)
 constexpr ptrdiff_t engine_throttle = 1472;          // m_display_throttle (f64)
 constexpr ptrdiff_t engine_boost = 1496;             // m_display_air_pressure_factor (f64, 1..2)
 constexpr ptrdiff_t engine_energy = 1536;            // m_display_torque (f64): energy this tick
+// 0.2.0 layouts (sdk/reference-0.2.0): m_content_lubricant +0x2a0 and m_content_coolant +0x388 are
+// vehicle_liquid_content_volume, whose vehicle_liquid_content base has m_volume +0x20, m_capacity +0x28, m_temperature +0x30.
+constexpr ptrdiff_t engine_oil_volume = 0x2a0 + 0x20, engine_oil_capacity = 0x2a0 + 0x28, engine_oil_temperature = 0x2a0 + 0x30;
+constexpr ptrdiff_t engine_coolant_temperature = 0x388 + 0x30;
 }  // namespace off
 constexpr int32_t kStoreSystem = 1;                  // file.e_store.system (as GpsPart, Turbo and Rotary)
 
@@ -92,7 +96,13 @@ transform_t g_vehicle_transform, g_component_transform;
 anymaker::cell_hook h_add_definitions, h_engine_tick, h_sensor_tick, h_get_f64;
 
 // ------------------------------------------------------------------------------------- shared state
-struct EngineEntry { const void* vehicle = nullptr; EngineSample sample; double time = 0, knock = 0, knock_time = -1e9; };
+struct EngineEntry {
+    const void* vehicle = nullptr; EngineSample sample; double time = 0, knock = 0, knock_time = -1e9;
+    double oil_level = 0, oil_c = NAN, coolant_c = NAN;   // for the Oil Gauge (gauges_logic.h)
+};
+// A Boost Controller, Boost Gauge or Oil Gauge (gauges_logic.h). Kept like the Dynos: microcontrollers hold pointers
+// into the slots.
+struct Gauge { gauges::Kind kind = gauges::kNone; double slots[gauges::kMaxSlots]{}; double peak = 0; bool reset_held = false; double last_tick = 0; };
 struct Dyno {
     Recorder recorder;
     std::string setup;                                // Turbo's name for the boost setup ("Twin turbo", ...)
@@ -106,26 +116,32 @@ std::unordered_map<const void*, EngineEntry> g_engines;
 // Keyed by server component. Entries are never erased: microcontrollers keep pointers into their slots (hk_get_f64)
 // until their next rebuild, so a Dyno that stops ticking keeps its entry (a few KB) for the rest of the session.
 std::unordered_map<const uint8_t*, Dyno> g_dynos;
-std::unordered_map<const void*, bool> g_is_dyno;      // definition pointer -> dyno_sensor? (cleared on each add)
+std::unordered_map<const void*, int> g_is_dyno;       // definition pointer -> kDynoKind, a gauges::Kind or 0 (cleared on each add)
+std::unordered_map<const uint8_t*, Gauge> g_gauges;    // keyed by server component, never erased (as g_dynos)
+constexpr int kDynoKind = 100;
+std::atomic<int64_t> g_gauge_tick_ms{INT64_MIN / 2};   // when an Oil Gauge last ticked: engines' oil is noted while one does
 double g_last_sweep = 0;
 // When a Dyno last ticked (ms, now_seconds clock). Engine ticks are only noted while one did in the last 5 s.
 std::atomic<int64_t> g_dyno_tick_ms{INT64_MIN / 2};
 int64_t now_ms() { return int64_t(now_seconds() * 1000); }
 bool dyno_ticking() { return now_ms() - g_dyno_tick_ms.load(std::memory_order_relaxed) < 5000; }
+bool oil_gauge_ticking() { return now_ms() - g_gauge_tick_ms.load(std::memory_order_relaxed) < 5000; }
 
-bool is_dyno(const uint8_t* sensor) {
-    if (!sensor || !anymaker::readable(sensor + off::component_definition, 8)) return false;
+// Which of our sensor parts this altitude sensor is: kDynoKind, a gauges::Kind, or 0 (a stock altitude sensor).
+int sensor_kind(const uint8_t* sensor) {
+    if (!sensor || !anymaker::readable(sensor + off::component_definition, 8)) return 0;
     auto* definition = at<const uint8_t*>(sensor, off::component_definition);
-    if (!definition) return false;
+    if (!definition) return 0;
     auto found = g_is_dyno.find(definition);
     if (found != g_is_dyno.end()) return found->second;
-    bool dyno = false;
+    int kind = 0;
     if (anymaker::readable(definition + off::definition_id, sizeof(anymaker::gc_string_view))) {
         auto* id = reinterpret_cast<const anymaker::gc_string_view*>(definition + off::definition_id);
-        dyno = id->data && id->length > 0 && id->length < 64 && anymaker::readable(id->data, size_t(id->length)) && id->view() == kDefinitionId;
+        if (id->data && id->length > 0 && id->length < 64 && anymaker::readable(id->data, size_t(id->length)))
+            kind = id->view() == kDefinitionId ? kDynoKind : int(gauges::kind_of_id(id->data, size_t(id->length)));
     }
-    g_is_dyno[definition] = dyno;
-    return dyno;
+    g_is_dyno[definition] = kind;
+    return kind;
 }
 
 // ------------------------------------------------------------------------------------- part definition
@@ -226,7 +242,7 @@ void hk_add_definitions(void* container, const void* file) {
 void hk_engine_tick(void* self, void* vehicle, void* scene) {
     // The engine speed the tick makes its power at: the game reads m_rps first and only sets the new speed at the end.
     // Read after the tick, an engine bouncing on the fuel cut showed power above 8,000 RPM.
-    bool feed = self && vehicle && dyno_ticking() &&
+    bool feed = self && vehicle && (dyno_ticking() || oil_gauge_ticking()) &&
                 anymaker::readable(static_cast<uint8_t*>(self) + off::engine_rps, off::engine_energy + 8 - off::engine_rps);
     double rps_before = feed ? at<double>(self, off::engine_rps) : 0;
     reinterpret_cast<engine_tick_t>(h_engine_tick.original)(self, vehicle, scene);
@@ -239,9 +255,65 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     s.boost = at<double>(self, off::engine_boost);
     s.temperature_c = at<double>(self, off::engine_temperature);
     for (double* v : {&s.rps, &s.watts, &s.throttle, &s.boost, &s.temperature_c}) if (!std::isfinite(*v)) *v = 0;
+    double oil_level = 0, oil_c = NAN, coolant_c = NAN;
+    auto* engine = static_cast<const uint8_t*>(self);
+    if (anymaker::readable(engine + off::engine_oil_volume, off::engine_coolant_temperature + 8 - off::engine_oil_volume)) {
+        double volume = at<double>(engine, off::engine_oil_volume), capacity = at<double>(engine, off::engine_oil_capacity);
+        oil_level = std::isfinite(volume) && std::isfinite(capacity) && capacity > 0 ? std::clamp(volume / capacity, 0.0, 1.0) : 0.0;
+        oil_c = at<double>(engine, off::engine_oil_temperature);
+        coolant_c = at<double>(engine, off::engine_coolant_temperature);
+    }
     std::lock_guard lock(g_mutex);
     auto& e = g_engines[self];
     e.vehicle = vehicle; e.sample = s; e.time = now_seconds();
+    e.oil_level = oil_level; e.oil_c = oil_c; e.coolant_c = coolant_c;
+}
+
+// A Boost Controller, Boost Gauge or Oil Gauge's server tick.
+void gauge_tick(uint8_t* sensor, void* vehicle, gauges::Kind kind) {
+    using namespace gauges;
+    double target = 0;
+    if (kind == kController) {
+        { std::lock_guard lock(g_mutex); target = controller_target(g_gauges[sensor].slots); }
+        turbo::set_boost_target(vehicle, target);   // Turbo's lock, not ours
+    }
+    turbo::VehicleBoost boost = kind == kOilGauge ? turbo::VehicleBoost{} : turbo::vehicle_boost(vehicle);
+    std::lock_guard lock(g_mutex);
+    double now = now_seconds();
+    Gauge& g = g_gauges[sensor];
+    bool fresh = !(g.last_tick > 0) || now - g.last_tick > 5.0;
+    g.kind = kind; g.last_tick = now;
+    double* o = g.slots;
+    if (kind == kController) {
+        o[kControllerBoostPsi] = boost.boost_psi;
+        o[kTargetSet] = target;
+    } else if (kind == kBoostGauge) {
+        double psi = std::max(0.0, boost.boost_psi);
+        bool reset = o[kResetPeak] > 0.5;
+        if ((reset && !g.reset_held) || fresh) g.peak = 0;
+        g.reset_held = reset;
+        g.peak = std::max(g.peak, psi);
+        o[kBoostPsi] = psi; o[kBoostKpa] = psi / kPsiPerKpa; o[kBoostBar] = psi / kPsiPerKpa / 100.0;
+        o[kBoostTarget] = boost.target_psi; o[kPeakPsi] = g.peak;
+    } else {
+        g_gauge_tick_ms.store(int64_t(now * 1000), std::memory_order_relaxed);
+        const EngineEntry* hot = nullptr;           // the hottest engine running on this vehicle
+        for (auto& [engine, e] : g_engines)
+            if (e.vehicle == vehicle && now - e.time < 0.25 && (!hot || e.sample.temperature_c > hot->sample.temperature_c)) hot = &e;
+        o[kOilPressurePsi] = hot ? oil_pressure_psi(hot->oil_level, hot->oil_c, hot->sample.rps * 60.0) : 0.0;
+        o[kOilTemperature] = hot && std::isfinite(hot->oil_c) ? hot->oil_c : 0.0;
+        o[kOilLevel] = hot ? hot->oil_level : 0.0;
+        o[kCoolantTemperature] = hot && std::isfinite(hot->coolant_c) ? hot->coolant_c : 0.0;
+        o[kEngineTemperature] = hot ? hot->sample.temperature_c : 0.0;
+    }
+    if (now - g_last_sweep > 2.0) {                 // as the Dyno's tick: engines gone from the scene stop ticking
+        g_last_sweep = now;
+        for (auto it = g_engines.begin(); it != g_engines.end();) it = now - it->second.time > 5.0 ? g_engines.erase(it) : std::next(it);
+    }
+    if (fresh) {
+        static std::atomic<int> logs{12};
+        if (logs.fetch_sub(1) > 0) log(0, "%s ticking on a vehicle", kind == kController ? "Boost Controller" : kind == kBoostGauge ? "Boost Gauge" : "Oil Gauge");
+    }
 }
 
 EngineSample vehicle_sample(const void* vehicle, double now) {
@@ -265,10 +337,13 @@ EngineSample vehicle_sample(const void* vehicle, double now) {
 void hk_sensor_tick(uint8_t* sensor, void* vehicle, void* scene) {
     reinterpret_cast<sensor_tick_t>(h_sensor_tick.original)(sensor, vehicle, scene);
     if (!sensor || !vehicle) return;
+    int kind;
     {
         std::lock_guard lock(g_mutex);
-        if (!is_dyno(sensor)) return;
+        kind = sensor_kind(sensor);
     }
+    if (!kind) return;
+    if (kind != kDynoKind) { gauge_tick(sensor, vehicle, gauges::Kind(kind)); return; }
     // The boost setup, and the power superchargers take through their belts: the curves show what reaches the
     // wheels, net of it. Asked before taking the Dyno's lock (Turbo has its own).
     turbo::VehicleBoost boost = turbo::vehicle_boost(vehicle);
@@ -340,10 +415,18 @@ void hk_get_f64(double** ret, uint8_t* sensor, const anymaker::gc_string_view* n
     reinterpret_cast<get_f64_t>(h_get_f64.original)(ret, sensor, name);
     if (!ret || *ret || !sensor || !name) return;
     auto view = name->view();
-    int i = channel_index(view.data(), view.size());
-    if (i < 0) return;
     std::lock_guard lock(g_mutex);
-    if (!is_dyno(sensor)) return;
+    int kind = sensor_kind(sensor);
+    if (kind && kind != kDynoKind) {                // a gauge or the Boost Controller
+        int i = gauges::channel_index(gauges::Kind(kind), view.data(), view.size());
+        if (i < 0) return;
+        *ret = &g_gauges[sensor].slots[i];
+        static std::atomic<int> glogs{8};
+        if (glogs.fetch_sub(1) > 0) log(0, "gauge data channel %s connected", gauges::channels(gauges::Kind(kind))[i].name);
+        return;
+    }
+    int i = channel_index(view.data(), view.size());
+    if (i < 0 || kind != kDynoKind) return;
     *ret = &g_dynos[sensor].slots[i];               // map nodes keep their address
     static std::atomic<int> logs{8};
     if (logs.fetch_sub(1) > 0) log(0, "data channel %s connected", kChannels[i].name);

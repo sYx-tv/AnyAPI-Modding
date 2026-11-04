@@ -243,6 +243,8 @@ std::unordered_map<const void*, PaintedPart> g_painted_parts;   // air filters a
 std::unordered_map<const void*, int> g_definition_size;   // definition pointer -> 3 or 6 (2-5 kept for the valve and supercharger voices), or 0 for other parts
 std::recursive_mutex g_mutex;                        // tick, create, destroy and data lookups (recursive: game calls made
                                                      // under it may come back through our hooks)
+struct VehicleTarget { double psi = 0, at = -1e9; };
+std::unordered_map<const void*, VehicleTarget> g_vehicle_targets;   // Boost Controllers' asks, by vehicle (under g_mutex)
 
 double now_seconds() {
     static LARGE_INTEGER freq = [] { LARGE_INTEGER f; QueryPerformanceFrequency(&f); return f; }();
@@ -1141,6 +1143,10 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     double now_s = now_seconds();
     t.vehicle = vehicle; t.ticked_at = now_s;
     refresh_topology(self, vehicle, t, now_s);
+    {                                                // a Boost Controller on this vehicle (gauges_logic.h, dyno_mod.cpp)
+        auto c = g_vehicle_targets.find(vehicle);
+        t.state.controller_psi = c != g_vehicle_targets.end() && now_s - c->second.at < 1.0 ? c->second.psi : 0.0;
+    }
     auto upstream = t.upstream ? g_turbos.find(t.upstream) : g_turbos.end();
     bool fed = upstream != g_turbos.end();           // a compound's second stage: it breathes another turbo's boost
     // The compressor inlet is open to the air, like a real turbo's intake: hold it at ambient every tick, both ways.
@@ -2180,6 +2186,16 @@ void remove_hooks() {
 // The Dyno's view of a vehicle's boost (engine_parts_shared.h). A turbo or supercharger counts when its boost reaches
 // an engine (straight, or through further stages); if none is seen to (an air manifold the walk did not reach), every
 // one on the vehicle counts. A compound is a turbo breathing another turbo's boost.
+void set_boost_target(const void* vehicle, double psi) {
+    if (!vehicle) return;
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    double now = now_seconds();
+    if (!(psi > 0) || !std::isfinite(psi)) { g_vehicle_targets.erase(vehicle); return; }
+    g_vehicle_targets[vehicle] = {psi, now};
+    if (g_vehicle_targets.size() > 64)              // vehicles gone: their asks are stale after a second
+        for (auto it = g_vehicle_targets.begin(); it != g_vehicle_targets.end();) it = now - it->second.at > 5.0 ? g_vehicle_targets.erase(it) : std::next(it);
+}
+
 VehicleBoost vehicle_boost(const void* vehicle) {
     VehicleBoost out;
     if (!vehicle) return out;
@@ -2205,6 +2221,8 @@ VehicleBoost vehicle_boost(const void* vehicle) {
             b->compound = b->compound || compound;
         }
         if (t.blower && std::isfinite(t.state.slots[kDrivePower])) out.drive_watts += std::max(0.0, t.state.slots[kDrivePower]) * 1000.0;
+        if (std::isfinite(t.state.slots[kBoostPsi])) out.boost_psi = std::max(out.boost_psi, t.state.slots[kBoostPsi]);
+        if (!t.blower && std::isfinite(t.state.slots[kBoostTargetSet])) out.target_psi = std::max(out.target_psi, t.state.slots[kBoostTargetSet]);
     }
     out.setup = boost_setup_name(fed.turbos + fed.superchargers > 0 ? fed : all);
     return out;

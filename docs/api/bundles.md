@@ -11,7 +11,7 @@ files in [native/bundles](../../native/bundles/):
 
 | Bundle DLL | Parts (mod id) |
 | --- | --- |
-| `AnyVehicleOverhaul.dll` (was `AnyEngineParts.dll` until 2026-11) | `anyengineparts` (turbo, superchargers, rotary, Dyno), `enginesound`, `gpspart`, `anymoto` (was the standalone `AnyMoto.dll`) |
+| `AnyVehicleOverhaul.dll` (was `AnyEngineParts.dll` until 2026-11) | `anyengineparts` (turbo, superchargers, rotary, Dyno), `enginesound`, `gpspart`, `anymoto` (was the standalone `AnyMoto.dll`), `anycvt` (was the standalone `AnyCVT.dll`) |
 | `AnyHelpers.dll` | `anyhelpers` (required), `anyinventory`, `anymirror`, `anybalance`, `mccode` |
 | `AnyGraphics.dll` | `anygraphics`, `thirdperson` |
 | `AnyMap.dll` | `anymap` |

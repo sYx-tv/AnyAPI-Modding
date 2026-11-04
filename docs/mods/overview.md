@@ -2,7 +2,7 @@
 
 **Bundles (AnyAPI 0.39.0, Manager 1.5.0).** Most mods now ship inside four bundles,
 so the library lists fewer entries: **AnyVehicleOverhaul** (AnyEngineParts, EngineSound,
-GpsPart and AnyMoto; it was the AnyEngineParts bundle until 2026-11), **AnyHelpers** (with AnyInventory, AnyMirror, AnyBalance and MCCode),
+GpsPart, AnyMoto and AnyCVT; it was the AnyEngineParts bundle until 2026-11), **AnyHelpers** (with AnyInventory, AnyMirror, AnyBalance and MCCode),
 **AnyGraphics** (with ThirdPerson) and **AnyMap**. Every bundled mod works exactly as
 before and keeps its settings, keybinds, saved vehicles and worlds. Each one has an
 **Enabled** row at the top of its group in Mod Settings (applies the next time you
@@ -30,7 +30,7 @@ keeps working defaults when it is absent.
 | [ThirdPerson](third-person.md) | 0.1.3 | API 0.35.0 | Third-person camera on F5 with an adjustable follow distance (Alt + mouse wheel) | AnyHelpers settings and controls |
 | [MCCode](mccode.md) | 0.2.0 | API 0.38.0 | A Code view in the microcontroller editor: type the program or build it from nodes and wires, with a command list and the game's debugger | None; `</> Code` in the microcontroller editor |
 | [CustomGame](custom-game.md) | 0.1.0 | API 0.40.0 | A Custom Game page on the New Game screen: day cycle, starting tier, up to 20 players, survival, enemy and world settings saved per world | Map packs from CustomMap |
-| [AnyVehicleOverhaul](vehicle-overhaul.md) | 2.0.0 | API 0.42.0 | Bundle: AnyEngineParts ([turbos and superchargers](turbo.md), [rotary engine](rotary.md), [Dyno](dyno.md)), [EngineSound](engine-sound.md), [GpsPart](gps.md) and [AnyMoto](moto.md) (motorcycle fork, swingarm, seat, handlebars and Lean Assist) | AnyHelpers settings and controls |
+| [AnyVehicleOverhaul](vehicle-overhaul.md) | 2.0.0 | API 0.42.0 | Bundle: AnyEngineParts ([turbos and superchargers](turbo.md), [rotary engine](rotary.md), [Dyno](dyno.md)), [EngineSound](engine-sound.md), [GpsPart](gps.md) [AnyMoto](moto.md) (motorcycle fork, swingarm, seat, handlebars and Lean Assist) and [AnyCVT](cvt.md) (belt CVTs); no boost cap, engine ratings and knock, Boost Controller, Boost Gauge and Oil Gauge | AnyHelpers settings and controls |
 
 All mods are in the published catalog ([`catalog.json`](../../catalog.json)).
 All versions target Anymaker 0.2.0 / Steam build 26328453. On that build every mod needs AnyAPI 0.42.0 or newer, and the experimental-SDK mods ship
@@ -46,7 +46,7 @@ Built from source only, not in the catalog yet. They use the experimental SDK.
 | [AnyLights](lights.md) | One paint tool for every colour (palette panel, modes, Ctrl+Z undo); lights glow their paint colour | AnyHelpers settings |
 | [AnyCombat](combat.md) | Hit markers and floating damage numbers for the hits you deal, red on a kill | AnyHelpers settings |
 | [AnyBattery](battery.md) | The Battery Pack: a battery you place and stretch to size like a liquid tank, placed empty and charged from the electric network; saved charge, charge_percent output | AnyHelpers settings |
-| [AnyCVT](cvt.md) | Small, Medium and Large CVTs: the stock gearbox of each size with R/N/D on the shifter link, a ratio that slides to hold a target RPM and a centrifugal clutch; ratio, engine_rpm, target_rpm and current_gear (-1/0/1) outputs | |
+| [AnyCVT](cvt.md) (in AnyVehicleOverhaul since 2026-11) | Small, Medium and Large CVTs: the stock gearbox of each size with R/N/D on the shifter link, a ratio that slides to hold a target RPM and a centrifugal clutch; ratio, engine_rpm, target_rpm and current_gear (-1/0/1) outputs | |
 | [AnyPerformance](performance.md) | Smooths the world's slow-motion and catch-up when the simulation stalls, logs what stalled it and every frame hitch, and keeps the server's 60 ticks a second evenly spaced | AnyHelpers settings |
 
 See [validation status](../development/validation.md) for tested behavior and limits,

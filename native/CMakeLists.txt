@@ -678,7 +678,7 @@ endfunction()
 # AnyVehicleOverhaul (was the AnyEngineParts bundle, 2026-11): AnyEngineParts, EngineSound, GpsPart and AnyMoto.
 anyapi_bundle(AnyVehicleOverhaulBundle AnyVehicleOverhaul bundles/anyvehicleoverhaul_bundle.cpp
   bundles/part_anyengineparts.cpp turbo_mod.cpp rotary_mod.cpp dyno_mod.cpp bundles/part_enginesound.cpp bundles/part_gpspart.cpp
-  bundles/part_anymoto.cpp)
+  bundles/part_anymoto.cpp bundles/part_anycvt.cpp)
 anyapi_bundle(AnyHelpersBundle AnyHelpers bundles/anyhelpers_bundle.cpp bundles/part_anyhelpers.cpp
   bundles/part_anymirror.cpp bundles/part_anybalance.cpp bundles/part_mccode.cpp)
 target_link_libraries(AnyHelpersBundle PRIVATE gdiplus user32)

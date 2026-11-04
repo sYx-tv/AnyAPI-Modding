@@ -180,6 +180,28 @@ int main() {
     }
     auto bad = mf; bad[0] = 'x';
     assert(build_dyno_mesh(bad, "x").empty());
+    // Gauges and the Boost Controller (gauges_logic.h).
+    {
+        using namespace gauges;
+        assert(kind_of_id("boost_controller", 16) == kController && kind_of_id("oil_gauge", 9) == kOilGauge && kind_of_id("dyno_sensor", 11) == kNone);
+        for (Kind k : {kController, kBoostGauge, kOilGauge}) {
+            assert(channel_count(k) <= kMaxSlots);
+            for (int i = 0; i < channel_count(k); ++i) assert(channel_index(k, channels(k)[i].name, std::strlen(channels(k)[i].name)) == i);
+        }
+        double slots[kMaxSlots]{};
+        assert(controller_target(slots) == 0);
+        slots[kTargetPsi] = 20; assert(controller_target(slots) == 20);
+        slots[kScramble] = 1; assert(controller_target(slots) == 25);
+        slots[kScramblePsi] = 8; assert(controller_target(slots) == 28);
+        slots[kTargetPsi] = 0; assert(controller_target(slots) == 0);      // scramble alone keeps the springs
+        slots[kTargetPsi] = NAN; assert(controller_target(slots) == 0);
+        slots[kTargetPsi] = 1e9; slots[kScramble] = 0; assert(controller_target(slots) == kMaxTargetPsi);
+        assert(oil_pressure_psi(1, 90, 0) == 0 && oil_pressure_psi(1, 90, 6000) > oil_pressure_psi(1, 90, 1000));
+        assert(oil_pressure_psi(1, 20, 3000) > oil_pressure_psi(1, 90, 3000) && oil_pressure_psi(1, 200, 3000) < oil_pressure_psi(1, 90, 3000));
+        assert(oil_pressure_psi(0.2, 90, 3000) < oil_pressure_psi(1, 90, 3000) * 0.5 && oil_pressure_psi(0, 90, 3000) == 0 && oil_pressure_psi(NAN, 90, 3000) == 0);
+        std::string json = definition_json();
+        assert(json.find("\"boost_controller\"") != std::string::npos && json.find("\"oil_gauge\"") != std::string::npos);
+    }
     std::puts("dyno logic ok");
     return 0;
 }

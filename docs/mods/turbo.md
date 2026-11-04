@@ -27,7 +27,7 @@ flange block carries them across the top and bottom corners.
 Exhaust expanding through the turbine (hot inlet to hot outlet) spins the shaft, and the compressor on the same
 shaft pushes air into the engine's intake with a boost that climbs with the square of the shaft's speed. Engines
 already turn intake pressure into power: ambient gives 1x, and an intake pressure of 98 kPa (the game's scale) gives
-the full 2x, and past that power keeps rising with boost: there is **no boost cap** (AnyVehicleOverhaul 2.1). A
+the full 2x, and past that power keeps rising with boost: there is **no boost cap** (AnyVehicleOverhaul 2.0). A
 built-in wastegate holds 88 kPa (12.8 psi) out of the box and sends the exhaust the shaft does not need round the
 turbine. Turn it up with a boost target (see [Turning up the boost](#turning-up-the-boost)); what the engine can take
 is set by its own rating.
@@ -35,8 +35,17 @@ is set by its own rating.
 ## Turning up the boost
 
 - **Boost target:** wire a psi value into a turbo's `boost_target_psi` input (0 or unwired: the wastegate spring's
-  12.8 psi). The turbo holds that boost if its exhaust can spin it fast enough. A Boost Controller part comes in a
-  later update.
+  12.8 psi). The turbo holds that boost if its exhaust can spin it fast enough.
+- **Boost Controller** (a 1-cell sensor part): sets the target for every turbo on its vehicle. Wire a psi value into
+  its `target_psi` (a microcontroller, a dial or a switch; 0 keeps the springs). `scramble` above 0.5 adds
+  `scramble_psi` (default 5) on top, for a push-to-pass button. A turbo's own `boost_target_psi` input wins over it.
+  Outputs `boost_psi` and `target_set`.
+- **Boost Gauge** reads the vehicle's highest boost (`boost_psi`, `boost_kpa`, `boost_bar`), the target
+  (`target_psi`) and the peak (`peak_psi`; `reset_peak` above 0.5 clears it). **Oil Gauge** reads the hottest
+  engine's `oil_pressure_psi`, `oil_temperature`, `oil_level` (0-1; under 0.5 the engine wears), `coolant_temperature`
+  and `engine_temperature`. The game has no oil pump, so oil pressure is worked out like a real gauge reads: it rises
+  with RPM, reads high on cold oil and low on very hot oil, and drops off with a low sump. Wire either to a display
+  or a microcontroller. All three drop as electronics loot after the 2nd bunker.
 - **Each size has a ceiling:** the 3x3's compressor tops out at a pressure ratio of about 3.3 (about 34 psi), the
   6x6's at about 4.2 (about 47 psi). Past the spring boost the shaft needs much more exhaust energy, so big boost
   needs a big engine at high RPM, and it lags more.

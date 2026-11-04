@@ -5,7 +5,8 @@
 > It is a [bundle](../api/bundles.md): it needs AnyAPI 0.39.0 or newer (0.42.1 or newer on 0.2.0). Install it from the manager.
 
 AnyVehicleOverhaul is every vehicle part mod in one download (`AnyVehicleOverhaul.dll`). It replaces two earlier
-downloads: the **AnyEngineParts** bundle (AnyEngineParts, EngineSound and GpsPart) and the standalone **AnyMoto**.
+downloads: the **AnyEngineParts** bundle (AnyEngineParts, EngineSound and GpsPart) and the standalone **AnyMoto** and
+**AnyCVT**.
 Nothing about the parts changed in the merge: same parts, same settings, same saves.
 
 | Piece (mod id) | What it adds | Guide |
@@ -14,17 +15,18 @@ Nothing about the parts changed in the merge: same parts, same settings, same sa
 | EngineSound (`enginesound`) | Generated engine sounds with presets and a Custom tuner in the Properties tool | [EngineSound](engine-sound.md) |
 | GpsPart (`gpspart`) | The GPS Sensor part | [GpsPart](gps.md) |
 | AnyMoto (`anymoto`) | Motorcycle fork, swingarm, seat, handlebars and Lean Assist for the stock Motorcycle Wheel | [AnyMoto](moto.md) |
+| AnyCVT (`anycvt`) | Belt CVTs for the small, medium and large engine (R/N/D on a mechanical shifter; none of them needs air) | [AnyCVT](cvt.md) |
 
 Each piece has an **Enabled** row at the top of its group in Mod Settings (AnyHelpers); switching one off applies the
 next time you start the game. Each piece also starts on its own: if one cannot find the game functions it needs, the
 others still work. Their lines in `anymaker_modding.log` keep their own tags (`turbo`, `rotary`, `dyno`,
-`enginesound`, `gpspart`, `anymoto`).
+`enginesound`, `gpspart`, `anymoto`, `anycvt`).
 
-## Upgrading from AnyEngineParts or AnyMoto
+## Upgrading from AnyEngineParts, AnyMoto or AnyCVT
 
 - **In the manager (1.5.0 or newer):** AnyVehicleOverhaul shows as an update while `AnyEngineParts.dll`,
-  `AnyMoto.dll`, `EngineSound.dll` or `GpsPart.dll` is installed. Installing it removes those DLLs (with a backup).
-- **By hand:** delete `AnyEngineParts.dll` and `AnyMoto.dll` from `AnyAPI and Modding/mods` and copy in
+  `AnyMoto.dll`, `AnyCVT.dll`, `EngineSound.dll` or `GpsPart.dll` is installed. Installing it removes those DLLs (with a backup).
+- **By hand:** delete `AnyEngineParts.dll`, `AnyMoto.dll` and `AnyCVT.dll` from `AnyAPI and Modding/mods` and copy in
   `AnyVehicleOverhaul.dll`.
 - **If an old DLL is left behind:** nothing loads twice. AnyAPI runs the old DLL's copy of each piece and skips the
   bundled one (the log says `BUNDLE_PART_SKIPPED bundle=AnyVehicleOverhaul reason=standalone_dll_installed`), so you
@@ -37,13 +39,13 @@ catalog entry changed.
 
 | Kept | Value | Why it matters |
 | --- | --- | --- |
-| Mod ids | `anyengineparts`, `enginesound`, `gpspart`, `anymoto` | Mod Settings values, keybinds (Dyno F6 is `anyengineparts`/`dyno_toggle`) and the on/off switch in `AnyAPI and Modding/bundle-parts.tsv` are keyed by these |
-| Game part ids | `turbocharger_*`, `supercharger_small`, `supercharger_large`, `turbo_blow_off_valve*`, `turbo_wastegate*`, `turbo_air_filter*`, `turbo_intercooler*`, `rotary_engine`, `dyno_sensor`, `gps_sensor`, `moto_fork`, `moto_swingarm`, `moto_seat`, `moto_handlebars`, `moto_lean_assist` | Saved vehicles, creations and worlds name parts by these ids |
-| Data folders | `AnyAPI and Modding/Turbo`, `Rotary`, `Dyno`, `GpsPart`, `AnyMoto` | The part definition files each piece writes at start |
+| Mod ids | `anyengineparts`, `enginesound`, `gpspart`, `anymoto`, `anycvt` | Mod Settings values, keybinds (Dyno F6 is `anyengineparts`/`dyno_toggle`) and the on/off switch in `AnyAPI and Modding/bundle-parts.tsv` are keyed by these |
+| Game part ids | `turbocharger_*`, `supercharger_small`, `supercharger_large`, `turbo_blow_off_valve*`, `turbo_wastegate*`, `turbo_air_filter*`, `turbo_intercooler*`, `rotary_engine`, `dyno_sensor`, `gps_sensor`, `moto_fork`, `moto_swingarm`, `moto_seat`, `moto_handlebars`, `moto_lean_assist`, `anycvt_small`, `anycvt_medium`, `anycvt_large`, `boost_controller`, `boost_gauge`, `oil_gauge` | Saved vehicles, creations and worlds name parts by these ids |
+| Data folders | `AnyAPI and Modding/Turbo`, `Rotary`, `Dyno`, `GpsPart`, `AnyMoto`, `AnyCVT` | The part definition files each piece writes at start |
 | Saved state | `anyengineparts_wear.json` (turbo wear), `enginesound_sounds.json` (engine sound choices), in the save's `working` folder | Travels with each world save |
-| Generated meshes | In `rom/meshes/components/`: the turbo, supercharger and valve meshes, `rotary_engine*`, `anyengineparts_dyno_sensor_a`, `gpspart_gps_sensor_a`, `anymoto_*` | Rewritten at every start under the same names |
+| Generated meshes | In `rom/meshes/components/`: the turbo, supercharger and valve meshes, `rotary_engine*`, `anyengineparts_dyno_sensor_a`, `gpspart_gps_sensor_a`, `anymoto_*`, `anycvt_*` | Rewritten at every start under the same names |
 
-In co-op, everyone should run the same download. A player still on AnyEngineParts + AnyMoto has the same pieces and
+In co-op, everyone should run the same download. A player still on AnyEngineParts + AnyMoto + AnyCVT has the same pieces and
 part ids, so worlds load either way.
 
 ## For developers
@@ -58,8 +60,9 @@ still its own standalone source, compiled unchanged through a `part_<id>.cpp` wr
 | [`part_enginesound.cpp`](../../native/bundles/part_enginesound.cpp) | [`enginesound_mod.cpp`](../../native/enginesound_mod.cpp) |
 | [`part_gpspart.cpp`](../../native/bundles/part_gpspart.cpp) | [`gpspart_mod.cpp`](../../native/gpspart_mod.cpp) |
 | [`part_anymoto.cpp`](../../native/bundles/part_anymoto.cpp) | [`anymoto_mod.cpp`](../../native/anymoto_mod.cpp) |
+| [`part_anycvt.cpp`](../../native/bundles/part_anycvt.cpp) | [`anycvt_mod.cpp`](../../native/anycvt_mod.cpp) |
 
-The standalone CMake targets (`AnyEngineParts`, `EngineSound`, `GpsPart`, `AnyMoto`) still build, for testing one
+The standalone CMake targets (`AnyEngineParts`, `EngineSound`, `GpsPart`, `AnyMoto`, `AnyCVT`) still build, for testing one
 piece alone; they are never released. `native/tools/port_release_plan.py` skips any standalone target whose main
 source a bundle compiles.
 

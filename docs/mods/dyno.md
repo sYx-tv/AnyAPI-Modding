@@ -39,7 +39,7 @@ Every number comes from the game's own engine:
   (1 hp = 745.7 W).
 - **Torque** is power divided by engine speed (2π × revolutions per second), in N·m.
 - **RPM** is the fastest engine's speed. **Boost** is the engine's intake pressure factor (1 = none, 2 = a turbo's
-  stock 12.8 psi; no upper cap since AnyVehicleOverhaul 2.1). **Engine** is the hottest engine's temperature.
+  stock 12.8 psi; no upper cap since AnyVehicleOverhaul 2.0). **Engine** is the hottest engine's temperature.
 
 Power at the wheels is not measured yet.
 

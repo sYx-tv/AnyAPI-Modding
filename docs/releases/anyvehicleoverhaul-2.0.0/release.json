@@ -6,6 +6,7 @@
       "Replaces": {
         "anyengineparts": "AnyAPI and Modding/mods/AnyEngineParts.dll",
         "anymoto": "AnyAPI and Modding/mods/AnyMoto.dll",
+        "anycvt": "AnyAPI and Modding/mods/AnyCVT.dll",
         "enginesound": "AnyAPI and Modding/mods/EngineSound.dll",
         "gpspart": "AnyAPI and Modding/mods/GpsPart.dll"
       },
@@ -17,7 +18,7 @@
           "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
         }
       ],
-      "Description": "Every vehicle part mod in one: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine (AnyEngineParts); EngineSound's generated engine sounds; the GPS Sensor part; and AnyMoto's motorcycle fork, swingarm, seat, handlebars and Lean Assist. Replaces AnyEngineParts and AnyMoto; saves, settings and keybinds carry over. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only."
+      "Description": "Every vehicle part mod in one: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine (AnyEngineParts); EngineSound's generated engine sounds; the GPS Sensor part; AnyMoto's motorcycle fork, swingarm, seat, handlebars and Lean Assist; and AnyCVT's belt CVTs for the small, medium and large engine. Replaces AnyEngineParts, AnyMoto and AnyCVT; saves, settings and keybinds carry over. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only."
     }
   }
 }
