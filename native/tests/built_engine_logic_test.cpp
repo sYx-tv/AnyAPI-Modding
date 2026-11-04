@@ -43,6 +43,12 @@ int main() {
     int n = 0;
     std::string out = definitions_file(file, &n);
     assert(n == 2);
+    {   // the Rotary's own file adds a Built Rotary, with its own description
+        int m = 0;
+        std::string r = definitions_file(file, &m, R"({"definitions": [{"id": "rotary_engine", "name": "Rotary Engine", "tech_tier": 4}]})");
+        assert(m == 3 && r.find("\"id\": \"built_rotary_engine\"") != std::string::npos && r.find("apex") != std::string::npos);
+        assert(stock_id("built_rotary_engine", &b) == "rotary_engine" && b);
+    }
     assert(out.find("\"id\": \"built_engine\"") != std::string::npos || out.find("\"id\":\"built_engine\"") != std::string::npos);
     assert(out.find("\"Built Small \\\"Inline\\\" Engine\"") != std::string::npos);
     assert(out.find("gearbox") == std::string::npos);

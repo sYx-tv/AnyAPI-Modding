@@ -24,9 +24,10 @@ constexpr size_t kPrefixLength = 6;
 constexpr double kBuiltBonus = 1.0;          // added to the stock engine's boost rating
 constexpr int kTechTier = 4;
 constexpr double kSpawnProbability = 0.075;
-inline constexpr const char* kStockIds[9] = {"engine", "engine_block_b", "engine_block_c",
-                                             "v_engine", "v_engine_b", "v_engine_c",
-                                             "opposed_engine", "opposed_engine_b", "opposed_engine_c"};
+inline constexpr const char* kStockIds[10] = {"engine", "engine_block_b", "engine_block_c",
+                                              "v_engine", "v_engine_b", "v_engine_c",
+                                              "opposed_engine", "opposed_engine_b", "opposed_engine_c",
+                                              "rotary_engine"};   // the mod's own Rotary (Nate 2026-11-04): built from rotary_logic.h's entry
 
 inline bool is_stock_engine(std::string_view id) {
     for (const char* s : kStockIds) if (id == s) return true;
@@ -124,7 +125,11 @@ inline std::string_view string_value(std::string_view o, const Member& m) {
 }
 
 // ------------------------------------------------------------------------------------- built definitions
-inline std::string description(std::string_view stock_name) {
+inline std::string description(std::string_view stock_name, bool rotary = false) {
+    if (rotary)
+        return "A " + std::string(stock_name) + " built for boost: ported housings, stronger apex and side seals, a lower "
+               "compression ratio. Everything else is the stock Rotary (power, fuel, size, sound); it takes about 1.0 more "
+               "boost factor (about 13 psi) before it knocks.";
     return "A " + std::string(stock_name) + " built for boost: forged pistons and rods, a stronger head gasket and "
            "studs, a lower compression ratio. Everything else is the stock engine (power, fuel, size, sound); it takes "
            "about 1.0 more boost factor (about 13 psi) before it knocks.";
@@ -145,7 +150,7 @@ inline std::string built_definition(std::string_view o) {
     Set sets[] = {
         {"id", "\"" + std::string(kPrefix) + std::string(id) + "\"", false},
         {"name", "\"Built " + stock_name + "\"", false},
-        {"description", "\"" + description(stock_name) + "\"", false},
+        {"description", "\"" + description(stock_name, id == "rotary_engine") + "\"", false},
         {"tech_tier", std::to_string(kTechTier), false},
         {"spawn_probability", "0.075", false},
     };
@@ -169,15 +174,17 @@ inline std::string built_definition(std::string_view o) {
 }
 // The built engines file made from the game's definitions file: {"definitions": [...]} with one entry per stock engine
 // found (normally 9), or empty when none is found.
-inline std::string definitions_file(std::string_view stock_file, int* count = nullptr) {
+// `extra_file` (another definitions file, the Rotary's) adds its engines too.
+inline std::string definitions_file(std::string_view stock_file, int* count = nullptr, std::string_view extra_file = {}) {
     std::string entries;
     int n = 0;
-    for (std::string_view o : definition_objects(stock_file)) {
-        std::string b = built_definition(o);
-        if (b.empty()) continue;
-        if (n++) entries += ",\n";
-        entries += "    " + b;
-    }
+    for (std::string_view file : {stock_file, extra_file})
+        for (std::string_view o : definition_objects(file)) {
+            std::string b = built_definition(o);
+            if (b.empty()) continue;
+            if (n++) entries += ",\n";
+            entries += "    " + b;
+        }
     if (count) *count = n;
     return n ? "{\n  \"definitions\": [\n" + entries + "\n  ]\n}\n" : std::string{};
 }

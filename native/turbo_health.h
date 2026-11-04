@@ -178,7 +178,15 @@ inline EngineRating engine_rating(const char* raw_id, size_t raw_n, int32_t exte
                                {"v_engine", 1, 0}, {"v_engine_b", 1, 1}, {"v_engine_c", 1, 2},
                                {"opposed_engine", 2, 0}, {"opposed_engine_b", 2, 1}, {"opposed_engine_c", 2, 2}};
     EngineRating r;
-    if (is("rotary_engine")) { r.factor = 2.3; r.known = true; return r; }
+    if (is("rotary_engine")) {   // 1 rotor per 2 cells; more rotors knock a little sooner, like more cylinders
+        int64_t cells = extend_z < 0 ? -int64_t(extend_z) : int64_t(extend_z);
+        if (cells > 4096) cells = 0;
+        int rotors = int(std::clamp<int64_t>(1 + cells / 2, 1, 4));
+        r.factor = 2.35 - 0.05 * (rotors - 1) + (is_built ? built::kBuiltBonus : 0.0);
+        r.cylinders = rotors;
+        r.known = true;
+        return r;
+    }
     for (const Row& row : rows) {
         if (!is(row.id)) continue;
         int64_t cells = extend_z < 0 ? -int64_t(extend_z) : int64_t(extend_z);

@@ -817,7 +817,8 @@ int main() {
       assert(a.slots[kBoostPsi] > 20 && b.slots[kBoostPsi] < 14 && near(a.slots[kBoostTargetSet], 30, 0.01) && a.speed <= s6.max_speed); }
     // Engine ratings and knock control.
     { EngineRating small = engine_rating("engine", 6, 0), v12 = engine_rating("v_engine_c", 10, 25), rot = engine_rating("rotary_engine", 13, 6);
-      assert(small.known && small.cylinders == 1 && near(small.factor, 2.15) && v12.cylinders == 12 && near(v12.factor, 2.88) && near(rot.factor, 2.3));
+      assert(small.known && small.cylinders == 1 && near(small.factor, 2.15) && v12.cylinders == 12 && near(v12.factor, 2.88) && near(rot.factor, 2.2) && rot.cylinders == 4);
+      assert(near(engine_rating("rotary_engine", 13, 0).factor, 2.35) && near(engine_rating("built_rotary_engine", 19, 2).factor, 3.3));
       assert(!engine_rating("gearbox", 7, 0).known && engine_rating("opposed_engine_b", 16, 6).cylinders == 6 && engine_rating("engine", 6, INT32_MIN).cylinders == 1);
       Knock k = knock_step(2.0, 2.5, 30, 1); assert(k.damage == 0 && k.factor == 2.0);
       k = knock_step(2.0, 2.5, 120, 1); assert(k.over > 0 && k.factor < 2.0 && k.damage > 0);            // hot air knocks sooner

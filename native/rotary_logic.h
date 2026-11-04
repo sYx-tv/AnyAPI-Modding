@@ -27,8 +27,10 @@ constexpr double kPowerFactor = 1.25;                        // power per cell o
 constexpr double kMaxRps = 8000.0 / 60.0;                    // the game's engine speed for factor_speed 1
 constexpr double kStartRps = 6.0;                            // the game's engine start speed
 
+// The Rotary and its built version ("built_rotary_engine", built_engine_logic.h), which runs the same way.
 inline bool is_rotary_id(const char* id, size_t length) {
     size_t n = std::char_traits<char>::length(kDefinitionId);
+    if (id && length == n + 6 && std::char_traits<char>::compare(id, "built_", 6) == 0) { id += 6; length -= 6; }
     return id && length == n && std::char_traits<char>::compare(id, kDefinitionId, n) == 0;
 }
 

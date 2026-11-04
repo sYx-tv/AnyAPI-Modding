@@ -61,6 +61,7 @@ bool write_wav(const std::string& path, const std::vector<int16_t>& pcm) {
 int main(int argc, char** argv) {
     // Ids, rotors, power.
     assert(is_rotary_id("rotary_engine", 13) && !is_rotary_id("rotary_engine", 12) && !is_rotary_id("engine", 6));
+    assert(is_rotary_id("built_rotary_engine", 19) && !is_rotary_id("built_engine", 12));
     assert(rotors_from_extend(0) == 1 && rotors_from_extend(2) == 2 && rotors_from_extend(4) == 3 && rotors_from_extend(6) == 4);
     assert(rotors_from_extend(40) == 4 && rotors_from_extend(-2) == 2 && rotors_from_extend(1) == 1);
     assert(boosted_volume(36) == 45 && boosted_volume(144) == 180 && boosted_volume(0) == 0);

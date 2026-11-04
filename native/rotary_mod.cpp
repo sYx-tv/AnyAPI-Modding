@@ -164,14 +164,14 @@ std::string forward(std::string s) { for (char& c : s) if (c == '\\') c = '/'; r
 
 // The built engines (built_engine_logic.h): made from the game's own engine entries each start, so they follow game
 // updates and the mod ships none of the game's data. Without the game's file there are no built engines.
-void write_built_engines(const std::wstring& game_dir, const std::wstring& dir) {
+void write_built_engines(const std::wstring& game_dir, const std::wstring& dir, const std::string& rotary_json) {
     std::string stock;
     if (!read_file(game_dir + L"\\rom\\data\\vehicle_component_definitions.json", stock)) {
         log(1, "could not read rom\\data\\vehicle_component_definitions.json; no built engines this time");
         return;
     }
     int count = 0;
-    std::string json = built::definitions_file(stock, &count);
+    std::string json = built::definitions_file(stock, &count, rotary_json);
     std::wstring file = dir + L"\\built_engines.json";
     if (json.empty() || !write_file(file, json.data(), json.size())) { log(1, "no built engines this time (%d stock engines found)", count); return; }
     std::string_view first = built::definition_objects(json).front();
@@ -220,7 +220,7 @@ bool write_definition_file() {
     std::wstring file = dir + L"\\rotary_engine.json";
     std::string json = definition_json(meshes ? mesh_path() : std::string("meshes/components/engine_block_a_0_0_0.mesh"));
     bool ok = write_file(file, json.data(), json.size());
-    write_built_engines(game_dir, dir);
+    write_built_engines(game_dir, dir, json);
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
     if (n > 1) WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, g_json_path.data(), n, nullptr, nullptr);
