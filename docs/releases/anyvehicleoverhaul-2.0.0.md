@@ -9,6 +9,8 @@ AnyCVT 0.0.1, plus:
 - **Engine ratings.** Every engine has a boost limit by size, layout and length. Past it the engine knocks, loses
   power, takes damage, and at its last damage step it blows until you repair it. Hot charge air lowers the limit.
 - **New parts:** Boost Controller (psi target and scramble for every turbo on the vehicle), Boost Gauge, Oil Gauge.
+- **Built engines:** a forged version of each of the nine stock engines, as its own part. Same engine, but it takes
+  about 13 psi more before it knocks. Tier 4 loot.
 - **Bug fixes:** twin turbos dumped a shared blow-off valve twice per tick; a blown turbo lost its soot after a
   reload; engine and rotary sounds stuttered on long frames and kept sound handles after a world change; Lean
   Assist could lose the bike's wheels after a world load; a locked wear file could reset every turbo to 100%.

@@ -11,7 +11,7 @@ Nothing about the parts changed in the merge: same parts, same settings, same sa
 
 | Piece (mod id) | What it adds | Guide |
 | --- | --- | --- |
-| AnyEngineParts (`anyengineparts`) | Turbochargers (3x3x2 and 6x6x2) with inline blow-off valves, a wastegate with antilag and boost channels; belt-driven superchargers (Small 2x2x2, Large 4x4x4); turbo upkeep (oil ports, cone air filters, heat and wear, intercoolers); a 1-4 rotor rotary engine; the Dyno sensor | [Turbo](turbo.md), [Rotary](rotary.md), [Dyno](dyno.md) |
+| AnyEngineParts (`anyengineparts`) | Turbochargers (3x3x2 and 6x6x2) with inline blow-off valves, a wastegate with antilag and boost channels; belt-driven superchargers (Small 2x2x2, Large 4x4x4); turbo upkeep (oil ports, cone air filters, heat and wear, intercoolers); a 1-4 rotor rotary engine; built (forged) versions of the nine stock engines; the Dyno sensor, Boost Controller and boost and oil gauges | [Turbo](turbo.md), [Rotary](rotary.md), [Dyno](dyno.md) |
 | EngineSound (`enginesound`) | Generated engine sounds with presets and a Custom tuner in the Properties tool | [EngineSound](engine-sound.md) |
 | GpsPart (`gpspart`) | The GPS Sensor part | [GpsPart](gps.md) |
 | AnyMoto (`anymoto`) | Motorcycle fork, swingarm, seat, handlebars and Lean Assist for the stock Motorcycle Wheel | [AnyMoto](moto.md) |
@@ -40,8 +40,8 @@ catalog entry changed.
 | Kept | Value | Why it matters |
 | --- | --- | --- |
 | Mod ids | `anyengineparts`, `enginesound`, `gpspart`, `anymoto`, `anycvt` | Mod Settings values, keybinds (Dyno F6 is `anyengineparts`/`dyno_toggle`) and the on/off switch in `AnyAPI and Modding/bundle-parts.tsv` are keyed by these |
-| Game part ids | `turbocharger_*`, `supercharger_small`, `supercharger_large`, `turbo_blow_off_valve*`, `turbo_wastegate*`, `turbo_air_filter*`, `turbo_intercooler*`, `rotary_engine`, `dyno_sensor`, `gps_sensor`, `moto_fork`, `moto_swingarm`, `moto_seat`, `moto_handlebars`, `moto_lean_assist`, `anycvt_small`, `anycvt_medium`, `anycvt_large`, `boost_controller`, `boost_gauge`, `oil_gauge` | Saved vehicles, creations and worlds name parts by these ids |
-| Data folders | `AnyAPI and Modding/Turbo`, `Rotary`, `Dyno`, `GpsPart`, `AnyMoto`, `AnyCVT` | The part definition files each piece writes at start |
+| Game part ids | `turbocharger_*`, `supercharger_small`, `supercharger_large`, `turbo_blow_off_valve*`, `turbo_wastegate*`, `turbo_air_filter*`, `turbo_intercooler*`, `rotary_engine`, `dyno_sensor`, `gps_sensor`, `moto_fork`, `moto_swingarm`, `moto_seat`, `moto_handlebars`, `moto_lean_assist`, `anycvt_small`, `anycvt_medium`, `anycvt_large`, `boost_controller`, `boost_gauge`, `oil_gauge`, `built_engine`, `built_engine_block_b`, `built_engine_block_c`, `built_v_engine`, `built_v_engine_b`, `built_v_engine_c`, `built_opposed_engine`, `built_opposed_engine_b`, `built_opposed_engine_c` | Saved vehicles, creations and worlds name parts by these ids |
+| Data folders | `AnyAPI and Modding/Turbo`, `Rotary`, `Dyno`, `GpsPart`, `AnyMoto`, `AnyCVT` | The part definition files each piece writes at start (`Rotary/built_engines.json` holds the built engines) |
 | Saved state | `anyengineparts_wear.json` (turbo wear), `enginesound_sounds.json` (engine sound choices), in the save's `working` folder | Travels with each world save |
 | Generated meshes | In `rom/meshes/components/`: the turbo, supercharger and valve meshes, `rotary_engine*`, `anyengineparts_dyno_sensor_a`, `gpspart_gps_sensor_a`, `anymoto_*`, `anycvt_*` | Rewritten at every start under the same names |
 

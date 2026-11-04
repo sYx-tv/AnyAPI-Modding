@@ -15,6 +15,7 @@
 // Stretch steps are 2, 3 and 5 cells for small, medium and large. Unstretched, an inline is a single, a V a V-twin
 // and a boxer a flat-twin; each step adds one cylinder to an inline and a pair to a V or boxer.
 // "rotary_engine" (AnyEngineParts) makes its own sound and is left alone.
+#include "built_engine_logic.h"
 #include "enginesound_synth.h"
 #include <algorithm>
 #include <cmath>
@@ -39,7 +40,10 @@ inline bool id_is(const char* id, size_t n, const char* want) {
     size_t w = std::strlen(want);
     return id && n == w && std::memcmp(id, want, n) == 0;
 }
-inline EngineKind engine_kind(const char* id, size_t n) {
+inline EngineKind engine_kind(const char* raw_id, size_t raw_n) {
+    std::string_view stock = built::stock_id(raw_id ? std::string_view(raw_id, raw_n) : std::string_view{});   // built engines sound stock
+    const char* id = stock.data();
+    size_t n = stock.size();
     struct Row { const char* id; Layout layout; Size size; };
     static const Row rows[] = {
         {"engine", synth::kInline, kSmall}, {"engine_block_b", synth::kInline, kMedium}, {"engine_block_c", synth::kInline, kLarge},

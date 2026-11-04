@@ -67,6 +67,7 @@ Every engine has a rating, the boost factor (`power_multiplier`) it takes with 4
 | Boxer | -0.1 (long crank) |
 | Each cylinder past 6 | -0.02 (down to -0.2) |
 | Rotary | 2.3 |
+| Built engine | stock + 1.0 (about 13 psi more) |
 
 Hot charge air lowers the rating: 98 °C (one turbo, no intercooler) takes about 40% of the boost part off it, so
 intercoolers matter. Past the rating the knock control pulls timing: only 30% of the extra boost still makes power,
@@ -74,6 +75,11 @@ and the engine takes damage, faster the further past it runs (10% over: a damage
 over: about every 100 s; 60% over: about every 30 s). An engine that is still knocking 25% or more past its rating
 when its last damage step lands **blows**: it makes no power until you repair it. The log names the engine's rating
 on its `engine intake` line.
+
+**Built engines** are forged versions of the nine stock engines (inline, V and boxer, small, medium and large): the
+same engine in every way (power, fuel, size, ports, sound) with a rating 1.0 higher. They are their own parts
+(`built_` + the stock id, for example `built_v_engine_c`), tier 4 loot at 0.075. The mod makes them from the game's
+own engine entries when the game starts, so they follow game updates.
 
 The Turbo 6x6 uses large pipes and the 3x3 small pipes. No gas tank is needed. The compressor inlet is open to the air like a real turbo intake.
 

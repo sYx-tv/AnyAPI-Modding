@@ -663,6 +663,9 @@ add_test(NAME rotary_logic COMMAND rotary_logic_test)
 add_executable(dyno_logic_test tests/dyno_logic_test.cpp)
 target_compile_options(dyno_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME dyno_logic COMMAND dyno_logic_test)
+add_executable(built_engine_logic_test tests/built_engine_logic_test.cpp)
+target_compile_options(built_engine_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME built_engine_logic COMMAND built_engine_logic_test)
 
 # Bundles (native/bundles): several mods in one DLL, each loaded by AnyAPI 0.39.0+ as its own part. They compile the
 # same sources as the standalone mods above, unchanged, and land in bundles/<config>/ under their release file names.

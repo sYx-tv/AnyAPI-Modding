@@ -8,6 +8,7 @@
 //   AnyEngineParts scales the boost part of that factor by the intake air's density (cold air, more boost).
 // - Engine oil is a mix of oil (liquid type 2) and pollutant (type 3). Engines turn oil into pollutant as they run;
 //   the stock oil filter removes it.
+#include "built_engine_logic.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -164,9 +165,13 @@ inline double knock_damage(double intake_c, double factor, double dt) {
 //   - Layout: a closed-deck inline is the stoutest (+0.15), a boxer's long unsupported crank the weakest (-0.1).
 //   - Length: every cylinder past 6 flexes the crank a little more (-0.02 each, down to -0.2).
 //   - Rotary: 2.3 (no valves or pistons to hurt, but apex seals).
-// A built engine or the ECU (later phases) raises these.
+//   - Built engines (built_engine_logic.h): +1.0. The ECU (a later phase) will raise these too.
 struct EngineRating { double factor = 2.0; int cylinders = 0; bool known = false; };
-inline EngineRating engine_rating(const char* id, size_t n, int32_t extend_z) {
+inline EngineRating engine_rating(const char* raw_id, size_t raw_n, int32_t extend_z) {
+    bool is_built = false;   // a built engine (built_engine_logic.h) rates as its stock engine plus kBuiltBonus
+    std::string_view stock = built::stock_id(raw_id ? std::string_view(raw_id, raw_n) : std::string_view{}, &is_built);
+    const char* id = stock.data();
+    size_t n = stock.size();
     auto is = [&](const char* want) { size_t w = std::char_traits<char>::length(want); return id && n == w && std::char_traits<char>::compare(id, want, n) == 0; };
     struct Row { const char* id; int layout; int size; };   // layout 0 inline, 1 V, 2 boxer; size 0-2
     static const Row rows[] = {{"engine", 0, 0}, {"engine_block_b", 0, 1}, {"engine_block_c", 0, 2},
@@ -182,6 +187,7 @@ inline EngineRating engine_rating(const char* id, size_t n, int32_t extend_z) {
         r.cylinders = std::clamp(row.layout == 0 ? 1 + steps : 2 + 2 * steps, 1, 16);
         static constexpr double base[] = {2.0, 2.5, 3.0}, layout[] = {0.15, 0.0, -0.1};
         r.factor = base[row.size] + layout[row.layout] - std::min(0.2, 0.02 * std::max(0, r.cylinders - 6));
+        if (is_built) r.factor += built::kBuiltBonus;
         r.known = true;
         return r;
     }

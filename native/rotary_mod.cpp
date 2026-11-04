@@ -12,6 +12,9 @@
 // 1 street port, 2 peripheral port. Works next to EngineSound: both hook the engine's client tick and the voice
 // update, and the rotary's voices stay silent whichever mod's hook sits on top.
 //
+// Built engines (built_engine_logic.h) ride on the same definitions hook: write_built_engines makes them from the
+// game's own engine entries at start and hk_add_definitions adds them next to the Rotary.
+//
 // Getting it: tech_tier 4 loot (after the 3rd bunker) in the "mechanical" group. Single player / host for now: the
 // definition is added on this game's server and client scene, and every player would need the mod.
 //
@@ -26,6 +29,7 @@
 #include "rotary_mesh.h"
 #include "engine_parts_shared.h"
 #include "rotary_sound.h"
+#include "built_engine_logic.h"
 #include <algorithm>
 #include <atomic>
 #include <cstdarg>
@@ -133,6 +137,51 @@ anymaker::cell_hook h_add_definitions;
 self_fn_t g_file_ctor, g_file_dtor;
 file_load_t g_file_load;
 std::string g_json_path, g_json_forward;            // absolute, backslashes / slashes; set before g_ready, then fixed
+std::string g_built_path, g_built_forward;          // the built engines file (built_engine_logic.h); empty: none
+std::string g_built_first;                          // the first id in it (already in a container: skip)
+
+bool write_file(const std::wstring& path, const void* data, size_t size);
+bool read_file(const std::wstring& path, std::string& out) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER size{};
+    bool ok = GetFileSizeEx(h, &size) && size.QuadPart > 0 && size.QuadPart < (64ll << 20);
+    if (ok) {
+        out.assign(size_t(size.QuadPart), '\0');
+        DWORD got = 0;
+        ok = ReadFile(h, out.data(), DWORD(out.size()), &got, nullptr) && got == out.size();
+    }
+    CloseHandle(h);
+    return ok;
+}
+std::string utf8(const std::wstring& w) {
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    std::string s(size_t(n > 0 ? n - 1 : 0), '\0');
+    if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, s.data(), n, nullptr, nullptr);
+    return s;
+}
+std::string forward(std::string s) { for (char& c : s) if (c == '\\') c = '/'; return s; }
+
+// The built engines (built_engine_logic.h): made from the game's own engine entries each start, so they follow game
+// updates and the mod ships none of the game's data. Without the game's file there are no built engines.
+void write_built_engines(const std::wstring& game_dir, const std::wstring& dir) {
+    std::string stock;
+    if (!read_file(game_dir + L"\\rom\\data\\vehicle_component_definitions.json", stock)) {
+        log(1, "could not read rom\\data\\vehicle_component_definitions.json; no built engines this time");
+        return;
+    }
+    int count = 0;
+    std::string json = built::definitions_file(stock, &count);
+    std::wstring file = dir + L"\\built_engines.json";
+    if (json.empty() || !write_file(file, json.data(), json.size())) { log(1, "no built engines this time (%d stock engines found)", count); return; }
+    std::string_view first = built::definition_objects(json).front();
+    for (const built::Member& m : built::members(first))
+        if (m.key == "id") g_built_first = std::string(built::string_value(first, m));
+    if (g_built_first.empty()) return;
+    g_built_path = utf8(file);
+    g_built_forward = forward(g_built_path);
+    log(count == 9 ? 0 : 1, "%d built engines written", count);
+}
 
 bool write_file(const std::wstring& path, const void* data, size_t size) {
     HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -171,6 +220,7 @@ bool write_definition_file() {
     std::wstring file = dir + L"\\rotary_engine.json";
     std::string json = definition_json(meshes ? mesh_path() : std::string("meshes/components/engine_block_a_0_0_0.mesh"));
     bool ok = write_file(file, json.data(), json.size());
+    write_built_engines(game_dir, dir);
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
     if (n > 1) WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, g_json_path.data(), n, nullptr, nullptr);
@@ -179,10 +229,10 @@ bool write_definition_file() {
     return ok && !g_json_path.empty();
 }
 
-bool already_added(void* container) {
+bool already_added(void* container, const char* id = kDefinitionId) {
     if (!g_get_definition || !g_string_ctor) return false;
     anymaker::gc_string_view s{};
-    g_string_ctor(&s, kDefinitionId);
+    g_string_ctor(&s, id);
     const void* found = nullptr;
     g_get_definition(&found, container, &s);
     return found != nullptr;
@@ -209,12 +259,18 @@ thread_local bool t_adding = false;
 void hk_add_definitions(void* container, const void* file) {
     reinterpret_cast<add_definitions_t>(h_add_definitions.original)(container, file);
     if (!t_adding) { std::lock_guard<std::recursive_mutex> lock(g_mutex); g_is_rotary.clear(); }   // definitions may move
-    if (!g_ready.load() || t_adding || !container || already_added(container)) return;
+    if (!g_ready.load() || t_adding || !container) return;
     t_adding = true;
-    bool ok = add_ours(container, g_json_path) || add_ours(container, g_json_forward);
+    static std::atomic<int> logs{6}, built_logs{6};
+    if (!already_added(container)) {
+        bool ok = add_ours(container, g_json_path) || add_ours(container, g_json_forward);
+        if (logs.fetch_sub(1) > 0) log(ok ? 0 : 2, ok ? "Rotary Engine added to the game's parts (%s)" : "could not load the Rotary definition from %s", g_json_path.c_str());
+    }
+    if (!g_built_path.empty() && !already_added(container, g_built_first.c_str())) {
+        bool ok = add_ours(container, g_built_path) || add_ours(container, g_built_forward);
+        if (built_logs.fetch_sub(1) > 0) log(ok ? 0 : 2, ok ? "built engines added to the game's parts" : "could not load the built engines from %s", g_built_path.c_str());
+    }
     t_adding = false;
-    static std::atomic<int> logs{6};
-    if (logs.fetch_sub(1) > 0) log(ok ? 0 : 2, ok ? "Rotary Engine added to the game's parts (%s)" : "could not load the Rotary definition from %s", g_json_path.c_str());
 }
 
 // ------------------------------------------------------------------------------------- sound (client, main thread)
