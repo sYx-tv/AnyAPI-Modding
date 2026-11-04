@@ -19,8 +19,8 @@
 // now: the definitions are added on this game's server and client scene, and every player would need the mod.
 // The hot-side gas is not saved; it refills from the pipes after loading.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (turbo_bindings.h): Anymaker 0.1.27 /
-// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (turbo_bindings.h): Anymaker 0.2.0 /
+// Steam build 26328453 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -66,6 +66,7 @@ void log(int level, const char* fmt, ...) {
 // Reference layouts (metadata, Anymaker 0.1.24; unchanged in 0.1.25).
 namespace off {
 constexpr ptrdiff_t component_id = 64;               // server_scene.vehicle_component.m_id (s32)
+constexpr ptrdiff_t component_vehicle = 320;         // server_scene.vehicle_component.m_parent_vehicle
 constexpr ptrdiff_t component_definition = 312;      // m_definition (ptr<const vehicle_component_definition>)
 constexpr ptrdiff_t component_colors = 136;          // m_colors (array<replication.master.property_s32>: buffer, count, element size)
 constexpr ptrdiff_t property_modified = 16;          // replication.master.property.m_is_modified (bool)
@@ -197,6 +198,8 @@ struct Turbo {
     double boost_capacity = 0;                       // litres its whole boost pipe holds (refresh_topology)
     int feeders = 1;                                 // compressors pushing into that pipe, itself included
     void* filter = nullptr;                          // the air filter on its intake this tick (a second stage: none)
+    bool sooted = false;                             // blown and painted sooty this session (saves keep the paint, but
+                                                     // a part painted one colour reads as new in set_paint)
     State state;
     double last_log = -1e9;
     int ticks = 0;
@@ -225,6 +228,7 @@ struct ValvePart {
     double vented = 0;                                // litres the turbos vented through it since its last tick
     double open_until = 0;                            // seconds (now_seconds) it shows open after venting
     const void* vented_by = nullptr;                  // the turbo that vented through it since its last tick
+    uint64_t vented_tick = 0;                         // the server tick (g_vent_tick) it was last vented in
     double antilag_until = 0;                         // wastegate: seconds (now_seconds) it shows antilag firing
     double antilag_level = 0;                         // how hard (0-1), for the bangs
     int antilag_size = 3;                             // the turbo it fires for
@@ -232,9 +236,10 @@ struct ValvePart {
     double last_tick = 0;                             // seconds (now_seconds) of its last own server tick
 };
 std::unordered_map<const void*, ValvePart> g_valves;
-std::unordered_map<const void*, int32_t> g_painted_parts;   // air filters and intercoolers given their starting colours (they have
+struct PaintedPart { int32_t id; const void* vehicle; };
+std::unordered_map<const void*, PaintedPart> g_painted_parts;   // air filters and intercoolers given their starting colours (they have
                                                      // no create hook): address -> component id, as the game reuses addresses
-std::unordered_map<const void*, int> g_definition_size;   // definition pointer -> 2-5, or 0 for other parts
+std::unordered_map<const void*, int> g_definition_size;   // definition pointer -> 3 or 6 (2-5 kept for the valve and supercharger voices), or 0 for other parts
 std::recursive_mutex g_mutex;                        // tick, create, destroy and data lookups (recursive: game calls made
                                                      // under it may come back through our hooks)
 
@@ -469,6 +474,7 @@ void sync_wear(double now) {
     if (!same_stamp(s, g_wear_stamp)) {
         if (s.exists) {
             std::vector<uint8_t> text = read_file(g_wear_path);
+            if (text.empty()) return;                    // locked or mid-write: keep what we have, read it next poll
             g_wear = decode_wear(std::string(text.begin(), text.end()));
             log(0, "turbo wear loaded: %zu parts", g_wear.size());
         } else if (g_wear_stamp.exists) {
@@ -556,10 +562,14 @@ void default_paint(void* self, int32_t slot0, int32_t slot1) { set_paint(self, s
 bool first_sight(const void* part) {
     const auto* id_at = static_cast<const uint8_t*>(part) + off::component_id;
     int32_t id = anymaker::readable(id_at, 4) ? at<int32_t>(part, off::component_id) : -1;
-    auto [it, added] = g_painted_parts.try_emplace(part, id);
+    // Ids count per vehicle, so a respawned design reuses them: the vehicle is kept too.
+    const auto* vehicle_at = static_cast<const uint8_t*>(part) + off::component_vehicle;
+    const void* vehicle = anymaker::readable(vehicle_at, 8) ? at<const void*>(part, off::component_vehicle) : nullptr;
+    PaintedPart now{id, vehicle};
+    auto [it, added] = g_painted_parts.try_emplace(part, now);
     if (added) return true;
-    if (it->second == id) return false;
-    it->second = id;
+    if (it->second.id == id && it->second.vehicle == vehicle) return false;
+    it->second = now;
     return true;
 }
 // A blown turbo goes sooty: both housings dark (palette 63, a burnt dark brown).
@@ -682,29 +692,37 @@ template <class F> void for_each_on_island(void* node, F f) {
 
 // Blow-off valves on the turbo's boost pipe vent the boost the turbo can no longer hold. Returns true if any vented
 // or is still open from venting (spring_kpa: the stiffest of them).
+// Counts server ticks for the blow-off valves' once-per-tick venting: every turbo calls vent_blow_off_valves each tick,
+// and the first one of a tick moves it on. A valve's own tick (or a sleeping valve's publish) between two turbos' ticks
+// must not let the second vent the same excess again.
+uint64_t g_vent_tick = 1;
+double g_vent_tick_at = -1e9;
 bool vent_blow_off_valves(void* turbo, int size, double excess, double dt, double& spring_kpa) {
+    double now = now_seconds();
+    if (dt > 0 && now - g_vent_tick_at >= dt * 0.5) { ++g_vent_tick; g_vent_tick_at = now; }
     if (!(excess > 0) || !(dt > 0)) return false;
     bool vented = false, latched = false;
-    double now = now_seconds();
     for_each_on_island(static_cast<uint8_t*>(turbo) + off::pump_node_b, [&](void* node) {
         void* component = at<void*>(node, off::node_component);
         auto found = g_valves.find(component);
         if (found == g_valves.end() || !is_blow_off(found->second.kind)) return;
         // Inline valves join the boost pipe through both ports; the old layout only through its inlet.
         if (!g_bov_inline && node != static_cast<uint8_t*>(component) + off::pump_node_a) return;
-        if (found->second.vented_by == turbo) return; // once per tick (an inline valve shows up through both ports)
+        bool this_tick = found->second.vented_tick == g_vent_tick;
+        if (this_tick && found->second.vented_by == turbo) return; // once per tick (an inline valve shows up through both ports)
         double setting = found->second.setting ? *found->second.setting : kBlowOffDefaultKpa;
         // Once open it stays open through the lift: between puffs the boost sits under the spring, and counting
         // those ticks as surge made it chatter surge, vent, surge as the spool ran down.
         if (now < found->second.open_until) { spring_kpa = latched ? std::max(spring_kpa, setting) : setting; latched = true; }
         // Twin turbos on one boost pipe: the other already vented this tick's excess through it. It is open for this
         // one too (latched above), and venting again would take the same boost twice.
-        if (found->second.vented_by) return;
+        if (this_tick) return;
         void* in = static_cast<uint8_t*>(component) + off::pump_content_0;
         double want = blow_off_vent(excess, setting, at<double>(in, off::content_volume), dt, found->second.kind == kKindBlowOffLarge);
         if (want <= 0) return;
         remove_volume(in, want);                      // out through the cap, to the air
         found->second.vented_by = turbo;
+        found->second.vented_tick = g_vent_tick;
         found->second.vented += want;
         found->second.vent_size = size;
         found->second.open_until = now + 0.3;
@@ -1157,6 +1175,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     if (filter && first_sight(filter)) default_paint(filter, kFilterColours.slot[0], kFilterColours.slot[1]);
     t.state.health = condition_head_factor(condition) * filter_head_factor(filter != nullptr, filter_condition ? *filter_condition : 1.0);
     t.state.blown = turbo_blown(condition);           // worn out: no boost, a choked intake (limp mode)
+    if (t.state.blown && !t.sooted) { set_paint(self, kPaletteSoot, kPaletteSoot, false); t.sooted = true; }   // also after a reload
     ValvePart* antilag = antilag_wastegate(t);
     in.antilag = antilag != nullptr;
     // Two-step: hand the engine it boosts the launch RPM a wastegate asks for; the engine tick does the limiting, and
@@ -1231,6 +1250,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     if (!turbo_blown(was) && turbo_blown(condition)) {   // it just wore out: it blows (the clients hear it go, turbo_sound.h)
         t.state.blown = true;
         set_paint(self, kPaletteSoot, kPaletteSoot, false);
+        t.sooted = true;
         log(1, "Turbo %dx%d id %d BLEW UP (worn out at %.0f C, oil %.2f L/s, %s): no boost and a choked intake until it is replaced",
             t.size, t.size, at<int32_t>(self, off::component_id), t.up.temperature, t.oil_lps, filtered ? "filtered" : "no air filter");
     }
@@ -2047,6 +2067,7 @@ void install_hooks() {
             continue;
         }
         std::lock_guard install_lock(engine_parts::install_mutex());   // one AnyEngineParts part hooks at a time
+        if (g_stop) return;                          // shut down while it was looking
         if (!destroy_slot_matches(*destroy)) return;
         g_file_ctor = fctor; g_file_dtor = fdtor; g_file_load = fload;
         g_content_ctor = cctor; g_content_dtor = cdtor; g_node_ctor = nctor; g_node_dtor = ndtor;
@@ -2152,5 +2173,9 @@ VehicleBoost vehicle_boost(const void* vehicle) {
 void init(const AnyModHostV1& h) { host = h; }
 void ready() { register_settings(); }   // AnyAPI_ModReady, on the loader thread
 void start() { install_hooks(); }       // on AnyEngineParts' install thread
-void shutdown() { g_stop = true; remove_hooks(); }
+void shutdown() {
+    g_stop = true;
+    std::lock_guard install_lock(engine_parts::install_mutex());   // not while a hook install is under way
+    remove_hooks();
+}
 }  // namespace turbo

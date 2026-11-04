@@ -15,8 +15,8 @@
 // Getting it: tech_tier 4 loot (after the 3rd bunker) in the "mechanical" group. Single player / host for now: the
 // definition is added on this game's server and client scene, and every player would need the mod.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (rotary_bindings.h): Anymaker 0.1.27 / Steam
-// build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (rotary_bindings.h): Anymaker 0.2.0 / Steam
+// build 26328453 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -535,6 +535,7 @@ void install_hooks() {
             continue;
         }
         std::lock_guard install_lock(engine_parts::install_mutex());   // one AnyEngineParts part hooks at a time
+        if (g_stop) return;                          // shut down while it was looking
         g_file_ctor = fctor; g_file_dtor = fdtor; g_file_load = fload; g_string_ctor = sc;
         g_get_definition = reinterpret_cast<get_definition_t>(function(bind::definitions_get_by_id));
         if (!g_get_definition) log(1, "definition lookup not found; Rotary may add its part twice if another mod re-adds definitions");
@@ -561,5 +562,9 @@ void remove_hooks() {
 // AnyEngineParts (engine_parts_mod.cpp) is the DLL; it starts this part of it.
 void init(const AnyModHostV1& h) { host = h; }
 void start() { install_hooks(); }       // on AnyEngineParts' install thread
-void shutdown() { g_stop = true; remove_hooks(); }
+void shutdown() {
+    g_stop = true;
+    std::lock_guard install_lock(engine_parts::install_mutex());   // not while a hook install is under way
+    remove_hooks();
+}
 }  // namespace rotary

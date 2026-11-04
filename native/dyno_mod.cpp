@@ -15,8 +15,8 @@
 // altitude sensor's server tick (for Dyno parts only) sums its vehicle's engines and feeds the recorder. Rendering
 // uses anyapi.gpu_draw. Single player / host: the engines and the part tick on the server of this game.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (dyno_bindings.h): Anymaker 0.1.27 / Steam build
-// 26113663 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (dyno_bindings.h): Anymaker 0.2.0 / Steam build
+// 26328453 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -616,6 +616,7 @@ void install_hooks() {
             continue;
         }
         std::lock_guard install_lock(engine_parts::install_mutex());   // one AnyEngineParts part hooks at a time
+        if (g_stop) return;                          // shut down while it was looking
         if (!g_vehicle_transform || !g_component_transform) log(1, "transforms not found; the graph shows for the most recent Dyno, wherever it is");
         if (!write_definition_file()) { log(2, "could not write the Dyno definition file; Dyno is off"); return; }
         if (!h_engine_tick.install(engine, (void*)&hk_engine_tick)) { log(2, "engine tick hook not installed; Dyno is off"); return; }
@@ -661,5 +662,9 @@ void ready() {
     if (!ui || !gpu || !gpu->register_renderer(draw, nullptr)) { gpu = nullptr; log(1, "gpu_draw or ui_state unavailable; the Dyno part works but shows no graph"); }
 }
 void start() { install_hooks(); }       // on AnyEngineParts' install thread
-void shutdown() { g_stop = true; remove_hooks(); }
+void shutdown() {
+    g_stop = true;
+    std::lock_guard install_lock(engine_parts::install_mutex());   // not while a hook install is under way
+    remove_hooks();
+}
 }  // namespace dyno

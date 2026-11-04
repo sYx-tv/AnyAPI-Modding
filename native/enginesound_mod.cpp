@@ -9,7 +9,7 @@
 // stock running and power voices silenced. Rotary engines are left to AnyEngineParts.
 //
 // EXPERIMENTAL. This mod hooks game functions directly through the experimental SDK (see
-// enginesound_bindings.h). The hooks resolve only on Anymaker 0.1.27 / Steam build 26113663 and are not
+// enginesound_bindings.h). The hooks resolve only on Anymaker 0.2.0 / Steam build 26328453 and are not
 // reviewed as an AnyAPI service yet. The first in-game runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>

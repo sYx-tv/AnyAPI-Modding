@@ -1,7 +1,7 @@
 // AnyEngineParts: engine parts for Anymaker in one mod. Ships as the "anyengineparts" part of the AnyVehicleOverhaul
 // bundle (bundles/anyvehicleoverhaul_bundle.cpp); keep the "anyengineparts" mod id, which keys players' settings and
 // keybinds. It carries three parts sets, each in its own file:
-//   - turbo_mod.cpp: exhaust-driven turbochargers (2x2x2 to 5x5x2), inline blow-off valves and a wastegate with
+//   - turbo_mod.cpp: exhaust-driven turbochargers (3x3x2 and 6x6x2), belt-driven superchargers, inline blow-off valves and a wastegate with
 //     antilag (docs/mods/turbo.md);
 //   - rotary_mod.cpp: a stretchable 1-4 rotor rotary engine with its own sound (docs/mods/rotary.md);
 //   - dyno_mod.cpp: a Dyno sensor part that records power and torque pulls and draws them on screen (docs/mods/dyno.md).
@@ -9,7 +9,7 @@
 // under their own tags ("turbo", "rotary", "dyno"). Each hooks and unhooks on its own: one failing to hook leaves the
 // others working, and one still looking for its game functions does not hold the others up.
 //
-// EXPERIMENTAL. All three hook game functions through the experimental SDK: Anymaker 0.1.27 / Steam build 26113663 only.
+// EXPERIMENTAL. All three hook game functions through the experimental SDK: Anymaker 0.2.0 / Steam build 26328453 only.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
