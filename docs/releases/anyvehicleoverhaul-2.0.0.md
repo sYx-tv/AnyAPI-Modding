@@ -9,6 +9,8 @@ AnyCVT 0.0.1, plus:
 - **Engine ratings.** Every engine has a boost limit by size, layout and length. Past it the engine knocks, loses
   power, takes damage, and at its last damage step it blows until you repair it. Hot charge air lowers the limit.
 - **New parts:** Boost Controller (psi target and scramble for every turbo on the vehicle), Boost Gauge, Oil Gauge.
+- **Twin screw supercharger:** sits on top of the engine and stretches to fit it (up to 16 wide, 3 tall, 16 long).
+  Flat boost from low RPM, sized by how big you make it and which Engine Wheel drives it. Smooth, quiet whine.
 - **Built engines:** a forged version of each of the nine stock engines, as its own part. Same engine, but it takes
   about 13 psi more before it knocks. Tier 4 loot.
 - **Bug fixes:** twin turbos dumped a shared blow-off valve twice per tick; a blown turbo lost its soot after a

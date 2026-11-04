@@ -55,6 +55,17 @@ is set by its own rating.
 - **Back pressure** still costs power the game's way: above 39 kPa (4 on the game's scale) of exhaust pressure before
   the turbines.
 
+### Twin screw supercharger
+
+`supercharger_twin_screw`, tier 4 loot. A positive displacement blower: it moves a set amount of air every turn, so its
+boost is what it moves over what the engine swallows. That comes in from low RPM and stays flat to the redline. Stretch
+it to fit the engine (2 to 16 cells wide and long, 2 or 3 tall): a bigger blower makes more boost. Belt it from an
+Engine Wheel like the centrifugal ones; inside it has a 2.5:1 drive, so the small, medium and large wheels turn its
+rotors at 1.0, 1.55 and 2.67 times engine speed. Outlet: the large pipe on the bottom, to the air manifold. Intake: the
+large pipe on the back face (an air filter fits). Its bypass opens off throttle, a relief valve stops it near 29 psi,
+and a Boost Controller caps it lower. It compresses inside the rotors, so it runs cooler and takes less belt power
+than a Roots would. A Roots blower is written but on hold.
+
 ### Engine ratings and knock
 
 Every engine has a rating, the boost factor (`power_multiplier`) it takes with 40 °C charge air before it knocks:

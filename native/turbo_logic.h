@@ -682,6 +682,7 @@ inline int pd_from_id(const char* id, size_t length) {   // -1: neither
     auto is = [&](const char* want) { return id && std::char_traits<char>::length(want) == length && std::char_traits<char>::compare(id, want, length) == 0; };
     return is(kTwinScrewId) ? kTwinScrew : is(kRootsId) ? kRoots : -1;
 }
+constexpr bool kOfferRoots = false;       // the Roots blower is on hold (Nate, 2026-11-04)
 constexpr int kPdBase = 2;                   // cells per axis unstretched
 constexpr int kPdMaxExtendXZ = 14, kPdMaxExtendY = 1;   // up to 16 x 3 x 16 cells
 constexpr double kPdGear = 2.5;              // pulley turns per rotor turn
@@ -1127,8 +1128,11 @@ inline std::string definitions_json(const bool built[kMaxSize - kMinSize + 1], c
     out += intercooler_entry(cooler_built && *cooler_built, true) + ",\n";
     for (int large = 0; large < 2; ++large)
         out += blower_entry(large, blower_built && blower_built[large] ? blower_mesh_path(large) : std::string(kStockMeshPath)) + ",\n";
-    for (int k = 0; k < 2; ++k)   // without their meshes: the stock impeller look
-        out += pd_entry(PdKind(k), pd_built && pd_built[k] ? pd_mesh_path(PdKind(k)) : std::string(kStockMeshPath)) + (k ? "\n" : ",\n");
+    // The twin screw (without its mesh: the stock impeller look). The Roots blower is on hold (Nate, 2026-11-04): its
+    // model and looks stay in the code, but it is not offered (kOfferRoots).
+    out += pd_entry(kTwinScrew, pd_built && pd_built[kTwinScrew] ? pd_mesh_path(kTwinScrew) : std::string(kStockMeshPath));
+    if (kOfferRoots) out += ",\n" + pd_entry(kRoots, pd_built && pd_built[kRoots] ? pd_mesh_path(kRoots) : std::string(kStockMeshPath));
+    out += "\n";
     return out + "  ]\n}\n";
 }
 

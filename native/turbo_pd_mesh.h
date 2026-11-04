@@ -338,8 +338,8 @@ inline void roots(Mesh& m, int look) {
 }
 
 constexpr int kTwinScrewLooks = 3, kRootsLooks = 3;
-// The looks that ship. PENDING Nate's pick (2026-11-04, three of each shown); until then the first of each.
-constexpr int kTwinScrewLook = 0, kRootsLook = 0;
+// The looks that ship: Nate picked the Magnuson style twin screw (2026-11-04, round 2). The Roots is on hold.
+constexpr int kTwinScrewLook = 2, kRootsLook = 0;
 // A vertex within 1 mm of a stretch plane is eased 1 mm off it, on its own side (a few curves land close to one).
 inline void ease_off_planes(Mesh& m, bool roots_kind) {
     Planes pl = planes(roots_kind);

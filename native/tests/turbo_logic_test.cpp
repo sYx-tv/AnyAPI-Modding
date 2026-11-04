@@ -191,7 +191,7 @@ int main() {
     std::string json = definitions_json(built, bov_built, wg_built);
     size_t count = 0;
     for (size_t at = 0; (at = json.find("\"class\": \"gas_pump_centrifugal\"", at)) != std::string::npos; ++at) ++count;
-    assert(count == 10);                                   // two turbos, two of each valve, two centrifugal superchargers, twin screw and Roots
+    assert(count == 9);                                    // two turbos, two of each valve, two centrifugal superchargers, the twin screw (Roots on hold)
     assert(json.find("turbocharger_2") == std::string::npos && json.find("turbocharger_4") == std::string::npos && json.find("turbocharger_5") == std::string::npos &&
            json.find("Turbo 2x2") == std::string::npos && json.find("Turbo 4x4") == std::string::npos && json.find("5x5") == std::string::npos && json.find("2x2 and") == std::string::npos);
     assert(json.find("\"bounds_max\": [1, 5, 5]") != std::string::npos && json.find("6x6x2") != std::string::npos);   // the 6x6 is 2 deep
@@ -639,9 +639,9 @@ int main() {
         for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_wastegate_large", "turbo_blow_off_valve_large", "turbo_air_filter_large",
                                "turbo_intercooler", "turbo_intercooler_round"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
-        for (const char* id : {"supercharger_twin_screw", "supercharger_roots"})
+        for (const char* id : {"supercharger_twin_screw"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
-        assert(count_in(full, "\"tech_tier\": ") == 14 && count_in(full, "\"spawn_probability\": ") == 14);
+        assert(count_in(full, "\"tech_tier\": ") == 13 && count_in(full, "\"spawn_probability\": ") == 13);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
         assert(definitions_json(all).find("meshes/components/turbo_a.mesh") != std::string::npos);   // no meshes: the stock look
         assert(blower_from_id("supercharger_small", 18) == kBlowerSmall && blower_from_id("supercharger_large", 18) == kBlowerLarge &&
@@ -652,6 +652,8 @@ int main() {
         assert(pd_cells(0, 0, 0) == 8 && pd_cells(2, 1, 6) == 4 * 3 * 8 && pd_cells(99, 99, -99) == 16 * 3 * 16 && pd_cells(INT32_MIN, 0, 0) == 16 * 2 * 2);
         bool none[5]{};
         std::string json = definitions_json(none);
+        assert(json.find("supercharger_roots") == std::string::npos);   // on hold
+        json = pd_entry(kRoots, "x");
         size_t at = json.find("\"id\": \"supercharger_roots\"");
         assert(at != std::string::npos && json.find("\"ext_max\": [14, 1, 14]", at) != std::string::npos && json.find("\"mode_y\": \"stretch\"", at) != std::string::npos);
         // A V8-sized engine (volume 200) on the medium Engine Wheel, at full throttle; the game's draw from research-engine-air.md.
@@ -689,7 +691,7 @@ int main() {
             }
             pdmesh::Planes pl = pdmesh::planes(r == 1);
             std::string c = std::string("\"center_stretch\": [") + (pl.p[0] > 0.05 ? "1.15" : "0.5") + ", " + (pl.p[1] > 0.05 ? "1.15" : "0.5") + ", " + (pl.p[2] > 0.05 ? "1.15" : "0.5") + "]";
-            assert(json.find(c, json.find(r ? "\"id\": \"supercharger_roots\"" : "\"id\": \"supercharger_twin_screw\"")) != std::string::npos);
+            assert(pd_entry(PdKind(r), "x").find(c) != std::string::npos);
         }
         assert(blower_voice(kVoiceTwinScrew).gear_gain < blower_voice(2).gear_gain && blower_voice(kVoiceRoots).gear_base < blower_voice(kVoiceTwinScrew).gear_base);
     }
