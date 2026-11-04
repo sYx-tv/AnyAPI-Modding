@@ -133,7 +133,8 @@ inline TurboLook turbo_look(int look) {
     }
     return {kMachined, kBlackAnod, kStainless, kHeatGold, kP1, kSteel, true, true, false, false};                // G-series
 }
-inline Mesh turbo(int n, int look) {
+// twin: a twin-scroll turbine housing (two runners side by side, a divided flange); looks only.
+inline Mesh turbo(int n, int look, bool twin = false) {
     Mesh m;
     TurboDims d = turbo_dims(n);
     TurboLook L = turbo_look(look);
@@ -187,8 +188,27 @@ inline Mesh turbo(int n, int look) {
         m.prism(1, pdmesh::rounded(ox - 0.008 * k, oz - 0.008 * k, ox + 0.008 * k, oz + 0.008 * k, 0.002 * k, 2), -kH, -kH + 0.006 * k, kPolish, false);   // fitting
     }
     // turbine scroll: in at the bottom (phi pi: -y) heading +z, shrinking round the shaft
-    scroll(m, d.xt, c, d.rbt, d.rt1, d.rt0, kPi, kPi - 2 * kPi + 0.35, L.hot, d.ft);
-    {   // turbine inlet: from the z- face straight in to the scroll's start, with a 4-bolt flange
+    const double tw_r = 0.62, tw_flat = std::min(1.0, 0.0165 / (tw_r * d.rt1)), tw_dx = 0.0158;
+    if (twin) {
+        for (double sx : {-1.0, 1.0})
+            scroll(m, d.xt + sx * tw_dx, c, d.rbt + d.rt1 * (1 - tw_r), d.rt1 * tw_r, d.rt0 * tw_r, kPi, kPi - 2 * kPi + 0.35, L.hot, tw_flat);
+        scroll(m, d.xt, c, d.rbt + d.rt1 * (1 - tw_r) + d.rt1 * 0.25, d.rt1 * 0.32, d.rt0 * 0.3, kPi, kPi - 2 * kPi + 0.35, L.hot_tint, 0.5);   // the divider seam
+    } else
+        scroll(m, d.xt, c, d.rbt, d.rt1, d.rt0, kPi, kPi - 2 * kPi + 0.35, L.hot, d.ft);
+    if (twin) {   // twin-scroll inlet: two runners from a divided flange, one per scroll
+        double ro = d.pipe * 0.62;
+        for (double sx : {-1.0, 1.0}) {
+            double ix = d.in_x + sx * ro * 0.95, tx = d.xt + sx * tw_dx;
+            std::vector<V3> p = {{ix, d.in_y, front + 0.004}, {ix, d.in_y, front + 0.014 * k}, {(ix + tx) / 2, d.in_y, (front + c) / 2}, {tx, d.in_y, c - 0.01 * k}, {tx, d.in_y, c}};
+            sweep(m, p, {ro, ro * 1.04, d.rt1 * tw_r, d.rt1 * tw_r, d.rt1 * tw_r}, {L.hot_tint, L.hot_tint, L.hot, L.hot, L.hot}, 18, tw_flat, {1, 0, 0});
+            bore(m, 2, ix, d.in_y, front, ro * 0.8, -1);
+        }
+        double fx = d.pipe * 1.75, fy = d.pipe * 1.3;
+        m.prism(2, rounded(d.in_x - fx, d.in_y - fy, d.in_x + fx, d.in_y + fy, fy * 0.4, 4), front, front + 0.006 * k, L.hot_tint, false);
+        m.box({d.in_x - 0.0012 * k, d.in_y - ro * 0.85, front - 0.0014}, {d.in_x + 0.0012 * k, d.in_y + ro * 0.85, front}, L.hot_tint);   // the divider wall
+        for (double sx : {-1.0, 1.0}) for (double sy : {-1.0, 1.0})
+            pdmesh::bolt(m, 2, d.in_x + sx * fx * 0.82, d.in_y + sy * fy * 0.7, front + 0.006 * k, 1, 0.0028 * k, kPolish);
+    } else {   // turbine inlet: from the z- face straight in to the scroll's start, with a 4-bolt flange
         std::vector<V3> p = {{d.in_x, d.in_y, front + 0.004}, {d.in_x, d.in_y, front + 0.014 * k}, {(d.in_x + d.xt) / 2, d.in_y, (front + c) / 2}, {d.xt, d.in_y, c - 0.01 * k}, {d.xt, d.in_y, c}};
         std::vector<Rgb> cs = {L.hot_tint, L.hot_tint, L.hot, L.hot, L.hot};
         sweep(m, p, {d.pipe * 1.1, d.pipe * 1.12, d.rt1 * 0.98, d.rt1, d.rt1}, cs, 22, d.ft, {1, 0, 0});
