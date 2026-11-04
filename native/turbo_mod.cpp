@@ -34,6 +34,7 @@
 #include "turbo_sound.h"
 #include "turbo_upkeep_mesh.h"
 #include "turbo_supercharger_mesh.h"
+#include "turbo_pd_mesh.h"
 #include "turbo_health.h"
 #include "turbo_wear_store.h"
 #include <algorithm>
@@ -1600,10 +1601,20 @@ bool write_definition_file() {
         blower_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
     if (!blower_built[0] || !blower_built[1]) log(1, "supercharger meshes not written; they use the stock impeller look");
+    bool pd_built[2]{};
+    for (int k = 0; k < 2; ++k) {
+        std::string path = pd_mesh_path(PdKind(k));
+        std::string name = path.substr(path.find_last_of('/') + 1);
+        name = name.substr(0, name.size() - 5);
+        std::vector<uint8_t> mesh = pdmesh::encode(pdmesh::build(k == kRoots, k == kRoots ? pdmesh::kRootsLook : pdmesh::kTwinScrewLook), name);
+        std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
+        pd_built[k] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
+    }
+    if (!pd_built[0] || !pd_built[1]) log(1, "twin screw or Roots meshes not written; they use the stock impeller look");
     dir += L"\\Turbo";
     CreateDirectoryW(dir.c_str(), nullptr);
     std::wstring file = dir + L"\\turbochargers.json";
-    std::string json = definitions_json(built, bov_built, wg_built, filter_built, &cooler_built, blower_built);
+    std::string json = definitions_json(built, bov_built, wg_built, filter_built, &cooler_built, blower_built, pd_built);
     bool ok = write_file(file, json.data(), json.size());
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');

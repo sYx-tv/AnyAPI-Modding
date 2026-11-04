@@ -839,7 +839,8 @@ inline std::string pd_entry(PdKind k, const std::string& mesh_path) {
         "      \"mode_z\": \"stretch\",\n" +
         "      \"interval\": [1, 1, 1],\n" +
         "      \"ext_max\": [" + std::to_string(kPdMaxExtendXZ) + ", " + std::to_string(kPdMaxExtendY) + ", " + std::to_string(kPdMaxExtendXZ) + "],\n" +
-        "      \"center_stretch\": [0.5, 0.5, 0.5],\n" +
+        // the stretch planes (turbo_pd_mesh.h): clear of the intake flange across it, so the port stays round
+        "      \"center_stretch\": " + (roots ? "[1.15, 0.5, 1.15]" : "[1.15, 1.15, 0.5]") + ",\n" +
         "      \"category\": \"gas\",\n" +
         "      \"tags\": \"torque\",\n" +
         "      \"tags_generated\": \"torque,port,\",\n" +

@@ -5,6 +5,7 @@
 #include "../turbo_health.h"
 #include "../turbo_wear_store.h"
 #include "../turbo_sound.h"
+#include "../turbo_pd_mesh.h"
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -679,6 +680,17 @@ int main() {
         double kw_screw, kw_roots, c_screw, c_roots;
         double p_screw = run(kTwinScrew, 64, 4500, 1, 12, &kw_screw, &c_screw), p_roots = run(kRoots, 64, 4500, 1, 12, &kw_roots, &c_roots);
         assert(std::abs(p_screw - p_roots) < 1 && kw_roots > kw_screw * 1.15 && c_roots > c_screw + 10);   // a Roots: hotter, hungrier
+        // Their meshes: every look clear of its stretch planes, which match the definitions' center_stretch, and in its 2 x 2 x 2 box.
+        for (int r = 0; r < 2; ++r) {
+            for (int look = 0; look < 3; ++look) {
+                pdmesh::Mesh m = pdmesh::build(r == 1, look);
+                assert(!m.v.empty() && m.i.size() % 3 == 0 && pdmesh::clear_of_planes(m, r == 1));
+                for (auto& v : m.v) for (int k = 0; k < 3; ++k) assert(v.pos[k] > -0.047 && v.pos[k] < (k == 1 && r == 1 && look == 1 ? 0.19 : 0.127));   // a few mm proud; the bug catcher stands tall
+            }
+            pdmesh::Planes pl = pdmesh::planes(r == 1);
+            std::string c = std::string("\"center_stretch\": [") + (pl.p[0] > 0.05 ? "1.15" : "0.5") + ", " + (pl.p[1] > 0.05 ? "1.15" : "0.5") + ", " + (pl.p[2] > 0.05 ? "1.15" : "0.5") + "]";
+            assert(json.find(c, json.find(r ? "\"id\": \"supercharger_roots\"" : "\"id\": \"supercharger_twin_screw\"")) != std::string::npos);
+        }
         assert(blower_voice(kVoiceTwinScrew).gear_gain < blower_voice(2).gear_gain && blower_voice(kVoiceRoots).gear_base < blower_voice(kVoiceTwinScrew).gear_base);
     }
     {   // the model: head with the square of the pulley's speed, no lag, and the belt pays for compressing the air
