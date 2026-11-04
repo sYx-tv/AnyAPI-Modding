@@ -1023,6 +1023,17 @@ void refresh_topology(void* self, void* vehicle, Turbo& t, double now) {
         if (!cooler || coolers == 8) return;
         for (int k = 0; k < coolers; ++k) if (seen[k] == cooler) return;   // one per intercooler, however many ports it has
         seen[coolers++] = cooler;
+        // A newly placed intercooler (or one saved empty) holds no air, and below ambient its tank starves the engine
+        // until boost fills it: in real life the engine just breathes through the cooler, so top it up to ambient.
+        auto* tank_content = static_cast<uint8_t*>(cooler) + off::tank_content;
+        if (anymaker::readable(tank_content, off::content_capacity + 8)) {
+            double c = at<double>(tank_content, off::content_capacity), v = at<double>(tank_content, off::content_volume);
+            if (std::isfinite(c) && std::isfinite(v) && c > 0 && v < c * 0.98) {
+                static std::atomic<int> fills{10};
+                if (fills.fetch_sub(1) > 0) log(0, "intercooler %p held %.2f of %.2f L: topped up to ambient", cooler, v, c);
+                hold_ambient(tank_content);
+            }
+        }
         cells += cooler_cells(cooler);
         if (first_sight(cooler)) default_paint(cooler, kCoolerColours.slot[0], kCoolerColours.slot[1]);
     });
