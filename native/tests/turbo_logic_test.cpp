@@ -685,7 +685,7 @@ int main() {
             for (int look = 0; look < 3; ++look) {
                 pdmesh::Mesh m = pdmesh::build(r == 1, look);
                 assert(!m.v.empty() && m.i.size() % 3 == 0 && pdmesh::clear_of_planes(m, r == 1));
-                for (auto& v : m.v) for (int k = 0; k < 3; ++k) assert(v.pos[k] > -0.047 && v.pos[k] < (k == 1 && r == 1 && look == 1 ? 0.19 : 0.127));   // a few mm proud; the bug catcher stands tall
+                for (auto& v : m.v) for (int k = 0; k < 3; ++k) assert(v.pos[k] > -0.047 && v.pos[k] < (k == 1 && r == 1 && look > 0 ? 0.19 : 0.127));   // a few mm proud; the scoop and air cleaner stand tall
             }
             pdmesh::Planes pl = pdmesh::planes(r == 1);
             std::string c = std::string("\"center_stretch\": [") + (pl.p[0] > 0.05 ? "1.15" : "0.5") + ", " + (pl.p[1] > 0.05 ? "1.15" : "0.5") + ", " + (pl.p[2] > 0.05 ? "1.15" : "0.5") + "]";

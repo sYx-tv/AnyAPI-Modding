@@ -141,87 +141,218 @@ inline void flange_y(Mesh& m, double y0, double y1, Rgb c, double r = 0.050) {
 // The base flange that bolts to the air manifold (bottom face, the whole footprint, inset).
 inline void base_plate(Mesh& m, Rgb c) { m.prism(1, rounded(-0.034, -0.034, 0.114, 0.114, 0.010), -0.040, -0.030, c, false); }
 
+// ------------------------------------------------------------------------------------------- shared detail
+using Ring = std::vector<std::pair<double, double>>;
+// A ring scaled about (cu, cw).
+inline Ring scaled(const Ring& r, double cu, double cw, double k) {
+    Ring out;
+    for (auto& p : r) out.push_back({cu + (p.first - cu) * k, cw + (p.second - cw) * k});
+    return out;
+}
+inline Ring moved(const Ring& r, double du, double dw) {
+    Ring out;
+    for (auto& p : r) out.push_back({p.first + du, p.second + dw});
+    return out;
+}
+// A loft along an axis through sections of equal point count (smooth sides), capped at both ends.
+inline void loft(Mesh& m, int axis, const std::vector<std::pair<double, Ring>>& s, Rgb c, bool cap0 = true, bool cap1 = true) {
+    auto put = [&](double u, double w, double a) { return axis == 0 ? V3{a, u, w} : axis == 1 ? V3{u, a, w} : V3{u, w, a}; };
+    if (s.size() < 2) return;
+    size_t n = s[0].second.size();
+    for (size_t j = 0; j + 1 < s.size(); ++j) {
+        const Ring &r0 = s[j].second, &r1 = s[j + 1].second;
+        double cu0 = 0, cw0 = 0, cu1 = 0, cw1 = 0;
+        for (size_t k = 0; k < n; ++k) { cu0 += r0[k].first / n; cw0 += r0[k].second / n; cu1 += r1[k].first / n; cw1 += r1[k].second / n; }
+        for (size_t k = 0; k < n; ++k) {
+            size_t q = (k + 1) % n;
+            V3 a = put(r0[k].first, r0[k].second, s[j].first), b = put(r0[q].first, r0[q].second, s[j].first);
+            V3 d = put(r1[q].first, r1[q].second, s[j + 1].first), e = put(r1[k].first, r1[k].second, s[j + 1].first);
+            V3 out = put((r0[k].first + r0[q].first) / 2 - cu0, (r0[k].second + r0[q].second) / 2 - cw0, 0);
+            V3 na = unit(put(r0[k].first - cu0, r0[k].second - cw0, 0)), nb = unit(put(r0[q].first - cu0, r0[q].second - cw0, 0));
+            V3 nd = unit(put(r1[q].first - cu1, r1[q].second - cw1, 0)), ne = unit(put(r1[k].first - cu1, r1[k].second - cw1, 0));
+            uint32_t ia = m.vertex(a, na, c), ib = m.vertex(b, nb, c), id = m.vertex(d, nd, c), ie = m.vertex(e, ne, c);
+            V3 f = cross(b - a, e - a);
+            if (dot(f, out) >= 0) { m.tri(ia, ib, id); m.tri(ia, id, ie); } else { m.tri(ia, id, ib); m.tri(ia, ie, id); }
+        }
+    }
+    auto cap = [&](const std::pair<double, Ring>& sec, double sign) {
+        std::vector<V3> pts;
+        for (auto& p : sec.second) pts.push_back(put(p.first, p.second, sec.first));
+        m.face(pts, put(0, 0, sign), c);
+    };
+    if (cap0) cap(s.front(), -1); if (cap1) cap(s.back(), 1);
+}
+// A hex bolt head standing out of a face along `axis` (sign +-1), centre (u, w) at a.
+inline void bolt(Mesh& m, int axis, double u, double w, double a, double sign, double r = 0.0035, Rgb c = kPolish) {
+    Ring h;
+    for (int k = 0; k < 6; ++k) { double t = kPi / 6 + kPi / 3 * k; h.push_back({u + r * std::cos(t), w + r * std::sin(t)}); }
+    m.prism(axis, h, sign > 0 ? a : a - 0.003, sign > 0 ? a + 0.003 : a, c, false);
+}
+// A pulley snout at the torque spot (x 0, y 0.08, on the front face at z -0.04): a cone out of the case, a bearing
+// nose, and the drive hub with its bolts and the shaft. The stock Pulley Wheel bolts on in front of it.
+inline void pulley_nose(Mesh& m, double z_case, double r_base, Rgb housing, double cy = 0.08) {
+    loft(m, 2, {{z_case, circle(0.0, cy, r_base, 28)}, {-0.031, circle(0.0, cy, 0.019, 28)}, {-0.035, circle(0.0, cy, 0.016, 28)}}, housing);
+    m.prism(2, circle(0.0, cy, 0.013, 24), -0.0395, -0.035, kIron);                     // drive hub
+    for (int k = 0; k < 5; ++k) { double t = 2 * kPi * (k + 0.5) / 5; bolt(m, 2, 0.0095 * std::cos(t), cy + 0.0095 * std::sin(t), -0.0395, -1, 0.0018); }
+    m.prism(2, circle(0.0, cy, 0.0045, 12), -0.0435, -0.0395, kPolish);                 // shaft
+}
+
 // ------------------------------------------------------------------------------------------- twin screw looks
-// 0 "Smooth cast": a rounded cast case over the twin rotors, the gear case up front, a round inlet on the back.
-// 1 "Ribbed": the same case with fins along the top and the sides, like a cast race blower.
-// 2 "Intercooled lid": a squared-off case carrying a black intercooler core on top between two end tanks.
+// The rotor case of a twin screw seen from the front: two bores side by side under one smooth casting, the male rotor's
+// bore a little bigger. Centred on the intake port (x 0.04), y from about 0 to 0.09.
+inline Ring screw_case(double grow = 0) {
+    Ring r;
+    const int n = 18;
+    double cl = 0.013, cr = 0.067, cy = 0.052, rl = 0.044 + grow, rr = 0.046 + grow;   // the top clears the height's stretch plane, so it grows
+    for (int k = 0; k <= n; ++k) { double a = -kPi / 2 + kPi * k / n; r.push_back({cr + rr * std::cos(a), cy + rr * std::sin(a)}); }   // right bore, bottom to top
+    for (int k = 1; k < 5; ++k) { double t = double(k) / 5; r.push_back({cr - (cr - cl) * t, cy + (rl + rr) / 2 - 0.004 * std::sin(kPi * t)}); }   // the saddle on top
+    for (int k = 0; k <= n; ++k) { double a = kPi / 2 + kPi * k / n; r.push_back({cl + rl * std::cos(a), cy + rl * std::sin(a)}); }   // left bore, top to bottom
+    for (int k = 1; k < 5; ++k) { double t = double(k) / 5; r.push_back({cl + (cr - cl) * t, cy - (rl + rr) / 2 + 0.002}); }       // flat underside
+    return r;
+}
+// The lower intake: a plenum casting under the rotors that bolts to the air manifold, its runners showing down the sides.
+inline void screw_lower(Mesh& m, Rgb body, Rgb accent) {
+    m.prism(1, rounded(-0.036, -0.034, 0.116, 0.114, 0.012, 6), -0.040, -0.031, accent, false);     // base flange
+    for (double z : {-0.026, 0.002, 0.026, 0.060, 0.084, 0.106})                                          // its bolts
+        for (double x : {-0.031, 0.111}) bolt(m, 1, x, z, -0.031, 1);
+    loft(m, 1, {{-0.031, rounded(-0.032, -0.030, 0.112, 0.110, 0.014, 6)}, {-0.012, rounded(-0.026, -0.024, 0.106, 0.104, 0.018, 6)},
+                {0.006, rounded(-0.024, -0.022, 0.104, 0.102, 0.020, 6)}}, body, false, true);
+    for (double z : {-0.016, 0.010, 0.068, 0.094})                                                       // runner ribs
+        for (double xs : {-0.027, 0.107})
+            loft(m, 1, {{-0.031, circle(xs + (xs < 0 ? -0.002 : 0.002), z, 0.0055, 12)}, {0.004, circle(xs + (xs < 0 ? 0.004 : -0.004), z, 0.0045, 12)}}, body);
+}
+inline void screw_inlet(Mesh& m, double z0, bool throttle_body) {
+    loft(m, 2, {{z0, circle(0.040, 0.048, 0.034, 32)}, {z0 + 0.008, circle(0.040, 0.044, 0.039, 32)}, {0.111, circle(0.040, 0.040, 0.044, 32)}}, kAlloy);   // inlet bell
+    if (throttle_body) {
+        m.prism(2, circle(0.040, 0.040, 0.046, 32), 0.111, 0.119, kAlloy);
+        m.prism(2, circle(0.040, 0.040, 0.040, 32), 0.1191, 0.1197, kCore);
+        m.box({0.074, 0.030, 0.104}, {0.088, 0.058, 0.118}, kDark);                    // the throttle motor on its side
+        m.prism(0, circle(0.040, 0.115, 0.004, 10), -0.010, 0.074, kIron);             // butterfly shaft
+    } else {
+        m.prism(2, circle(0.040, 0.040, 0.049, 32), 0.111, 0.117, kPolish);
+        for (int k = 0; k < 6; ++k) { double t = 2 * kPi * (k + 0.5) / 6; bolt(m, 2, 0.04 + 0.044 * std::cos(t), 0.04 + 0.044 * std::sin(t), 0.117, 1, 0.0028); }
+        m.prism(2, circle(0.040, 0.040, 0.037, 32), 0.1171, 0.1177, kCore);
+    }
+}
+// 0 "Kenne Bell": a smooth twin-bore casting with soft ends, two raised bands, the nose cone up front and a round
+//   polished inlet on the back.
+// 1 "Whipple": the bores polished, cast ribs running along the top of each, and an electronic throttle body on the inlet.
+// 2 "Magnuson": a smooth rounded lid hiding the rotors, a raised logo panel and side cooling ribs, the nose cone up front.
 inline void twin_screw(Mesh& m, int look) {
     Rgb body = kPaint0, accent = kPaint1;
-    double top = look == 2 ? 0.070 : 0.095;
-    if (look == 2) m.prism(2, rounded(-0.036, -0.030, 0.116, top, 0.008), -0.030, 0.105, body, false);
-    else m.prism(2, twin_lobes(0.010, 0.070, 0.035, 0.048, 10), -0.030, 0.105, body);
-    // the gear case up front, following the rotor case (rounded), with the drive snout standing out of it
-    if (look == 2) m.prism(2, rounded(-0.038, -0.032, 0.118, top + 0.004, 0.010), -0.034, -0.026, accent, false);
-    else m.prism(2, twin_lobes(0.010, 0.070, 0.035, 0.050, 10), -0.034, -0.026, accent);
-    drive_snout(m, accent);
-    base_plate(m, body);
-    flange_z(m, 0.105, 0.120, kAlloy);                                                   // inlet (back face)
-    m.prism(2, circle(0.040, 0.040, 0.036, 24), 0.118, 0.1205, kDark);                   // its bore
-    if (look == 1) {
-        for (double x : {-0.012, 0.016, 0.096, 0.112})                                   // fins along the top
-            m.box({x - 0.003, 0.070, -0.026}, {x + 0.003, 0.100 + (x > 0 && x < 0.10 ? 0.0 : -0.004), 0.100}, accent);
-        for (double y : {0.005, 0.030, 0.055})                                           // and down the sides
-            for (double xs : {-0.046, 0.118}) m.box({xs, y - 0.003, -0.026}, {xs + 0.008, y + 0.003, 0.100}, accent);
-    }
+    screw_lower(m, look == 1 ? kAlloy : body, accent);
+    double z0 = -0.026, z1 = 0.100;
     if (look == 2) {
-        m.box({-0.030, top, -0.020}, {0.110, top + 0.030, 0.095}, kCore);                // intercooler core
-        for (double x = -0.024; x < 0.106; x += 0.0185)                                  // its fin lines
-            if (std::fabs(x - kFar) > 0.002) m.box({x - 0.0012, top + 0.030, -0.018}, {x + 0.0012, top + 0.0315, 0.093}, kIron);
-        m.box({-0.036, top, -0.030}, {0.116, top + 0.036, -0.020}, kAlloy);               // end tanks
-        m.box({-0.036, top, 0.095}, {0.116, top + 0.036, 0.105}, kAlloy);
-        m.prism(0, circle(top + 0.014, 0.100, 0.007, 10), 0.116, 0.126, kAlloy);          // coolant necks
-        m.prism(0, circle(top + 0.014, -0.025, 0.007, 10), 0.116, 0.126, kAlloy);
+        Ring lid = rounded(-0.030, 0.004, 0.110, 0.100, 0.034, 8);
+        loft(m, 2, {{z0, scaled(lid, 0.04, 0.05, 0.85)}, {z0 + 0.006, scaled(lid, 0.04, 0.05, 0.97)}, {z0 + 0.012, lid}, {z1 - 0.010, lid},
+                    {z1 - 0.004, scaled(lid, 0.04, 0.05, 0.96)}, {z1, scaled(lid, 0.04, 0.05, 0.86)}}, body);
+        m.prism(1, rounded(0.006, 0.010, 0.074, 0.064, 0.010, 6), 0.0995, 0.1045, accent, false);   // logo panel
+        for (double y : {0.026, 0.040, 0.054})                                                      // side cooling ribs
+            for (double xs : {-0.031, 0.109}) m.prism(2, circle(xs + (xs < 0 ? 0 : 0.002), y, 0.0035, 10), 0.002, 0.082, accent);
+    } else {
+        Ring c = screw_case();
+        loft(m, 2, {{z0, scaled(c, 0.04, 0.052, 0.85)}, {z0 + 0.005, scaled(c, 0.04, 0.052, 0.97)}, {z0 + 0.010, c}, {z1 - 0.008, c},
+                    {z1 - 0.003, scaled(c, 0.04, 0.052, 0.97)}, {z1, scaled(c, 0.04, 0.052, 0.88)}}, look == 1 ? kPolish : body);
+        if (look == 0)
+            for (double z : {-0.006, 0.084}) m.prism(2, screw_case(0.003), z, z + 0.006, accent);    // cast bands
+        if (look == 1)
+            for (double x : {0.013, 0.067})                                                          // ribs along each bore
+                for (double dx : {-0.010, 0.0, 0.010}) {
+                    double top = 0.052 + std::sqrt(std::max(0.0, 0.045 * 0.045 - dx * dx));
+                    m.prism(2, circle(x + dx, top, 0.003, 10), -0.016, 0.092, accent);
+                }
     }
+    // the front gear case and the pulley nose
+    loft(m, 2, {{-0.033, scaled(screw_case(0.004), 0.04, 0.052, 0.92)}, {-0.029, screw_case(0.004)}, {z0 + 0.002, screw_case(0.004)}}, accent);
+    for (int k = 0; k < 8; ++k) {                                                                     // its bolts
+        double t = 2 * kPi * (k + 0.5) / 8;
+        bolt(m, 2, 0.04 + 0.060 * std::cos(t), 0.052 + 0.036 * std::sin(t), -0.033, -1, 0.0025);
+    }
+    pulley_nose(m, -0.033, 0.026, accent);
+    screw_inlet(m, z1, look == 1);
+    // a boost reference fitting and a coolant boss on top, near the back
+    m.prism(1, circle(0.030, 0.070, 0.0045, 10), 0.0935, 0.106, kAlloy);
+    m.prism(1, circle(0.060, 0.074, 0.006, 12), 0.0935, 0.101, kIron);
 }
 
 // ------------------------------------------------------------------------------------------- Roots looks
-// 0 "Classic": a polished, deep-ribbed case, the gear drive cover up front, a flat inlet plate on top with its bolts.
-// 1 "Bug catcher": the classic case under a tall scoop with an open mesh mouth facing forward.
-// 2 "Street": a smoother black case with rounded edges and polished strakes, a low round inlet on top.
+// The classic blower case seen from the front: a deep rounded box with its long ribs, rotors side by side.
+inline Ring roots_case(double grow = 0) { return rounded(-0.032 - grow, -0.014 - grow, 0.112 + grow, 0.082 + grow, 0.016 + grow, 6); }
+// The adapter that bolts the blower to the manifold: a tapered plate under the case.
+inline void roots_adapter(Mesh& m, Rgb c) {
+    m.prism(1, rounded(-0.036, -0.036, 0.116, 0.116, 0.010, 6), -0.040, -0.030, c, false);
+    loft(m, 1, {{-0.030, rounded(-0.034, -0.032, 0.114, 0.112, 0.011, 6)}, {-0.014, rounded(-0.031, -0.026, 0.111, 0.106, 0.012, 6)}}, c, false, false);
+    for (double z : {-0.028, 0.000, 0.024, 0.060, 0.084, 0.108})
+        for (double x : {-0.033, 0.113}) bolt(m, 1, x, z, -0.030, 1, 0.003);
+}
+// 0 "6-71": the polished classic, rounded ribs down both sides, the tall gear case with its bolts up front, a bolted
+//   inlet plate on top.
+// 1 "Bug catcher": the 6-71 under a tall scoop, its mesh mouth facing forward.
+// 2 "Street": the 6-71 in black with polished ribs and a chrome air cleaner on top.
 inline void roots(Mesh& m, int look) {
-    Rgb body = look == 2 ? kDark : kPaint0, rib = look == 2 ? kPolish : kPaint1;
-    double top = 0.085;
-    m.prism(2, look == 2 ? rounded(-0.036, -0.030, 0.116, top, 0.022) : rounded(-0.036, -0.030, 0.116, top, 0.006), -0.026, 0.108, body, look == 2);
-    if (look != 2)
-        for (double y = -0.020; y < top - 0.005; y += 0.0145)                           // deep ribs down both sides
-            if (std::fabs(y - kNear) > 0.003)
-                for (double xs : {-0.044, 0.116}) m.box({xs, y - 0.0025, -0.022}, {xs + 0.008, y + 0.0025, 0.104}, rib);
-    if (look == 2)                                                                       // polished strakes down both sides
-        for (double y : {0.000, 0.022, 0.058})
-            for (double xs : {-0.040, 0.116}) m.box({xs, y - 0.004, -0.022}, {xs + 0.004, y + 0.004, 0.104}, rib);
-    // the gear drive cover up front: rounded on top, as on a classic blower's snout
-    m.prism(2, rounded(-0.036, -0.032, 0.116, top + 0.008, look == 2 ? 0.020 : 0.030), -0.034, -0.026, rib, true);
-    drive_snout(m, rib);
-    m.prism(2, rounded(-0.036, -0.030, 0.116, top, 0.010), 0.108, 0.116, rib, false);   // rear bearing plate
-    base_plate(m, body);
-    if (look == 0) {                                                                     // inlet plate with its bolts
-        m.box({-0.020, top, -0.010}, {0.100, top + 0.008, 0.090}, kAlloy);
-        for (double x : {-0.012, 0.084}) for (double z : {-0.002, 0.026, 0.054, 0.082})
-            m.prism(1, circle(x, z, 0.0035, 6), top + 0.008, top + 0.011, kPolish);
-        m.prism(1, circle(0.040, 0.040, 0.038, 24), top + 0.008, top + 0.0095, kDark);
-    } else if (look == 1) {                                                              // bug catcher scoop
-        m.box({-0.020, top, -0.010}, {0.100, top + 0.008, 0.090}, kAlloy);
-        double s0 = top + 0.008, s1 = top + 0.095;
-        m.face({{-0.016, s0, 0.086}, {0.096, s0, 0.086}, {0.096, s1, 0.050}, {-0.016, s1, 0.050}}, {0, 0.6, 1}, kPolish);      // back, sloped
-        m.face({{-0.016, s0, -0.006}, {-0.016, s0, 0.086}, {-0.016, s1, 0.050}, {-0.016, s1, -0.020}}, {-1, 0, 0}, kPolish);   // sides
-        m.face({{0.096, s0, -0.006}, {0.096, s1, -0.020}, {0.096, s1, 0.050}, {0.096, s0, 0.086}}, {1, 0, 0}, kPolish);
-        m.face({{-0.016, s1, -0.020}, {-0.016, s1, 0.050}, {0.096, s1, 0.050}, {0.096, s1, -0.020}}, {0, 1, 0}, kPolish);       // top
-        m.face({{-0.012, s0 + 0.004, -0.007}, {0.088, s0 + 0.004, -0.007}, {0.088, s1 - 0.004, -0.019}, {-0.012, s1 - 0.004, -0.019}}, {0, 0, -1}, kCore);   // mesh mouth
-        for (double x = -0.002; x < 0.09; x += 0.0135)
-            if (std::fabs(x - kFar) > 0.002) m.box({x - 0.001, s0 + 0.004, -0.0205}, {x + 0.001, s1 - 0.004, -0.018}, kIron);
-        m.box({-0.020, s1 - 0.004, -0.024}, {0.100, s1 + 0.002, -0.016}, kPolish);       // lip
+    Rgb body = look == 2 ? kDark : kPaint0, trim = look == 2 ? kPolish : kPaint1;
+    roots_adapter(m, look == 2 ? kDark : kAlloy);
+    double z0 = -0.022, z1 = 0.100, top = 0.082;
+    Ring c = roots_case();
+    loft(m, 2, {{z0, scaled(c, 0.04, 0.034, 0.95)}, {z0 + 0.004, c}, {z1 - 0.004, c}, {z1, scaled(c, 0.04, 0.034, 0.95)}}, body);
+    for (double y : {-0.006, 0.008, 0.022, 0.050, 0.064})                                        // ribs down both sides (round topped)
+        for (double xs : {-0.032, 0.112}) m.prism(2, circle(xs + (xs < 0 ? -0.002 : 0.002), y, 0.0042, 12), z0 + 0.004, z1 - 0.004, trim);
+    for (double x : {-0.012, 0.016, 0.064, 0.086})                                               // and a few along the top edges
+        m.prism(2, circle(x, top + 0.001, 0.0032, 10), z0 + 0.006, z1 - 0.006, trim);
+    // the gear case: taller than the case, rounded over the drive, bolted round its edge
+    Ring g = rounded(-0.034, -0.016, 0.114, 0.100, 0.030, 8);
+    loft(m, 2, {{-0.034, scaled(g, 0.04, 0.042, 0.94)}, {-0.030, g}, {z0 + 0.001, g}}, trim);
+    for (int k = 0; k < 10; ++k) {
+        double t = 2 * kPi * (k + 0.5) / 10;
+        bolt(m, 2, 0.04 + 0.064 * std::cos(t), 0.042 + 0.048 * std::sin(t), -0.034, -1, 0.0026);
+    }
+    pulley_nose(m, -0.034, 0.028, trim);
+    loft(m, 2, {{z1 - 0.001, c}, {0.108, c}, {0.111, scaled(c, 0.04, 0.034, 0.95)}}, trim);       // rear bearing plate
+    for (int k = 0; k < 8; ++k) { double t = 2 * kPi * (k + 0.5) / 8; bolt(m, 2, 0.04 + 0.060 * std::cos(t), 0.034 + 0.036 * std::sin(t), 0.111, 1, 0.0024); }
+    // on top: the inlet
+    m.prism(1, rounded(-0.016, -0.006, 0.096, 0.086, 0.010, 6), top, top + 0.006, kAlloy, false);
+    for (double x : {-0.010, 0.086}) for (double z : {0.000, 0.026, 0.054, 0.080}) bolt(m, 1, x, z, top + 0.006, 1, 0.0025);
+    if (look == 0) {
+        m.prism(1, circle(0.040, 0.040, 0.040, 32), top + 0.006, top + 0.009, kPolish);
+        m.prism(1, circle(0.040, 0.040, 0.034, 32), top + 0.0091, top + 0.0095, kCore);
+    } else if (look == 1) {
+        // a Hilborn-style bug catcher: a tall scoop that leans forward, its mouth a mesh, a lip round the mouth
+        double y0 = top + 0.006, y1 = top + 0.090;
+        Ring base = rounded(-0.010, -0.002, 0.090, 0.082, 0.020, 8);
+        loft(m, 1, {{y0, base}, {y0 + 0.030, moved(scaled(base, 0.04, 0.04, 1.04), 0, -0.006)}, {y1, moved(scaled(base, 0.04, 0.04, 1.08), 0, -0.016)}}, kPolish);
+        // the mouth: across the front of the top, sloping back
+        double mz = -0.003 - 0.016, back = 0.070;
+        m.face({{-0.012, y1 + 0.0005, mz + 0.004}, {0.088, y1 + 0.0005, mz + 0.004}, {0.088, y1 + 0.0005, back}, {-0.012, y1 + 0.0005, back}}, {0, 1, 0}, kCore);
+        for (double x = -0.004; x < 0.086; x += 0.010)
+            if (std::fabs(x - kFar) > 0.002) m.box({x - 0.0008, y1, mz + 0.004}, {x + 0.0008, y1 + 0.0025, back}, kIron);
+        Ring lip = moved(scaled(base, 0.04, 0.04, 1.11), 0, -0.016);
+        loft(m, 1, {{y1 - 0.004, lip}, {y1 + 0.003, lip}}, kPolish, false, false);
     } else {
-        flange_y(m, top + 0.003, top + 0.012, kPolish, 0.044);
-        m.prism(1, circle(0.040, 0.040, 0.032, 24), top + 0.012, top + 0.0135, kCore);
+        // a chrome air cleaner: a round lid over a filter band, its stud and wing nut on top
+        m.prism(1, circle(0.040, 0.040, 0.044, 36), top + 0.006, top + 0.010, kPolish);
+        m.prism(1, circle(0.040, 0.040, 0.046, 36), top + 0.010, top + 0.030, kCore);
+        loft(m, 1, {{top + 0.030, circle(0.040, 0.040, 0.050, 36)}, {top + 0.036, circle(0.040, 0.040, 0.049, 36)}, {top + 0.040, circle(0.040, 0.040, 0.040, 36)}}, kPolish);
+        m.prism(1, circle(0.040, 0.040, 0.004, 10), top + 0.040, top + 0.048, kPolish);
+        m.box({0.031, top + 0.044, 0.038}, {0.049, top + 0.048, 0.042}, kPolish);
     }
 }
 
 constexpr int kTwinScrewLooks = 3, kRootsLooks = 3;
 // The looks that ship. PENDING Nate's pick (2026-11-04, three of each shown); until then the first of each.
 constexpr int kTwinScrewLook = 0, kRootsLook = 0;
+// A vertex within 1 mm of a stretch plane is eased 1 mm off it, on its own side (a few curves land close to one).
+inline void ease_off_planes(Mesh& m, bool roots_kind) {
+    Planes pl = planes(roots_kind);
+    for (auto& x : m.v)
+        for (int k = 0; k < 3; ++k) {
+            double d = double(x.pos[k]) - pl.p[k];
+            if (std::fabs(d) < 0.001) x.pos[k] = float(pl.p[k] + (d < 0 ? -0.001 : 0.001));
+        }
+}
 inline Mesh build(bool roots_kind, int look) {
     Mesh m;
     if (roots_kind) roots(m, look); else twin_screw(m, look);
+    ease_off_planes(m, roots_kind);
     return m;
 }
 // Nothing may sit on a stretch plane (the game could not tell which way it goes).
