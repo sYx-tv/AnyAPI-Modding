@@ -111,6 +111,7 @@ constexpr ptrdiff_t component_extend = 296;          // m_extend_size's value (v
 constexpr ptrdiff_t engine_air_manifolds = 1256;     // engine.m_air_manifolds (vector<ptr<air_manifold>>)
 constexpr ptrdiff_t engine_damage = 1448;            // engine.m_damage (s32, 0-2: the game's damage steps)
 constexpr ptrdiff_t engine_damage_factor = 1456;     // engine.m_damage_factor (f64; a damage step at 1)
+constexpr ptrdiff_t engine_volume = 1416;            // engine.m_volume (s32; set in create from its zones, as Rotary reads it)
 constexpr ptrdiff_t engine_rps = 1424;               // engine.m_rps (f64; the tick reads it before setting the new speed)
 constexpr ptrdiff_t manifold_content = 576;          // air_manifold.m_content_gas (vehicle_gas_content)
 constexpr ptrdiff_t manifold_air_temperature = 624;  // air_manifold.m_content_gas.m_temperature
@@ -212,6 +213,9 @@ struct Turbo {
     const void* vehicle = nullptr;
     double ticked_at = -1e9;
     double drive_kw = 0;                             // supercharger: smoothed power its belt takes (log)
+    int pd = -1;                                     // a twin screw or Roots (PdKind), -1: not one
+    double pd_after = NAN;                           // its boost pipe's content after its last move (for the engine's draw)
+    double pd_draw = 0;                              // smoothed L/s the engine took from it
 };
 std::unordered_map<const void*, Turbo> g_turbos;     // keyed by server component (superchargers too); nodes keep their address
 // Air manifolds, noted by the engine tick hook: manifold component -> the engine breathing through it, and when.
@@ -256,8 +260,19 @@ double now_seconds() {
 // kKindSupercharger(Large) a supercharger, 0 a stock impeller.
 constexpr int kKindBlowOff = 10, kKindWastegate = 11, kKindBlowOffLarge = 12, kKindWastegateLarge = 13;
 constexpr int kKindIntercooler = 14, kKindAirFilter = 16, kKindAirFilterLarge = 17;
-constexpr int kKindSupercharger = 20, kKindSuperchargerLarge = 21;
-bool is_blower(int kind) { return kind == kKindSupercharger || kind == kKindSuperchargerLarge; }
+constexpr int kKindSupercharger = 20, kKindSuperchargerLarge = 21, kKindTwinScrew = 22, kKindRoots = 23;
+bool is_pd(int kind) { return kind == kKindTwinScrew || kind == kKindRoots; }   // positive displacement (turbo_logic.h)
+bool is_blower(int kind) { return kind == kKindSupercharger || kind == kKindSuperchargerLarge || is_pd(kind); }
+PdKind pd_kind(int kind) { return kind == kKindRoots ? kRoots : kTwinScrew; }
+// Sets a supercharger's kind up (once).
+void setup_blower(Turbo& t, int kind) {
+    if (t.blower) return;
+    t.blower = true;
+    t.pd = is_pd(kind) ? int(pd_kind(kind)) : -1;
+    t.large = kind == kKindSuperchargerLarge || t.pd >= 0;   // the twin screw and Roots have large pipes
+    t.spec = blower_spec(t.large); t.size = t.spec.size;
+}
+std::string booster_name(const Turbo& t);
 bool is_intercooler(int kind) { return kind == kKindIntercooler; }
 bool is_air_filter(int kind) { return kind == kKindAirFilter || kind == kKindAirFilterLarge; }
 bool is_blow_off(int kind) { return kind == kKindBlowOff || kind == kKindBlowOffLarge; }
@@ -283,6 +298,9 @@ int kind_of_definition(const void* definition) {
             Blower b = blower_from_id(id.data, size_t(id.length));
             if (b == kBlowerSmall) n = kKindSupercharger;
             else if (b == kBlowerLarge) n = kKindSuperchargerLarge;
+            int pd = pd_from_id(id.data, size_t(id.length));
+            if (pd == kTwinScrew) n = kKindTwinScrew;
+            else if (pd == kRoots) n = kKindRoots;
         }
     }
     g_definition_size[definition] = n;
@@ -602,12 +620,11 @@ void hk_create(void* self, void* vehicle) {
     if (is_blower(kind)) {
         Turbo& t = g_turbos[self];
         if (t.blower) return;
-        t.blower = true; t.large = kind == kKindSuperchargerLarge;
-        t.spec = blower_spec(t.large); t.size = t.spec.size;
+        setup_blower(t, kind);
         default_paint(self, kBlowerColours.slot[0], kBlowerColours.slot[1]);
         static std::atomic<int> logs{8};
         if (logs.fetch_sub(1) > 0)
-            log(0, "Supercharger (%s) created (component %d): contents %.2f/%.2f L", t.large ? "large" : "small", at<int32_t>(self, off::component_id),
+            log(0, "%s created (component %d): contents %.2f/%.2f L", booster_name(t).c_str(), at<int32_t>(self, off::component_id),
                 at<double>(self, off::pump_content_0 + off::content_capacity), at<double>(self, off::pump_content_1 + off::content_capacity));
         return;
     }
@@ -940,6 +957,8 @@ void publish_sleeping_valves(double dt) {
 
 // "Turbo 3x3" or "Supercharger (large)", for the log.
 std::string booster_name(const Turbo& t) {
+    if (t.pd == kRoots) return "Supercharger (Roots)";
+    if (t.pd == kTwinScrew) return "Supercharger (twin screw)";
     if (t.blower) return t.large ? "Supercharger (large)" : "Supercharger (small)";
     return "Turbo " + std::to_string(t.size) + "x" + std::to_string(t.size);
 }
@@ -1077,7 +1096,33 @@ void tick_blower(void* self, void* vehicle, Turbo& t) {
     t.state.health = filter_head_factor(filter != nullptr, filter_condition ? *filter_condition : 1.0);
     t.state.blown = false;
     in.bov_venting = vent_blow_off_valves(self, t.size, (in.pressure[kColdOut] - in.pressure[kColdIn]) - head_for(t.state, in.pressure[kColdIn]), in.dt, in.bov_spring_kpa);
-    BlowerStep o = blower_step(t.state, t.spec, in, rps);
+    BlowerStep o;
+    if (t.pd >= 0) {
+        // The engine's draw: what left the boost pipe since its last move (another feeder on the pipe adds in too).
+        double now_out = in.volume[kColdOut];
+        if (std::isfinite(t.pd_after)) {
+            double took = std::max(0.0, t.pd_after - now_out) / in.dt;
+            t.pd_draw += (took - t.pd_draw) * std::min(1.0, in.dt / 0.12);
+        }
+        PdInputs pd;
+        pd.draw_lps = t.pd_draw;
+        pd.capacity = t.boost_capacity;
+        if (t.feeds_engine && anymaker::readable(static_cast<const uint8_t*>(t.feeds_engine) + off::engine_volume, 16)) {
+            pd.engine_volume = double(at<int32_t>(t.feeds_engine, off::engine_volume));
+            pd.engine_rpm = at<double>(t.feeds_engine, off::engine_rps) * 60.0;
+        }
+        double psi = finite_or(t.state.slots[kBoostTarget], 0.0);
+        if (!(psi > 0)) psi = finite_or(t.state.controller_psi, 0.0);
+        if (psi > 0) pd.target_pressure = 1.0 + psi / kPsiPerKpa / kKpaPerUnit;
+        int32_t ex = 0, ey = 0, ez = 0;
+        if (anymaker::readable(static_cast<uint8_t*>(self) + off::component_extend, 12)) {
+            ex = at<int32_t>(self, off::component_extend); ey = at<int32_t>(self, off::component_extend + 4); ez = at<int32_t>(self, off::component_extend + 8);
+        }
+        o = pd_step(t.state, PdKind(t.pd), pd_cells(ex, ey, ez), in, pd, rps);
+        t.pd_after = now_out + std::max(0.0, o.compressor_move);
+    } else {
+        o = blower_step(t.state, t.spec, in, rps);
+    }
     publish_sleeping_valves(in.dt);
     if (o.compressor_move > 0) g_content_move(c0, c1, &o.compressor_move);
     else if (o.compressor_move < 0) { double v = -o.compressor_move; g_content_move(c1, c0, &v); }
@@ -1126,7 +1171,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     if (is_valve(kind)) { tick_valve(self, kind); return; }
     if (is_blower(kind)) {
         Turbo& t = g_turbos[self];                    // it has nothing to build, so one created before the hooks works too
-        if (!t.blower) { t.blower = true; t.large = kind == kKindSuperchargerLarge; t.spec = blower_spec(t.large); t.size = t.spec.size; }
+        setup_blower(t, kind);
         tick_blower(self, vehicle, t);
         return;
     }
@@ -1722,7 +1767,7 @@ void stream_sound(void* self, int kind, const double* dt) {
         decode_blow_off_factor(factor, flag, level, unused, v.synth.size);
     } else if (is_blower(kind)) {
         v.synth.voice = Voice::kSupercharger;
-        v.synth.size = kind == kKindSuperchargerLarge ? 4 : 2;
+        v.synth.size = kind == kKindSuperchargerLarge ? 4 : kind == kKindTwinScrew ? kVoiceTwinScrew : kind == kKindRoots ? kVoiceRoots : 2;
         decode_turbo_factor(factor, level, flag, blown);
         blown = false;
     } else {

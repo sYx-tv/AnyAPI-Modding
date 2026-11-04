@@ -190,7 +190,7 @@ int main() {
     std::string json = definitions_json(built, bov_built, wg_built);
     size_t count = 0;
     for (size_t at = 0; (at = json.find("\"class\": \"gas_pump_centrifugal\"", at)) != std::string::npos; ++at) ++count;
-    assert(count == 8);                                    // two turbos, two of each valve, two superchargers
+    assert(count == 10);                                   // two turbos, two of each valve, two centrifugal superchargers, twin screw and Roots
     assert(json.find("turbocharger_2") == std::string::npos && json.find("turbocharger_4") == std::string::npos && json.find("turbocharger_5") == std::string::npos &&
            json.find("Turbo 2x2") == std::string::npos && json.find("Turbo 4x4") == std::string::npos && json.find("5x5") == std::string::npos && json.find("2x2 and") == std::string::npos);
     assert(json.find("\"bounds_max\": [1, 5, 5]") != std::string::npos && json.find("6x6x2") != std::string::npos);   // the 6x6 is 2 deep
@@ -638,11 +638,48 @@ int main() {
         for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_wastegate_large", "turbo_blow_off_valve_large", "turbo_air_filter_large",
                                "turbo_intercooler", "turbo_intercooler_round"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
-        assert(count_in(full, "\"tech_tier\": ") == 12 && count_in(full, "\"spawn_probability\": ") == 12);
+        for (const char* id : {"supercharger_twin_screw", "supercharger_roots"})
+            assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
+        assert(count_in(full, "\"tech_tier\": ") == 14 && count_in(full, "\"spawn_probability\": ") == 14);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
         assert(definitions_json(all).find("meshes/components/turbo_a.mesh") != std::string::npos);   // no meshes: the stock look
         assert(blower_from_id("supercharger_small", 18) == kBlowerSmall && blower_from_id("supercharger_large", 18) == kBlowerLarge &&
                blower_from_id("supercharger", 12) == kNoBlower && valve_from_id("supercharger_small", 18) == kNoValve && size_from_id("supercharger_small", 18) == 0);
+    }
+    {   // twin screw and Roots: stretch to fit, flat boost from what the engine swallows, bypass off throttle, relief
+        assert(pd_from_id("supercharger_twin_screw", 23) == kTwinScrew && pd_from_id("supercharger_roots", 18) == kRoots && pd_from_id("supercharger_small", 18) == -1);
+        assert(pd_cells(0, 0, 0) == 8 && pd_cells(2, 1, 6) == 4 * 3 * 8 && pd_cells(99, 99, -99) == 16 * 3 * 16 && pd_cells(INT32_MIN, 0, 0) == 16 * 2 * 2);
+        bool none[5]{};
+        std::string json = definitions_json(none);
+        size_t at = json.find("\"id\": \"supercharger_roots\"");
+        assert(at != std::string::npos && json.find("\"ext_max\": [14, 1, 14]", at) != std::string::npos && json.find("\"mode_y\": \"stretch\"", at) != std::string::npos);
+        // A V8-sized engine (volume 200) on the medium Engine Wheel, at full throttle; the game's draw from research-engine-air.md.
+        auto run = [](PdKind k, int cells, double rpm, double throttle, double cap_psi, double* kw = nullptr, double* air_c = nullptr) {
+            State st; double cap = 30, out = cap, draw = 0, V = 200, dt = 1.0 / 60;
+            BlowerStep o;
+            for (int i = 0; i < 900; ++i) {
+                double used = std::min(out, engine_full_draw_lps(V, rpm, out / cap) * throttle * dt);
+                out -= used; draw += (used / dt - draw) * 0.2;
+                Inputs in; in.dt = dt; in.pressure[kColdIn] = 1; in.volume[kColdIn] = 1e6; in.pressure[kColdOut] = out / cap; in.volume[kColdOut] = out; in.boost_capacity = cap;
+                PdInputs pd; pd.draw_lps = draw; pd.capacity = cap; pd.engine_volume = V; pd.engine_rpm = rpm;
+                if (cap_psi > 0) pd.target_pressure = 1 + cap_psi / kPsiPerKpa / kKpaPerUnit;
+                o = pd_step(st, k, cells, in, pd, rpm / 60 * kBeltMedium);
+                out += o.compressor_move;
+            }
+            if (kw) *kw = o.drive_joules * 60 / 1000;
+            if (air_c) *air_c = boost_air_c(kAmbientC, o.pressure_ratio, o.efficiency, 0.0, kAmbientC);
+            return (out / cap - 1) * kKpaPerUnit * kPsiPerKpa;
+        };
+        double low = run(kTwinScrew, 64, 2000, 1, 0), mid = run(kTwinScrew, 64, 4500, 1, 0), high = run(kTwinScrew, 64, 7000, 1, 0);
+        assert(low > 10 && mid > 13 && high < 20 && high - low < 0.5 * high);                  // in from low RPM, near flat
+        assert(run(kTwinScrew, 96, 4500, 1, 0) > mid + 5 && run(kTwinScrew, 32, 4500, 1, 0) < 5);   // bigger blower, more boost
+        assert(run(kTwinScrew, 64, 4500, 0.2, 0) < 2);                                        // throttle shut: bypass open
+        assert(run(kTwinScrew, 512, 7000, 1, 0) < 30 && run(kRoots, 512, 7000, 1, 0) < 24);     // relief valves
+        assert(std::abs(run(kTwinScrew, 96, 4500, 1, 10) - 10) < 1.0);                         // a Boost Controller caps it
+        double kw_screw, kw_roots, c_screw, c_roots;
+        double p_screw = run(kTwinScrew, 64, 4500, 1, 12, &kw_screw, &c_screw), p_roots = run(kRoots, 64, 4500, 1, 12, &kw_roots, &c_roots);
+        assert(std::abs(p_screw - p_roots) < 1 && kw_roots > kw_screw * 1.15 && c_roots > c_screw + 10);   // a Roots: hotter, hungrier
+        assert(blower_voice(kVoiceTwinScrew).gear_gain < blower_voice(2).gear_gain && blower_voice(kVoiceRoots).gear_base < blower_voice(kVoiceTwinScrew).gear_base);
     }
     {   // the model: head with the square of the pulley's speed, no lag, and the belt pays for compressing the air
         assert(blower_spool(0) == 0 && near(blower_spool(kBlowerFullBoostRps), 1) && near(blower_spool(-kBlowerFullBoostRps / 2), 0.25) && blower_spool(1e9) == 1);
@@ -728,7 +765,7 @@ int main() {
             assert(mean > 0 && most < 1.6 * mean);
             double level = 0; bool surging = false, blown = false;
             decode_turbo_factor(byte / 255.0, level, surging, blown);
-            BlowerVoice bv = blower_voice(big2 != 0);
+            BlowerVoice bv = blower_voice(big2 != 0 ? 4 : 2);
             assert(std::abs(sy.gear_pitch - (bv.gear_base + bv.gear_span * level)) < 3 * bv.gear_span / 124.0);
         }
         assert(near(blower_sound_level(kBlowerSoundRps * 2), 1) && near(blower_sound_level(-kBlowerSoundRps / 2), 0.5));

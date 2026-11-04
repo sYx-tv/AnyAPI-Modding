@@ -657,6 +657,203 @@ inline std::string blower_entry(bool large, const std::string& mesh_path) {
         "    }";
 }
 
+// ------------------------------------------------------------------------------------------- positive displacement
+// Twin screw and Roots superchargers: blowers that sit on top of the engine and stretch to fit it (width and length to
+// 16 cells, height 2 or 3). Belt driven like the centrifugal ones (a stock Pulley Wheel on the torque spot, belted to an
+// Engine Wheel), with a 2.5:1 drive gear inside, so the rotors turn 1.0, 1.55 or 2.67 times engine speed on the small,
+// medium or large Engine Wheel: the overdrive a real blower's pulleys set.
+//
+// A positive displacement blower moves a fixed volume of air per turn, so its boost is the ratio of what it moves to
+// what the engine swallows: both go with engine speed, so boost comes in almost at once and stays flat across the rev
+// range, the way a real twin screw or Roots does (bigger blower or faster drive: more boost). The game's engines draw
+// air by their size, speed and throttle, not by the pressure, so the blower measures what the engine draws each tick
+// and works out the pressure ratio a real one would make on that engine; it then fills the boost pipe towards it. Air
+// leaks back past the rotors more as the boost rises and less as they spin faster (volumetric efficiency). Off
+// throttle its bypass valve opens (the engine draws next to nothing), and a relief limit caps it (kPdMaxRatio).
+// A Boost Controller (or the boost_target_psi input) sets a lower cap through the bypass.
+//   Twin screw: compresses inside the rotors, so the air comes out cooler and takes less power (72 % efficient).
+//   Roots: pushes air into the manifold without squeezing it first: hotter air and more belt power at high boost
+//   (about 55 % efficient at 10 psi, worse above), leakier at low speed. The classic muscle blower.
+enum PdKind { kTwinScrew = 0, kRoots = 1 };
+constexpr const char* kTwinScrewId = "supercharger_twin_screw";
+constexpr const char* kRootsId = "supercharger_roots";
+inline const char* pd_id(PdKind k) { return k == kRoots ? kRootsId : kTwinScrewId; }
+inline int pd_from_id(const char* id, size_t length) {   // -1: neither
+    auto is = [&](const char* want) { return id && std::char_traits<char>::length(want) == length && std::char_traits<char>::compare(id, want, length) == 0; };
+    return is(kTwinScrewId) ? kTwinScrew : is(kRootsId) ? kRoots : -1;
+}
+constexpr int kPdBase = 2;                   // cells per axis unstretched
+constexpr int kPdMaxExtendXZ = 14, kPdMaxExtendY = 1;   // up to 16 x 3 x 16 cells
+constexpr double kPdGear = 2.5;              // pulley turns per rotor turn
+constexpr double kPdLitresPerCellRev = 0.014;   // air moved per rotor turn per cell of blower (game litres)
+constexpr double kPdMaxRatio[2] = {3.0, 2.6};   // relief valve: twin screw ~29 psi, Roots ~23 psi
+constexpr double kPdLeak[2] = {0.05, 0.09};     // volumetric efficiency lost per unit of pressure ratio over 1, at speed
+constexpr double kPdLeakSpeedRps = 40.0;        // rotor speed (rev/s) where leakage is down to kPdLeak
+constexpr double kPdBypassShare = 0.12;         // engine draw under this share of what the blower moves: throttle shut, bypass open
+constexpr double kPdFillTau = 0.15;             // seconds it takes to fill the boost pipe to its ratio
+inline int pd_axis_cells(int32_t extend, int max_extend) {
+    int64_t e = extend < 0 ? -int64_t(extend) : int64_t(extend);
+    return kPdBase + int(e > max_extend ? max_extend : e);
+}
+inline int pd_cells(int32_t ex, int32_t ey, int32_t ez) {
+    return pd_axis_cells(ex, kPdMaxExtendXZ) * pd_axis_cells(ey, kPdMaxExtendY) * pd_axis_cells(ez, kPdMaxExtendXZ);
+}
+// Air moved (game litres per second, at the inlet's pressure) at a pulley speed.
+inline double pd_displacement_lps(int cells, double pulley_rps) { return kPdLitresPerCellRev * std::max(0, cells) * std::abs(finite_or(pulley_rps, 0.0)) / kPdGear; }
+inline double pd_volumetric_efficiency(PdKind k, double ratio, double rotor_rps) {
+    double speed = std::max(0.25, std::abs(finite_or(rotor_rps, 0.0)) / kPdLeakSpeedRps);
+    return std::clamp(1.0 - kPdLeak[k] * std::max(0.0, ratio - 1.0) / std::sqrt(speed), 0.3, 1.0);
+}
+// Adiabatic efficiency: a twin screw's is near flat; a Roots' falls as the boost rises (it compresses against the
+// manifold, not inside itself).
+inline double pd_efficiency(PdKind k, double ratio) {
+    if (k == kTwinScrew) return 0.72;
+    double r = std::max(1.0001, finite_or(ratio, 1.0));
+    double ideal = (std::pow(r, kAirExponent) - 1.0) / (kAirExponent * (r - 1.0));   // isentropic over isochoric work
+    return std::clamp(0.70 * ideal, 0.3, 0.7);
+}
+// The game's engines' air at full throttle (research-engine-air.md): volume x 400 / 60 x clamp(rpm / 8000 + 0.2, 0, 1)
+// x the boost factor / 9.6e6 of fuel a tick, each unit of fuel taking 8720 of air, at 60 ticks a second. What a real
+// engine of that size swallows at an RPM is the part that goes with its speed.
+constexpr double kEngineAirPerVolumeRpm = 400.0 / 60.0 / 9.6e6 * 8720.0 * 60.0 / 8000.0;
+inline double engine_full_draw_lps(double volume, double rpm, double intake_pressure) {
+    return volume * kEngineAirPerVolumeRpm * 8000.0 * std::clamp(std::abs(rpm) / 8000.0 + 0.2, 0.0, 1.0) * power_multiplier(intake_pressure);
+}
+inline double engine_swept_lps(double volume, double rpm) { return volume * kEngineAirPerVolumeRpm * std::abs(rpm); }
+struct PdInputs {
+    double engine_volume = 0;     // the engine it feeds (m_volume), 0: not known yet
+    double engine_rpm = 0;
+    double draw_lps = 0;          // what the engine took out of the boost pipe over the last tick (smoothed), L/s
+    double target_pressure = 0;   // a cap from the Boost Controller / boost_target_psi (game units; 0: none)
+    double capacity = 0;          // litres the boost pipe holds
+};
+// One tick: the cold ports only (kColdIn, kColdOut), as blower_step.
+inline BlowerStep pd_step(State& st, PdKind k, int cells, const Inputs& in, const PdInputs& pd, double pulley_rps) {
+    BlowerStep out;
+    double dt = std::clamp(finite_or(in.dt, 0.0), 0.0, 0.25);
+    if (dt <= 0) return out;
+    double p_in = std::max(0.1, finite_or(in.pressure[kColdIn], 1.0)), p_out = std::max(0.0, finite_or(in.pressure[kColdOut], 1.0));
+    double rotor_rps = std::abs(finite_or(pulley_rps, 0.0)) / kPdGear;
+    double density = inlet_density(in.intake_temperature);
+    double moved = pd_displacement_lps(cells, pulley_rps) * density * p_in;      // L/s of outside-air mass, at no leak
+    double draw = std::max(0.0, finite_or(pd.draw_lps, 0.0));
+    // What a real blower would make: what it moves over what the engine swallows at outside pressure (the game's
+    // engines draw a little more as boost raises their power; take that back out).
+    // With the engine known: its swept air at this RPM (flat boost), and its throttle from what it draws against what
+    // it would at full throttle. Without: what it draws.
+    bool known = pd.engine_volume > 0 && std::isfinite(pd.engine_volume) && std::isfinite(pd.engine_rpm) && std::abs(pd.engine_rpm) > 200;
+    double swallowed = known ? engine_swept_lps(pd.engine_volume, pd.engine_rpm) : draw / power_multiplier(std::max(1.0, p_out));
+    double throttle = known ? clamp01(draw / std::max(1e-6, engine_full_draw_lps(pd.engine_volume, pd.engine_rpm, std::max(1.0, p_out)))) : 1.0;
+    double open = known ? clamp01((throttle - 0.25) / 0.35) : 1.0;     // the bypass closes as the throttle opens
+    open = open * open * (3 - 2 * open);
+    double ratio = 1.0;
+    bool bypass = moved <= 1e-9 || (known ? open <= 0 : draw < kPdBypassShare * moved);
+    if (!bypass) {
+        ratio = moved / std::max(1e-6, swallowed);
+        for (int i = 0; i < 3; ++i) ratio = moved * pd_volumetric_efficiency(k, ratio, rotor_rps) / std::max(1e-6, swallowed);   // leakage grows with boost
+    }
+    double kpa_in = boost_kpa(p_in);
+    double relief = 1.0 + (kpa_in * kPdMaxRatio[k] - kAmbientKpa) / kKpaPerUnit;
+    double target = bypass ? p_in : 1.0 + (kpa_in * std::max(1.0, ratio) - kAmbientKpa) / kKpaPerUnit;
+    target = std::min(target, relief);
+    if (!bypass && target > p_in) target = p_in + (target - p_in) * open;
+    if (pd.target_pressure > 1.0) target = std::min(target, pd.target_pressure);
+    double limit = finite_or(st.slots[kBoostLimit], 0.0);
+    if (limit > 0) target = std::min(target, 1.0 + limit / kKpaPerUnit);
+    target = std::clamp(target, std::min(p_in, 1.0), kMaxEnginePressure);
+    // Fill towards it: replace what the engine drew and close the gap over kPdFillTau, never more than the rotors move.
+    double capacity = pd.capacity > 0 && std::isfinite(pd.capacity) ? pd.capacity : (p_out > 1e-6 ? std::max(0.0, in.volume[kColdOut]) / p_out : 1.0);
+    double want = (draw + (target - p_out) * capacity / kPdFillTau) * dt;
+    // The game's engines take relatively more air at low RPM than their size says (the + 0.2 in their draw), so the
+    // blower's delivery is counted on the same scale: it keeps up with the engine at every speed (flat boost).
+    double scale = known ? std::clamp(std::abs(pd.engine_rpm) / 8000.0 + 0.2, 0.0, 1.0) / std::max(0.025, std::abs(pd.engine_rpm) / 8000.0) : 1.0;
+    double most = scale * moved * pd_volumetric_efficiency(k, std::max(1.0, boost_kpa(p_out) / kpa_in), rotor_rps) * dt;
+    if (p_out < p_in) most = std::max(most, (draw + (p_in - p_out) * capacity / kPdFillTau) * dt);   // too small for the engine: it sucks through
+    want = std::clamp(want, 0.0, std::max(0.0, most));
+    out.compressor_move = capped(want, in.volume[kColdIn], in.volume[kColdOut]);
+    st.surging = false;   // a positive displacement blower cannot surge
+    double flow = out.compressor_move / dt;
+    double paid = working_flow(st, in, flow, dt);
+    out.pressure_ratio = std::max(1.0, finite_or(boost_kpa(p_out) / std::max(1.0, kpa_in), 1.0));
+    out.efficiency = pd_efficiency(k, out.pressure_ratio);
+    out.head = std::max(0.0, target - p_in);
+    // The rotors also churn the air the bypass sends round, a little.
+    double churn = bypass ? 0.02 * moved * kKgPerLitre * kCpAir * 10.0 : 0.0;
+    out.drive_joules = (compressor_watts(paid, p_in, p_out, in.intake_temperature, out.efficiency) + churn) / kBlowerDriveEfficiency * dt;
+    double kf = std::min(1.0, dt / 0.15);
+    st.intake_flow += (flow - st.intake_flow) * kf;
+    st.speed = std::min(1.0, rotor_rps / (kBlowerFullBoostRps / kPdGear));
+    st.spool = bypass ? 0.0 : clamp01((p_out - p_in) / std::max(1e-6, relief - p_in));
+    st.slots[kIntakePressure] = p_out * kKpaPerUnit;
+    st.slots[kPowerMultiplier] = power_multiplier(p_out);
+    st.slots[kSpool] = st.spool;
+    st.slots[kRpm] = rotor_rps * 60.0;
+    st.slots[kIntakeFlow] = st.intake_flow;
+    st.slots[kSurge] = 0.0;
+    st.slots[kBoost] = (p_out - 1.0) * kKpaPerUnit;
+    st.slots[kBoostPsi] = st.slots[kBoost] * kPsiPerKpa;
+    st.slots[kCondition] = 1.0;
+    st.slots[kDrivePower] = out.drive_joules / dt / 1000.0;
+    st.slots[kBypass] = bypass ? 1.0 : clamp01(1.0 - flow / std::max(1e-6, moved));
+    st.slots[kBoostTargetSet] = (target - 1.0) * kKpaPerUnit * kPsiPerKpa;
+    return out;
+}
+
+inline std::string pd_mesh_path(PdKind k) { return std::string("meshes/components/turbo_") + pd_id(k) + ".mesh"; }
+// Both: 2 x 2 x 2 cells unstretched, stretching like a tank: width (x) and length (z) to 16 cells, height (y) to 3.
+// A large-pipe outlet on the bottom (the near corner, under the rotors' discharge), a large-pipe intake on the back face
+// (twin screw: where its throttle body bolts on) or the top (Roots: under its carb hat or scoop), the torque spot on
+// the front face, upper row (it rides up with the height), data ports on both sides.
+inline std::string pd_entry(PdKind k, const std::string& mesh_path) {
+    bool roots = k == kRoots;
+    std::string description = std::string(roots ? "Roots blower, the classic muscle car supercharger. " : "Twin screw supercharger. ") +
+        "Sits on top of the engine and stretches to fit it: wider and longer to 16 cells, 2 or 3 tall. A bigger blower moves more air for more boost. "
+        "Bolt a Pulley Wheel onto its torque spot (the front face, top row) and belt it to an Engine Wheel: the small wheel turns it at engine speed, "
+        "the medium 1.55 times, the large 2.67 times (more boost). Boost comes in from idle and stays flat to the redline. "
+        "Outlet: the large pipe on the bottom, to the air manifold. Intake: the large pipe on the " + (roots ? "top" : "back face") + ", open to the air (an air filter fits). "
+        "Its bypass opens off throttle. " +
+        (roots ? "It squeezes the air in the manifold, not inside itself: hotter boost and more belt power than a twin screw, an intercooler helps. Relief at about 23 psi."
+               : "It compresses inside the rotors: cooler boost and less belt power than a Roots. Relief at about 29 psi.") +
+        " A Boost Controller caps its boost through the bypass.";
+    std::string surfaces = "{\"id\": \"torque\", \"pos\": [0, 1, 0], \"dir\": 4, \"type\": \"torque\"},\n"
+        "        {\"size\": [2, 2], \"gender\": 2, \"type\": \"port\"},\n"
+        "        {\"pos\": [1, 0, 0], \"size\": [2, 2], \"dir\": 1, \"gender\": 2, \"type\": \"port\"}";
+    std::string in = roots ? "{\"pos\": [0, 1, 0], \"direction\": 3, \"type\": \"gas\", \"size\": 1}" : "{\"pos\": [0, 0, 1], \"direction\": 5, \"type\": \"gas\", \"size\": 1}";
+    std::string out = "{\"pos\": [0, 0, 0], \"direction\": 2, \"type\": \"gas\", \"size\": 1}";
+    std::string descriptors;
+    for (int i = 0; i < kChannelCount; ++i)
+        descriptors += std::string(i ? ",\n        " : "") + "{\"type\": \"" + (kChannels[i].input ? "type_f64_input" : "type_f64_output") + "\", \"name\": \"" + kChannels[i].name + "\"}";
+    return std::string("    {\n") +
+        "      \"id\": \"" + pd_id(k) + "\",\n" +
+        "      \"name\": \"" + (roots ? "Supercharger (Roots Blower)" : "Supercharger (Twin Screw)") + "\",\n" +
+        "      \"description\": \"" + description + "\",\n" +
+        "      \"class\": \"gas_pump_centrifugal\",\n" +
+        "      \"zones\": [{\"bounds_max\": [1, 1, 1]}],\n" +
+        "      \"interaction_zones\": [],\n" +
+        "      \"surfaces\": [\n        " + surfaces + "\n      ],\n" +
+        "      \"logic_nodes\": [\n        " + in + ",\n        " + out + "\n      ],\n" +
+        "      \"mesh_static\": {\"mesh_path\": \"" + mesh_path + "\"},\n" +
+        "      \"meshes_dynamic\": [],\n" +
+        "      \"mode_x\": \"stretch\",\n" +
+        "      \"mode_y\": \"stretch\",\n" +
+        "      \"mode_z\": \"stretch\",\n" +
+        "      \"interval\": [1, 1, 1],\n" +
+        "      \"ext_max\": [" + std::to_string(kPdMaxExtendXZ) + ", " + std::to_string(kPdMaxExtendY) + ", " + std::to_string(kPdMaxExtendXZ) + "],\n" +
+        "      \"center_stretch\": [0.5, 0.5, 0.5],\n" +
+        "      \"category\": \"gas\",\n" +
+        "      \"tags\": \"torque\",\n" +
+        "      \"tags_generated\": \"torque,port,\",\n" +
+        "      \"inspection_geometry\": [{\"p0\": [0.0, 0.0, 0.0], \"p1\": [1.0, 1.0, 1.0]}],\n" +
+        "      \"density\": 900.0,\n" +
+        "      \"mateable_port_types\": 2,\n" +
+        "      \"data_descriptors\": [\n        " + descriptors + "\n      ],\n" +
+        loot_lines(kLateTier) +
+        "      \"loot_group\": \"mechanical\",\n" +
+        "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
+        "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
+        "    }";
+}
+
 // ------------------------------------------------------------------------------------------- valves
 // Two companion parts, also of the impeller's class (two gas nodes: in at the bottom, out at the top, one cell):
 //   Blow-off valve: sits on the boost pipe. When boost in the pipe is higher than the turbo can hold (throttle
@@ -914,7 +1111,8 @@ inline std::string intercooler_entry(bool built, bool round = false) {
 // bov_built[large], wg_built[large] and filter_built[large] the same for the valves and filters, cooler_built for the
 // intercoolers' tiles (else the radiator's look).
 inline std::string definitions_json(const bool built[kMaxSize - kMinSize + 1], const bool bov_built[2] = nullptr, const bool wg_built[2] = nullptr,
-                                    const bool filter_built[2] = nullptr, const bool* cooler_built = nullptr, const bool blower_built[2] = nullptr) {
+                                    const bool filter_built[2] = nullptr, const bool* cooler_built = nullptr, const bool blower_built[2] = nullptr,
+                                    const bool pd_built[2] = nullptr) {
     std::string out = "{\n  \"definitions\": [\n";
     for (int n : kTurboSizes)
         out += definition_entry(n, built[n - kMinSize] ? mesh_path(n) : std::string(kStockMeshPath)) + ",\n";
@@ -927,7 +1125,9 @@ inline std::string definitions_json(const bool built[kMaxSize - kMinSize + 1], c
     out += intercooler_entry(cooler_built && *cooler_built) + ",\n";
     out += intercooler_entry(cooler_built && *cooler_built, true) + ",\n";
     for (int large = 0; large < 2; ++large)
-        out += blower_entry(large, blower_built && blower_built[large] ? blower_mesh_path(large) : std::string(kStockMeshPath)) + (large ? "\n" : ",\n");
+        out += blower_entry(large, blower_built && blower_built[large] ? blower_mesh_path(large) : std::string(kStockMeshPath)) + ",\n";
+    for (int k = 0; k < 2; ++k)   // without their meshes: the stock impeller look
+        out += pd_entry(PdKind(k), pd_built && pd_built[k] ? pd_mesh_path(PdKind(k)) : std::string(kStockMeshPath)) + (k ? "\n" : ",\n");
     return out + "  ]\n}\n";
 }
 
