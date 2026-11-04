@@ -1,7 +1,7 @@
 // Built engines: id mapping, the definitions file rewrite, and the rating bonus.
-#include "built_engine_logic.h"
-#include "enginesound_params.h"
-#include "turbo_health.h"
+#include "../built_engine_logic.h"
+#include "../enginesound_params.h"
+#include "../turbo_health.h"
 #include <cassert>
 #include <cstdio>
 
