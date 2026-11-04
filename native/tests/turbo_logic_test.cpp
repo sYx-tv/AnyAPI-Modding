@@ -202,7 +202,7 @@ int main() {
     {   // with every mesh built the parts use theirs; the intercooler points at its first tile
         bool all[5] = {true, true, true, true, true}, two[2] = {true, true}, one = true;
         std::string full = definitions_json(all, two, two, two, &one);
-        assert(full.find("turbo_turbo_air_filter_large.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_0_0_0.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_round_0_0_0.mesh") != std::string::npos && full.find("Turbo Intercooler (Round Tank)") != std::string::npos && full.find("\"mode_x\": \"tile\"") != std::string::npos &&
+        assert(full.find("turbo_turbo_air_filter_large.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_0_0_0.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_round_0_0_0.mesh") != std::string::npos && full.find("Turbo Intercooler (Tube and Fin)") != std::string::npos && full.find("turbo_turbo_intercooler_race_2_2_0.mesh") == std::string::npos && full.find("turbo_turbo_air_filter_drum_large.mesh") != std::string::npos && full.find("\"mode_x\": \"tile\"") != std::string::npos &&
                full.find("radiator_a_0_0_0.mesh") == std::string::npos);
         // the oil ports come after the four gas nodes, so saved gas links keep their meaning
         size_t entry = full.find("\"name\": \"Turbo 3x3\"");
@@ -633,15 +633,21 @@ int main() {
         assert(small.find("\"tech_tier\": 3") != std::string::npos && small.find("\"name\": \"drive_power\"") != std::string::npos);
         for (int n : {2, 4, 5}) assert(full.find("\"id\": \"" + definition_id(n) + "\"") == std::string::npos);
         // Survival loot: the starter parts drop after the 2nd bunker (tier 3), the rest after the 3rd (tier 4).
-        for (const char* id : {"turbocharger_3", "supercharger_small", "turbo_blow_off_valve", "turbo_air_filter"})
+        for (const char* id : {"turbocharger_3", "supercharger_small", "turbo_blow_off_valve", "turbo_air_filter", "turbo_air_filter_sock", "turbo_air_filter_drum"})
             assert(entry(id).find("\"tech_tier\": 3,\n      \"spawn_probability\": 0.15,") != std::string::npos);
         for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_blow_off_valve_large", "turbo_air_filter_large",
-                               "turbo_intercooler", "turbo_intercooler_round"})
+                               "turbo_air_filter_sock_large", "turbo_air_filter_drum_large", "turbo_intercooler", "turbo_intercooler_round",
+                               "turbo_intercooler_race"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
         for (const char* id : {"supercharger_twin_screw"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
-        assert(count_in(full, "\"tech_tier\": ") == 11 && count_in(full, "\"spawn_probability\": ") == 11);
+        assert(count_in(full, "\"tech_tier\": ") == 16 && count_in(full, "\"spawn_probability\": ") == 16);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
+        // Looks v2: every filter and intercooler look is its own part, found by its id.
+        assert(valve_from_id("turbo_air_filter_sock", 21) == kAirFilter && valve_from_id("turbo_air_filter_drum_large", 27) == kAirFilterLarge &&
+               valve_from_id("turbo_intercooler_race", 22) == kIntercooler && valve_from_id("turbo_air_filter_x", 18) == kNoValve);
+        assert(part_look_from_id("turbo_air_filter_drum_large", 27) == 2 && part_look_from_id("turbo_air_filter", 16) == 0 &&
+               part_look_from_id("turbo_intercooler_round", 23) == 1 && part_look_from_id("turbo_intercooler_race", 22) == 2);
         assert(definitions_json(all).find("meshes/components/turbo_a.mesh") != std::string::npos);   // no meshes: the stock look
         assert(blower_from_id("supercharger_small", 18) == kBlowerSmall && blower_from_id("supercharger_large", 18) == kBlowerLarge &&
                blower_from_id("supercharger", 12) == kNoBlower && valve_from_id("supercharger_small", 18) == kNoValve && size_from_id("supercharger_small", 18) == 0);

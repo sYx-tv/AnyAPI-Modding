@@ -937,6 +937,21 @@ constexpr const char* kAirFilterId = "turbo_air_filter";
 constexpr const char* kAirFilterLargeId = "turbo_air_filter_large";
 constexpr const char* kIntercoolerId = "turbo_intercooler";
 constexpr const char* kIntercoolerRoundId = "turbo_intercooler_round";
+// Looks v2 (Nate, 2026-11-04 "add all of the air filters and intercoolers in"): three of each, each its own part. The
+// first two of each keep the old ids, so saved parts keep loading (they take the new looks).
+constexpr int kFilterLooks = 3, kCoolerLooks = 3;
+inline constexpr const char* kFilterLookIds[kFilterLooks] = {"", "_sock", "_drum"};
+inline constexpr const char* kFilterLookNames[kFilterLooks] = {"Cone", "Mesh Sock", "Round Drum"};
+inline constexpr const char* kCoolerIds[kCoolerLooks] = {"turbo_intercooler", "turbo_intercooler_round", "turbo_intercooler_race"};
+inline constexpr const char* kCoolerNames[kCoolerLooks] = {"Bar and Plate", "Tube and Fin", "Fabricated Race"};
+inline std::string air_filter_id(bool large, int look) { return std::string("turbo_air_filter") + kFilterLookIds[look] + (large ? "_large" : ""); }
+// The look a filter or intercooler id has (0 if it is neither, or the first look).
+inline int part_look_from_id(const char* id, size_t length) {
+    std::string s(id ? id : "", id ? length : 0);
+    if (s.rfind("turbo_air_filter", 0) == 0) return s.find("_sock") != std::string::npos ? 1 : s.find("_drum") != std::string::npos ? 2 : 0;
+    for (int k = 0; k < kCoolerLooks; ++k) if (s == kCoolerIds[k]) return k;
+    return 0;
+}
 constexpr double kBlowOffCoeff = 60.0;          // L/s per unit of excess boost while open (small; large x2.5)
 constexpr double kBlowOffLargeFactor = 2.5;
 constexpr double kWastegateCoeff = 40.0;        // L/s per unit of pressure drop, fully open (small; large x2.5)
@@ -953,10 +968,18 @@ inline double blow_off_surge_through(double spring_kpa) {
 }
 inline bool blow_off_shows_open(bool vented_recently, double flow_lps) { return vented_recently && flow_lps > kBlowOffAudibleLps; }
 constexpr double kBlowOffMaxKpa = 50.0;
+inline Valve filter_from_id(const char* id, size_t length) {
+    for (int look = 0; look < kFilterLooks; ++look)
+        for (int large = 0; large < 2; ++large) {
+            std::string want = air_filter_id(large != 0, look);
+            if (want.size() == length && want.compare(0, length, id, length) == 0) return large ? kAirFilterLarge : kAirFilter;
+        }
+    return kNoValve;
+}
 inline Valve valve_from_id(const char* id, size_t length) {
     auto is = [&](const char* want) { return std::char_traits<char>::length(want) == length && std::char_traits<char>::compare(want, id, length) == 0; };
     return !id ? kNoValve : is(kBlowOffId) ? kBlowOff : is(kBlowOffLargeId) ? kBlowOffLarge : is(kWastegateId) ? kWastegate : is(kWastegateLargeId) ? kWastegateLarge
-         : is(kAirFilterId) ? kAirFilter : is(kAirFilterLargeId) ? kAirFilterLarge : (is(kIntercoolerId) || is(kIntercoolerRoundId)) ? kIntercooler : kNoValve;
+         : (is(kIntercoolerId) || is(kIntercoolerRoundId) || is(kCoolerIds[2])) ? kIntercooler : filter_from_id(id, length);
 }
 
 enum ValveChannel { kValveOpen, kValveFlow, kValvePressure, kValveAntilag, kValveTwoStep, kValveChannelCount };
@@ -1095,7 +1118,7 @@ inline std::string wastegate_mesh_path(bool large) { return std::string("meshes/
 constexpr const char* kValveMeshPath = "meshes/components/gas_port_a.mesh";
 // Air filter: a cone filter for the compressor intake. It is a gas vent to the game (class gas_vent / gas_vent_b,
 // so it draws outside air like one); a turbo whose intake pipe has one on it counts as filtered.
-inline std::string air_filter_entry(bool large, const std::string& mesh) {
+inline std::string air_filter_entry(bool large, const std::string& mesh, int look = 0) {
     // The small filter is 3 x 3 x 3 cells and the large 4 x 4 x 4 (as turbo_upkeep_mesh.h's air_filter_cells), its pipe in
     // the middle of the bottom face: the small pipe under cell 1, the large (2 x 2, anchored at its low corner) under
     // cells 1..2. Every face but the top takes other parts.
@@ -1103,12 +1126,13 @@ inline std::string air_filter_entry(bool large, const std::string& mesh) {
     const int cells = large ? 4 : 3;
     std::string surfaces = mount_box(cells, cells, cells, {0, 1, 2, 4, 5}, {{1, 0, 1, 2, large ? 2 : 1}}).substr(2);   // not under its neck
     (void)size;
-    std::string description = std::string("Cone air filter for a Turbo's compressor intake, ") + (large ? "large pipe (the 6x6 turbo)" : "small pipe (the 3x3 turbo)") +
+    static constexpr const char* kKind[kFilterLooks] = {"Cone air filter", "Mesh sock air filter (a velocity stack in a sock)", "Round drum air filter"};
+    std::string description = std::string(kKind[look]) + " for a Turbo's compressor intake, " + (large ? "large pipe (the 6x6 turbo)" : "small pipe (the 3x3 turbo)") +
         ". Pipe its neck to the turbo's intake (front centre). Clean air makes the turbo wear several times slower. It clogs slowly "
         "with use and a clogged filter costs a little boost; place a new one to replace it.";
     return std::string("    {\n") +
-        "      \"id\": \"" + (large ? kAirFilterLargeId : kAirFilterId) + "\",\n" +
-        "      \"name\": \"" + (large ? "Turbo Air Filter (Large)" : "Turbo Air Filter (Small)") + "\",\n" +
+        "      \"id\": \"" + air_filter_id(large, look) + "\",\n" +
+        "      \"name\": \"Turbo Air Filter, " + kFilterLookNames[look] + (large ? " (Large)" : " (Small)") + "\",\n" +
         "      \"description\": \"" + description + "\",\n" +
         "      \"class\": \"" + (large ? "gas_vent_b" : "gas_vent") + "\",\n" +
         "      \"zones\": [{\"bounds_max\": [" + last + ", " + last + ", " + last + "]}],\n" +
@@ -1126,7 +1150,7 @@ inline std::string air_filter_entry(bool large, const std::string& mesh) {
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
         "    }";
 }
-inline std::string air_filter_mesh_path(bool large) { return std::string("meshes/components/turbo_") + (large ? kAirFilterLargeId : kAirFilterId) + ".mesh"; }
+inline std::string air_filter_mesh_path(bool large, int look = 0) { return "meshes/components/turbo_" + air_filter_id(large, look) + ".mesh"; }
 
 // Intercooler: grows like the stock radiator (wider in whole cells along x, its end tanks staying put; taller along y) and, like it, has no
 // pipes of its own: gas ports snap onto any face, small or large. It is a stock gas tank underneath (class gas_tank),
@@ -1134,11 +1158,11 @@ inline std::string air_filter_mesh_path(bool large) { return std::string("meshes
 // heat it takes out (turbo_health.h).
 // Two of them, picked by Nate from five looks (turbo_upkeep_mesh.h): the black race core (turbo_intercooler) and the
 // round-tank front mount (turbo_intercooler_round). Same part otherwise.
-inline const char* intercooler_id(bool round) { return round ? kIntercoolerRoundId : kIntercoolerId; }
-inline std::string intercooler_mesh_path(int tx = 0, int ty = 0, bool round = false) {
-    return std::string("meshes/components/turbo_") + intercooler_id(round) + "_" + std::to_string(tx) + "_" + std::to_string(ty) + "_0.mesh";
+inline const char* intercooler_id(int look) { return kCoolerIds[look < 0 || look >= kCoolerLooks ? 0 : look]; }
+inline std::string intercooler_mesh_path(int tx = 0, int ty = 0, int look = 0) {
+    return std::string("meshes/components/turbo_") + intercooler_id(look) + "_" + std::to_string(tx) + "_" + std::to_string(ty) + "_0.mesh";
 }
-inline std::string intercooler_entry(bool built, bool round = false) {
+inline std::string intercooler_entry(bool built, int round = 0) {
     std::string description = std::string("Air-to-air intercooler for a Turbo. Snap gas ports onto it (small or large) like a radiator: one for "
         "the turbo's boost, one to the engine's air intake. Compressing air heats it, and hot air makes less power and can knock "
         "the engine; the intercooler cools the boost back towards the outside air. Stretch it wider and taller for more cooling. "
@@ -1152,7 +1176,7 @@ inline std::string intercooler_entry(bool built, bool round = false) {
         "{\"pos\": [-1, 0, 0], \"size\": [1, 2], \"gender\": 2, \"type\": \"port\"}";
     return std::string("    {\n") +
         "      \"id\": \"" + intercooler_id(round) + "\",\n" +
-        "      \"name\": \"" + (round ? "Turbo Intercooler (Round Tank)" : "Turbo Intercooler (Race Core)") + "\",\n" +
+        "      \"name\": \"Turbo Intercooler (" + kCoolerNames[round < 0 || round >= kCoolerLooks ? 0 : round] + ")\",\n" +
         "      \"description\": \"" + description + "\",\n" +
         "      \"class\": \"gas_tank\",\n" +
         "      \"zones\": [{\"bounds_min\": [-1, 0, 0], \"bounds_max\": [1, 1, 0]}],\n" +
@@ -1197,9 +1221,9 @@ inline std::string definitions_json(const bool built[kMaxSize - kMinSize + 1], c
     // ECU has the antilag and launch two-step it used to carry. Saved wastegates drop from vehicles on load.
     (void)wg_built;
     for (int large = 0; large < 2; ++large)
-        out += air_filter_entry(large, filter_built && filter_built[large] ? air_filter_mesh_path(large) : std::string(large ? "meshes/components/gas_port_b.mesh" : kValveMeshPath)) + ",\n";
-    out += intercooler_entry(cooler_built && *cooler_built) + ",\n";
-    out += intercooler_entry(cooler_built && *cooler_built, true) + ",\n";
+        for (int look = 0; look < kFilterLooks; ++look)
+            out += air_filter_entry(large, filter_built && filter_built[large] ? air_filter_mesh_path(large, look) : std::string(large ? "meshes/components/gas_port_b.mesh" : kValveMeshPath), look) + ",\n";
+    for (int look = 0; look < kCoolerLooks; ++look) out += intercooler_entry(cooler_built && *cooler_built, look) + ",\n";
     for (int large = 0; large < 2; ++large)
         out += blower_entry(large, blower_built && blower_built[large] ? blower_mesh_path(large) : std::string(kStockMeshPath)) + ",\n";
     // The twin screw (without its mesh: the stock impeller look). The Roots blower is on hold (Nate, 2026-11-04): its

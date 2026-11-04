@@ -39,6 +39,7 @@
 #include "turbo_wear_store.h"
 #include "exhaust_logic.h"
 #include "exhaust_mesh.h"
+#include "avo_looks_mesh.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -565,13 +566,24 @@ double* valve_setting(ValvePart& v) {
 // Starting colours, as indices into the game's colour palette (rom/textures/color_palette.txtr): the meshes mark the
 // turbo's cold and hot housings and each valve's body and cap as paint slots 0 and 1 (turbo_mesh.h).
 // Starting colours (palette indices into rom/textures/color_palette.txtr, and their colours for the preview).
-constexpr int32_t kPaletteSteel = 81, kPaletteCastIron = 79, kPaletteBrightSteel = 83, kPaletteBrightRed = 36;
+constexpr int32_t kPaletteSteel = 81, kPaletteCastIron = 79, kPaletteBrightSteel = 83, kPaletteBrightRed = 36, kPaletteBlack = 84;
 struct StartColours { int32_t slot[2]; uint8_t rgb[2][3]; };
 constexpr StartColours kTurboColours{{kPaletteSteel, kPaletteCastIron}, {{197, 199, 196}, {55, 67, 69}}};
-constexpr StartColours kValveColours{{kPaletteBrightSteel, kPaletteBrightRed}, {{236, 236, 231}, {204, 44, 36}}};
-constexpr StartColours kFilterColours{{kPaletteBrightRed, kPaletteBrightSteel}, {{204, 44, 36}, {236, 236, 231}}};   // element, caps
-constexpr StartColours kCoolerColours{{kPaletteBrightSteel, kPaletteSteel}, {{236, 236, 231}, {197, 199, 196}}};     // tanks, end caps
-constexpr StartColours kBlowerColours{{kPaletteBrightSteel, kPaletteCastIron}, {{236, 236, 231}, {55, 67, 69}}};     // housing, gear case
+constexpr uint8_t kRgbSteel[3]{197, 199, 196}, kRgbCast[3]{55, 67, 69}, kRgbBright[3]{236, 236, 231}, kRgbRed[3]{204, 44, 36}, kRgbBlack[3]{14, 14, 16};
+constexpr StartColours kValveColours{{kPaletteBlack, kPaletteBrightRed}, {{14, 14, 16}, {204, 44, 36}}};             // HKS: black body, red band
+constexpr StartColours kBlowerColours{{kPaletteBrightSteel, kPaletteBlack}, {{236, 236, 231}, {14, 14, 16}}};       // ProCharger: polished head, black case
+// One per look (turbo_logic.h kFilterLookIds / kCoolerIds): element and caps; tanks and end caps.
+constexpr StartColours kFilterLookColours[kFilterLooks]{
+    {{kPaletteBrightRed, kPaletteBrightSteel}, {{204, 44, 36}, {236, 236, 231}}},      // red cone, chrome lid
+    {{kPaletteBlack, kPaletteCastIron}, {{14, 14, 16}, {55, 67, 69}}},                 // black sock, dark band
+    {{kPaletteBrightSteel, kPaletteBlack}, {{236, 236, 231}, {14, 14, 16}}}};          // chrome drum, black lid
+constexpr StartColours kCoolerLookColours[kCoolerLooks]{
+    {{kPaletteSteel, kPaletteBlack}, {{197, 199, 196}, {14, 14, 16}}},
+    {{kPaletteBlack, kPaletteCastIron}, {{14, 14, 16}, {55, 67, 69}}},
+    {{kPaletteSteel, kPaletteSteel}, {{197, 199, 196}, {197, 199, 196}}}};
+int look_of_part(const void* component);
+inline const StartColours& filter_colours(const void* component) { return kFilterLookColours[look_of_part(component)]; }
+inline const StartColours& cooler_colours(const void* component) { return kCoolerLookColours[look_of_part(component)]; }
 
 // Sets paint slots 0 and 1, as the paint tool would (the property's modified flag sends it to the clients). With
 // only_new, only a newly placed part, whose slots all hold the same default; a part that was painted (or whose saved
@@ -824,6 +836,12 @@ const char* definition_id_of(const void* component, size_t& length) {
     if (!id.data || id.length <= 0 || id.length > 64 || !anymaker::readable(id.data, size_t(id.length))) return nullptr;
     length = size_t(id.length);
     return id.data;
+}
+int look_of_part(const void* component) {
+    size_t length = 0;
+    const char* id = definition_id_of(component, length);
+    int look = id ? part_look_from_id(id, length) : 0;
+    return look < 0 || look > 2 ? 0 : look;
 }
 bool is_intercooler_part(const void* component) {
     size_t length = 0;
@@ -1087,7 +1105,7 @@ void refresh_topology(void* self, void* vehicle, Turbo& t, double now) {
             }
         }
         cells += cooler_cells(cooler);
-        if (first_sight(cooler)) default_paint(cooler, kCoolerColours.slot[0], kCoolerColours.slot[1]);
+        if (first_sight(cooler)) default_paint(cooler, cooler_colours(cooler).slot[0], cooler_colours(cooler).slot[1]);
     });
     t.cooler_cells = cells;
     t.coolers = coolers;
@@ -1156,7 +1174,7 @@ void tick_blower(void* self, void* vehicle, Turbo& t) {
     t.filter = filter;
     bool filtered = fed ? upstream->second.filter != nullptr : filter != nullptr;
     double* filter_condition = filter ? &wear_of('f', vehicle, filter) : nullptr;
-    if (filter && first_sight(filter)) default_paint(filter, kFilterColours.slot[0], kFilterColours.slot[1]);
+    if (filter && first_sight(filter)) default_paint(filter, filter_colours(filter).slot[0], filter_colours(filter).slot[1]);
     t.state.health = filter_head_factor(filter != nullptr, filter_condition ? *filter_condition : 1.0);
     t.state.blown = false;
     in.bov_venting = vent_blow_off_valves(self, t.size, (in.pressure[kColdOut] - in.pressure[kColdIn]) - head_for(t.state, in.pressure[kColdIn]), in.dt, in.bov_spring_kpa);
@@ -1289,7 +1307,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     t.filter = filter;
     bool filtered = fed ? upstream->second.filter != nullptr : filter != nullptr;
     double* filter_condition = filter ? &wear_of('f', vehicle, filter) : nullptr;
-    if (filter && first_sight(filter)) default_paint(filter, kFilterColours.slot[0], kFilterColours.slot[1]);
+    if (filter && first_sight(filter)) default_paint(filter, filter_colours(filter).slot[0], filter_colours(filter).slot[1]);
     t.state.health = condition_head_factor(condition) * filter_head_factor(filter != nullptr, filter_condition ? *filter_condition : 1.0);
     t.state.blown = turbo_blown(condition);           // worn out: no boost, a choked intake (limp mode)
     if (t.state.blown && !t.sooted) { set_paint(self, kPaletteSoot, kPaletteSoot, false); t.sooted = true; }   // also after a reload
@@ -1620,7 +1638,7 @@ bool write_definition_file() {
         std::string path = blow_off_mesh_path(large != 0);              // meshes/components/turbo_<id>.mesh
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_blow_off_mesh(stock, large != 0, name.c_str(), kBlowOffStyle);
+        std::vector<uint8_t> mesh = pdmesh::encode(avolook::blow_off(large != 0, 1), name);   // HKS SSQV (Nate's pick, 2026-11-04)
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         bov_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
@@ -1635,22 +1653,22 @@ bool write_definition_file() {
         wg_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
     if (!wg_built[0] || !wg_built[1]) log(1, "wastegate meshes not written; the wastegates use the gas port look");
-    bool filter_built[2]{}, cooler_built = true;
-    for (int large = 0; large < 2; ++large) {
-        std::string path = air_filter_mesh_path(large != 0);
+    bool filter_built[2]{true, true}, cooler_built = true;
+    for (int look = 0; look < kFilterLooks; ++look)            // every filter look (avo_looks_mesh.h)
+        for (int large = 0; large < 2; ++large) {
+            std::string path = air_filter_mesh_path(large != 0, look);
+            std::string name = path.substr(path.find_last_of('/') + 1);
+            name = name.substr(0, name.size() - 5);
+            std::vector<uint8_t> mesh = pdmesh::encode(avolook::air_filter(large != 0, look), name);
+            std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
+            filter_built[large] = filter_built[large] && !mesh.empty() && write_file(file, mesh.data(), mesh.size());
+        }
+    for (int k = 0; k < 9 * kCoolerLooks; ++k) {             // nine tiles each, laid out along x and y
+        int tx = k % 3, ty = k / 3 % 3, look = k / 9;
+        std::string path = intercooler_mesh_path(tx, ty, look);
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_air_filter_mesh(stock, large != 0, name.c_str());
-        std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
-        filter_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
-    }
-    for (int k = 0; k < 18; ++k) {                           // nine tiles each, laid out along x and y
-        int tx = k % 3, ty = k / 3 % 3;
-        bool round = k >= 9;
-        std::string path = intercooler_mesh_path(tx, ty, round);
-        std::string name = path.substr(path.find_last_of('/') + 1);
-        name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_intercooler_tile(stock, tx, ty, name.c_str(), round ? kIntercoolerRoundStyle : kIntercoolerStyle);
+        std::vector<uint8_t> mesh = pdmesh::encode(avolook::intercooler_tile(tx, ty, look), name);
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         cooler_built = cooler_built && !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
@@ -1661,7 +1679,7 @@ bool write_definition_file() {
         std::string path = blower_mesh_path(large != 0);
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_supercharger_mesh(stock, large != 0, name.c_str());
+        std::vector<uint8_t> mesh = pdmesh::encode(avolook::supercharger(large != 0, 0), name);   // ProCharger (Nate's pick, 2026-11-04)
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         blower_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
@@ -2342,8 +2360,12 @@ void hk_push_mesh_static(void* renderer, void* layers, const void* composite, co
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
         int kind = kind_of_definition(static_cast<const uint8_t*>(composite) - off::definition_mesh_static);
         if (is_valve(kind)) start = &kValveColours;
-        else if (is_air_filter(kind)) start = &kFilterColours;
-        else if (is_intercooler(kind)) start = &kCoolerColours;
+        else if (is_air_filter(kind) || is_intercooler(kind)) {
+            const void* definition = static_cast<const uint8_t*>(composite) - off::definition_mesh_static;
+            auto& id = at<anymaker::gc_string_view>(definition, off::definition_id);
+            int look = id.data && id.length > 0 && id.length < 64 && anymaker::readable(id.data, size_t(id.length)) ? part_look_from_id(id.data, size_t(id.length)) : 0;
+            start = is_air_filter(kind) ? &kFilterLookColours[look] : &kCoolerLookColours[look];
+        }
         else if (kind >= kMinSize && kind <= kMaxSize) start = &kTurboColours;
         else if (is_blower(kind)) start = &kBlowerColours;
     }

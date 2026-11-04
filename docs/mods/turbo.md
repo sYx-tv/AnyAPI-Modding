@@ -139,8 +139,8 @@ the air cool: the second turbo heats air that is already hot.
 
 A supercharger is a centrifugal compressor driven by the engine through a belt, so it has no lag: its boost follows
 the engine's speed the moment it changes. **Supercharger (Small)** is 2x2x2 with a small boost outlet; **Supercharger
-(Large)** is the same unit at twice the size, 4x4x4, with a large outlet. Both are a satin cast head unit: a ribbed
-snail-shell housing on the front and a finned gear case behind it. Paint colour 1 sets the housing, colour 2 the gear
+(Large)** is the same unit at twice the size, 4x4x4, with a large outlet. Both look like a ProCharger head unit: a polished
+snail-shell housing on the front and a black finned gear case behind it. Paint colour 1 sets the housing, colour 2 the gear
 case.
 
 | Port | Where | Connect to |
@@ -222,7 +222,7 @@ A companion part, in the gas parts with the turbos:
   boost with the ECU's boost target. Antilag and launch control (two-step) are rows on the ECU (see
   [AnyVehicleOverhaul](vehicle-overhaul.md)). A saved vehicle loses any old wastegate part when it loads.
 
-The blow-off valves start with a bright steel body and a red cap; paint the body and the cap separately. While you place
+The blow-off valves are HKS-style, with a flared trumpet top; they start with a black body and a red band, and both paint. While you place
 a turbo or valve, the preview shows these starting colours. The turbo's own `surge`
 output is 1 while it surges.
 
@@ -253,10 +253,11 @@ wear at all. The times below are for full boost the whole time:
 - **Heat.** Exhaust heats the turbine and the shaft heats with speed (four times as much with no oil). With oil
   a turbo at full boost sits around 140 °C; dry it climbs to about 400 °C. Above 250 °C it wears faster, the
   hotter the faster.
-- **Air filter.** The **Turbo Air Filter** (small pipe, 3x3x3) and **Turbo Air Filter (Large)** (large pipe,
-  4x4x4) are cone filters, the pipe in the middle of the bottom. Pipe the neck to the turbo's intake. Clean air makes the turbo wear four times slower.
+- **Air filter.** Each comes small (small pipe, 3x3x3) and large (large pipe, 4x4x4) in three looks that work the
+  same: **Cone** (a pleated red cone, chrome lid), **Mesh Sock** (a black sock over a stack) and **Round Drum** (a
+  chrome drum with a black lid). The pipe is in the middle of the bottom. Pipe the neck to the turbo's intake. Clean air makes the turbo wear four times slower.
   A filter clogs slowly as it works, about 10 hours of full boost to go fully dirty, and a clogged filter costs up to 15% of the boost. Place a new one to replace it. A new
-  filter starts with a red element and steel caps, and both paint.
+  filter starts in its look's colours, and both colours paint.
 - **Condition.** Down to half, the turbo performs like new. Below that its boost falls (to 60% near the end).
   At 0% it **blows up**: a bang, shrapnel and a hiss of smoke, and both housings go sooty. A blown turbo makes no boost
   and its wrecked compressor chokes the engine's air: the engine still runs through it, but gets only about a third of
@@ -274,9 +275,9 @@ scales with the air's density against 30 °C air, so hot boost makes less power 
 air over 60 °C also knocks a boosted engine, which slowly damages it. Without an intercooler, full boost
 costs a damage step about every 8 to 9 minutes.
 
-An intercooler fixes that. There are two, which work the same and differ only in looks: the **Turbo Intercooler
-(Race Core)**, a black core with bright fins and an inlet stub on each tank, and the **Turbo Intercooler (Round
-Tank)**, a slim silver core between round tanks. Like the radiator, it has no pipes of its own: snap gas ports onto its faces,
+An intercooler fixes that. There are three, which work the same and differ only in looks: **Bar and Plate**
+(a black bar core, cast ribbed tanks), **Tube and Fin** (a silver tube core, black welded tanks) and **Fabricated
+Race** (bright core, fabricated aluminium tanks). Like the radiator, it has no pipes of its own: snap gas ports onto its faces,
 small or large, wherever suits the build. Run one from the turbo's boost and one to the engine's air intake. All its
 ports share one volume of air, so the boost passes straight through. It is 3 cells wide, 2 tall and 1 deep, and the
 model fills every cell of it. It has an end tank on each side, like a car's, and grows like the radiator: wider and
