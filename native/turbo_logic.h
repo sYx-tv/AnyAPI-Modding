@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 namespace turbo {
 
@@ -282,6 +283,33 @@ inline std::string mount_cells(int cx, int cy, int cz, int dir, int skip_u = -1,
     return out;
 }
 
+// Mounting faces on the given faces of a box (cells 0..cx-1, 0..cy-1, 0..cz-1), one per cell, leaving out every cell
+// a pipe or oil node (or the torque spot) sits on, so a mount never covers a port (audited 2026-11-04).
+struct FaceCell { int x, y, z, dir, span = 1; };
+inline bool face_covers(const FaceCell& f, int x, int y, int z, int dir) {
+    if (f.dir != dir) return false;
+    auto in = [&](int v, int lo) { return v >= lo && v < lo + f.span; };
+    if (dir <= 1) return x == f.x && in(y, f.y) && in(z, f.z);
+    if (dir <= 3) return y == f.y && in(x, f.x) && in(z, f.z);
+    return z == f.z && in(x, f.x) && in(y, f.y);
+}
+inline std::string mount_box(int cx, int cy, int cz, std::initializer_list<int> dirs, const std::vector<FaceCell>& skip) {
+    std::string out;
+    for (int dir : dirs) {
+        int axis = dir / 2, hi = dir % 2;
+        for (int x = 0; x < cx; ++x)
+            for (int y = 0; y < cy; ++y)
+                for (int z = 0; z < cz; ++z) {
+                    int v = axis == 0 ? x : axis == 1 ? y : z, last = (axis == 0 ? cx : axis == 1 ? cy : cz) - 1;
+                    if (v != (hi ? last : 0)) continue;
+                    bool blocked = false;
+                    for (const FaceCell& f : skip) blocked = blocked || face_covers(f, x, y, z, dir);
+                    if (!blocked) out += mount_face(x, y, z, dir);
+                }
+    }
+    return out;
+}
+
 // One part definition: a resized stock impeller (class gas_pump_centrifugal) with a hot side.
 inline std::string definition_entry(int n, const std::string& mesh_path) {
     Spec s = spec(n);
@@ -302,7 +330,13 @@ inline std::string definition_entry(int n, const std::string& mesh_path) {
                 surfaces += ",\n        {\"pos\": [" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": " + std::to_string(x) + ", \"gender\": 2, \"type\": \"port\"}";
             }
     // Mounting faces (Nate 2026-11-04): the bottom (but the torque cell), the top, the front and the back.
-    surfaces += mount_cells(2, n, n, 2, 0, n == 2 ? 0 : top) + mount_face(0, top, 0, 3, 2, n) + mount_face(0, 0, 0, 4, 2, n) + mount_face(0, 0, top, 5, 2, n);
+    {
+        int span = s.large_pipe ? 2 : 1;
+        std::vector<FaceCell> skip = {{0, 0, n == 2 ? 0 : top, 2}};
+        for (Node k : {kColdOut, kHotIn}) { Port p = port(n, k); skip.push_back({p.x, p.y, p.z, p.dir, span}); }
+        for (bool in : {true, false}) { Port p = oil_port(n, in); skip.push_back({p.x, p.y, p.z, p.dir}); }
+        surfaces += mount_box(2, n, n, {2, 3, 4, 5}, skip);
+    }
     std::string descriptors;
     for (int i = 0; i < kChannelCount; ++i)
         descriptors += std::string(i ? ",\n        " : "") + "{\"type\": \"" + (kChannels[i].input ? "type_f64_input" : "type_f64_output") + "\", \"name\": \"" + kChannels[i].name + "\"}";
@@ -648,7 +682,8 @@ inline std::string blower_entry(bool large, const std::string& mesh_path) {
             for (int z = 0; z < n; ++z)
                 surfaces += ",\n        {\"pos\": [" + std::to_string(side ? top : 0) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"dir\": " + std::to_string(side) + ", \"gender\": 2, \"type\": \"port\"}";
     // Mounting faces (Nate 2026-11-04): bottom, top, front, and the back but its torque cell (x 0, y 0).
-    surfaces += mount_face(0, 0, 0, 2, n, n) + mount_face(0, top, 0, 3, n, n) + mount_face(0, 0, 0, 4, n, n) + mount_cells(n, n, n, 5, 0, 0);
+    surfaces += mount_box(n, n, n, {2, 3, 4, 5}, {{0, 0, top, 5}, large ? FaceCell{1, 1, 0, 4, 2} : FaceCell{0, 0, 0, 4, 2},
+                                                  large ? FaceCell{2, 3, 0, 3, 2} : FaceCell{1, 1, 0, 3}});
     // A large pipe is 2 x 2 cells anchored at its low corner: the intake across x and y (centred on the even face),
     // the large outlet across x and z.
     std::string in = large ? "{\"pos\": [1, 1, 0], \"direction\": 4, \"type\": \"gas\", \"size\": 1}" : "{\"pos\": [0, 0, 0], \"direction\": 4, \"type\": \"gas\", \"size\": 1}";
@@ -846,7 +881,8 @@ inline std::string pd_entry(PdKind k, const std::string& mesh_path) {
         "        {\"pos\": [1, 0, 0], \"size\": [2, 2], \"dir\": 1, \"gender\": 2, \"type\": \"port\"}";
     // Mounting faces (Nate 2026-11-04): it bolts down by its bottom (onto the air manifold, over its outlet) and takes
     // parts on its top, back and the front but the torque cell (x 0, y 1).
-    surfaces += mount_face(0, 0, 0, 2, 2, 2) + mount_face(0, 1, 0, 3, 2, 2) + mount_face(0, 0, 1, 5, 2, 2) + mount_face(0, 0, 0, 4, 2, 1) + mount_face(1, 1, 0, 4);
+    // Its whole back face is the intake (twin screw), so that face takes no mount.
+    surfaces += mount_face(0, 0, 0, 2, 2, 2) + mount_box(2, 2, 2, {3, 4}, {{0, 1, 0, 4}, {0, 1, 0, 3, roots ? 2 : 0}});
     std::string in = roots ? "{\"pos\": [0, 1, 0], \"direction\": 3, \"type\": \"gas\", \"size\": 1}" : "{\"pos\": [0, 0, 1], \"direction\": 5, \"type\": \"gas\", \"size\": 1}";
     std::string out = "{\"pos\": [0, 0, 0], \"direction\": 2, \"type\": \"gas\", \"size\": 1}";
     std::string descriptors;
@@ -972,7 +1008,7 @@ inline std::string blow_off_entry(bool large, const std::string& mesh) {
         }
     {   // Mounting faces (Nate 2026-11-04): top, both ends, and the bottom but its torque cell.
         int n = large ? 2 : 1;
-        surfaces += mount_face(0, n - 1, 0, 3, n, n) + mount_face(0, 0, 0, 4, n, n) + mount_face(0, 0, n - 1, 5, n, n) + mount_cells(n, n, n, 2, 0, 0);
+        surfaces += mount_box(n, n, n, {2, 3, 4, 5}, {{0, 0, 0, 2}, {0, 0, 0, 4, n}, {0, 0, n - 1, 5, n}});
     }
     std::string box = large ? "[1, 1, 1]" : "[0, 0, 0]";
     std::string description = std::string("Inline blow-off valve for a Turbo, ") + (large ? "large pipe (the 6x6 turbo)" : "small pipe (the 3x3 turbo)") +
@@ -1064,8 +1100,9 @@ inline std::string air_filter_entry(bool large, const std::string& mesh) {
     // the middle of the bottom face: the small pipe under cell 1, the large (2 x 2, anchored at its low corner) under
     // cells 1..2. Every face but the top takes other parts.
     const std::string n = large ? "4" : "3", last = large ? "3" : "2", size = "\"size\": [" + n + ", " + n + "]";
-    std::string surfaces = "{" + size + "}, {\"pos\": [0, 0, " + last + "], " + size + ", \"dir\": 5}, {" + size + ", \"dir\": 4}, {\"pos\": [" + last +
-        ", 0, 0], " + size + ", \"dir\": 1}, {" + size + ", \"dir\": 2}";
+    const int cells = large ? 4 : 3;
+    std::string surfaces = mount_box(cells, cells, cells, {0, 1, 2, 4, 5}, {{1, 0, 1, 2, large ? 2 : 1}}).substr(2);   // not under its neck
+    (void)size;
     std::string description = std::string("Cone air filter for a Turbo's compressor intake, ") + (large ? "large pipe (the 6x6 turbo)" : "small pipe (the 3x3 turbo)") +
         ". Pipe its neck to the turbo's intake (front centre). Clean air makes the turbo wear several times slower. It clogs slowly "
         "with use and a clogged filter costs a little boost; place a new one to replace it.";
@@ -1156,8 +1193,9 @@ inline std::string definitions_json(const bool built[kMaxSize - kMinSize + 1], c
         out += definition_entry(n, built[n - kMinSize] ? mesh_path(n) : std::string(kStockMeshPath)) + ",\n";
     for (int large = 0; large < 2; ++large)
         out += blow_off_entry(large, bov_built && bov_built[large] ? blow_off_mesh_path(large) : std::string(kValveMeshPath)) + ",\n";
-    for (int large = 0; large < 2; ++large)
-        out += wastegate_entry(large, wg_built && wg_built[large] ? wastegate_mesh_path(large) : std::string(kValveMeshPath)) + ",\n";
+    // The wastegate part is gone (Nate, 2026-11-04): every turbo's built-in wastegate holds the boost target, and the
+    // ECU has the antilag and launch two-step it used to carry. Saved wastegates drop from vehicles on load.
+    (void)wg_built;
     for (int large = 0; large < 2; ++large)
         out += air_filter_entry(large, filter_built && filter_built[large] ? air_filter_mesh_path(large) : std::string(large ? "meshes/components/gas_port_b.mesh" : kValveMeshPath)) + ",\n";
     out += intercooler_entry(cooler_built && *cooler_built) + ",\n";

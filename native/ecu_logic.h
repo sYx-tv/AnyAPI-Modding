@@ -17,7 +17,7 @@
 //   fuel_trim     -15..+15 % fuel. Lean (minus) up to -8 %: +0.5 % power a step but knocks sooner and runs hotter;
 //                 past -8 % it loses power. Rich (plus): a little less power, knocks later, burns more fuel, pops more.
 //   pops          0..1: burble tune, pops and bangs on the overrun (lift off at speed).
-//   antilag       above 0.5: every wastegate on the vehicle runs antilag (the turbos stay spooled off throttle).
+//   antilag       above 0.5: every turbo on the vehicle runs antilag (stays spooled off throttle, bangs in the exhaust).
 // Outputs: rpm, boost_psi, knock (0 none, 1 = 100 % past the limit), power_scale and knock_limit (boost factor).
 #include <algorithm>
 #include <cmath>

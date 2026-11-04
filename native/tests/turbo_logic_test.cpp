@@ -191,7 +191,7 @@ int main() {
     std::string json = definitions_json(built, bov_built, wg_built);
     size_t count = 0;
     for (size_t at = 0; (at = json.find("\"class\": \"gas_pump_centrifugal\"", at)) != std::string::npos; ++at) ++count;
-    assert(count == 9);                                    // two turbos, two of each valve, two centrifugal superchargers, the twin screw (Roots on hold)
+    assert(count == 7);                                    // two turbos, two blow-off valves, two centrifugal superchargers, the twin screw (no wastegate part, Roots on hold)
     assert(json.find("turbocharger_2") == std::string::npos && json.find("turbocharger_4") == std::string::npos && json.find("turbocharger_5") == std::string::npos &&
            json.find("Turbo 2x2") == std::string::npos && json.find("Turbo 4x4") == std::string::npos && json.find("5x5") == std::string::npos && json.find("2x2 and") == std::string::npos);
     assert(json.find("\"bounds_max\": [1, 5, 5]") != std::string::npos && json.find("6x6x2") != std::string::npos);   // the 6x6 is 2 deep
@@ -211,8 +211,7 @@ int main() {
         for (int k = 0; k < 3; ++k) last_gas = full.find("\"type\": \"gas\"", last_gas + 1);
         assert(oil != std::string::npos && last_gas < oil);
     }
-    assert(json.find("turbo_turbo_wastegate.mesh") != std::string::npos && json.find("turbo_turbo_wastegate_large.mesh") == std::string::npos &&
-           json.find("\"id\": \"turbo_wastegate_large\"") != std::string::npos);
+    assert(json.find("\"id\": \"turbo_wastegate") == std::string::npos);   // the wastegate part is gone (built-in wastegate + ECU)
     assert(json.find("\"id\": \"turbo_blow_off_valve_large\"") != std::string::npos && json.find("turbo_turbo_blow_off_valve_large.mesh") != std::string::npos &&
            json.find("turbo_turbo_blow_off_valve.mesh") == std::string::npos);
     assert(json.find("\"direction\": 5, \"type\": \"gas\", \"size\": 1}") != std::string::npos);   // the large valve's Air port is a large pipe
@@ -226,7 +225,7 @@ int main() {
         assert(depth >= 0 && square >= 0);
     }
     assert(depth == 0 && square == 0 && !in_string);
-    assert(json.find("\"id\": \"turbo_blow_off_valve\"") != std::string::npos && json.find("\"type_f64_input\", \"name\": \"open\"") != std::string::npos);
+    assert(json.find("\"id\": \"turbo_blow_off_valve\"") != std::string::npos);
     assert(valve_from_id("turbo_wastegate", 15) == kWastegate && valve_from_id("turbo_blow_off_valve", 20) == kBlowOff && valve_from_id("turbo_blow_off_valve_large", 26) == kBlowOffLarge && valve_from_id("turbo", 5) == kNoValve &&
            valve_from_id("turbo_wastegate_large", 21) == kWastegateLarge && valve_from_id("turbo_intercooler", 17) == kIntercooler && valve_from_id("turbo_intercooler_round", 23) == kIntercooler && valve_from_id("turbo_air_filter_large", 22) == kAirFilterLarge);
     assert(wastegate_move(1, 3, 1, 50, 50, 1.0 / 60, true) > wastegate_move(1, 3, 1, 50, 50, 1.0 / 60) * 2);   // the large wastegate flows more
@@ -328,7 +327,7 @@ int main() {
     assert(valve_channel_index("antilag", 7) == kValveAntilag && channel_index("boost_psi", 9) == kBoostPsi);
     // Two-step: the wastegate takes a launch RPM; the limiter cuts at it and gives the fuel back 150 RPM below, so the
     // engine bounces just under it; 0 is off, and it never asks for more than the game's own fuel cut.
-    assert(valve_channel_index("two_step", 8) == kValveTwoStep && json.find("\"type_f64_input\", \"name\": \"two_step\"") != std::string::npos);
+    assert(valve_channel_index("two_step", 8) == kValveTwoStep);
     { bool cut = false;
       assert(!two_step_cut(cut, 3000, 4000) && two_step_cut(cut, 4000, 4000) && two_step_cut(cut, 3900, 4000) && !two_step_cut(cut, 3840, 4000));
       assert(!two_step_cut(cut, 3990, 4000) && two_step_cut(cut, -4100, 4000));             // either way round
@@ -634,14 +633,14 @@ int main() {
         assert(small.find("\"tech_tier\": 3") != std::string::npos && small.find("\"name\": \"drive_power\"") != std::string::npos);
         for (int n : {2, 4, 5}) assert(full.find("\"id\": \"" + definition_id(n) + "\"") == std::string::npos);
         // Survival loot: the starter parts drop after the 2nd bunker (tier 3), the rest after the 3rd (tier 4).
-        for (const char* id : {"turbocharger_3", "supercharger_small", "turbo_wastegate", "turbo_blow_off_valve", "turbo_air_filter"})
+        for (const char* id : {"turbocharger_3", "supercharger_small", "turbo_blow_off_valve", "turbo_air_filter"})
             assert(entry(id).find("\"tech_tier\": 3,\n      \"spawn_probability\": 0.15,") != std::string::npos);
-        for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_wastegate_large", "turbo_blow_off_valve_large", "turbo_air_filter_large",
+        for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_blow_off_valve_large", "turbo_air_filter_large",
                                "turbo_intercooler", "turbo_intercooler_round"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
         for (const char* id : {"supercharger_twin_screw"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
-        assert(count_in(full, "\"tech_tier\": ") == 13 && count_in(full, "\"spawn_probability\": ") == 13);
+        assert(count_in(full, "\"tech_tier\": ") == 11 && count_in(full, "\"spawn_probability\": ") == 11);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
         assert(definitions_json(all).find("meshes/components/turbo_a.mesh") != std::string::npos);   // no meshes: the stock look
         assert(blower_from_id("supercharger_small", 18) == kBlowerSmall && blower_from_id("supercharger_large", 18) == kBlowerLarge &&

@@ -2509,7 +2509,7 @@ extern "C" __declspec(dllexport) double AVO_EcuCrackle(int32_t vehicle_id) {
     double now = now_seconds();
     for (auto& [vehicle, e] : g_vehicle_ecus)
         if (now - e.at < 1.0 && anymaker::readable(static_cast<const uint8_t*>(vehicle) + off::vehicle_id, 4) && at<int32_t>(vehicle, off::vehicle_id) == vehicle_id)
-            return ecu::crackle(e.tune);
+            return e.tune.antilag ? std::max(0.8, ecu::crackle(e.tune)) : ecu::crackle(e.tune);   // antilag bangs too
     return -1.0;
 }
 double ecu_saved(void* vehicle, const void* component) {

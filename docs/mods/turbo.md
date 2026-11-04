@@ -103,7 +103,6 @@ depending on its size, against 5 to 33 L/s through a turbine. So:
 - The engine's exhaust manifolds go only to the turbo's exhaust inlet, and the tailpipe vent goes on the turbo's
   exhaust out. A vent before the turbine lets the exhaust skip it, and the turbo never spools.
 - This counts for every air and exhaust manifold on the engine: one more manifold with its own vent does the same.
-- A wastegate is the one bypass that belongs there: it opens only as far as you tell it to.
 
 Big engines need big turbos. A turbo much smaller than its engine chokes the exhaust: the back pressure takes away
 much of what the boost adds (a 4-rotor Rotary wants a 6x6).
@@ -198,17 +197,16 @@ valve) slows it hard.
 Pick the size whose turbine flow is close to your engine's exhaust L/s. A matched turbo gives some boost from about
 2,500 RPM and full boost soon after you floor it, well before the redline. From there its built-in wastegate holds
 full boost (88 kPa) to the redline and sends the spare exhaust round the turbine, which keeps back pressure down; the
-`wastegate` output reads how far it is open. A Turbo Wastegate part (`open`, or `boost_limit`) still caps boost
-lower.
+`wastegate` output reads how far it is open. The ECU's boost target (or `boost_target_psi`) sets what it holds.
 
 A turbo that is too small for its engine chokes it: it spools fast, but the exhaust backs up (a 3x3 on a 4-rotor holds
 5 to 8 units, 49 to 76 kPa), and above 39 kPa of exhaust pressure the engine loses power, as it does with any
 restricted exhaust. A turbo that is too big barely spools: a 6x6 on a 2-rotor makes about 37 kPa at 2,500 RPM and
 needs about 5 s to reach full boost at 3,500.
 
-## Blow-off valve and wastegate
+## Blow-off valve
 
-Two companion parts, in the gas parts with the turbos:
+A companion part, in the gas parts with the turbos:
 
 - **Turbo Blow-Off Valve (Small)** (1 cell, small pipe, for the 3x3) and **(Large)** (2x2x2, large
   pipe, for the 6x6). Inline: pipe the turbo's boost outlet into its **plain end** (it shows as *Gas
@@ -220,36 +218,20 @@ Two companion parts, in the gas parts with the turbos:
   surge completely; stiffer springs let more and more surge through while they vent (at 50 the turbo surges
   almost as if there were no valve, with the valve's hiss on top), and **Sound effect** (see Sounds below); they reset to the defaults when the vehicle loads (the game's binary save format has no room for extra values). The large valve
   vents 2.5 times faster. Outputs `open` (0/1), `flow` (L/s) and `pressure` (kPa).
-- **Turbo Wastegate (Small)** (1 cell, small pipe) and **(Large)** (2x2x2, large pipe, flows 2.5 times as much).
-  Exhaust from the manifold goes in underneath; the side port goes to a vent or the turbo's exhaust outlet pipe. Its `open` input (0 to 1, from a data link or microcontroller) lets exhaust bypass the turbine,
-  which caps boost. Its `antilag` input (1 on, 0 off) turns on antilag for the turbo on the same exhaust pipe:
-  whenever the engine is running but its exhaust alone would let the turbo slow down (off throttle, idling), fuel
-  burnt in the exhaust holds the turbo at 80% spool, with bangs and crackles from the wastegate. Wire it to a
-  switch, or build your own logic in a microcontroller (only on a launch, only above some speed). Its `two_step`
-  input is launch control (see below). Outputs `flow` (L/s) and `pressure` (kPa).
+- **No wastegate part** (removed in the AnyVehicleOverhaul dev build): every turbo has a built-in wastegate. Set its
+  boost with the ECU's boost target. Antilag and launch control (two-step) are rows on the ECU (see
+  [AnyVehicleOverhaul](vehicle-overhaul.md)). A saved vehicle loses any old wastegate part when it loads.
 
-The valves start with a bright steel body and a red cap; paint the body and the cap separately. While you place
+The blow-off valves start with a bright steel body and a red cap; paint the body and the cap separately. While you place
 a turbo or valve, the preview shows these starting colours. The turbo's own `surge`
 output is 1 while it surges.
 
 ### Launch control (two-step)
 
-A wastegate's `two_step` input takes an engine RPM (0 is off). While it is set, the engine that turbo boosts holds at
-that RPM however far you press the throttle: the fuel cuts at the RPM and comes back 150 RPM below, so it bounces on
-the limiter like a real launch control. With `antilag` on as well, the fuel the limiter cuts goes into the exhaust,
-so antilag fires on the line however little the engine is making, and the turbo is spooled (with bangs) before you
-go. Set `two_step` back to 0 and the engine is free at once.
-
-It is meant for a microcontroller, so you decide when it is on. For example, with the gear and an antilag switch
-wired in:
-
-- `launch = gear == 0 and switch == 1`
-- the wastegate's `two_step` = `launch ? 4000 : 0`
-- its `antilag` = `switch` (or `launch` for bangs only on the line)
-
-The mod reads the engine's speed itself, so the microcontroller needs no RPM. On a compound, a wastegate on either
-turbo's exhaust works. It needs the game functions the hot boost air uses (see How it works); without them the input
-does nothing.
+Launch control lives on the ECU: set **Launch RPM** and turn **Launch** on (or wire its input to a clutch or gear
+switch). The engine holds at that RPM however far you press the throttle. The fuel cuts at the RPM and comes back
+150 RPM below, so it bounces on the limiter like a real launch control. With the ECU's **Antilag** on as well, the
+cut fuel goes into the exhaust and the turbo is spooled (with bangs) before you go.
 
 ## Upkeep: oil, air filter, heat and wear
 
@@ -315,7 +297,7 @@ Turbos and blow-off valves have their own sounds in place of the impeller hum, m
   3 dump (deep). Each is voiced for the turbo venting through it: a 3x3's is short and sharp, a 6x6's long
   and deep.
 
-- **Antilag**: irregular gunshot bangs and crackles from the wastegate while antilag fires; deeper on bigger turbos.
+- **Antilag**: bangs and crackles in the exhaust while the ECU's antilag fires.
 - **Blowing up**: once, when a turbo wears out: a crack and a boom, shrapnel pinging, the wheel screeching to a stop
   and a hiss of boost and smoke. A turbo that was already blown when you load in stays quiet.
 - **Supercharger whine**: the buzz of its straight-cut step-up gears, there from idle and sliding up with the engine,
@@ -323,7 +305,7 @@ Turbos and blow-off valves have their own sounds in place of the impeller hum, m
   sings lower. Off the throttle it surges like a turbo unless a blow-off valve on its outlet pipe vents the boost, just
   as real centrifugal superchargers need a bypass valve.
 
-The wastegate is otherwise silent. Sounds follow the vehicle volume slider and are heard by every player near the part.
+Sounds follow the vehicle volume slider and are heard by every player near the part.
 With AnyHelpers installed, **Mod Settings > AnyEngineParts > Turbo volume** sets how loud the turbo sounds, blow-off
 valves and antilag are, and **Supercharger volume** the supercharger whine, each from 0 to 200 % (100 is normal).
 They apply to your game only.
@@ -359,14 +341,13 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | `air_filter` | Output | 1 with an air filter on the intake, else 0 |
 | `boost_air_temperature` | Output | The boost air after any intercooler, °C (what the engine breathes) |
 | `drive_power` | Output | Supercharger: the power its belt takes from the engine, kW (0 on a turbo) |
-| `boost_limit` | Input | A wastegate: caps boost (as the `boost` output reads it) at this pressure in kPa (0 or unwired: no cap) |
 | `boost_target_psi` | Input | The boost (psi over the air outside) its built-in wastegate holds, up to the compressor's ceiling (0 or unwired: 12.8) |
 | `boost_target` | Output | The boost target it holds now, psi |
 
 ## Getting it
 
-- **Survival:** world loot. The Turbo 3x3 and the small supercharger, wastegate, blow-off valve and air filter drop
-  after the 2nd bunker (tech tier 3). The Turbo 6x6, the large supercharger, wastegate, blow-off valve and air filter,
+- **Survival:** world loot. The Turbo 3x3 and the small supercharger, blow-off valve and air filter drop
+  after the 2nd bunker (tech tier 3). The Turbo 6x6, the large supercharger, blow-off valve and air filter,
   and the intercoolers drop after the 3rd bunker (tech tier 4). As with the stock parts, new loot carries
   the tier the world has reached, so each tier drops until the next bunker is done. They are mechanical loot
   (industrial, construction, aircraft and bunker loot spots) and turn up about a quarter less often than the
