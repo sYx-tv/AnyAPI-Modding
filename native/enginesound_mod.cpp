@@ -20,6 +20,7 @@
 #include "enginesound_params.h"
 #include "enginesound_save.h"
 #include "route_cell.h"
+#include "exhaust_logic.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -27,6 +28,7 @@
 #include <cstdio>
 #include <cstring>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -165,9 +167,20 @@ buffer_reset_t g_buffer_reset;
 world_transform_t g_world_transform;
 std::atomic<bool> g_sound_ok{false};                           // streaming found: generated sounds play
 
+// AnyVehicleOverhaul exhaust (exhaust_logic.h): the engine's exhaust plays from the ends of its pipes (our tips and
+// stock vents), sounding like what is on the way; the engine itself keeps a quieter, muffled voice for its mechanics
+// and intake. Up to kMaxOutlets voices. An engine with no outlets found plays as before, from the engine.
+constexpr int kMaxOutlets = 4;
+struct OutletVoice { void* effect = nullptr; const void* part = nullptr; double position[3]{}, velocity[3]{}; bool placed = false; };
 struct ClientEngine {
     void* effect = nullptr;                          // application.audio.effect_3d (a handle)
     synth::Synth synth;
+    synth::Synth ex_synth;                           // the exhaust's own synth (the tune its parts give it)
+    OutletVoice outlets[kMaxOutlets];
+    int outlet_count = 0;
+    exhaust::Chain chain;
+    double chain_at = -10, ecu_crackle = -1;
+    std::string chain_text;
     double start = 0, last_tick = 0, retry_at = 0;
     long long written = 0;                           // samples queued since start
     double position[3]{}, velocity[3]{};
@@ -189,11 +202,15 @@ double now_seconds() {
     LARGE_INTEGER t; QueryPerformanceCounter(&t);
     return double(t.QuadPart) / double(freq.QuadPart);
 }
+void release_effect(void*& effect) {
+    if (!effect) return;
+    g_effect_stop(&effect);
+    g_effect_reset(&effect);
+    effect = nullptr;
+}
 void release_voice(ClientEngine& e) {
-    if (!e.effect) return;
-    g_effect_stop(&e.effect);
-    g_effect_reset(&e.effect);
-    e.effect = nullptr;
+    release_effect(e.effect);
+    for (OutletVoice& o : e.outlets) release_effect(o.effect);
 }
 // Samples the voice still has to play, or -1 when its fields don't look right.
 long long voice_queued(void* effect) {
@@ -203,6 +220,158 @@ long long voice_queued(void* effect) {
     if (bytes < 0 || cursor < 0 || bytes > 64 * synth::kSampleRate) return -1;
     return std::max<long long>(0, bytes / 2 - cursor);
 }
+
+// ------------------------------------------------------------------ the exhaust's parts (client, every 2 s)
+namespace exoff {
+constexpr ptrdiff_t component_id = 8;                // client_scene.vehicle_component.m_id (s32)
+constexpr ptrdiff_t component_vehicle = 200;         // ptr<client_scene.vehicle>
+constexpr ptrdiff_t vehicle_id = 8;
+constexpr ptrdiff_t vehicle_grids = 16 + 8;          // m_grids -> vector<ref<vehicle_grid>>
+constexpr ptrdiff_t grid_components = 40 + 8;
+constexpr ptrdiff_t vehicle_gas_links = 456 + 8;     // m_gas_links (container) -> vector<ref<vehicle_gas_link>>
+constexpr ptrdiff_t link_c0 = 8 + 8 + 8, link_n0 = 8 + 24 + 8, link_c1 = 48 + 8 + 8, link_n1 = 48 + 24 + 8;   // m_p0 / m_p1 node_id
+constexpr ptrdiff_t def_class = 48, def_logic_nodes = 184;
+}  // namespace exoff
+struct LogicNodeRaw { anymaker::gc_string_view id; int32_t pos[3]; int32_t dir, type, size; };
+static_assert(sizeof(LogicNodeRaw) == 40, "logic node");
+template <class F> void each_ref(const uint8_t* vec, int max_count, F&& visit) {
+    if (!anymaker::readable(vec, sizeof(anymaker::gc_vector_raw))) return;
+    anymaker::gc_vector_raw v;
+    std::memcpy(&v, vec, sizeof v);
+    if (v.count <= 0 || v.element_size != 16 || v.count > max_count || v.capacity < v.count || !v.buffer || !anymaker::readable(v.buffer, size_t(v.capacity) * 16)) return;
+    for (int32_t i = 0; i < v.count; ++i) {
+        auto* ref = v.at<anymaker::gc_ref_raw<uint8_t>>(i);
+        if (ref && ref->ptr) visit(ref->ptr);
+    }
+}
+anymaker::gc_string_view string_at(const void* base, ptrdiff_t o) {
+    anymaker::gc_string_view s{};
+    if (base && anymaker::readable(static_cast<const uint8_t*>(base) + o, sizeof s)) std::memcpy(&s, static_cast<const uint8_t*>(base) + o, sizeof s);
+    if (!s.data || s.length <= 0 || s.length > 64 || !anymaker::readable(s.data, size_t(s.length))) s = {};
+    return s;
+}
+using ecu_crackle_t = double (*)(int32_t);
+ecu_crackle_t ecu_crackle_fn() {                     // AnyVehicleOverhaul's Turbo part, when it is in this DLL
+    static ecu_crackle_t fn = [] {
+        HMODULE self = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&string_at, &self)) return ecu_crackle_t(nullptr);
+        return reinterpret_cast<ecu_crackle_t>(GetProcAddress(self, "AVO_EcuCrackle"));
+    }();
+    return fn;
+}
+void find_exhaust(uint8_t* engine, ClientEngine& v, double now) {
+    if (now - v.chain_at < 2.0) return;
+    v.chain_at = now;
+    const uint8_t* vehicle = static_cast<const uint8_t*>(pointer_at(engine, exoff::component_vehicle));
+    if (auto fn = ecu_crackle_fn(); fn && vehicle && anymaker::readable(vehicle + exoff::vehicle_id, 4)) v.ecu_crackle = fn(rd<int32_t>(vehicle, exoff::vehicle_id));
+    std::vector<exhaust::Part> parts;
+    std::vector<exhaust::Link> links;
+    if (vehicle) {
+        each_ref(vehicle + exoff::vehicle_grids, 4096, [&](uint8_t* grid) {
+            if (anymaker::readable(grid, 112)) each_ref(grid + exoff::grid_components, 1 << 16, [&](uint8_t* c) {
+                if (!anymaker::readable(c, 224) || parts.size() > 4096) return;
+                const void* def = pointer_at(c, off::client_definition);
+                auto id = string_at(def, off::definition_id), cls = string_at(def, exoff::def_class);
+                exhaust::Part p;
+                p.id = rd<int32_t>(c, exoff::component_id);
+                p.handle = c;
+                p.role = exhaust::role_of(id.data, size_t(id.length), cls.data, size_t(cls.length), &p.sub, &p.layout);
+                parts.push_back(p);
+            });
+        });
+        each_ref(vehicle + exoff::vehicle_gas_links, 1 << 16, [&](uint8_t* l) {
+            if (anymaker::readable(l, 96) && links.size() < 8192)
+                links.push_back({rd<int32_t>(l, exoff::link_c0), rd<int32_t>(l, exoff::link_n0), rd<int32_t>(l, exoff::link_c1), rd<int32_t>(l, exoff::link_n1)});
+        });
+    }
+    int32_t me = rd<int32_t>(engine, exoff::component_id);
+    // Each gas node of the engine: its definition id says air or exhaust when it can; else a walk that reached a
+    // compressor or an air filter is the air side.
+    std::vector<int32_t> nodes;
+    for (const auto& l : links) {
+        if (l.c0 == me && std::find(nodes.begin(), nodes.end(), l.n0) == nodes.end()) nodes.push_back(l.n0);
+        if (l.c1 == me && std::find(nodes.begin(), nodes.end(), l.n1) == nodes.end()) nodes.push_back(l.n1);
+    }
+    const void* def = pointer_at(engine, off::client_definition);
+    const auto* lv = def && anymaker::readable(static_cast<const uint8_t*>(def) + exoff::def_logic_nodes, sizeof(anymaker::gc_vector_raw))
+                         ? reinterpret_cast<const anymaker::gc_vector_raw*>(static_cast<const uint8_t*>(def) + exoff::def_logic_nodes) : nullptr;
+    exhaust::Chain chain;
+    std::vector<int> outlets;
+    std::string text;
+    for (int32_t n : nodes) {
+        const LogicNodeRaw* ln = lv ? lv->at<LogicNodeRaw>(n) : nullptr;
+        auto nid = ln && anymaker::readable(ln, sizeof *ln) ? ln->id : anymaker::gc_string_view{};
+        if (nid.data && (nid.length <= 0 || nid.length > 64 || !anymaker::readable(nid.data, size_t(nid.length)))) nid = {};
+        int side = exhaust::node_side(nid.data, size_t(nid.length));
+        exhaust::Walk w = exhaust::walk(parts, links, me, n);
+        bool is_exhaust = side == 1 || (side == 0 && !w.intake && !w.outlets.empty());
+        char line[200];
+        std::snprintf(line, sizeof line, "%snode %d '%.*s' %s: %d parts, %zu outlets, %d turbos%s", text.empty() ? "" : "; ", n, int(nid.length), nid.data ? nid.data : "",
+                      is_exhaust ? "exhaust" : "air", w.parts, w.outlets.size(), w.chain.turbos, w.intake ? ", reaches the intake" : "");
+        text += line;
+        if (!is_exhaust) continue;
+        for (int k = 0; k < exhaust::kInlineCount; ++k) chain.count[k] += w.chain.count[k];
+        for (int k = 0; k < exhaust::kLookCount; ++k) chain.tips[k] += w.chain.tips[k];
+        chain.turbos += w.chain.turbos; chain.side_pipes += w.chain.side_pipes; chain.outlets += w.chain.outlets;
+        outlets.insert(outlets.end(), w.outlets.begin(), w.outlets.end());
+    }
+    v.chain = chain;
+    int count = std::min<int>(kMaxOutlets, int(outlets.size()));
+    for (int i = 0; i < kMaxOutlets; ++i) {
+        const void* part = i < count ? parts[size_t(outlets[size_t(i)])].handle : nullptr;
+        if (v.outlets[i].part != part) { release_effect(v.outlets[i].effect); v.outlets[i] = OutletVoice{}; v.outlets[i].part = part; }
+    }
+    v.outlet_count = count;
+    for (int k = 0; k < exhaust::kInlineCount; ++k)
+        if (chain.count[k]) text += std::string(", ") + std::to_string(chain.count[k]) + "x " + exhaust::kInlineNames[k];
+    for (int k = 0; k < exhaust::kLookCount; ++k)
+        if (chain.tips[k]) text += std::string(", ") + std::to_string(chain.tips[k]) + "x " + exhaust::kLookNames[k] + " tip";
+    if (text != v.chain_text) {                      // AVO dev build: what the engine's exhaust is, when it changes
+        static std::atomic<int> logs{64};
+        if (logs.fetch_sub(1) > 0)
+            log(0, "AVO exhaust engine %d: %d parts, %zu links, %d outlets (voices %d), ECU pops %.2f | %s", me, int(parts.size()), links.size(), int(outlets.size()), count,
+                v.ecu_crackle, text.empty() ? "no gas links" : text.c_str());
+        v.chain_text = text;
+    }
+}
+synth::Tune tuned(synth::Tune t, const exhaust::Chain& c, double ecu_crackle) {
+    exhaust::SoundTune s{t.pipe_hz, t.body_hz, t.rasp, t.muffler, t.crackle, t.intake, t.uneven, t.gain};
+    s = exhaust::apply(s, c, ecu_crackle);
+    t.pipe_hz = s.pipe_hz; t.body_hz = s.body_hz; t.rasp = s.rasp; t.muffler = s.muffler; t.crackle = s.crackle; t.intake = s.intake;
+    t.uneven = s.uneven; t.gain = s.gain;
+    return t;
+}
+// Places one voice (starts it when it has none); false when there is none to play into.
+bool place_voice(void*& effect, double* position, double* velocity, bool& placed, const double* p, double step, double now, double& retry_at) {
+    if (std::isfinite(p[0]) && std::isfinite(p[1]) && std::isfinite(p[2])) {
+        for (int i = 0; i < 3; ++i) {
+            double vel = placed ? (p[i] - position[i]) / step : 0.0;
+            vel = std::max(-150.0, std::min(150.0, vel));
+            velocity[i] += (vel - velocity[i]) * 0.2;
+            position[i] = p[i];
+        }
+        placed = true;
+    }
+    if (!placed) return false;
+    if (!effect) {
+        if (now < retry_at) return false;
+        int32_t group = audio::kGroupVehicle; double range = audio::kRange;
+        g_play_voice(&effect, &group, position, velocity, &range);
+        if (!effect) { retry_at = now + 1.0; return false; }
+    }
+    g_effect_place(&effect, position, velocity);
+    return true;
+}
+void append_pcm(void*& effect, const int16_t* pcm, int n) {
+    GameBuffer buffer{nullptr, 0, 0};
+    int32_t bytes = n * 2;
+    g_buffer_reset(&buffer, &bytes);
+    if (!buffer.data || buffer.size != bytes) return;
+    std::memcpy(buffer.data, pcm, size_t(bytes));
+    g_effect_append(&effect, &buffer);
+    if (buffer.data) { int32_t zero = 0; g_buffer_reset(&buffer, &zero); }
+}
+std::vector<int16_t> g_ex_pcm;
 
 void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const double* dt) {
     double now = now_seconds();
@@ -214,6 +383,7 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     in.layout = kind.layout;
     in.cylinders = cylinders(kind, extend_at(self, off::client_extend_z));
     in.tune = tune_of(decode(value, kind.layout), kind);
+    find_exhaust(self, v, now);
     // Firing: the game's power voice is audible.
     in.running = v.game_volume_seen ? v.game_volume > 0.001 : in.rps >= synth::kIdleRps;
     if (in.running != v.was_running) {
@@ -274,6 +444,25 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     if (want <= 0) return;
     int n = int(std::min<long long>(want, synth::kSampleRate / 5));
     g_pcm.resize(size_t(n));
+    if (v.outlet_count > 0) {                        // the exhaust at its outlets, the engine itself quieter and muffled
+        synth::Input ex = in;
+        ex.tune = tuned(in.tune, v.chain, v.ecu_crackle);
+        ex.tune.gain *= 1.0 / std::sqrt(double(v.outlet_count));
+        g_ex_pcm.resize(size_t(n));
+        synth::render(v.ex_synth, ex, g_ex_pcm.data(), n);
+        for (int i = 0; i < v.outlet_count; ++i) {
+            OutletVoice& o = v.outlets[i];
+            if (!o.part) continue;
+            double m[12]{};
+            g_world_transform(m, o.part);
+            double retry = 0;
+            if (place_voice(o.effect, o.position, o.velocity, o.placed, m + off::mat34_t / 8, step, now, retry)) append_pcm(o.effect, g_ex_pcm.data(), n);
+        }
+        in.tune.muffler = 1.0;
+        in.tune.crackle = 0.0;
+        in.tune.gain *= 0.4;
+        in.tune.intake = std::min(1.0, in.tune.intake * 1.3 + 0.1);
+    } else if (v.ecu_crackle >= 0) in.tune.crackle = std::max(in.tune.crackle, v.ecu_crackle);
     synth::render(v.synth, in, g_pcm.data(), n);
     GameBuffer buffer{nullptr, 0, 0};
     int32_t bytes = n * 2;

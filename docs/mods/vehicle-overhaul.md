@@ -22,6 +22,28 @@ next time you start the game. Each piece also starts on its own: if one cannot f
 others still work. Their lines in `anymaker_modding.log` keep their own tags (`turbo`, `rotary`, `dyno`,
 `enginesound`, `gpspart`, `anymoto`, `anycvt`).
 
+## In the 2.1 dev build (not released)
+
+Everything below is in the dev build only, for testing. Its lines in the log start with `AVO`.
+
+- **ECU** (`engine_ecu`): one per vehicle tunes every engine on it. Open its panel with **F9** near it (Up/Down picks
+  a row, Left/Right changes it, Shift moves 4 steps). The rows are rev limit, launch RPM, launch (two-step), boost
+  target, ignition timing, fuel trim, pops and antilag. Every row is also a data input, and a wired input that is not 0
+  wins over the panel. Its outputs are rpm, boost psi, knock, power scale and knock limit (see `native/ecu_logic.h`).
+- **Built Rotary** (`built_rotary_engine`): the rotary's knock limit now drops a little with each rotor.
+- **Exhaust tips**: Street, Race and Classic looks, each as a single, dual, quad or side pipe
+  (`exhaust_tip_<look>_<layout>`). A tip is a vent. The engine's exhaust sound plays from it.
+- **Inline exhaust parts**: chambered, straight-through, glasspack and turbo mufflers, inline and Helmholtz
+  resonators, a catalytic converter, and equal and unequal header collectors. Exhaust goes in the back and out the
+  front. Each part has its own backpressure. Headers on the exhaust manifold add 4 % (equal) or 3 % (unequal) power.
+- **Intake parts** for naturally aspirated engines: a velocity stack, ITBs and a muscle carb. They go on the air
+  manifold.
+- **Exhaust sound**: EngineSound follows the pipes from the engine to its outlets. It plays the exhaust from each tip
+  or stock vent, and the parts on the way set its tone. The engine itself keeps a quieter voice. See
+  `native/exhaust_logic.h`.
+
+The looks of the ECU, the intake parts, the turbo muffler, the resonators, the cat and the headers are placeholders.
+
 ## Upgrading from AnyEngineParts, AnyMoto or AnyCVT
 
 - **In the manager (1.5.0 or newer):** AnyVehicleOverhaul shows as an update while `AnyEngineParts.dll`,

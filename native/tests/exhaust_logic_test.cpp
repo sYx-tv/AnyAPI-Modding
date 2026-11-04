@@ -12,7 +12,7 @@ static void fits(const pdmesh::Mesh& m, const Box& b, const char* what) {
     for (auto& v : m.v) {
         bool ok = v.pos[0] >= b.x0 * 0.08 - h - slack && v.pos[0] <= b.x1 * 0.08 + h + slack && v.pos[1] >= b.y0 * 0.08 - h - slack &&
                   v.pos[1] <= b.y1 * 0.08 + h + slack && v.pos[2] >= b.z0 * 0.08 - h - slack && v.pos[2] <= b.z1 * 0.08 + h + slack;
-        if (!ok) { std::printf("%s: vertex (%.3f %.3f %.3f) outside its cells\n", what, v.pos[0], v.pos[1], v.pos[2]); assert(false); }
+        if (!ok) { std::fflush(stdout); std::fprintf(stderr, "%s: vertex (%.3f %.3f %.3f) outside its cells\n", what, v.pos[0], v.pos[1], v.pos[2]); assert(false); }
     }
 }
 int main() {
@@ -55,7 +55,37 @@ int main() {
     std::string e = entries(true);
     int depth = 0, objects = 0;
     for (char c : e) { if (c == '{' || c == '[') ++depth; if (c == '}' || c == ']') --depth; assert(depth >= 0); if (c == '{' && depth == 1) ++objects; }
-    assert(depth == 0 && objects == int(kLookCount) * int(kLayoutCount) + int(kInlineCount));
+    assert(depth == 0 && objects == int(kLookCount) * int(kLayoutCount) + int(kInlineCount) + int(kIntakeCount));
+    // the walk: engine 1 (node 0 air, node 1 exhaust) -> header 2 -> junction 3 -> turbo 4 hot side -> cat 5 -> muffler 6 -> dual tip 7
+    //   and junction 3 -> stock vent 8; the air side: engine node 0 -> turbo 4 compressor (node 1)
+    std::vector<Part> parts = {{1, kEngine}, {2, kInlinePart, kHeaderUnequal}, {3, kPass}, {4, kTurbo}, {5, kInlinePart, kCat},
+                               {6, kInlinePart, kStraight}, {7, kTip, kRace, kDual}, {8, kVent}};
+    std::vector<Link> links = {{1, 1, 2, 0}, {2, 1, 3, 0}, {3, 1, 4, kTurboHotIn}, {4, kTurboHotOut, 5, 0}, {5, 1, 6, 0}, {6, 1, 7, 0}, {3, 2, 8, 0},
+                               {1, 0, 4, 1}};
+    Walk ex = walk(parts, links, 1, 1);
+    assert(!ex.intake && ex.chain.turbos == 1 && ex.chain.has(kCat) && ex.chain.has(kStraight) && ex.chain.has(kHeaderUnequal));
+    assert(ex.outlets.size() == 2 && ex.chain.tips[kRace] == 1 && ex.chain.any());
+    Walk air = walk(parts, links, 1, 0);
+    assert(air.intake && air.outlets.empty());
+    int sub = 0, lay = 0;
+    assert(role_of("turbocharger_6", 14, "gas_pump_centrifugal", 20, &sub, &lay) == kTurbo);
+    assert(role_of("turbo_air_filter", 16, "gas_vent", 8, &sub, &lay) == kAirFilter);
+    assert(role_of("exhaust_tip_classic_quad", 24, "gas_vent", 8, &sub, &lay) == kTip && sub == kClassic && lay == kQuad);
+    assert(role_of("gas_vent_a", 10, "gas_vent", 8, &sub, &lay) == kVent);
+    assert(node_side("exhaust", 7) == 1 && node_side("air", 3) == -1 && node_side("", 0) == 0);
+    Chain stock; stock.outlets = 2; stock.turbos = 1;
+    assert(!stock.any());
+    // intake parts
+    for (int k = 0; k < kIntakeCount; ++k) {
+        assert(intake_from_id(kIntakeIds[k], std::strlen(kIntakeIds[k])) == k);
+        fits(exmesh::intake_part(k), intake_box(k), kIntakeIds[k]);
+        assert(role_of(kIntakeIds[k], std::strlen(kIntakeIds[k]), "gas_vent", 8, &sub, &lay) == kIntakePart);
+    }
+    int stack[kIntakeCount] = {1, 0, 0}, itb[kIntakeCount] = {0, 1, 0}, nothing[kIntakeCount] = {};
+    assert(near(intake_power(stack, 6000), 1.05) && near(intake_power(stack, 2000), 0.98) && intake_power(stack, 4000) > 1.0);
+    assert(near(intake_power(itb, 2000), 1.04) && near(intake_power(nothing, 6000), 1.0));
+    { std::vector<Part> p2 = {{1, kEngine}, {2, kIntakePart, kCarb}}; std::vector<Link> l2 = {{1, 0, 2, 0}};
+      Walk w2 = walk(p2, l2, 1, 0); assert(w2.intake && w2.outlets.empty()); }
     std::printf("exhaust_logic ok\n");
     return 0;
 }

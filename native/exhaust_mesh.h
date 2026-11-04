@@ -175,4 +175,27 @@ inline Mesh inline_part(int k) {
     return m;
 }
 
+// ------------------------------------------------------------------------------------- intake parts (dev placeholders)
+enum Intake { kVelocityStack, kItb, kCarb };
+inline Mesh intake_part(int k) {
+    Mesh m;
+    inlet(m, -0.040, -0.024, kAlum);
+    if (k == kVelocityStack) {                       // polished trumpet with a rolled lip
+        tube(m, 0, 0, {{-0.024, 0.024, pdmesh::kPolish}, {0.04, 0.026, pdmesh::kPolish}, {0.08, 0.032, pdmesh::kPolish}, {0.1, 0.04, pdmesh::kPolish}, {0.11, 0.046, pdmesh::kPolish},
+                       {0.115, 0.05, kChrome}, {0.118, 0.046, kChrome}});
+    } else if (k == kItb) {                          // black throttle body with its shaft, a short alloy stack
+        m.prism(2, pdmesh::rounded(-0.034, -0.034, 0.034, 0.034, 0.008, 4), -0.024, 0.03, kBlack);
+        m.prism(0, pdmesh::circle(0, 0.003, 0.006, 10), -0.04, 0.04, kAlum);
+        tube(m, 0, 0, {{0.03, 0.026, kAlum}, {0.08, 0.03, kAlum}, {0.105, 0.04, kAlum}, {0.11, 0.043, kChrome}});
+    } else {                                         // carb body on the pipe, a big round chrome-lidded filter on top
+        tube(m, 0, 0, {{-0.024, 0.024, kAlum}, {0.0, 0.024, kAlum}});
+        m.prism(2, pdmesh::rounded(-0.05, -0.035, 0.05, 0.1, 0.01, 4), 0.0, 0.14, kGold);
+        m.prism(1, pdmesh::circle(0, 0.08, 0.112, 40), 0.1, 0.112, kBlack);
+        m.prism(1, pdmesh::circle(0, 0.08, 0.108, 40), 0.112, 0.16, kMufflerGrey);
+        m.prism(1, pdmesh::circle(0, 0.08, 0.112, 40), 0.16, 0.172, kChrome);
+        m.prism(1, pdmesh::circle(0, 0.08, 0.012, 12), 0.172, 0.185, kChrome);   // the wing nut
+    }
+    return m;
+}
+
 }  // namespace exmesh

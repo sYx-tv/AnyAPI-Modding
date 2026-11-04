@@ -17,7 +17,9 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <cctype>
 #include <string>
+#include <vector>
 
 namespace exhaust {
 
@@ -82,9 +84,10 @@ struct Chain {
     int turbos = 0;
     int tips[kLookCount]{};          // tips of each look (stock vents count as none)
     int side_pipes = 0, outlets = 0;
+    // Parts that change the sound: our inline parts or tips (stock vents and a turbo alone keep the preset).
     bool any() const {
-        if (turbos || outlets) return true;
         for (int c : count) if (c) return true;
+        for (int t : tips) if (t) return true;
         return false;
     }
     bool has(int k) const { return count[k] > 0; }
@@ -123,6 +126,110 @@ inline SoundTune apply(SoundTune t, const Chain& c, double ecu_crackle) {
     if (c.turbos) pop *= 0.6;
     t.crackle = std::clamp(std::max(pop, ecu_crackle), 0.0, 1.0);
     return t;
+}
+
+// ------------------------------------------------------------------------------------- intake parts (batch 5)
+// Open intakes for a naturally aspirated engine's air manifold (class gas_vent: they draw outside air like the stock
+// vent). Put on a boost pipe they would leak the boost, like any vent. What they do, on the game's power:
+//   Velocity stack  +5 % above 5000 rpm (the ram effect), -2 % under 3000.
+//   ITBs            +4 % and the throttle answers sharper (individual throttle bodies).
+//   Muscle carb     +2 %, a big round filter and a loud intake roar.
+enum Intake { kVelocityStack, kItb, kCarb, kIntakeCount };
+inline constexpr const char* kIntakeIds[kIntakeCount] = {"intake_velocity_stack", "intake_itb", "intake_carb_muscle"};
+inline constexpr const char* kIntakeNames[kIntakeCount] = {"Velocity Stack", "Individual Throttle Bodies", "Muscle Carb"};
+inline int intake_from_id(const char* id, size_t n) {
+    for (int k = 0; k < kIntakeCount; ++k)
+        if (id && std::strlen(kIntakeIds[k]) == n && std::memcmp(kIntakeIds[k], id, n) == 0) return k;
+    return -1;
+}
+// Power over stock from the intake parts on an engine's air manifold (`count` of each kind; the best one counts).
+inline double intake_power(const int* count, double rpm) {
+    double best = 1.0;
+    if (count[kItb]) best = std::max(best, 1.04);
+    if (count[kCarb]) best = std::max(best, 1.02);
+    if (count[kVelocityStack]) {
+        double stack = rpm >= 5000 ? 1.05 : rpm <= 3000 ? 0.98 : 0.98 + 0.07 * (rpm - 3000) / 2000;
+        best = count[kItb] || count[kCarb] ? std::max(best, stack) : stack;
+    }
+    return best;
+}
+// ------------------------------------------------------------------------------------- the client's walk along the pipes
+// What each part on the vehicle is to the walk, from its definition id and class.
+enum Role { kPass, kTip, kInlinePart, kTurbo, kVent, kAirFilter, kEngine, kIntakePart };
+struct Part { int32_t id = 0; int role = kPass; int sub = 0; int layout = 0; const void* handle = nullptr; };
+struct Link { int32_t c0, n0, c1, n1; };
+// Turbo nodes (turbo_logic.h Node): 0 and 1 the compressor, 2 and 3 the hot side.
+constexpr int kTurboHotIn = 2, kTurboHotOut = 3;
+struct Walk {
+    Chain chain;
+    std::vector<int> outlets;        // indexes into parts: tips and stock vents, in the order found
+    bool intake = false;             // it reached a compressor or an air filter: this is the engine's air side
+    int parts = 0;                   // parts passed
+};
+inline int role_of(const char* id, size_t n, const char* cls, size_t cn, int* sub, int* layout) {
+    auto is = [&](const char* want) { return std::strlen(want) == cn && std::memcmp(cls, want, cn) == 0; };
+    int look = 0, lay = 0;
+    if (id && tip_from_id(id, n, &look, &lay)) { *sub = look; *layout = lay; return kTip; }
+    int k = id ? inline_from_id(id, n) : -1;
+    if (k >= 0) { *sub = k; return kInlinePart; }
+    if (id && n >= 13 && std::memcmp(id, "turbocharger_", 13) == 0) return kTurbo;   // turbocharger_3, turbocharger_6
+    if (id && n >= 16 && std::memcmp(id, "turbo_air_filter", 16) == 0) return kAirFilter;
+    if (id && intake_from_id(id, n) >= 0) { *sub = intake_from_id(id, n); return kIntakePart; }
+    // blow-off valves, wastegates, intercoolers, superchargers: the gas goes on through them
+    if (cls && (is("gas_vent") || is("gas_vent_b"))) return kVent;
+    if (cls && cn >= 6 && std::memcmp(cls, "engine", 6) == 0) return kEngine;
+    return kPass;
+}
+// Walks from one engine node along the pipes to its outlets.
+inline Walk walk(const std::vector<Part>& parts, const std::vector<Link>& links, int32_t engine, int32_t node) {
+    Walk w;
+    auto index_of = [&](int32_t id) { for (size_t i = 0; i < parts.size(); ++i) if (parts[i].id == id) return int(i); return -1; };
+    std::vector<std::pair<int32_t, int32_t>> todo{{engine, node}};   // (component, node) the gas leaves from
+    std::vector<int32_t> seen{engine};
+    auto visited = [&](int32_t c) { for (int32_t s : seen) if (s == c) return true; return false; };
+    while (!todo.empty() && w.parts < 256) {
+        auto [c, n] = todo.back(); todo.pop_back();
+        for (const Link& l : links) {
+            int32_t to = -1, at_node = -1;
+            if (l.c0 == c && l.n0 == n) { to = l.c1; at_node = l.n1; }
+            else if (l.c1 == c && l.n1 == n) { to = l.c0; at_node = l.n0; }
+            if (to < 0 || visited(to)) continue;
+            seen.push_back(to);
+            ++w.parts;
+            int i = index_of(to);
+            int role = i >= 0 ? parts[size_t(i)].role : kPass;
+            switch (role) {
+                case kTip: w.outlets.push_back(i); ++w.chain.outlets; ++w.chain.tips[parts[size_t(i)].sub];
+                    if (parts[size_t(i)].layout == kSide) ++w.chain.side_pipes; continue;
+                case kVent: w.outlets.push_back(i); ++w.chain.outlets; continue;
+                case kAirFilter: case kIntakePart: w.intake = true; continue;
+                case kEngine: continue;
+                case kTurbo:
+                    if (at_node != kTurboHotIn && at_node != kTurboHotOut) { w.intake = true; continue; }
+                    ++w.chain.turbos;
+                    todo.push_back({to, at_node == kTurboHotIn ? kTurboHotOut : kTurboHotIn});
+                    continue;
+                case kInlinePart:
+                    ++w.chain.count[parts[size_t(i)].sub];
+                    todo.push_back({to, at_node == 0 ? 1 : 0});
+                    continue;
+            }
+            // a pipe junction, a tank, a valve: on through every other node it has
+            for (const Link& m : links) {
+                if (m.c0 == to && m.n0 != at_node) todo.push_back({to, m.n0});
+                if (m.c1 == to && m.n1 != at_node) todo.push_back({to, m.n1});
+            }
+        }
+    }
+    return w;
+}
+// Which side of the engine a node is, from its definition id: 1 exhaust, -1 air, 0 not known.
+inline int node_side(const char* id, size_t n) {
+    std::string s(id ? id : "", id ? n : 0);
+    for (char& ch : s) ch = char(std::tolower((unsigned char)ch));
+    if (s.find("exhaust") != std::string::npos) return 1;
+    if (s.find("air") != std::string::npos || s.find("intake") != std::string::npos) return -1;
+    return 0;
 }
 
 // ------------------------------------------------------------------------------------- part definitions
@@ -231,6 +338,36 @@ inline std::string inline_entry(int k, const std::string& mesh) {
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
         "    }";
 }
+inline Box intake_box(int k) { return k == kCarb ? Box{-1, 0, 0, 1, 2, 2} : Box{-1, -1, 0, 1, 1, 1}; }
+inline std::string intake_entry(int k, const std::string& mesh) {
+    Box b = intake_box(k);
+    static constexpr const char* kText[kIntakeCount] = {
+        "Velocity stack: a flared open intake for a naturally aspirated engine. Pipe its back to the air manifold. About 5 % more power above "
+        "5000 rpm, a little less under 3000. Not for a boost pipe (it would leak the boost).",
+        "Individual throttle bodies: an open throttle body and short stack for a naturally aspirated engine. Pipe its back to the air manifold. "
+        "About 4 % more power. Not for a boost pipe.",
+        "Muscle carb with a big round air filter, for a naturally aspirated engine. Pipe its back to the air manifold. About 2 % more power "
+        "and a loud intake roar. Not for a boost pipe."};
+    return std::string("    {\n") +
+        "      \"id\": \"" + kIntakeIds[k] + "\",\n" +
+        "      \"name\": \"" + kIntakeNames[k] + "\",\n" +
+        "      \"description\": \"" + kText[k] + "\",\n" +
+        "      \"class\": \"gas_vent\",\n" +
+        "      \"zones\": [" + box_json(b) + "],\n" +
+        "      \"interaction_zones\": [],\n" +
+        "      \"surfaces\": [" + mounts(b).substr(2) + "],\n" +
+        "      \"logic_nodes\": [{\"pos\": [0, 0, 0], \"direction\": 4, \"type\": \"gas\"}],\n" +
+        "      \"mesh_static\": {\"mesh_path\": \"" + mesh + "\"},\n" +
+        "      \"meshes_dynamic\": [],\n" +
+        "      \"category\": \"gas\",\n" +
+        "      \"inspection_geometry\": [{\"p0\": [" + std::to_string(b.x0) + ".0, " + std::to_string(b.y0) + ".0, 0.0], \"p1\": [" + std::to_string(b.x1) + ".0, " +
+            std::to_string(b.y1) + ".0, " + std::to_string(b.z1) + ".0]}],\n" +
+        "      \"data_descriptors\": [],\n" +
+        loot() +
+        "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]],\n" +
+        "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
+        "    }";
+}
 // Every exhaust part's entry (without the file's braces), with the given meshes (empty: a stock look).
 inline std::string entries(bool meshes) {
     std::string out;
@@ -239,6 +376,8 @@ inline std::string entries(bool meshes) {
             out += (out.empty() ? "" : ",\n") + tip_entry(l, y, meshes ? mesh_path_tip(l, y) : "meshes/components/gas_port_b.mesh");
     for (int k = 0; k < kInlineCount; ++k)
         out += ",\n" + inline_entry(k, meshes ? mesh_path_inline(k) : "meshes/components/turbo_a.mesh");
+    for (int k = 0; k < kIntakeCount; ++k)
+        out += ",\n" + intake_entry(k, meshes ? std::string("meshes/components/") + kIntakeIds[k] + ".mesh" : "meshes/components/gas_port_b.mesh");
     return out;
 }
 
