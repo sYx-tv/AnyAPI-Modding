@@ -34,8 +34,11 @@ Everything below is in the dev build only, for testing. Its lines in the log sta
 - **Exhaust tips**: Street, Race and Classic looks, each as a single, dual, quad or side pipe
   (`exhaust_tip_<look>_<layout>`). A tip is a vent. The engine's exhaust sound plays from it.
 - **Inline exhaust parts**: chambered, straight-through, glasspack and turbo mufflers, inline and Helmholtz
-  resonators, a catalytic converter, and equal and unequal header collectors. Exhaust goes in the back and out the
-  front. Each part has its own backpressure. Headers on the exhaust manifold add 4 % (equal) or 3 % (unequal) power.
+  resonators and a catalytic converter. Exhaust goes in the back and out the front. Each part has its own backpressure.
+- **Race headers** (`header_2_1` to `header_6_1`): equal-length 2-1 to 6-1 headers. Snap a gas port onto each flange
+  input (one per primary, on the back face) and onto the collector outlet (front face, small or large), and pipe each
+  exhaust manifold to an input. Stretch the length (up to 10 more cells): every primary gains the same length. On an
+  engine's exhaust it adds about 4 % power.
 - **Intake parts** for naturally aspirated engines: a velocity stack, ITBs and a muscle carb. They go on the air
   manifold.
 - **Exhaust sound**: EngineSound follows the pipes from the engine to its outlets. It plays the exhaust from each tip

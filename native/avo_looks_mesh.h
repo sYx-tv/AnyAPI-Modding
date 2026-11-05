@@ -490,69 +490,80 @@ inline Mesh air_filter(bool large, int look) {
 
 
 // ------------------------------------------------------------------------------------- race headers (N into 1)
-// n primaries (2-6), equal length. Inputs in a row along x on the back face (z cell 0, the z- face), one per x cell at
-// y cell 0; they loop up and merge in a collector on the front face (z cell kHeaderLength-1), centred on x, at y
-// kHeaderOutY. Looks: 0 polished stainless, 1 ceramic coated, 2 burnt titanium.
+// n primaries (2-6), equal length. Inputs in a row along x on the back face (the z- face of z cell 0), one per x cell
+// at y cell 0; they loop up, run straight and parallel across the length's stretch plane (so stretching the part adds
+// the same length to every primary), and merge in a collector whose large outlet sits on the front face (z cell
+// kHeaderLength-1), centred on the corner of x cells n/2-1 and n/2 and y cells 0 and 1 (a large pipe centres on a cell
+// corner). Looks: 0 polished stainless, 1 ceramic coated, 2 burnt titanium.
 constexpr int kHeaderLength = 5;
-inline double header_out_x(int n) { return (n - 1) * kCell / 2; }
-constexpr double kHeaderOutY = kH;   // between y cells 0 and 1: a large pipe centres there
+constexpr double kHeaderStretch = 2.0;                 // the length's stretch plane, in cells (z 0.16 m)
+inline double header_out_x(int n) { return (n / 2) * kCell - kH; }
+constexpr double kHeaderOutY = kH;
 inline Mesh header(int n, int look) {
     Mesh m;
     n = std::clamp(n, 2, 6);
-    const double z0 = -kH, z1 = kHeaderLength * kCell - kH, pr = 0.017;
-    const double xc = header_out_x(n), yc = kHeaderOutY, zm = z1 - 0.11, rc = n <= 2 ? 0.015 : 0.012 + 0.0045 * n;
-    Rgb tube = look == 1 ? kCeramic : look == 2 ? Rgb{170, 160, 150} : kPolish;
-    Rgb flange = look == 1 ? Rgb{120, 120, 118} : look == 2 ? kSatin : kSatin;
+    const double z0 = -kH, z1 = kHeaderLength * kCell - kH, pr = 0.017, plane = kHeaderStretch * kCell;
+    const double za = plane - 0.03, zb = plane + 0.03, zm = z1 - 0.1;
+    const double xc = header_out_x(n), yc = kHeaderOutY, rc = n <= 2 ? 0.018 : 0.012 + 0.0045 * n;
+    const Rgb straw{186, 170, 140};
     // the head flange: one plate across every port, bolts between them
     m.prism(2, rounded(-kH + 0.004, -kH + 0.004, (n - 1) * kCell + kH - 0.004, kH - 0.004, 0.006, 3), z0, z0 + 0.007, kP1, false);
     for (int i = 0; i <= n; ++i) {
-        double bx = (i - 0.5) * kCell;
-        if (i == 0) bx = -kH + 0.009; else if (i == n) bx = (n - 1) * kCell + kH - 0.009;
+        double bx = i == 0 ? -kH + 0.009 : i == n ? (n - 1) * kCell + kH - 0.009 : (i - 0.5) * kCell;
         for (double by : {-kH + 0.008, kH - 0.008}) pdmesh::bolt(m, 2, bx, by, z0 + 0.007, 1, 0.0032, kPolish);
     }
-    // primaries: straight paths differ in length, so the shorter (inner) ones loop higher to match the longest
-    std::vector<std::vector<V3>> paths(n);
-    double longest = 0;
-    auto build = [&](int i, double lift) {
-        // round the collector in x order, alternating above and below, so no two primaries cross
-        double xi = i * kCell, u = -1 + 2 * (i + 0.5) / n, v = std::sqrt(std::max(0.0, 1 - u * u)) * (i % 2 ? 1 : -1);
-        V3 end{xc + rc * u, yc + rc * v, zm};
+    auto smooth = [](V3 a, V3 b, double bulge, int steps, bool ease_in, double wiggle = 0) {
         std::vector<V3> p;
-        const int steps = 18;
         for (int k = 0; k <= steps; ++k) {
             double t = double(k) / steps, e = t * t * (3 - 2 * t);
-            V3 q{xi + (end.x - xi) * e, 0.0 + (end.y - 0.0) * e, z0 + 0.006 + (end.z - z0 - 0.006) * t};
-            q.y += (0.035 + lift) * std::sin(kPi * std::min(1.0, t * 1.25));        // the loop up over the flange
+            V3 q{a.x + (b.x - a.x) * e, a.y + (b.y - a.y) * e, a.z + (b.z - a.z) * t};
+            q.y += bulge * std::sin(kPi * t) * (ease_in ? 1.0 : 0.0);
+            q.x += wiggle * std::sin(2 * kPi * t);
             p.push_back(q);
         }
         return p;
     };
     auto length = [](const std::vector<V3>& p) { double l = 0; for (size_t k = 1; k < p.size(); ++k) { V3 d = p[k] - p[k - 1]; l += std::sqrt(pdmesh::dot(d, d)); } return l; };
-    for (int i = 0; i < n; ++i) { paths[i] = build(i, 0); longest = std::max(longest, length(paths[i])); }
+    // where each primary runs straight (a bundle, two rows from 3 up) and where it ends on the collector's ring
+    auto bundle = [&](int i) {
+        double pitch = n == 2 ? 0.038 : 0.019;
+        return V3{xc + (i - (n - 1) / 2.0) * pitch, n == 2 ? yc : yc + (i % 2 ? 0.02 : -0.02), 0.0};
+    };
+    auto ring = [&](int i) {
+        double u = -1 + 2 * (i + 0.5) / n, v = std::sqrt(std::max(0.0, 1 - u * u)) * (i % 2 ? 1 : -1);
+        return V3{xc + rc * u, yc + rc * v, zm};
+    };
+    // lift raises the loop over the flange; past kMaxLift (the part's top) an S-bend sideways adds the rest
+    const double kMaxLift = 0.04;
+    auto path = [&](int i, double lift) {
+        V3 b = bundle(i), s{i * kCell, 0.0, z0 + 0.01}, a{b.x, b.y, za}, c{b.x, b.y, zb};
+        std::vector<V3> p = smooth(s, a, 0.022 + std::min(lift, kMaxLift), 24, true, std::max(0.0, lift - kMaxLift));
+        std::vector<V3> q = smooth(c, ring(i), 0, 8, false);
+        p.insert(p.end(), q.begin(), q.end());   // a -> c is the straight run across the stretch plane
+        return p;
+    };
+    double longest = 0;
+    for (int i = 0; i < n; ++i) longest = std::max(longest, length(path(i, 0)));
     for (int i = 0; i < n; ++i) {
-        double lift = 0;
-        for (int it = 0; it < 20 && length(build(i, lift)) < longest - 0.001; ++it) lift += 0.004;
-        paths[i] = build(i, std::min(lift, kCell * 2 - 0.08));
-    }
-    for (int i = 0; i < n; ++i) {
-        std::vector<double> r(paths[i].size(), pr);
-        std::vector<Rgb> c(paths[i].size(), kP0);
+        double lo = 0, hi = 0.12;                                          // the loop height that makes it the longest's length
+        for (int it = 0; it < 30; ++it) { double mid = (lo + hi) / 2; (length(path(i, mid)) < longest ? lo : hi) = mid; }
+        std::vector<V3> p = path(i, lo);
+        std::vector<double> r(p.size(), pr);
+        std::vector<Rgb> c(p.size(), kP0);
         if (look == 2)                                                     // heat colours: gold at the flange, blue, then straw
-            for (size_t k = 0; k < c.size(); ++k) {
-                double t = double(k) / (c.size() - 1);
-                c[k] = t < 0.3 ? kHeatGold : t < 0.65 ? kHeatBlue : Rgb{186, 170, 140};
-            }
-        sweep(m, paths[i], r, c, 16);
+            for (size_t k = 0; k < c.size(); ++k) { double t = double(k) / (c.size() - 1); c[k] = t < 0.3 ? kHeatGold : t < 0.6 ? kHeatBlue : straw; }
+        sweep(m, p, r, c, 16);
         bore(m, 2, i * kCell, 0, z0, 0.014, -1);
     }
     // collector: the merge cone, its slip-joint collar and the outlet with a V-band
-    double rout = n >= 4 ? 0.036 : 0.03;
-    loft(m, 2, {{zm - 0.004, circle(xc, yc, rc + pr * 1.05, 32)}, {zm + 0.05, circle(xc, yc, rout, 32)}, {z1 - 0.012, circle(xc, yc, rout, 32)}}, look == 2 ? Rgb{186, 170, 140} : kP0);
+    double rout = kLargePipe * 1.08;
+    Rgb col = look == 2 ? straw : kP0;
+    loft(m, 2, {{zm - 0.004, circle(xc, yc, rc + pr * 1.05, 32)}, {zm + 0.045, circle(xc, yc, rout, 32)}, {z1 - 0.012, circle(xc, yc, rout, 32)}}, col);
     rod(m, 2, xc, yc, zm + 0.004, zm + 0.012, rc + pr * 1.12, kP1, 32);
-    rod(m, 2, xc, yc, z1 - 0.012, z1 - 0.002, rout * 1.12, kSteel, 32);
-    pdmesh::bolt(m, 1, xc, z1 - 0.007, yc + rout * 1.12, 1, 0.003, kPolish);
-    bore(m, 2, xc, yc, z1, rout * 0.8, 1);
-    (void)tube; (void)flange;
+    rod(m, 2, xc, yc, z1 - 0.012, z1 - 0.002, rout * 1.1, kSteel, 32);
+    pdmesh::bolt(m, 1, xc, z1 - 0.007, yc + rout * 1.1, 1, 0.003, kPolish);
+    bore(m, 2, xc, yc, z1, rout * 0.85, 1);
     return m;
 }
+
 }  // namespace avolook

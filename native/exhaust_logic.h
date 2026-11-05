@@ -368,6 +368,56 @@ inline std::string intake_entry(int k, const std::string& mesh) {
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
         "    }";
 }
+// Race headers (Nate 2026-11-05): equal-length N into 1, 2-1 to 6-1. A gas tank like the intercooler (gas ports snap
+// onto it): one port face per primary on the head flange (the back face, z cell 0, one per x cell at y 0) and the
+// collector's 2x2 outlet face on the front, centred on the corner of x cells n/2-1, n/2 and y cells 0, 1 (a large
+// pipe; a small one snaps on there too). The length stretches (up to kHeaderMaxExtend more cells): every primary
+// runs straight across the stretch plane, so each gains the same length (avo_looks_mesh.h header()). On an engine's
+// exhaust manifold island it gives the equal-length header power (header_power).
+constexpr int kHeaderMin = 2, kHeaderMax = 6, kHeaderLen = 5, kHeaderMaxExtend = 10;
+constexpr double kHeaderStretchCells = 2.0;
+inline std::string header_id(int n) { return "header_" + std::to_string(n) + "_1"; }
+inline int header_from_id(const char* id, size_t n) {
+    if (!id || n != 10 || std::memcmp(id, "header_", 7) != 0 || std::memcmp(id + 8, "_1", 2) != 0) return 0;
+    int k = id[7] - '0';
+    return k >= kHeaderMin && k <= kHeaderMax ? k : 0;
+}
+inline std::string header_entry(int n, const std::string& mesh) {
+    std::string surfaces;
+    auto add = [&](const std::string& s) { surfaces += (surfaces.empty() ? "" : ", ") + s; };
+    for (int i = 0; i < n; ++i)
+        add("{\"pos\": [" + std::to_string(i) + ", 0, 0], \"size\": [1, 1], \"dir\": 4, \"gender\": 2, \"type\": \"port\"}");
+    add("{\"pos\": [" + std::to_string(n / 2 - 1) + ", 0, " + std::to_string(kHeaderLen - 1) + "], \"size\": [2, 2], \"dir\": 5, \"gender\": 2, \"type\": \"port\"}");
+    Box b{0, 0, 0, n - 1, 1, kHeaderLen - 1};
+    surfaces += mounts(b);
+    std::string description = std::to_string(n) + "-1 equal-length race header. Snap a gas port onto each of its " + std::to_string(n) +
+        " flange inputs and pipe each to an exhaust manifold, and a gas port onto the collector outlet (small or large). Stretch it longer: every "
+        "primary stays the same length. On the engine's exhaust it gives about 4 % more power and a smooth note.";
+    return std::string("    {\n") +
+        "      \"id\": \"" + header_id(n) + "\",\n" +
+        "      \"name\": \"Race Header " + std::to_string(n) + "-1\",\n" +
+        "      \"description\": \"" + description + "\",\n" +
+        "      \"class\": \"gas_tank\",\n" +
+        "      \"zones\": [" + box_json(b) + "],\n" +
+        "      \"interaction_zones\": [],\n" +
+        "      \"surfaces\": [" + surfaces + "],\n" +
+        "      \"logic_nodes\": [],\n" +
+        "      \"mesh_static\": {\"mesh_path\": \"" + mesh + "\"},\n" +
+        "      \"meshes_dynamic\": [],\n" +
+        "      \"mode_z\": \"stretch\",\n" +
+        "      \"interval\": [0, 0, 1],\n" +
+        "      \"ext_max\": [0, 0, " + std::to_string(kHeaderMaxExtend) + "],\n" +
+        "      \"center_stretch\": [0.0, 0.0, " + std::to_string(kHeaderStretchCells).substr(0, 3) + "],\n" +
+        "      \"category\": \"gas\",\n" +
+        "      \"tags_generated\": \"port,\",\n" +
+        "      \"inspection_geometry\": [{\"p0\": [0.0, 0.0, 0.0], \"p1\": [" + std::to_string(n - 1) + ".0, 1.0, " + std::to_string(kHeaderLen - 1) + ".0]}],\n" +
+        "      \"density\": 400.0,\n" +
+        "      \"mateable_port_types\": 10,\n" +
+        "      \"data_descriptors\": [],\n" +
+        loot() +
+        "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]]\n" +
+        "    }";
+}
 // Every exhaust part's entry (without the file's braces), with the given meshes (empty: a stock look).
 inline std::string entries(bool meshes) {
     std::string out;
@@ -375,7 +425,10 @@ inline std::string entries(bool meshes) {
         for (int y = 0; y < kLayoutCount; ++y)
             out += (out.empty() ? "" : ",\n") + tip_entry(l, y, meshes ? mesh_path_tip(l, y) : "meshes/components/gas_port_b.mesh");
     for (int k = 0; k < kInlineCount; ++k)
-        out += ",\n" + inline_entry(k, meshes ? mesh_path_inline(k) : "meshes/components/turbo_a.mesh");
+        if (k != kHeaderEqual && k != kHeaderUnequal)   // the old placeholder collectors: the race headers replace them
+            out += ",\n" + inline_entry(k, meshes ? mesh_path_inline(k) : "meshes/components/turbo_a.mesh");
+    for (int n = kHeaderMin; n <= kHeaderMax; ++n)
+        out += ",\n" + header_entry(n, meshes ? "meshes/components/" + header_id(n) + ".mesh" : "meshes/components/radiator_a_0_0_0.mesh");
     for (int k = 0; k < kIntakeCount; ++k)
         out += ",\n" + intake_entry(k, meshes ? std::string("meshes/components/") + kIntakeIds[k] + ".mesh" : "meshes/components/gas_port_b.mesh");
     return out;

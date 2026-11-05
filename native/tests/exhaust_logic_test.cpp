@@ -1,6 +1,7 @@
 // Exhaust parts (exhaust_logic.h, exhaust_mesh.h): ids, flow, sound tune and that every mesh fits its part's cells.
 #include "../exhaust_logic.h"
 #include "../exhaust_mesh.h"
+#include "../avo_looks_mesh.h"
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -55,7 +56,26 @@ int main() {
     std::string e = entries(true);
     int depth = 0, objects = 0;
     for (char c : e) { if (c == '{' || c == '[') ++depth; if (c == '}' || c == ']') --depth; assert(depth >= 0); if (c == '{' && depth == 1) ++objects; }
-    assert(depth == 0 && objects == int(kLookCount) * int(kLayoutCount) + int(kInlineCount) + int(kIntakeCount));
+    assert(depth == 0 && objects == int(kLookCount) * int(kLayoutCount) + int(kInlineCount) - 2 + int(kIntakeCount) + (kHeaderMax - kHeaderMin + 1));
+    // race header meshes: inside the part (but the flange bolts' heads and port rims, 2 mm), nothing on the stretch plane
+    for (int n = kHeaderMin; n <= kHeaderMax; ++n)
+        for (int look = 0; look < 3; ++look) {
+            pdmesh::Mesh m = avolook::header(n, look);
+            for (auto& v : m.v) {
+                assert(std::abs(v.pos[2] - kHeaderStretchCells * 0.08) > 0.0005);
+                assert(v.pos[0] > -0.042 && v.pos[0] < (n - 1) * 0.08 + 0.042 && v.pos[1] > -0.042 && v.pos[1] < 0.122 && v.pos[2] > -0.046 && v.pos[2] < kHeaderLen * 0.08 - 0.038);
+            }
+        }
+    // race headers: one flange port per primary, one 2x2 outlet, stretch only along z; the old collectors are gone
+    assert(e.find("header_collector_equal") == std::string::npos && e.find("\"id\": \"header_4_1\"") != std::string::npos);
+    assert(header_from_id("header_6_1", 10) == 6 && header_from_id("header_1_1", 10) == 0 && header_from_id("header_4_2", 10) == 0 && header_from_id("header_7_1", 10) == 0);
+    {
+        std::string h = header_entry(4, "x");
+        size_t inputs = 0;
+        for (size_t at = 0; (at = h.find("\"dir\": 4, \"gender\": 2, \"type\": \"port\"", at)) != std::string::npos; ++at) ++inputs;
+        assert(inputs == 4 && h.find("{\"pos\": [1, 0, 4], \"size\": [2, 2], \"dir\": 5, \"gender\": 2, \"type\": \"port\"}") != std::string::npos);
+        assert(h.find("\"center_stretch\": [0.0, 0.0, 2.0]") != std::string::npos && h.find("\"class\": \"gas_tank\"") != std::string::npos);
+    }
     // the walk: engine 1 (node 0 air, node 1 exhaust) -> header 2 -> junction 3 -> turbo 4 hot side -> cat 5 -> muffler 6 -> dual tip 7
     //   and junction 3 -> stock vent 8; the air side: engine node 0 -> turbo 4 compressor (node 1)
     std::vector<Part> parts = {{1, kEngine}, {2, kInlinePart, kHeaderUnequal}, {3, kPass}, {4, kTurbo}, {5, kInlinePart, kCat},

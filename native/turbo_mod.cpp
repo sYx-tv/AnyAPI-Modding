@@ -1729,6 +1729,12 @@ bool write_definition_file() {
         std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
         exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
     }
+    for (int n = exhaust::kHeaderMin; n <= exhaust::kHeaderMax; ++n) {   // race headers: polished stainless until Nate picks
+        std::string id = exhaust::header_id(n);
+        std::vector<uint8_t> mesh = pdmesh::encode(avolook::header(n, 0), id);
+        std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
+        exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
+    }
     for (int k = 0; k < exhaust::kIntakeCount; ++k) {
         std::string id = exhaust::kIntakeIds[k];
         std::vector<uint8_t> mesh = pdmesh::encode(exmesh::intake_part(k), id);
@@ -2159,6 +2165,12 @@ const EngineParts& engine_parts(void* engine, void* vehicle, double now) {
         if (k >= 0) ++fresh.intake[k];
         int e = exhaust::inline_from_id(id, length);
         if (e == exhaust::kHeaderEqual) fresh.header_equal = true;
+        // a race header is a gas tank: its nodes belong to the gas ports snapped onto it
+        if (length >= 8 && std::memcmp(id, "gas_port", 8) == 0 && anymaker::readable(static_cast<const uint8_t*>(component) + off::port_mated_component, 8)) {
+            size_t ml = 0;
+            const char* mid = definition_id_of(at<void*>(component, off::port_mated_component), ml);
+            if (mid && exhaust::header_from_id(mid, ml)) fresh.header_equal = true;
+        }
         if (e == exhaust::kHeaderUnequal) fresh.header_unequal = true;
     };
     PointerRing air, exhaust_ring;
