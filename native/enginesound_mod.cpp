@@ -276,6 +276,7 @@ void find_exhaust(uint8_t* engine, ClientEngine& v, double now) {
                 p.id = rd<int32_t>(c, exoff::component_id);
                 p.handle = c;
                 p.role = exhaust::role_of(id.data, size_t(id.length), cls.data, size_t(cls.length), &p.sub, &p.layout);
+                p.exhaust_manifold = cls.length == 16 && std::memcmp(cls.data, "exhaust_manifold", 16) == 0;
                 parts.push_back(p);
             });
         });
@@ -285,12 +286,26 @@ void find_exhaust(uint8_t* engine, ClientEngine& v, double now) {
         });
     }
     int32_t me = rd<int32_t>(engine, exoff::component_id);
-    // Each gas node of the engine: its definition id says air or exhaust when it can; else a walk that reached a
-    // compressor or an air filter is the air side.
-    std::vector<int32_t> nodes;
+    // Where the exhaust starts: the engine's own gas nodes, and every exhaust manifold on the vehicle (the stock
+    // manifolds are parts of their own, snapped onto the engine, and the pipes start from them; Nate's 2026-11-05 test
+    // had all the sound at the engine because the walk only looked at the engine's own nodes). A vehicle with several
+    // engines gives each one every manifold (the client has no manifold-to-engine link to go by).
+    struct Start { int32_t component, node; bool manifold; };
+    std::vector<Start> starts;
+    auto add_start = [&](int32_t c, int32_t n, bool manifold) {
+        for (const Start& s : starts) if (s.component == c && s.node == n) return;
+        starts.push_back({c, n, manifold});
+    };
+    std::vector<int32_t> manifolds;
+    for (size_t i = 0; i < parts.size(); ++i)
+        if (parts[i].exhaust_manifold) manifolds.push_back(parts[i].id);
     for (const auto& l : links) {
-        if (l.c0 == me && std::find(nodes.begin(), nodes.end(), l.n0) == nodes.end()) nodes.push_back(l.n0);
-        if (l.c1 == me && std::find(nodes.begin(), nodes.end(), l.n1) == nodes.end()) nodes.push_back(l.n1);
+        if (l.c0 == me) add_start(me, l.n0, false);
+        if (l.c1 == me) add_start(me, l.n1, false);
+        for (int32_t m : manifolds) {
+            if (l.c0 == m) add_start(m, l.n0, true);
+            if (l.c1 == m) add_start(m, l.n1, true);
+        }
     }
     const void* def = pointer_at(engine, off::client_definition);
     const auto* lv = def && anymaker::readable(static_cast<const uint8_t*>(def) + exoff::def_logic_nodes, sizeof(anymaker::gc_vector_raw))
@@ -298,15 +313,17 @@ void find_exhaust(uint8_t* engine, ClientEngine& v, double now) {
     exhaust::Chain chain;
     std::vector<int> outlets;
     std::string text;
-    for (int32_t n : nodes) {
-        const LogicNodeRaw* ln = lv ? lv->at<LogicNodeRaw>(n) : nullptr;
+    for (const Start& st : starts) {
+        int32_t n = st.node;
+        const LogicNodeRaw* ln = !st.manifold && lv ? lv->at<LogicNodeRaw>(n) : nullptr;
         auto nid = ln && anymaker::readable(ln, sizeof *ln) ? ln->id : anymaker::gc_string_view{};
         if (nid.data && (nid.length <= 0 || nid.length > 64 || !anymaker::readable(nid.data, size_t(nid.length)))) nid = {};
-        int side = exhaust::node_side(nid.data, size_t(nid.length));
-        exhaust::Walk w = exhaust::walk(parts, links, me, n);
+        int side = st.manifold ? 1 : exhaust::node_side(nid.data, size_t(nid.length));
+        exhaust::Walk w = exhaust::walk(parts, links, st.component, n);
         bool is_exhaust = side == 1 || (side == 0 && !w.intake && !w.outlets.empty());
         char line[200];
-        std::snprintf(line, sizeof line, "%snode %d '%.*s' %s: %d parts, %zu outlets, %d turbos%s", text.empty() ? "" : "; ", n, int(nid.length), nid.data ? nid.data : "",
+        std::snprintf(line, sizeof line, "%s%s %d node %d '%.*s' %s: %d parts, %zu outlets, %d turbos%s", text.empty() ? "" : "; ", st.manifold ? "manifold" : "engine",
+                      st.component, n, int(nid.length), nid.data ? nid.data : "",
                       is_exhaust ? "exhaust" : "air", w.parts, w.outlets.size(), w.chain.turbos, w.intake ? ", reaches the intake" : "");
         text += line;
         if (!is_exhaust) continue;
@@ -314,6 +331,19 @@ void find_exhaust(uint8_t* engine, ClientEngine& v, double now) {
         for (int k = 0; k < exhaust::kLookCount; ++k) chain.tips[k] += w.chain.tips[k];
         chain.turbos += w.chain.turbos; chain.side_pipes += w.chain.side_pipes; chain.outlets += w.chain.outlets;
         outlets.insert(outlets.end(), w.outlets.begin(), w.outlets.end());
+    }
+    // No outlet found along the pipes (a race header is a gas tank: its ports are not linked through it on the client,
+    // and a pipe layout the walk does not know ends it too): the exhaust tips on the vehicle are where the exhaust
+    // goes, with every exhaust part on the vehicle in the chain.
+    if (outlets.empty()) {
+        exhaust::Chain all;
+        for (size_t i = 0; i < parts.size(); ++i) {
+            const exhaust::Part& p = parts[i];
+            if (p.role == exhaust::kTip) { outlets.push_back(int(i)); ++all.outlets; ++all.tips[p.sub]; if (p.layout == exhaust::kSide) ++all.side_pipes; }
+            else if (p.role == exhaust::kInlinePart) ++all.count[p.sub];
+            else if (p.role == exhaust::kTurbo) ++all.turbos;
+        }
+        if (!outlets.empty()) { chain = all; text += std::string(text.empty() ? "" : "; ") + "no outlet along the pipes: every tip on the vehicle"; }
     }
     v.chain = chain;
     int count = std::min<int>(kMaxOutlets, int(outlets.size()));

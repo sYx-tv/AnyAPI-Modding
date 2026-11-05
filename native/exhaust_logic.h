@@ -157,7 +157,7 @@ inline double intake_power(const int* count, double rpm) {
 // ------------------------------------------------------------------------------------- the client's walk along the pipes
 // What each part on the vehicle is to the walk, from its definition id and class.
 enum Role { kPass, kTip, kInlinePart, kTurbo, kVent, kAirFilter, kEngine, kIntakePart };
-struct Part { int32_t id = 0; int role = kPass; int sub = 0; int layout = 0; const void* handle = nullptr; };
+struct Part { int32_t id = 0; int role = kPass; int sub = 0; int layout = 0; const void* handle = nullptr; bool exhaust_manifold = false; };
 struct Link { int32_t c0, n0, c1, n1; };
 // Turbo nodes (turbo_logic.h Node): 0 and 1 the compressor, 2 and 3 the hot side.
 constexpr int kTurboHotIn = 2, kTurboHotOut = 3;
