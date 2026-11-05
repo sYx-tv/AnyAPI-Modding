@@ -31,6 +31,7 @@ Everything below is in the dev build only, for testing. Its lines in the log sta
   target, ignition timing, fuel trim, pops and antilag. Every row is also a data input, and a wired input that is not 0
   wins over the panel. Its outputs are rpm, boost psi, knock, power scale and knock limit (see `native/ecu_logic.h`).
 - **Built Rotary** (`built_rotary_engine`): the rotary's knock limit now drops a little with each rotor.
+- **Rotary sounds**: the rotary's Sound effect row opens the Rotary sound panel (EngineSound's): the three ports, five sounds made for its rotor count (1-4 rotors) and Custom (port, exhaust note, bark, rasp, muffler, idle chop, pops, idle blat, shaft whirr, volume). Saves keep a port so a world still loads without the mod. The parts on its pipes (mufflers, resonators, headers, tips) change it too, and it plays from the exhaust tips.
 - **Exhaust tips**: Street, Race and Classic looks, each as a single, dual, quad or side pipe
   (`exhaust_tip_<look>_<layout>`). A tip is a vent. The engine's exhaust sound plays from it.
 - **Inline exhaust parts**: chambered, straight-through, glasspack and turbo mufflers, inline and Helmholtz

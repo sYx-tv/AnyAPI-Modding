@@ -21,6 +21,7 @@
 #include "enginesound_save.h"
 #include "route_cell.h"
 #include "exhaust_logic.h"
+#include "rotary_tune.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -617,9 +618,9 @@ void hk_props(uint8_t* engine, uint8_t* pd) {
     reinterpret_cast<props_t>(h_props.original)(engine, pd);
     if (!g_ready || !engine || !pd || !anymaker::readable(pd + off::pd_elements, sizeof(anymaker::gc_vector_raw))) return;
     EngineKind kind = kind_of(pointer_at(engine, off::server_definition));
-    if (kind.rotary) return;                         // AnyEngineParts' rotary keeps its own ports row
     int32_t ext = extend_at(engine, off::server_extend_z);
-    int n = cylinders(kind, ext);
+    // AnyEngineParts' rotary: its ports, rotor-count sounds and Custom (rotary_tune.h), played by rotary_mod.cpp
+    int n = kind.rotary ? rotary::rotors_from_extend(ext) : cylinders(kind, ext);
     auto* vec = reinterpret_cast<const anymaker::gc_vector_raw*>(pd + off::pd_elements);
     for (int32_t i = 0; i < vec->count && i < 64; ++i) {
         auto* ref = vec->at<anymaker::gc_ref_raw<uint8_t>>(i);
@@ -628,7 +629,8 @@ void hk_props(uint8_t* engine, uint8_t* pd) {
         if (rd<uint8_t*>(row, off::srow_value_ptr) != engine + off::server_engine_sound) continue;
         int32_t lo = rd<int32_t>(row, off::srow_min), hi = rd<int32_t>(row, off::srow_max), name = rd<int32_t>(row, off::srow_name);
         char engine_label[32];
-        engine_name(kind.layout, n, engine_label, sizeof engine_label);
+        if (kind.rotary) std::snprintf(engine_label, sizeof engine_label, "%d-rotor", n);
+        else engine_name(kind.layout, n, engine_label, sizeof engine_label);
         if (g_range_logs.fetch_sub(1) > 0)
             log(0, "host engine sound row: %s %s (extend z %d), label=%d range %d..%d value=%d", size_name(kind.size), engine_label, ext, name, lo, hi, rd<int32_t>(engine, off::server_engine_sound + 24));
         if (lo != kVanillaMin || hi != kVanillaMax || name != kSoundLabel) {
@@ -851,6 +853,22 @@ Layout panel_layout(int* cylinders_out = nullptr) {
     if (cylinders_out) *cylinders_out = n;
     return k.layout;
 }
+bool panel_rotary(int* rotors = nullptr) {
+    EngineKind k; int n;
+    decode_tag(g_panel.tag, k, n);
+    if (rotors) *rotors = n;
+    return k.rotary;
+}
+Choice panel_decode(int32_t value) {
+    int rotors = 2;
+    if (panel_rotary(&rotors)) return rotary_tune::decode(value, rotors);
+    return decode(value, panel_layout());
+}
+const char* panel_choice_name(int32_t value) {
+    int rotors = 2;
+    if (panel_rotary(&rotors)) return rotary_tune::choice_name(value, rotors);
+    return choice_name(value, panel_layout());
+}
 void queue_send(int32_t value) {
     g_panel.pending = value; g_panel.pending_row = g_panel.row_id; g_panel.has_pending = true; g_panel.last_commit = GetTickCount64();
 }
@@ -867,7 +885,7 @@ void hk_row(uint8_t* row, void* fui, uint8_t* client, const int32_t* a, const in
         uint64_t now = GetTickCount64();
         if (g_panel.row_id != id || now - g_panel.seen > 1000) { g_panel.dragging = -1; g_panel.has_pending = false; }
         g_panel.seen = now; g_panel.row_id = id; g_panel.tag = kServerMax - real_max;
-        if (g_panel.value != value && g_panel.dragging < 0 && now - g_panel.last_commit > 1000) g_panel.draft = decode(value, panel_layout()).params;
+        if (g_panel.value != value && g_panel.dragging < 0 && now - g_panel.last_commit > 1000) g_panel.draft = panel_decode(value).params;
         g_panel.value = value;
         if (g_panel.has_pending && g_panel.pending_row == id) { send = true; to_send = g_panel.pending; g_panel.has_pending = false; }
     }
@@ -972,11 +990,13 @@ void draw(const AnyFrameV1* frame, void*) {
     Layout layout = panel_layout(&cyl);
     EngineKind kind; int unused;
     decode_tag(g_panel.tag, kind, unused);
-    Choice c = decode(g_panel.value, layout);
+    const bool rot = kind.rotary;
+    Choice c = panel_decode(g_panel.value);
     bool custom = c.mode == Mode::Custom;
+    const int slider_count = rot ? rotary_tune::kSliderCount : kSliderCount;
     float s = std::clamp(float(frame->height) / 1080.f, .7f, 1.8f);
     float w = 380 * s, head = 58 * s, item_h = 24 * s, row_h = 26 * s;
-    float h = head + kOptionCount * item_h + 10 * s + (custom ? row_h * kSliderCount + 12 * s : 40 * s);
+    float h = head + kOptionCount * item_h + 10 * s + (custom ? row_h * slider_count + 12 * s : 40 * s);
     float x = std::max(0.f, float(frame->width) - w - 24 * s), y = std::max(8 * s, float(frame->height) * .5f - h * .5f);
     g_panel.x = x; g_panel.w = w; g_panel.scale = s; g_panel.item_h = item_h; g_panel.row_h = row_h;
     g_panel.list_y = y + head;
@@ -991,11 +1011,12 @@ void draw(const AnyFrameV1* frame, void*) {
         AnyGpuCommandV1 cmd; cmd.kind = ANY_GPU_TEXT; cmd.rect[0] = tx; cmd.rect[1] = ty; cmd.rect[2] = tw; cmd.rect[3] = th; cmd.text = t;
         cmd.text_length = uint32_t(wcslen(t)); cmd.font_size = size; cmd.color = color; cmd.flags = flags | ANY_GPU_NOWRAP | ANY_GPU_VCENTER; gpu->emit(&cmd); };
     rect(ANY_GPU_ROUND_RECT, x, y, w, h, 0xf0191c20, 6 * s);
-    text(x + 14 * s, y + 8 * s, w - 28 * s, 18 * s, L"ENGINE SOUND", 11 * s, 0xffaeb7c2, ANY_GPU_BOLD);
+    text(x + 14 * s, y + 8 * s, w - 28 * s, 18 * s, rot ? L"ROTARY SOUND" : L"ENGINE SOUND", 11 * s, 0xffaeb7c2, ANY_GPU_BOLD);
     wchar_t buf[96];
     char engine_label[32];
     engine_name(layout, cyl, engine_label, sizeof engine_label);
-    if (kind.known) swprintf(buf, 96, L"%hs (%hs block): %hs", engine_label, size_name(kind.size), choice_name(g_panel.value, layout));
+    if (rot) swprintf(buf, 96, L"%d-rotor rotary: %hs", cyl, panel_choice_name(g_panel.value));
+    else if (kind.known) swprintf(buf, 96, L"%hs (%hs block): %hs", engine_label, size_name(kind.size), choice_name(g_panel.value, layout));
     else swprintf(buf, 96, L"%hs", choice_name(g_panel.value, layout));
     text(x + 14 * s, y + 26 * s, w - 28 * s, 26 * s, buf, 16 * s, 0xfff5f7fa);
     // The options: this layout's five sounds, the game's own three and Custom.
@@ -1004,7 +1025,8 @@ void draw(const AnyFrameV1* frame, void*) {
         float ry = g_panel.list_y + i * item_h;
         bool on = option_selected(slot, g_panel.value);
         if (on) rect(ANY_GPU_ROUND_RECT, x + 10 * s, ry + 1 * s, w - 20 * s, item_h - 2 * s, 0xff3a4048, 4 * s);
-        const char* label = slot < 3 ? choice_name(option_value(slot), layout) : slot == kOptionCount - 1 ? "Custom" : synth::kPresets[layout][slot - 3].name;
+        const char* label = slot < 3 ? panel_choice_name(option_value(slot)) : slot == kOptionCount - 1 ? "Custom"
+                            : rot ? rotary_tune::preset_name(cyl, slot - 3) : synth::kPresets[layout][slot - 3].name;
         swprintf(buf, 96, L"%hs", label);
         text(x + 22 * s, ry, w - 44 * s, item_h, buf, 13 * s, on ? 0xffedc56c : slot < 3 ? 0xff8c96a2 : 0xffdfe4ea, on ? ANY_GPU_BOLD : 0);
     }
@@ -1015,15 +1037,17 @@ void draw(const AnyFrameV1* frame, void*) {
         return;
     }
     const Params& p = g_panel.draft;
-    for (int i = 0; i < kSliderCount; ++i) {
-        float ry = g_panel.sliders_y + i * row_h;
-        swprintf(buf, 96, L"%hs", kSliders[i].label);
+    for (int r = 0; r < slider_count; ++r) {
+        const int i = rot ? rotary_tune::kSliderOrder[r] : r;
+        float ry = g_panel.sliders_y + r * row_h;
+        swprintf(buf, 96, L"%hs", rot ? rotary_tune::slider_label(i) : kSliders[i].label);
         text(x + 14 * s, ry, 145 * s, row_h, buf, 12 * s, 0xffdfe4ea);
         rect(ANY_GPU_ROUND_RECT, g_panel.track_x, ry + row_h * .6f - 2 * s, g_panel.track_w, 4 * s, 0xff3a4048, 2 * s);
         float t = float(p.v[i]) / float(max_step(i));
         rect(ANY_GPU_ROUND_RECT, g_panel.track_x, ry + row_h * .6f - 2 * s, g_panel.track_w * t, 4 * s, 0xffedc56c, 2 * s);
         rect(ANY_GPU_ELLIPSE, g_panel.track_x + g_panel.track_w * t - 6 * s, ry + row_h * .6f - 6 * s, 12 * s, 12 * s, g_panel.dragging == i ? 0xffffffff : 0xffedc56c);
-        value_text(i, p, layout, cyl, buf, 96);
+        if (rot) rotary_tune::value_text(i, p, buf, 96);
+        else value_text(i, p, layout, cyl, buf, 96);
         text(g_panel.track_x, ry - 1 * s, g_panel.track_w, 12 * s, buf, 10 * s, 0xffaeb7c2, ANY_GPU_CENTER);
     }
 }
@@ -1041,7 +1065,8 @@ uint32_t input(const AnyInputV1* e, void*) {
     std::lock_guard lock(g_mutex);
     if (e->kind == ANY_FOCUS_LOST) { g_panel.dragging = -1; return 0; }
     if (!g_panel.visible) return 0;
-    const Layout layout = panel_layout();
+    const bool rot = panel_rotary();
+    const int slider_count = rot ? rotary_tune::kSliderCount : kSliderCount;
     const bool inside = e->x >= g_panel.x && e->x < g_panel.x + g_panel.w && e->y >= g_panel.list_y && e->y < g_panel.bottom;
     const bool down = e->kind == ANY_MOUSE_DOWN && e->button == 1;
     // Option list.
@@ -1049,25 +1074,26 @@ uint32_t input(const AnyInputV1* e, void*) {
         int i = std::clamp(int((e->y - g_panel.list_y) / g_panel.item_h), 0, kOptionCount - 1);
         int slot = i < synth::kPresetsPerLayout ? 3 + i : i < synth::kPresetsPerLayout + 3 ? i - synth::kPresetsPerLayout : i;
         if (!option_selected(slot, g_panel.value)) {
-            int32_t v = slot == kOptionCount - 1 ? pack(decode(g_panel.value, layout).params) : option_value(slot);
-            if (slot == kOptionCount - 1) g_panel.draft = decode(g_panel.value, layout).params;
+            int32_t v = slot == kOptionCount - 1 ? pack(panel_decode(g_panel.value).params) : option_value(slot);
+            if (slot == kOptionCount - 1) g_panel.draft = panel_decode(g_panel.value).params;
             queue_send(v);
-            log(0, "panel: %s -> %s", choice_name(g_panel.value, layout), choice_name(v, layout));
+            log(0, "panel: %s -> %s", panel_choice_name(g_panel.value), panel_choice_name(v));
         }
         return 1;
     }
-    if (decode(g_panel.value, layout).mode != Mode::Custom) {
+    if (panel_decode(g_panel.value).mode != Mode::Custom) {
         bool on_button = inside && e->y >= g_panel.button_y && e->y < g_panel.button_y + g_panel.button_h;
         if (down && on_button) {
-            g_panel.draft = decode(g_panel.value, layout).params;
+            g_panel.draft = panel_decode(g_panel.value).params;
             queue_send(pack(g_panel.draft));
             return 1;
         }
         return (e->kind == ANY_MOUSE_DOWN || e->kind == ANY_MOUSE_UP || e->kind == ANY_MOUSE_WHEEL) && inside;
     }
-    bool on_sliders = inside && e->y >= g_panel.sliders_y && e->y < g_panel.sliders_y + g_panel.row_h * kSliderCount;
+    bool on_sliders = inside && e->y >= g_panel.sliders_y && e->y < g_panel.sliders_y + g_panel.row_h * slider_count;
     if (down && on_sliders) {
-        g_panel.dragging = std::clamp(int((e->y - g_panel.sliders_y) / g_panel.row_h), 0, kSliderCount - 1);
+        int r = std::clamp(int((e->y - g_panel.sliders_y) / g_panel.row_h), 0, slider_count - 1);
+        g_panel.dragging = rot ? rotary_tune::kSliderOrder[r] : r;
         set_from_mouse(g_panel.dragging, e->x);
         return 1;
     }

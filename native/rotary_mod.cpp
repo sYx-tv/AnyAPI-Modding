@@ -29,6 +29,7 @@
 #include "rotary_mesh.h"
 #include "engine_parts_shared.h"
 #include "rotary_sound.h"
+#include "rotary_tune.h"
 #include "built_engine_logic.h"
 #include <algorithm>
 #include <atomic>
@@ -315,6 +316,7 @@ struct ClientEngine {
     long long written = 0;                           // samples queued since start
     bool rate_logged = false;
     double logged_muffler = -9, logged_pipe = -9;   // the exhaust parts last logged
+    int32_t logged_value = INT32_MIN + 1;              // the sound choice last logged
     double position[3]{}, velocity[3]{};
     bool placed = false;
     double game_volume = 0;                          // the stock power voice's volume this tick (> 0 while it runs)
@@ -389,7 +391,21 @@ void stream_sound(void* self, const double* dt) {
     in.rps = factor_to_rps(at<double>(self, off::client_factor_speed));
     in.load = at<double>(self, off::client_factor_power);
     in.rotors = rotors_from_extend(at<int32_t>(self, off::client_extend_z));
-    in.port = port_from_index(at<int32_t>(self, off::client_sound_index));
+    const int32_t sound_value = at<int32_t>(self, off::client_sound_index);
+    in.port = port_from_index(sound_value);
+    // A rotor-count sound or Custom (EngineSound's panel, rotary_tune.h) in place of the port's own.
+    const enginesound::Choice choice = rotary_tune::decode(sound_value, in.rotors);
+    double own_muffler = 0; bool own_pops_off = false;
+    if (choice.mode != enginesound::Mode::Vanilla) {
+        in.custom = true; in.ch = rotary_tune::character_of(choice.params);
+        own_muffler = rotary_tune::muffler_of(choice.params); own_pops_off = rotary_tune::pops_off(choice.params);
+        in.muffler = own_muffler; if (own_pops_off) in.crackle = 0;
+    }
+    if (v.logged_value != sound_value) {
+        static std::atomic<int> logs{24};
+        if (logs.fetch_sub(1) > 0) log(0, "rotary sound choice: %s (%d rotors)", rotary_tune::choice_name(sound_value, in.rotors), in.rotors);
+        v.logged_value = sound_value;
+    }
     // Firing: the game's power voice is audible. Without the voice hook, assume it fires at start speed or above.
     in.running = g_voices_hooked && v.game_volume_seen ? v.game_volume > 0.001 : in.rps >= kStartRps;
     v.game_volume_seen = false;
@@ -405,7 +421,9 @@ void stream_sound(void* self, const double* dt) {
     if (auto fn = exhaust_at_fn(); fn && fn(self, tips)) p = tips;   // from the exhaust tips
     double tune[5];                                  // ... sounding like the mufflers, resonators, headers on the way
     if (auto fn = exhaust_tune_fn(); fn && fn(self, tune)) {
-        in.pipe = tune[0]; in.rasp = tune[1]; in.gain = tune[2]; in.muffler = tune[3]; in.crackle = tune[4];
+        in.pipe = tune[0]; in.rasp = tune[1]; in.gain = tune[2];
+        in.muffler = std::max(own_muffler, tune[3]);  // the louder of the chosen sound's muffler and the parts'
+        in.crackle = own_pops_off ? 0 : tune[4];
         if (v.logged_muffler != in.muffler || v.logged_pipe != in.pipe) {
             static std::atomic<int> logs{16};
             if (logs.fetch_sub(1) > 0) log(0, "rotary exhaust parts: pipe x%.2f, rasp x%.2f, gain x%.2f, muffler %.2f, pops %.2f", in.pipe, in.rasp, in.gain, in.muffler, in.crackle);
