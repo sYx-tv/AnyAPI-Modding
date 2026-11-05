@@ -314,6 +314,7 @@ struct ClientEngine {
     double start = 0, last_tick = 0, retry_at = 0;
     long long written = 0;                           // samples queued since start
     bool rate_logged = false;
+    double logged_muffler = -9, logged_pipe = -9;   // the exhaust parts last logged
     double position[3]{}, velocity[3]{};
     bool placed = false;
     double game_volume = 0;                          // the stock power voice's volume this tick (> 0 while it runs)
@@ -370,6 +371,15 @@ exhaust_at_t exhaust_at_fn() {
     }();
     return fn;
 }
+using exhaust_tune_t = int (*)(void* engine, double* out);
+exhaust_tune_t exhaust_tune_fn() {
+    static exhaust_tune_t fn = [] {
+        HMODULE self = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&exhaust_tune_fn, &self)) return exhaust_tune_t(nullptr);
+        return reinterpret_cast<exhaust_tune_t>(GetProcAddress(self, "AVO_ExhaustTune"));
+    }();
+    return fn;
+}
 
 void stream_sound(void* self, const double* dt) {
     double now = now_seconds();
@@ -393,6 +403,15 @@ void stream_sound(void* self, const double* dt) {
     const double* p = matrix + off::mat34_t / 8;
     double tips[3];
     if (auto fn = exhaust_at_fn(); fn && fn(self, tips)) p = tips;   // from the exhaust tips
+    double tune[5];                                  // ... sounding like the mufflers, resonators, headers on the way
+    if (auto fn = exhaust_tune_fn(); fn && fn(self, tune)) {
+        in.pipe = tune[0]; in.rasp = tune[1]; in.gain = tune[2]; in.muffler = tune[3]; in.crackle = tune[4];
+        if (v.logged_muffler != in.muffler || v.logged_pipe != in.pipe) {
+            static std::atomic<int> logs{16};
+            if (logs.fetch_sub(1) > 0) log(0, "rotary exhaust parts: pipe x%.2f, rasp x%.2f, gain x%.2f, muffler %.2f, pops %.2f", in.pipe, in.rasp, in.gain, in.muffler, in.crackle);
+            v.logged_muffler = in.muffler; v.logged_pipe = in.pipe;
+        }
+    }
     double step = dt && std::isfinite(*dt) && *dt > 1e-4 ? *dt : 1.0 / 60.0;
     if (std::isfinite(p[0]) && std::isfinite(p[1]) && std::isfinite(p[2])) {
         for (int i = 0; i < 3; ++i) {

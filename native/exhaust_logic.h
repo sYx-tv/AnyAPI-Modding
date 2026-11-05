@@ -113,7 +113,10 @@ inline SoundTune apply(SoundTune t, const Chain& c, double ecu_crackle) {
     if (c.has(kResonator)) { t.rasp *= 0.7; t.muffler = std::min(0.95, t.muffler + 0.04); }
     if (c.has(kHelmholtz)) { t.pipe_hz *= 1.06; t.rasp *= 0.85; }
     if (c.has(kHeaderUnequal)) t.uneven = 1.0;
-    else if (c.has(kHeaderEqual)) t.uneven = 0.0;
+    else if (c.has(kHeaderEqual)) {                 // equal-length primaries: smooth, a cleaner and louder rasp
+        t.uneven = 0.0;
+        t.rasp = std::min(1.0, t.rasp + 0.1); t.pipe_hz *= 1.05; t.gain *= 1.06;
+    }
     if (!c.has(kCat) && !c.has(kTurboMuffler)) t.rasp = std::min(1.0, t.rasp + 0.15);
     // Tips: Race brighter and louder, Classic deeper, side pipes loudest.
     if (c.tips[kRace]) { t.rasp = std::min(1.0, t.rasp + 0.1); t.gain *= 1.08; }
@@ -167,12 +170,14 @@ struct Walk {
     bool intake = false;             // it reached a compressor or an air filter: this is the engine's air side
     int parts = 0;                   // parts passed
 };
+inline int header_from_id(const char* id, size_t n);   // below, with the race headers
 inline int role_of(const char* id, size_t n, const char* cls, size_t cn, int* sub, int* layout) {
     auto is = [&](const char* want) { return std::strlen(want) == cn && std::memcmp(cls, want, cn) == 0; };
     int look = 0, lay = 0;
     if (id && tip_from_id(id, n, &look, &lay)) { *sub = look; *layout = lay; return kTip; }
     int k = id ? inline_from_id(id, n) : -1;
     if (k >= 0) { *sub = k; return kInlinePart; }
+    if (id && header_from_id(id, n) > 0) { *sub = kHeaderEqual; return kInlinePart; }   // the race headers (gas tanks)
     if (id && n >= 13 && std::memcmp(id, "turbocharger_", 13) == 0) return kTurbo;   // turbocharger_3, turbocharger_6
     if (id && n >= 16 && std::memcmp(id, "turbo_air_filter", 16) == 0) return kAirFilter;
     if (id && intake_from_id(id, n) >= 0) { *sub = intake_from_id(id, n); return kIntakePart; }

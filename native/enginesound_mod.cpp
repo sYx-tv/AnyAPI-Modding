@@ -91,7 +91,7 @@ using vol_speed_t = void (*)(uint8_t* single, const double* volume, const double
 using props_t = void (*)(uint8_t* engine, uint8_t* property_data);
 using row_ui_t = void (*)(uint8_t* row, void* frontend_ui, uint8_t* client, const int32_t* a, const int32_t* b);
 using push_s32_t = void (*)(uint8_t* peer_data, const int32_t* id, const int32_t* value);
-anymaker::cell_hook h_tick, h_vol_speed, h_props, h_row;
+anymaker::cell_hook h_tick, h_vol_speed, h_props, h_row, h_vol;
 void** g_push_cell;
 
 // ------------------------------------------------------------------ which engine (any thread)
@@ -599,6 +599,17 @@ void hk_vol_speed(uint8_t* single, const double* volume, const double* speed, co
     original(single, &zero, speed, effect, group, pos);
 }
 
+// The gas vents' loop and the gas valves' hiss (they play through update_play_volume, not the speed one): muted.
+using vol_t = void (*)(uint8_t* single, const double* volume, const int32_t* effect, const int32_t* group, const void* pos);
+void hk_vol(uint8_t* single, const double* volume, const int32_t* effect, const int32_t* group, const void* pos) {
+    auto original = reinterpret_cast<vol_t>(h_vol.original);
+    if (effect && volume && (*effect == audio::kEffectGasVent || *effect == audio::kEffectGasValveHiss)) {
+        double zero = 0;
+        return original(single, &zero, effect, group, pos);
+    }
+    original(single, volume, effect, group, pos);
+}
+
 // Host: widen the engine's sound row so the generated sounds, Custom and packed tunes are accepted and saved, and
 // tag it with the engine (layout, size, cylinders) for the clients' panel.
 std::atomic<int> g_range_logs{6};
@@ -912,6 +923,8 @@ void install_hooks() {
         bool ok = h_vol_speed.install(vol, (void*)&hk_vol_speed) && h_tick.install(tick, (void*)&hk_tick) &&
                   h_props.install(props, (void*)&hk_props) && h_row.install(row, (void*)&hk_row);
         if (!ok) { remove_hooks(); log(2, "a hook cell was already taken or not writable; EngineSound is off"); return; }
+        if (void** quiet = hook_cell(bind::effect_update_play_volume); quiet && h_vol.install(quiet, (void*)&hk_vol)) log(0, "gas vent and valve hiss muted");
+        else log(1, "gas vent and valve sound function not found; their hiss stays");
         g_sound_ok = true;
         g_ready = true;
         log(0, "Ready after %d s: generated sounds %d..%d, Custom %d", attempt, kFirstPreset, kCustomIndex - 1, kCustomIndex);
@@ -931,7 +944,7 @@ void remove_hooks() {
     g_sound_ok = false;
     h_save_engine.remove((void*)&hk_save_engine); h_save_vehicle.remove((void*)&hk_save_vehicle);
     h_row.remove((void*)&hk_row); h_props.remove((void*)&hk_props);
-    h_tick.remove((void*)&hk_tick); h_vol_speed.remove((void*)&hk_vol_speed);
+    h_tick.remove((void*)&hk_tick); h_vol_speed.remove((void*)&hk_vol_speed); h_vol.remove((void*)&hk_vol);
 }
 
 // ------------------------------------------------------------------ panel drawing and input
@@ -1074,6 +1087,21 @@ uint32_t input(const AnyInputV1* e, void*) {
 extern "C" __declspec(dllexport) int AVO_ExhaustAt(void* engine, double* out) {
     if (!out || !enginesound::g_sound_ok) return 0;
     return enginesound::exhaust_position(static_cast<uint8_t*>(engine), out) ? 1 : 0;
+}
+// What the parts on that engine's pipes do to its sound (exhaust_logic.h apply() on a neutral tune), after
+// AVO_ExhaustAt found them: out = pipe pitch scale, rasp scale, gain scale, muffler 0-0.95, pops 0-1 (-1 stock).
+// 0 with stock pipes (no parts and no ECU), else 1.
+extern "C" __declspec(dllexport) int AVO_ExhaustTune(void* engine, double* out) {
+    if (!out || !enginesound::g_sound_ok) return 0;
+    auto found = enginesound::g_exhaust_only.find(engine);
+    if (found == enginesound::g_exhaust_only.end()) return 0;
+    const enginesound::ClientEngine& v = found->second;
+    if (!v.chain.any() && v.ecu_crackle < 0) return 0;
+    const exhaust::SoundTune base{100, 300, 0.5, 0, -1, 0, 0, 1};
+    exhaust::SoundTune t = exhaust::apply(base, v.chain, v.ecu_crackle);
+    out[0] = t.pipe_hz / base.pipe_hz; out[1] = t.rasp / base.rasp; out[2] = t.gain / base.gain;
+    out[3] = v.chain.any() ? t.muffler : 0; out[4] = t.crackle;
+    return 1;
 }
 
 using namespace enginesound;
