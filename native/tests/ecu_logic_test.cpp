@@ -25,6 +25,8 @@ int main() {
     assert(rated_with(2.0, lean8) < 2.0 && rated_with(2.0, rich) > 2.0 && crackle(rich) > crackle(stock));
     // panel rows clamp and step
     Tune n; nudge(n, kBoost, 3); assert(near(n.boost_psi, 3)); nudge(n, kBoost, -10); assert(near(n.boost_psi, 0));
+    { Tune r; nudge(r, kRevLimit, 1); assert(near(r.rev_limit, 3000)); nudge(r, kRevLimit, 1); assert(near(r.rev_limit, 3250));
+      nudge(r, kRevLimit, -2); assert(near(r.rev_limit, 0)); nudge(r, kLaunchRpm, 1); assert(near(r.launch_rpm, 2000)); }
     nudge(n, kRevLimit, 100); assert(near(n.rev_limit, 12000)); nudge(n, kLaunch, 1); assert(n.launch);
     assert(row_text(stock, kBoost) == "Springs (12.8 psi)" && row_text(adv, kTiming) == "+5 deg" && row_text(t, kAntilag) == "On");
     // wired inputs win when not 0

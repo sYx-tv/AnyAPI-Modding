@@ -359,6 +359,18 @@ long long voice_queued(void* effect) {
     return std::max<long long>(0, bytes / 2 - cursor);    // the audio thread may be mid-update: never negative
 }
 
+// AnyVehicleOverhaul: the middle of the engine's exhaust outlets (enginesound_mod.cpp), when EngineSound is in this
+// DLL. Nate's 2026-11-05 test: his rotary's sound stayed at the engine with a tip on, as EngineSound skips rotaries.
+using exhaust_at_t = int (*)(void* engine, double* out);
+exhaust_at_t exhaust_at_fn() {
+    static exhaust_at_t fn = [] {
+        HMODULE self = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&exhaust_at_fn, &self)) return exhaust_at_t(nullptr);
+        return reinterpret_cast<exhaust_at_t>(GetProcAddress(self, "AVO_ExhaustAt"));
+    }();
+    return fn;
+}
+
 void stream_sound(void* self, const double* dt) {
     double now = now_seconds();
     ClientEngine& v = g_engines[self];
@@ -379,6 +391,8 @@ void stream_sound(void* self, const double* dt) {
     double matrix[12]{};
     g_world_transform(matrix, self);
     const double* p = matrix + off::mat34_t / 8;
+    double tips[3];
+    if (auto fn = exhaust_at_fn(); fn && fn(self, tips)) p = tips;   // from the exhaust tips
     double step = dt && std::isfinite(*dt) && *dt > 1e-4 ? *dt : 1.0 / 60.0;
     if (std::isfinite(p[0]) && std::isfinite(p[1]) && std::isfinite(p[2])) {
         for (int i = 0; i < 3; ++i) {

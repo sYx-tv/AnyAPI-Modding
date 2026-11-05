@@ -71,9 +71,15 @@ inline void set(Tune& t, int row, double v) {
         case kPops: t.pops = v; break; case kAntilag: t.antilag = v > 0.5; break;
     }
 }
+// The lowest working value of a row that is off at 0: a 250 rpm rev limit or launch would stall the engine, so
+// stepping up from off starts here and stepping down from here turns it off (Nate's 2026-11-05 test hit 250 rpm).
+inline double floor_of(int row) { return row == kRevLimit ? 3000 : row == kLaunchRpm ? 2000 : 0; }
 inline void nudge(Tune& t, int row, int steps) {
     if (row < 0 || row >= kRowCount) return;
-    set(t, row, get(t, row) + steps * kRows[row].step);
+    double v = get(t, row), floor = floor_of(row), next = v + steps * kRows[row].step;
+    if (floor > 0 && steps > 0 && v < floor) next = floor + (steps - 1) * kRows[row].step;
+    else if (floor > 0 && steps < 0 && next < floor) next = 0;
+    set(t, row, next);
 }
 inline std::string row_text(const Tune& t, int row) {
     char b[48];

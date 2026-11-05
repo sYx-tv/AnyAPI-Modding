@@ -150,6 +150,7 @@ constexpr double kLead = 0.08;                      // seconds of sound queued a
 // The voice object keeps the PCM still to play: a byte buffer whose size is at +0x78 and a read cursor in samples
 // at +0x80 (the same as the AnyEngineParts sounds read).
 constexpr int kVoiceBytes = 0x78, kVoiceCursor = 0x80;
+constexpr int32_t kEffectGasVent = 20, kEffectGasValveHiss = 55;   // e_audio_effect.fluid_gas_vent, fluid_valve_gas_hiss
 }  // namespace audio
 struct GameBuffer { void* data; int32_t size; uint32_t pad; };
 static_assert(sizeof(GameBuffer) == 16, "binary.buffer");
@@ -504,6 +505,38 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     v.written += n;
 }
 
+// Rotary and stock-sound engines keep their own voices (rotary_mod.cpp, the game's recordings): they only get told
+// where the exhaust comes out, the middle of the outlets the walk finds, so their sound plays from the tips.
+std::unordered_map<const void*, ClientEngine> g_exhaust_only;
+double g_exhaust_sweep = 0;
+bool exhaust_position(uint8_t* engine, double out[3]) {
+    if (!engine || !g_world_transform) return false;
+    double now = now_seconds();
+    ClientEngine& v = g_exhaust_only[engine];
+    v.last_tick = now;
+    find_exhaust(engine, v, now);
+    if (now - g_exhaust_sweep > 1.0) {
+        g_exhaust_sweep = now;
+        for (auto it = g_exhaust_only.begin(); it != g_exhaust_only.end();)
+            if (now - it->second.last_tick > 1.0) it = g_exhaust_only.erase(it); else ++it;
+    }
+    double sum[3]{}; int n = 0;
+    for (int i = 0; i < v.outlet_count; ++i) {
+        if (!v.outlets[i].part) continue;
+        double m[12]{};
+        g_world_transform(m, v.outlets[i].part);
+        const double* p = m + off::mat34_t / 8;
+        if (!std::isfinite(p[0]) || !std::isfinite(p[1]) || !std::isfinite(p[2])) continue;
+        for (int k = 0; k < 3; ++k) sum[k] += p[k];
+        ++n;
+    }
+    if (!n) return false;
+    for (int k = 0; k < 3; ++k) out[k] = sum[k] / n;
+    return true;
+}
+thread_local double t_exhaust_pos[3];
+thread_local bool t_exhaust_moved;   // this stock-sound engine's voices play from its exhaust outlets
+
 void sweep_engines(double now) {
     if (now - g_last_sweep < 1.0) return;
     g_last_sweep = now;
@@ -521,7 +554,11 @@ void hk_tick(uint8_t* engine, void* client, void* vehicle, void* scene, const do
     if (!generated) {
         auto found = g_engines.find(engine);   // switched back to a game sound: hand the voice back
         if (found != g_engines.end()) { release_voice(found->second); g_engines.erase(found); }
+        uint8_t* prev = t_engine; bool prev_generated = t_generated, prev_moved = t_exhaust_moved;
+        t_engine = engine; t_generated = false;
+        t_exhaust_moved = !kind.rotary && exhaust_position(engine, t_exhaust_pos);   // the rotary asks for itself
         original(engine, client, vehicle, scene, dt);
+        t_engine = prev; t_generated = prev_generated; t_exhaust_moved = prev_moved;
         if (!g_engines.empty()) sweep_engines(now_seconds());   // the last generated engine may be gone: free its voice
         return;
     }
@@ -538,7 +575,18 @@ void hk_tick(uint8_t* engine, void* client, void* vehicle, void* scene, const do
 // knock while damaged and its leak pass through. The power voice's volume is kept: it says the engine is firing.
 void hk_vol_speed(uint8_t* single, const double* volume, const double* speed, const int32_t* effect, const int32_t* group, const void* pos) {
     auto original = reinterpret_cast<vol_speed_t>(h_vol_speed.original);
+    // The hiss of gas valves and the rush of open gas vents (stock exhaust ends) are muted (Nate 2026-11-05): the
+    // exhaust is heard from the engine's sound at its tips instead.
+    if (effect && volume && (*effect == audio::kEffectGasVent || *effect == audio::kEffectGasValveHiss)) {
+        double zero = 0;
+        return original(single, &zero, speed, effect, group, pos);
+    }
     uint8_t* e = t_engine;
+    if (e && !t_generated && t_exhaust_moved && single && pos) {   // a stock-sound engine: its voices from the tips
+        ptrdiff_t o = single - e;
+        if (o == off::voice_operate || o == off::voice_power || o == off::voice_knock || o == off::voice_leak)
+            return original(single, volume, speed, effect, group, t_exhaust_pos);
+    }
     if (!e || !t_generated || !single || !volume) return original(single, volume, speed, effect, group, pos);
     ptrdiff_t o = single - e;
     if (o != off::voice_operate && o != off::voice_power && o != off::voice_knock) return original(single, volume, speed, effect, group, pos);
@@ -1020,6 +1068,13 @@ uint32_t input(const AnyInputV1* e, void*) {
 }
 }  // namespace
 }  // namespace enginesound
+
+// Where an engine's exhaust comes out (the middle of its outlets) for AnyEngineParts' rotary, which plays its own
+// voice. Asked for by name (GetProcAddress) so each standalone build still links. 1 with a position, else 0.
+extern "C" __declspec(dllexport) int AVO_ExhaustAt(void* engine, double* out) {
+    if (!out || !enginesound::g_sound_ok) return 0;
+    return enginesound::exhaust_position(static_cast<uint8_t*>(engine), out) ? 1 : 0;
+}
 
 using namespace enginesound;
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyModCallbacksV1* out) {
