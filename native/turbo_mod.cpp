@@ -2178,8 +2178,13 @@ const EngineParts& engine_parts(void* engine, void* vehicle, double now) {
     for (int32_t i = 0; i < air.count; ++i)
         if (auto* m = static_cast<uint8_t*>(air[i]); m && anymaker::readable(m + kAirManifoldGasNode, 64)) for_each_connected(vehicle, m + kAirManifoldGasNode, visit);
     read_ring(static_cast<const uint8_t*>(engine) + off::engine_exhaust_manifolds, 32, exhaust_ring);
-    for (int32_t i = 0; i < exhaust_ring.count; ++i)
-        if (auto* m = static_cast<uint8_t*>(exhaust_ring[i]); m && anymaker::readable(m + kExhaustManifoldGasNode, 64)) for_each_connected(vehicle, m + kExhaustManifoldGasNode, visit);
+    for (int32_t i = 0; i < exhaust_ring.count; ++i) {
+        auto* m = static_cast<uint8_t*>(exhaust_ring[i]);
+        size_t ml = 0;
+        const char* mid = m ? definition_id_of(m, ml) : nullptr;
+        if (mid && exhaust::header_from_id(mid, ml)) fresh.header_equal = true;   // a race header is the manifold itself
+        if (m && anymaker::readable(m + kExhaustManifoldGasNode, 64)) for_each_connected(vehicle, m + kExhaustManifoldGasNode, visit);
+    }
     for (int k = 0; k < exhaust::kIntakeCount; ++k)
         if (fresh.intake[k]) fresh.text += std::string(fresh.text.empty() ? "" : ", ") + std::to_string(fresh.intake[k]) + "x " + exhaust::kIntakeNames[k];
     if (fresh.header_equal) fresh.text += std::string(fresh.text.empty() ? "" : ", ") + "equal headers";

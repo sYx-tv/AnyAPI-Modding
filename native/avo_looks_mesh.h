@@ -490,18 +490,21 @@ inline Mesh air_filter(bool large, int look) {
 
 
 // ------------------------------------------------------------------------------------- race headers (N into 1)
-// n primaries (2-6), equal length, laid out like a real long-tube header (Nate 2026-11-05: out from the head, then
-// down and back along the engine). x runs along the engine, z out from the head, y up. The head flange is on the z-
-// face: one input per x cell 0..n-1 at y cell 0, z cell 0. Each primary goes straight out to its own lane (lanes
-// stacked in z, so none cross), drops a cell and runs rearward; the ones with the shorter run dip lower to match the
-// longest. Past the flange they gather into a ring of straight parallel tubes across the length's stretch plane (so
-// stretching the part adds the same length to every primary), and the collector merges them into the large outlet on
-// the x+ face (x cell n+2), centred on the corner of y cells -1, 0 and z cells header_out_z_cell(n), +1.
+// Race headers are exhaust manifolds (Nate 2026-11-06: snap straight onto the engine like the stock manifold, no gas
+// ports in between; fixed sizes 1-1 to 6-1). x runs along the engine, z out from the head, y up. The head flange is
+// on the z- face: one input per cylinder, every 2 cells along x (the engines' cylinder pitch) at y cell 0, z cell 0;
+// the first input is the part's port that mates with the engine. Each primary goes straight out to its own lane (lanes
+// stacked in z, so none cross), drops a cell and runs rearward; the ones with the shorter run dip down (more than once
+// when they need to) to match the longest. They gather into a ring at the collector, which merges them into the
+// outlet on the x+ face: the manifold's exhaust gas node (a large pipe), centred on the corner of y cells -1, 0 and z
+// cells header_out_z_cell(n), +1.
 // Looks: 0 polished stainless, 1 ceramic coated, 2 burnt titanium.
-inline int header_cells_x(int n) { return n + 3; }
+constexpr int kHeaderPitchCells = 2;
+inline int header_last_input_cell(int n) { return kHeaderPitchCells * (std::clamp(n, 1, 6) - 1); }
+inline int header_cells_x(int n) { return header_last_input_cell(n) + 4; }
+inline int header_cells_y(int) { return 4; }
 inline int header_cells_z(int n) { return n >= 5 ? 4 : 2; }
 inline int header_out_z_cell(int n) { return n >= 5 ? 1 : 0; }
-inline double header_stretch_cells(int n) { return n + 1.5; }   // the stretch plane along x, in cells
 constexpr double kHeaderRunY = -kH;                                // the rearward run and the outlet (a cell corner)
 // Catmull-Rom through w (with phantom ends along the given tangents), `per` samples a span.
 inline std::vector<V3> spline(const std::vector<V3>& w, V3 t0, V3 t1, int per = 8) {
@@ -519,56 +522,82 @@ inline std::vector<V3> spline(const std::vector<V3>& w, V3 t0, V3 t1, int per = 
     out.push_back(w.back());
     return out;
 }
-inline Mesh header(int n, int look) {
-    Mesh m;
-    n = std::clamp(n, 2, 6);
-    const double z0 = -kH, x1 = (header_cells_x(n) - 1) * kCell + kH, pr = 0.017, plane = header_stretch_cells(n) * kCell;
-    const double xa = plane - 0.02, xb = plane + 0.02, yc = kHeaderRunY, zc = header_out_z_cell(n) * kCell + kH, pitch = 0.035;
-    const double rb = std::max(0.021, n * 0.0372 / (2 * kPi));
-    const Rgb straw{186, 170, 140};
-    // the head flange: one plate across every port, bolts between them
-    m.prism(2, rounded(-kH + 0.004, -kH + 0.004, (n - 1) * kCell + kH - 0.004, kH - 0.004, 0.006, 3), z0, z0 + 0.007, kP1, false);
-    for (int i = 0; i <= n; ++i) {
-        double bx = i == 0 ? -kH + 0.009 : i == n ? (n - 1) * kCell + kH - 0.009 : (i - 0.5) * kCell;
-        for (double by : {-kH + 0.008, kH - 0.008}) pdmesh::bolt(m, 2, bx, by, z0 + 0.007, 1, 0.0032, kPolish);
-    }
-    auto lane = [&](int i) { return zc + (i - (n - 1) / 2.0) * pitch; };   // the farthest primary (0) runs innermost
+inline double path_length(const std::vector<V3>& p) {
+    double l = 0;
+    for (size_t k = 1; k < p.size(); ++k) { V3 d = p[k] - p[k - 1]; l += std::sqrt(pdmesh::dot(d, d)); }
+    return l;
+}
+
+// The primaries' centre lines (for the mesh and the tests: equal length).
+struct HeaderLayout { std::vector<std::vector<V3>> paths; double rb, pr, yc, zc, xm, x1; };
+inline HeaderLayout header_layout(int n) {
+    n = std::clamp(n, 1, 6);
+    HeaderLayout L;
+    const double z0 = -kH, pitch = 0.035, xin = header_last_input_cell(n) * kCell;
+    L.pr = 0.017; L.yc = kHeaderRunY; L.zc = header_out_z_cell(n) * kCell + kH;
+    L.x1 = (header_cells_x(n) - 1) * kCell + kH;
+    const double xa = xin + 1.9 * kCell;                                     // the ring, where the primaries meet
+    L.xm = xa + 0.012;
+    L.rb = n == 1 ? 0.0 : std::max(0.021, n * 0.0372 / (2 * kPi));
+    const double ymin = -(header_cells_y(n) - 1) * kCell - kH + L.pr + 0.004;   // the lowest a dip may go
+    auto lane = [&](int i) { return L.zc + (i - (n - 1) / 2.0) * pitch; };   // the farthest primary (0) runs innermost
     auto ring = [&](int i) {                                                // in lane order round the ring: no crossings
+        if (n == 1) return V3{xa, L.yc, L.zc};
         double u = -1 + 2 * (i + 0.5) / n, v = std::sqrt(std::max(0.0, 1 - u * u)) * (i % 2 ? 1 : -1);
-        return V3{xa, yc + rb * v, zc + rb * u};
+        return V3{xa, L.yc + L.rb * v, L.zc + L.rb * u};
     };
-    auto length = [](const std::vector<V3>& p) { double l = 0; for (size_t k = 1; k < p.size(); ++k) { V3 d = p[k] - p[k - 1]; l += std::sqrt(pdmesh::dot(d, d)); } return l; };
-    auto path = [&](int i, double dip) {
-        double xi = i * kCell, zi = lane(i), xr = xa - 0.05, x3 = xi + 0.055;
+    auto path = [&](int i, double dip, int humps) {
+        double xi = i * kHeaderPitchCells * kCell, zi = lane(i), x3 = xi + 0.055, xr = std::max(x3 + 0.03, xa - 0.05);
         V3 a = ring(i);
-        std::vector<V3> w = {{xi, 0.0, z0 + 0.01}, {xi, 0.006, (z0 + zi) / 2}, {xi + 0.018, -0.006, zi}, {x3, yc, zi}};
-        if (dip > 0.002) w.push_back({(x3 + xr) / 2, yc - dip, zi});
-        w.push_back({std::max(xr, x3 + 0.03), yc, zi});
+        std::vector<V3> w = {{xi, 0.0, z0 + 0.01}, {xi, 0.006, (z0 + zi) / 2}, {xi + 0.018, -0.006, zi}, {x3, L.yc, zi}};
+        for (int h = 0; h < humps && dip > 0.002; ++h) {
+            double t0 = double(2 * h + 1) / (2 * humps + 1);
+            w.push_back({x3 + (xr - x3) * t0, std::max(ymin, L.yc - dip), zi});
+            if (h + 1 < humps) w.push_back({x3 + (xr - x3) * double(2 * h + 2) / (2 * humps + 1), L.yc, zi});
+        }
+        w.push_back({xr, L.yc, zi});
         w.push_back(a);
-        std::vector<V3> p = spline(w, {0, 0, 0.02}, {0.02, 0, 0});
-        std::vector<V3> tail = spline({{xb, a.y, a.z}, {xb + 0.012, yc + (a.y - yc) * 0.85, zc + (a.z - zc) * 0.85}, {xb + 0.026, yc + (a.y - yc) * 0.5, zc + (a.z - zc) * 0.5}},
-                                      {0.02, 0, 0}, {0.02, 0, 0}, 4);
-        p.insert(p.end(), tail.begin(), tail.end());                       // a -> (xb, a) is the straight run across the plane
-        return p;
+        return spline(w, {0, 0, 0.02}, {0.02, 0, 0});
     };
     double longest = 0;
-    for (int i = 0; i < n; ++i) longest = std::max(longest, length(path(i, 0)));
+    for (int i = 0; i < n; ++i) longest = std::max(longest, path_length(path(i, 0, 0)));
     for (int i = 0; i < n; ++i) {
-        double lo = 0, hi = 0.11;
-        for (int it = 0; it < 30; ++it) { double mid = (lo + hi) / 2; (length(path(i, mid)) < longest ? lo : hi) = mid; }
-        std::vector<V3> p = path(i, lo);
-        std::vector<double> r(p.size(), pr);
+        std::vector<V3> best = path(i, 0, 0);
+        for (int humps = 1; humps <= 6 && path_length(best) < longest - 0.002; ++humps) {
+            double lo = 0, hi = L.yc - ymin;
+            if (path_length(path(i, hi, humps)) < longest) { best = path(i, hi, humps); continue; }   // more humps
+            for (int it = 0; it < 30; ++it) { double mid = (lo + hi) / 2; (path_length(path(i, mid, humps)) < longest ? lo : hi) = mid; }
+            best = path(i, lo, humps);
+        }
+        L.paths.push_back(best);
+    }
+    return L;
+}
+inline Mesh header(int n, int look) {
+    Mesh m;
+    n = std::clamp(n, 1, 6);
+    const HeaderLayout L = header_layout(n);
+    const double z0 = -kH, xin = header_last_input_cell(n) * kCell;
+    const Rgb straw{186, 170, 140};
+    // the head flange: one plate along the inputs, bolts either side of each
+    m.prism(2, rounded(-kH + 0.004, -kH + 0.004, xin + kH - 0.004, kH - 0.004, 0.006, 3), z0, z0 + 0.007, kP1, false);
+    for (int i = 0; i < n; ++i)
+        for (double bx : {i * kHeaderPitchCells * kCell - 0.027, i * kHeaderPitchCells * kCell + 0.027})
+            for (double by : {-kH + 0.008, kH - 0.008}) pdmesh::bolt(m, 2, bx, by, z0 + 0.007, 1, 0.0032, kPolish);
+    for (int i = 0; i < n; ++i) {
+        const std::vector<V3>& p = L.paths[size_t(i)];
+        std::vector<double> r(p.size(), L.pr);
         std::vector<Rgb> c(p.size(), kP0);
         if (look == 2)
             for (size_t k = 0; k < c.size(); ++k) { double t = double(k) / (c.size() - 1); c[k] = t < 0.3 ? kHeatGold : t < 0.6 ? kHeatBlue : straw; }
         sweep(m, p, r, c, 16);
-        bore(m, 2, i * kCell, 0, z0, 0.014, -1);
+        bore(m, 2, i * kHeaderPitchCells * kCell, 0, z0, 0.014, -1);
     }
     // collector: the merge cone, its slip-joint collar and the outlet with a V-band
-    double rout = kLargePipe * 1.08, xm = xb + 0.012;
+    const double rout = kLargePipe * 1.08, xm = L.xm, yc = L.yc, zc = L.zc, x1 = L.x1;
     Rgb col = look == 2 ? straw : kP0;
-    loft(m, 0, {{xm, circle(yc, zc, rb + pr * 0.9, 32)}, {xm + 0.032, circle(yc, zc, rout, 32)}, {x1 - 0.012, circle(yc, zc, rout, 32)}}, col);
-    rod(m, 0, yc, zc, xm, xm + 0.008, rb + pr * 1.05, kP1, 32);
+    loft(m, 0, {{xm - 0.012, circle(yc, zc, L.rb + L.pr * 0.9, 32)}, {xm + 0.032, circle(yc, zc, rout, 32)}, {x1 - 0.012, circle(yc, zc, rout, 32)}}, col);
+    rod(m, 0, yc, zc, xm - 0.012, xm - 0.004, L.rb + L.pr * 1.05, kP1, 32);
     rod(m, 0, yc, zc, x1 - 0.012, x1 - 0.002, rout * 1.1, kSteel, 32);
     pdmesh::bolt(m, 1, x1 - 0.007, zc, yc + rout * 1.1, 1, 0.003, kPolish);
     bore(m, 0, yc, zc, x1, rout * 0.85, 1);

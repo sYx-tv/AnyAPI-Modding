@@ -374,18 +374,18 @@ inline std::string intake_entry(int k, const std::string& mesh) {
         "      \"force_emitter_element_rotor\": {\"blades\": []}\n" +
         "    }";
 }
-// Race headers (Nate 2026-11-05): equal-length long-tube N into 1, 2-1 to 6-1. A gas tank like the intercooler (gas
-// ports snap onto it). x runs along the engine, z out from the head, y up: one port face per primary on the head
-// flange (the z- face, x cells 0..n-1 at y 0), the primaries run down and back, and the collector's 2x2 outlet face is
-// on the x+ face (x cell n+2) over y cells -1, 0 and z cells header_out_z(n), +1 (a large pipe; a small one snaps on
-// there too). The length stretches along x (up to kHeaderMaxExtend more cells): every primary runs straight across the
-// stretch plane, so each gains the same length (avo_looks_mesh.h header(), which this layout matches). On an engine's
-// exhaust manifold island it gives the equal-length header power (header_power).
-constexpr int kHeaderMin = 2, kHeaderMax = 6, kHeaderMaxExtend = 10;
-inline int header_len(int n) { return n + 3; }                 // x cells
+// Race headers (Nate 2026-11-06): exhaust manifolds, equal-length N into 1, 1-1 to 6-1, fixed sizes. Class
+// exhaust_manifold like the stock ones (rom: exhaust_manifold_straight_b), so the header snaps straight onto an
+// engine's exhaust port face and the engine pushes its exhaust into it. x runs along the engine, z out from the head,
+// y up. The head flange is the z- face: one input per cylinder every 2 cells along x; the first (cell 0, 0, 0) is the
+// male port that mates with the engine (1x1, so it fits every engine's faces, as the small stock manifold does). The
+// collector's outlet on the x+ face is the manifold's exhaust gas node: a large pipe or a gas port goes there, over y
+// cells -1, 0 and z cells header_out_z(n), +1. Matches avo_looks_mesh.h header(). On the engine it gives the
+// equal-length header power (header_power) and a smooth note.
+constexpr int kHeaderMin = 1, kHeaderMax = 6, kHeaderDrop = 3;   // y cells below the flange row
+inline int header_len(int n) { return 2 * (n - 1) + 4; }       // x cells
 inline int header_depth(int n) { return n >= 5 ? 4 : 2; }      // z cells
 inline int header_out_z(int n) { return n >= 5 ? 1 : 0; }
-inline double header_stretch(int n) { return n + 1.5; }        // the stretch plane along x, in cells
 inline std::string header_id(int n) { return "header_" + std::to_string(n) + "_1"; }
 inline int header_from_id(const char* id, size_t n) {
     if (!id || n != 10 || std::memcmp(id, "header_", 7) != 0 || std::memcmp(id + 8, "_1", 2) != 0) return 0;
@@ -394,46 +394,37 @@ inline int header_from_id(const char* id, size_t n) {
 }
 inline std::string header_entry(int n, const std::string& mesh) {
     const int lx = header_len(n) - 1, dz = header_depth(n) - 1;
-    std::string surfaces;
-    auto add = [&](const std::string& s) { surfaces += (surfaces.empty() ? "" : ", ") + s; };
-    for (int i = 0; i < n; ++i)
-        add("{\"pos\": [" + std::to_string(i) + ", 0, 0], \"size\": [1, 1], \"dir\": 4, \"gender\": 2, \"type\": \"port\"}");
-    add("{\"pos\": [" + std::to_string(lx) + ", -1, " + std::to_string(header_out_z(n)) + "], \"size\": [2, 2], \"dir\": 1, \"gender\": 2, \"type\": \"port\"}");
-    // mounting faces: the bottom, the top and the front end (the flange and the outlet faces take ports)
+    std::string surfaces = "{\"pos\": [0, 0, 0], \"dir\": 4, \"gender\": 1, \"type\": \"port\"}";
     auto face = [&](int x, int y, int z, int su, int sw, int dir) {
-        add("{\"pos\": [" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"size\": [" + std::to_string(su) + ", " +
-            std::to_string(sw) + "], \"dir\": " + std::to_string(dir) + "}");
+        surfaces += ", {\"pos\": [" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"size\": [" + std::to_string(su) + ", " +
+            std::to_string(sw) + "], \"dir\": " + std::to_string(dir) + "}";
     };
-    face(0, -2, 0, lx + 1, dz + 1, 2);
+    face(0, -kHeaderDrop, 0, lx + 1, dz + 1, 2);   // mounting faces: the bottom and the top
     face(0, 0, 0, lx + 1, dz + 1, 3);
-    face(0, -2, 0, dz + 1, 3, 0);
-    Box b{0, -2, 0, lx, 0, dz};
-    std::string description = std::to_string(n) + "-1 equal-length long-tube race header. Put its flange against the engine and snap a gas port onto each of its " +
-        std::to_string(n) + " inputs, piped to the exhaust manifolds; the primaries run down and back to the collector at the rear end, which takes a gas "
-        "port (small or large). Stretch it longer: every primary stays the same length. On the engine's exhaust it gives about 4 % more power and a "
-        "smooth note.";
-    char stretch[16];
-    std::snprintf(stretch, sizeof stretch, "%.1f", header_stretch(n));
+    Box b{0, -kHeaderDrop, 0, lx, 0, dz};
+    std::string description = n == 1 ? std::string("Single-runner race header: an exhaust manifold for one cylinder. Snap its flange onto the engine's exhaust face; the "
+                                                   "collector at the end takes a large pipe or a gas port, routed wherever you like. About 4 % more power and a smooth note.")
+                                     : std::to_string(n) + "-1 equal-length race header: an exhaust manifold for " + std::to_string(n) +
+                                           " cylinders. Snap its flange onto the engine's exhaust face (the first runner is the one that snaps on); the primaries run "
+                                           "down and back to the collector, which takes a large pipe or a gas port, routed wherever you like. About 4 % more power and a "
+                                           "smooth note.";
     return std::string("    {\n") +
         "      \"id\": \"" + header_id(n) + "\",\n" +
         "      \"name\": \"Race Header " + std::to_string(n) + "-1\",\n" +
         "      \"description\": \"" + description + "\",\n" +
-        "      \"class\": \"gas_tank\",\n" +
+        "      \"class\": \"exhaust_manifold\",\n" +
         "      \"zones\": [" + box_json(b) + "],\n" +
         "      \"interaction_zones\": [],\n" +
         "      \"surfaces\": [" + surfaces + "],\n" +
-        "      \"logic_nodes\": [],\n" +
+        "      \"logic_nodes\": [{\"id\": \"exhaust\", \"pos\": [" + std::to_string(lx) + ", -1, " + std::to_string(header_out_z(n)) +
+        "], \"direction\": 1, \"type\": \"gas\", \"size\": 1}],\n" +
         "      \"mesh_static\": {\"mesh_path\": \"" + mesh + "\"},\n" +
         "      \"meshes_dynamic\": [],\n" +
-        "      \"mode_x\": \"stretch\",\n" +
-        "      \"interval\": [1, 0, 0],\n" +
-        "      \"ext_max\": [" + std::to_string(kHeaderMaxExtend) + ", 0, 0],\n" +
-        "      \"center_stretch\": [" + stretch + ", 0.0, 0.0],\n" +
-        "      \"category\": \"gas\",\n" +
+        "      \"category\": \"engine\",\n" +
         "      \"tags_generated\": \"port,\",\n" +
-        "      \"inspection_geometry\": [{\"p0\": [0.0, -2.0, 0.0], \"p1\": [" + std::to_string(lx) + ".0, 0.0, " + std::to_string(dz) + ".0]}],\n" +
-        "      \"density\": 400.0,\n" +
-        "      \"mateable_port_types\": 10,\n" +
+        "      \"inspection_geometry\": [{\"p0\": [0.0, -" + std::to_string(kHeaderDrop) + ".0, 0.0], \"p1\": [" + std::to_string(lx) + ".0, 0.0, " + std::to_string(dz) + ".0]}],\n" +
+        "      \"density\": 800.0,\n" +
+        "      \"mateable_port_types\": 64,\n" +
         "      \"data_descriptors\": [],\n" +
         loot() +
         "      \"constraint_orientations\": [[1, 0, 0, 0, 1, 0, 0, 0, 1]]\n" +

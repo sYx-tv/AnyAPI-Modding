@@ -57,30 +57,36 @@ int main() {
     int depth = 0, objects = 0;
     for (char c : e) { if (c == '{' || c == '[') ++depth; if (c == '}' || c == ']') --depth; assert(depth >= 0); if (c == '{' && depth == 1) ++objects; }
     assert(depth == 0 && objects == int(kLookCount) * int(kLayoutCount) + int(kInlineCount) - 2 + int(kIntakeCount) + (kHeaderMax - kHeaderMin + 1));
-    // race header meshes: inside the part (but the flange bolts' heads and port rims, 2 mm), nothing on the stretch plane,
-    // and the layout matches the definition's
+    // race headers are exhaust manifolds: inside the part (but the flange bolts' heads and port rims, 2 mm), the
+    // layout matches the definition's, and every primary is the same length
     for (int n = kHeaderMin; n <= kHeaderMax; ++n) {
         assert(avolook::header_cells_x(n) == header_len(n) && avolook::header_cells_z(n) == header_depth(n) && avolook::header_out_z_cell(n) == header_out_z(n) &&
-               avolook::header_stretch_cells(n) == header_stretch(n));
+               avolook::header_cells_y(n) == kHeaderDrop + 1);
+        avolook::HeaderLayout L = avolook::header_layout(n);
+        assert(int(L.paths.size()) == n);
+        double l0 = avolook::path_length(L.paths[0]);
+        for (auto& p : L.paths) {
+            double l = avolook::path_length(p);
+            if (std::abs(l - l0) > 0.006) { std::printf("header %d-1: primary %.3f m vs %.3f m\n", n, l, l0); assert(false); }
+        }
         for (int look = 0; look < 3; ++look) {
             pdmesh::Mesh m = avolook::header(n, look);
-            for (auto& v : m.v) {
-                assert(std::abs(v.pos[0] - header_stretch(n) * 0.08) > 0.0005);
-                assert(v.pos[0] > -0.042 && v.pos[0] < (header_len(n) - 1) * 0.08 + 0.042 && v.pos[1] > -0.202 && v.pos[1] < 0.042 && v.pos[2] > -0.046 &&
+            for (auto& v : m.v)
+                assert(v.pos[0] > -0.042 && v.pos[0] < (header_len(n) - 1) * 0.08 + 0.042 && v.pos[1] > -kHeaderDrop * 0.08 - 0.042 && v.pos[1] < 0.042 && v.pos[2] > -0.046 &&
                        v.pos[2] < header_depth(n) * 0.08 - 0.038);
-            }
         }
     }
-    // race headers: one flange port per primary, one 2x2 outlet, stretch only along z; the old collectors are gone
     assert(e.find("header_collector_equal") == std::string::npos && e.find("\"id\": \"header_4_1\"") != std::string::npos);
-    assert(header_from_id("header_6_1", 10) == 6 && header_from_id("header_1_1", 10) == 0 && header_from_id("header_4_2", 10) == 0 && header_from_id("header_7_1", 10) == 0);
+    assert(header_from_id("header_6_1", 10) == 6 && header_from_id("header_1_1", 10) == 1 && header_from_id("header_4_2", 10) == 0 && header_from_id("header_7_1", 10) == 0);
     {
         std::string h = header_entry(4, "x");
-        size_t inputs = 0;
-        for (size_t at = 0; (at = h.find("\"dir\": 4, \"gender\": 2, \"type\": \"port\"", at)) != std::string::npos; ++at) ++inputs;
-        assert(inputs == 4 && h.find("{\"pos\": [6, -1, 0], \"size\": [2, 2], \"dir\": 1, \"gender\": 2, \"type\": \"port\"}") != std::string::npos);
-        assert(h.find("\"center_stretch\": [5.5, 0.0, 0.0]") != std::string::npos && h.find("\"class\": \"gas_tank\"") != std::string::npos);
-        assert(header_entry(6, "x").find("{\"pos\": [8, -1, 1], \"size\": [2, 2], \"dir\": 1") != std::string::npos);
+        assert(h.find("\"class\": \"exhaust_manifold\"") != std::string::npos && h.find("\"mateable_port_types\": 64") != std::string::npos);
+        assert(h.find("{\"pos\": [0, 0, 0], \"dir\": 4, \"gender\": 1, \"type\": \"port\"}") != std::string::npos);   // the one male port
+        assert(h.find("{\"id\": \"exhaust\", \"pos\": [9, -1, 0], \"direction\": 1, \"type\": \"gas\", \"size\": 1}") != std::string::npos);
+        assert(h.find("stretch") == std::string::npos && h.find("\"gender\": 2") == std::string::npos);
+        assert(header_entry(6, "x").find("\"pos\": [13, -1, 1], \"direction\": 1") != std::string::npos);
+        int sub = 0, lay = 0;
+        assert(role_of("header_1_1", 10, "exhaust_manifold", 16, &sub, &lay) == kInlinePart && sub == kHeaderEqual);
     }
     // the walk: engine 1 (node 0 air, node 1 exhaust) -> header 2 -> junction 3 -> turbo 4 hot side -> cat 5 -> muffler 6 -> dual tip 7
     //   and junction 3 -> stock vent 8; the air side: engine node 0 -> turbo 4 compressor (node 1)

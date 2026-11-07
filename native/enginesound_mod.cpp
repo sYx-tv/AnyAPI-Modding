@@ -329,6 +329,9 @@ void find_exhaust(uint8_t* engine, ClientEngine& v, double now) {
                       is_exhaust ? "exhaust" : "air", w.parts, w.outlets.size(), w.chain.turbos, w.intake ? ", reaches the intake" : "");
         text += line;
         if (!is_exhaust) continue;
+        if (st.manifold)                             // a race header is the manifold the walk starts from
+            for (const exhaust::Part& p : parts)
+                if (p.id == st.component && p.role == exhaust::kInlinePart && p.sub == exhaust::kHeaderEqual) { ++chain.count[exhaust::kHeaderEqual]; break; }
         for (int k = 0; k < exhaust::kInlineCount; ++k) chain.count[k] += w.chain.count[k];
         for (int k = 0; k < exhaust::kLookCount; ++k) chain.tips[k] += w.chain.tips[k];
         chain.turbos += w.chain.turbos; chain.side_pipes += w.chain.side_pipes; chain.outlets += w.chain.outlets;
