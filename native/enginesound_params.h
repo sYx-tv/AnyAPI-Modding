@@ -15,6 +15,7 @@
 // Stretch steps are 2, 3 and 5 cells for small, medium and large. Unstretched, an inline is a single, a V a V-twin
 // and a boxer a flat-twin; each step adds one cylinder to an inline and a pair to a V or boxer.
 // "rotary_engine" (AnyEngineParts) makes its own sound and is left alone.
+#include "built_engine_logic.h"
 #include "enginesound_synth.h"
 #include <algorithm>
 #include <cmath>
@@ -39,7 +40,10 @@ inline bool id_is(const char* id, size_t n, const char* want) {
     size_t w = std::strlen(want);
     return id && n == w && std::memcmp(id, want, n) == 0;
 }
-inline EngineKind engine_kind(const char* id, size_t n) {
+inline EngineKind engine_kind(const char* raw_id, size_t raw_n) {
+    std::string_view stock = built::stock_id(raw_id ? std::string_view(raw_id, raw_n) : std::string_view{});   // built engines sound stock
+    const char* id = stock.data();
+    size_t n = stock.size();
     struct Row { const char* id; Layout layout; Size size; };
     static const Row rows[] = {
         {"engine", synth::kInline, kSmall}, {"engine_block_b", synth::kInline, kMedium}, {"engine_block_c", synth::kInline, kLarge},
@@ -52,7 +56,7 @@ inline EngineKind engine_kind(const char* id, size_t n) {
 }
 inline int stretch_interval(Size s) { return s == kSmall ? 2 : s == kMedium ? 3 : 5; }
 inline int cylinders(const EngineKind& k, int32_t extend_z) {
-    int32_t cells = extend_z < 0 ? -extend_z : extend_z;
+    int64_t cells = extend_z < 0 ? -int64_t(extend_z) : int64_t(extend_z);   // no overflow at INT32_MIN
     if (cells > 4096) cells = 0;   // not a real stretch
     int steps = int(cells / stretch_interval(k.size));
     int n = k.layout == synth::kInline ? 1 + steps : 2 + 2 * steps;
@@ -86,7 +90,10 @@ inline void engine_name(Layout l, int cylinders, char* buf, size_t n) {
 inline constexpr int32_t kServerMin = INT32_MIN;
 inline constexpr int32_t kServerMax = INT32_MAX;
 inline constexpr int32_t kTagSpan = 1024;
+// Kind 9 is AnyEngineParts' rotary, with its rotor count (1-4) in place of the cylinders (rotary_tune.h).
+inline constexpr int kRotaryTagKind = 9;
 inline int32_t row_tag(const EngineKind& k, int cylinders) {
+    if (k.rotary) return 1 + kRotaryTagKind + 16 * std::clamp(cylinders, 1, 4);
     return 1 + int32_t(k.layout) * 3 + int32_t(k.size) + 16 * synth::clamp_cylinders(cylinders);
 }
 inline bool is_modded_max(int32_t max) { return max > kServerMax - kTagSpan; }
@@ -96,6 +103,7 @@ inline void decode_tag(int32_t tag, EngineKind& k, int& cylinders) {
     cylinders = 4;
     if (tag <= 0 || tag >= kTagSpan) return;
     int kind = (tag - 1) % 16, cyl = (tag - 1) / 16;
+    if (kind == kRotaryTagKind && cyl >= 1) { k = {synth::kInline, Size(0), true, true}; cylinders = std::clamp(cyl, 1, 4); return; }
     if (kind >= 9 || cyl < 1) return;
     k = {Layout(kind / 3), Size(kind % 3), false, true};
     cylinders = synth::clamp_cylinders(cyl);

@@ -15,8 +15,8 @@
 // altitude sensor's server tick (for Dyno parts only) sums its vehicle's engines and feeds the recorder. Rendering
 // uses anyapi.gpu_draw. Single player / host: the engines and the part tick on the server of this game.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (dyno_bindings.h): Anymaker 0.1.27 / Steam build
-// 26113663 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (dyno_bindings.h): Anymaker 0.2.0 / Steam build
+// 26328453 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -69,6 +69,10 @@ constexpr ptrdiff_t engine_temperature = 1432;       // m_temperature (f64, C)
 constexpr ptrdiff_t engine_throttle = 1472;          // m_display_throttle (f64)
 constexpr ptrdiff_t engine_boost = 1496;             // m_display_air_pressure_factor (f64, 1..2)
 constexpr ptrdiff_t engine_energy = 1536;            // m_display_torque (f64): energy this tick
+// 0.2.0 layouts (sdk/reference-0.2.0): m_content_lubricant +0x2a0 and m_content_coolant +0x388 are
+// vehicle_liquid_content_volume, whose vehicle_liquid_content base has m_volume +0x20, m_capacity +0x28, m_temperature +0x30.
+constexpr ptrdiff_t engine_oil_volume = 0x2a0 + 0x20, engine_oil_capacity = 0x2a0 + 0x28, engine_oil_temperature = 0x2a0 + 0x30;
+constexpr ptrdiff_t engine_coolant_temperature = 0x388 + 0x30;
 }  // namespace off
 constexpr int32_t kStoreSystem = 1;                  // file.e_store.system (as GpsPart, Turbo and Rotary)
 
@@ -92,7 +96,19 @@ transform_t g_vehicle_transform, g_component_transform;
 anymaker::cell_hook h_add_definitions, h_engine_tick, h_sensor_tick, h_get_f64;
 
 // ------------------------------------------------------------------------------------- shared state
-struct EngineEntry { const void* vehicle = nullptr; EngineSample sample; double time = 0, knock = 0, knock_time = -1e9; };
+struct EngineEntry {
+    const void* vehicle = nullptr; EngineSample sample; double time = 0, knock = 0, knock_time = -1e9;
+    double oil_level = 0, oil_c = NAN, coolant_c = NAN;   // for the Oil Gauge (gauges_logic.h)
+};
+// A Boost Controller, Boost Gauge or Oil Gauge (gauges_logic.h). Kept like the Dynos: microcontrollers hold pointers
+// into the slots.
+struct Gauge {
+    gauges::Kind kind = gauges::kNone; double slots[gauges::kMaxSlots]{}; double peak = 0; bool reset_held = false; double last_tick = 0;
+    // ECU (ecu_logic.h): its panel tune (loaded from the world's file on first tick, saved when the panel changes it)
+    ecu::Tune panel; bool panel_loaded = false, panel_dirty = false;
+    void* vehicle = nullptr;
+    double position[3]{}; bool placed = false;
+};
 struct Dyno {
     Recorder recorder;
     std::string setup;                                // Turbo's name for the boost setup ("Twin turbo", ...)
@@ -106,26 +122,32 @@ std::unordered_map<const void*, EngineEntry> g_engines;
 // Keyed by server component. Entries are never erased: microcontrollers keep pointers into their slots (hk_get_f64)
 // until their next rebuild, so a Dyno that stops ticking keeps its entry (a few KB) for the rest of the session.
 std::unordered_map<const uint8_t*, Dyno> g_dynos;
-std::unordered_map<const void*, bool> g_is_dyno;      // definition pointer -> dyno_sensor? (cleared on each add)
+std::unordered_map<const void*, int> g_is_dyno;       // definition pointer -> kDynoKind, a gauges::Kind or 0 (cleared on each add)
+std::unordered_map<const uint8_t*, Gauge> g_gauges;    // keyed by server component, never erased (as g_dynos)
+constexpr int kDynoKind = 100;
+std::atomic<int64_t> g_gauge_tick_ms{INT64_MIN / 2};   // when an Oil Gauge last ticked: engines' oil is noted while one does
 double g_last_sweep = 0;
 // When a Dyno last ticked (ms, now_seconds clock). Engine ticks are only noted while one did in the last 5 s.
 std::atomic<int64_t> g_dyno_tick_ms{INT64_MIN / 2};
 int64_t now_ms() { return int64_t(now_seconds() * 1000); }
 bool dyno_ticking() { return now_ms() - g_dyno_tick_ms.load(std::memory_order_relaxed) < 5000; }
+bool oil_gauge_ticking() { return now_ms() - g_gauge_tick_ms.load(std::memory_order_relaxed) < 5000; }
 
-bool is_dyno(const uint8_t* sensor) {
-    if (!sensor || !anymaker::readable(sensor + off::component_definition, 8)) return false;
+// Which of our sensor parts this altitude sensor is: kDynoKind, a gauges::Kind, or 0 (a stock altitude sensor).
+int sensor_kind(const uint8_t* sensor) {
+    if (!sensor || !anymaker::readable(sensor + off::component_definition, 8)) return 0;
     auto* definition = at<const uint8_t*>(sensor, off::component_definition);
-    if (!definition) return false;
+    if (!definition) return 0;
     auto found = g_is_dyno.find(definition);
     if (found != g_is_dyno.end()) return found->second;
-    bool dyno = false;
+    int kind = 0;
     if (anymaker::readable(definition + off::definition_id, sizeof(anymaker::gc_string_view))) {
         auto* id = reinterpret_cast<const anymaker::gc_string_view*>(definition + off::definition_id);
-        dyno = id->data && id->length > 0 && id->length < 64 && anymaker::readable(id->data, size_t(id->length)) && id->view() == kDefinitionId;
+        if (id->data && id->length > 0 && id->length < 64 && anymaker::readable(id->data, size_t(id->length)))
+            kind = id->view() == kDefinitionId ? kDynoKind : int(gauges::kind_of_id(id->data, size_t(id->length)));
     }
-    g_is_dyno[definition] = dyno;
-    return dyno;
+    g_is_dyno[definition] = kind;
+    return kind;
 }
 
 // ------------------------------------------------------------------------------------- part definition
@@ -226,7 +248,7 @@ void hk_add_definitions(void* container, const void* file) {
 void hk_engine_tick(void* self, void* vehicle, void* scene) {
     // The engine speed the tick makes its power at: the game reads m_rps first and only sets the new speed at the end.
     // Read after the tick, an engine bouncing on the fuel cut showed power above 8,000 RPM.
-    bool feed = self && vehicle && dyno_ticking() &&
+    bool feed = self && vehicle && (dyno_ticking() || oil_gauge_ticking()) &&
                 anymaker::readable(static_cast<uint8_t*>(self) + off::engine_rps, off::engine_energy + 8 - off::engine_rps);
     double rps_before = feed ? at<double>(self, off::engine_rps) : 0;
     reinterpret_cast<engine_tick_t>(h_engine_tick.original)(self, vehicle, scene);
@@ -239,9 +261,113 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     s.boost = at<double>(self, off::engine_boost);
     s.temperature_c = at<double>(self, off::engine_temperature);
     for (double* v : {&s.rps, &s.watts, &s.throttle, &s.boost, &s.temperature_c}) if (!std::isfinite(*v)) *v = 0;
+    double oil_level = 0, oil_c = NAN, coolant_c = NAN;
+    auto* engine = static_cast<const uint8_t*>(self);
+    if (anymaker::readable(engine + off::engine_oil_volume, off::engine_coolant_temperature + 8 - off::engine_oil_volume)) {
+        double volume = at<double>(engine, off::engine_oil_volume), capacity = at<double>(engine, off::engine_oil_capacity);
+        oil_level = std::isfinite(volume) && std::isfinite(capacity) && capacity > 0 ? std::clamp(volume / capacity, 0.0, 1.0) : 0.0;
+        oil_c = at<double>(engine, off::engine_oil_temperature);
+        coolant_c = at<double>(engine, off::engine_coolant_temperature);
+    }
     std::lock_guard lock(g_mutex);
     auto& e = g_engines[self];
     e.vehicle = vehicle; e.sample = s; e.time = now_seconds();
+    e.oil_level = oil_level; e.oil_c = oil_c; e.coolant_c = coolant_c;
+}
+
+// A Boost Controller, Boost Gauge or Oil Gauge's server tick.
+void ecu_tick(uint8_t* sensor, void* vehicle);
+void gauge_tick(uint8_t* sensor, void* vehicle, gauges::Kind kind) {
+    using namespace gauges;
+    if (kind == kEcu) { ecu_tick(sensor, vehicle); return; }
+    double target = 0;
+    if (kind == kController) {
+        { std::lock_guard lock(g_mutex); target = controller_target(g_gauges[sensor].slots); }
+        turbo::set_boost_target(vehicle, target);   // Turbo's lock, not ours
+    }
+    turbo::VehicleBoost boost = kind == kOilGauge ? turbo::VehicleBoost{} : turbo::vehicle_boost(vehicle);
+    std::lock_guard lock(g_mutex);
+    double now = now_seconds();
+    Gauge& g = g_gauges[sensor];
+    bool fresh = !(g.last_tick > 0) || now - g.last_tick > 5.0;
+    g.kind = kind; g.last_tick = now;
+    double* o = g.slots;
+    if (kind == kController) {
+        o[kControllerBoostPsi] = boost.boost_psi;
+        o[kTargetSet] = target;
+    } else if (kind == kBoostGauge) {
+        double psi = std::max(0.0, boost.boost_psi);
+        bool reset = o[kResetPeak] > 0.5;
+        if ((reset && !g.reset_held) || fresh) g.peak = 0;
+        g.reset_held = reset;
+        g.peak = std::max(g.peak, psi);
+        o[kBoostPsi] = psi; o[kBoostKpa] = psi / kPsiPerKpa; o[kBoostBar] = psi / kPsiPerKpa / 100.0;
+        o[kBoostTarget] = boost.target_psi; o[kPeakPsi] = g.peak;
+    } else {
+        g_gauge_tick_ms.store(int64_t(now * 1000), std::memory_order_relaxed);
+        const EngineEntry* hot = nullptr;           // the hottest engine running on this vehicle
+        for (auto& [engine, e] : g_engines)
+            if (e.vehicle == vehicle && now - e.time < 0.25 && (!hot || e.sample.temperature_c > hot->sample.temperature_c)) hot = &e;
+        o[kOilPressurePsi] = hot ? oil_pressure_psi(hot->oil_level, hot->oil_c, hot->sample.rps * 60.0) : 0.0;
+        o[kOilTemperature] = hot && std::isfinite(hot->oil_c) ? hot->oil_c : 0.0;
+        o[kOilLevel] = hot ? hot->oil_level : 0.0;
+        o[kCoolantTemperature] = hot && std::isfinite(hot->coolant_c) ? hot->coolant_c : 0.0;
+        o[kEngineTemperature] = hot ? hot->sample.temperature_c : 0.0;
+    }
+    if (now - g_last_sweep > 2.0) {                 // as the Dyno's tick: engines gone from the scene stop ticking
+        g_last_sweep = now;
+        for (auto it = g_engines.begin(); it != g_engines.end();) it = now - it->second.time > 5.0 ? g_engines.erase(it) : std::next(it);
+    }
+    if (fresh) {
+        static std::atomic<int> logs{12};
+        if (logs.fetch_sub(1) > 0) log(0, "%s ticking on a vehicle", kind == kController ? "Boost Controller" : kind == kBoostGauge ? "Boost Gauge" : "Oil Gauge");
+    }
+}
+
+// The ECU's server tick: its tune (panel, then wired inputs) goes to every engine on its vehicle (Turbo's engine
+// tick applies it), its boost target to the turbos; its outputs show what the engines did.
+void ecu_tick(uint8_t* sensor, void* vehicle) {
+    double saved = 1.0;
+    bool load = false;
+    {
+        std::lock_guard lock(g_mutex);
+        load = !g_gauges[sensor].panel_loaded;
+    }
+    if (load) saved = turbo::ecu_saved(vehicle, sensor);   // Turbo's lock, not ours
+    ecu::Tune tune;
+    double save = 0;
+    {
+        std::lock_guard lock(g_mutex);
+        Gauge& g = g_gauges[sensor];
+        double now = now_seconds();
+        bool fresh = !(g.last_tick > 0) || now - g.last_tick > 5.0;
+        g.kind = gauges::kEcu; g.last_tick = now; g.vehicle = vehicle;
+        if (load) {
+            g.panel = ecu::unpack(saved); g.panel_loaded = true;
+            log(0, "ECU loaded its tune (%s)", saved == 1.0 ? "defaults" : "saved");
+        }
+        if (g.panel_dirty) { save = ecu::pack(g.panel); g.panel_dirty = false; }
+        tune = ecu::effective(g.panel, g.slots);
+        if (fresh) { static std::atomic<int> logs{12}; if (logs.fetch_sub(1) > 0) log(0, "ECU ticking on a vehicle"); }
+        if (g_vehicle_transform && g_component_transform) {
+            double v[12], c[12], t[3];
+            g_vehicle_transform(v, vehicle);
+            g_component_transform(c, sensor);
+            for (int i = 0; i < 3; ++i) t[i] = v[i] * c[9] + v[3 + i] * c[10] + v[6 + i] * c[11] + v[9 + i];
+            if (std::isfinite(t[0]) && std::isfinite(t[1]) && std::isfinite(t[2]) && std::abs(t[0]) < 1e7 && std::abs(t[2]) < 1e7) {
+                std::memcpy(g.position, t, sizeof t); g.placed = true;
+            }
+        }
+    }
+    if (save > 0) turbo::ecu_save(vehicle, sensor, save);
+    turbo::set_ecu_tune(vehicle, tune);
+    if (tune.boost_psi > 0) turbo::set_boost_target(vehicle, tune.boost_psi);
+    turbo::EcuReport r = turbo::ecu_report(vehicle);
+    turbo::VehicleBoost boost = turbo::vehicle_boost(vehicle);
+    std::lock_guard lock(g_mutex);
+    double* o = g_gauges[sensor].slots;
+    o[ecu::kOutRpm] = r.rpm; o[ecu::kOutBoostPsi] = std::max(0.0, boost.boost_psi); o[ecu::kOutKnock] = r.knock;
+    o[ecu::kOutPowerScale] = r.power_scale; o[ecu::kOutKnockLimit] = r.knock_limit;
 }
 
 EngineSample vehicle_sample(const void* vehicle, double now) {
@@ -265,10 +391,13 @@ EngineSample vehicle_sample(const void* vehicle, double now) {
 void hk_sensor_tick(uint8_t* sensor, void* vehicle, void* scene) {
     reinterpret_cast<sensor_tick_t>(h_sensor_tick.original)(sensor, vehicle, scene);
     if (!sensor || !vehicle) return;
+    int kind;
     {
         std::lock_guard lock(g_mutex);
-        if (!is_dyno(sensor)) return;
+        kind = sensor_kind(sensor);
     }
+    if (!kind) return;
+    if (kind != kDynoKind) { gauge_tick(sensor, vehicle, gauges::Kind(kind)); return; }
     // The boost setup, and the power superchargers take through their belts: the curves show what reaches the
     // wheels, net of it. Asked before taking the Dyno's lock (Turbo has its own).
     turbo::VehicleBoost boost = turbo::vehicle_boost(vehicle);
@@ -340,10 +469,18 @@ void hk_get_f64(double** ret, uint8_t* sensor, const anymaker::gc_string_view* n
     reinterpret_cast<get_f64_t>(h_get_f64.original)(ret, sensor, name);
     if (!ret || *ret || !sensor || !name) return;
     auto view = name->view();
-    int i = channel_index(view.data(), view.size());
-    if (i < 0) return;
     std::lock_guard lock(g_mutex);
-    if (!is_dyno(sensor)) return;
+    int kind = sensor_kind(sensor);
+    if (kind && kind != kDynoKind) {                // a gauge or the Boost Controller
+        int i = gauges::channel_index(gauges::Kind(kind), view.data(), view.size());
+        if (i < 0) return;
+        *ret = &g_gauges[sensor].slots[i];
+        static std::atomic<int> glogs{8};
+        if (glogs.fetch_sub(1) > 0) log(0, "gauge data channel %s connected", gauges::channels(gauges::Kind(kind))[i].name);
+        return;
+    }
+    int i = channel_index(view.data(), view.size());
+    if (i < 0 || kind != kDynoKind) return;
     *ret = &g_dynos[sensor].slots[i];               // map nodes keep their address
     static std::atomic<int> logs{8};
     if (logs.fetch_sub(1) > 0) log(0, "data channel %s connected", kChannels[i].name);
@@ -354,6 +491,12 @@ const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const ModControlsV1* controls;
 uint64_t g_action;
+uint64_t g_ecu_action;                                // the ECU panel's key (F9 by default)
+// The ECU panel (ecu_logic.h): open on its key near an ECU; Up/Down pick a row, Left/Right change it (Shift: 4 steps).
+std::atomic<bool> g_ecu_open{false};
+std::atomic<int> g_ecu_row{0};
+std::atomic<bool> g_ecu_near{false};                   // an ECU within reach (render thread writes, input reads)
+constexpr double kEcuReach = 8.0;
 std::mutex g_input_mutex;
 bool g_hidden = false, g_key_down = false, g_cleared_this_hold = false;   // under g_input_mutex
 std::atomic<bool> g_near{false};                      // a Dyno's graph is in range (render thread writes, input reads)
@@ -369,8 +512,30 @@ bool gameplay() {
     return ui && ui->copy(&s) && s.kind == ANY_UI_GAMEPLAY;
 }
 
+void ecu_nudge(int steps);
+uint32_t ecu_key();
+uint32_t ecu_input(const AnyInputV1* e) {
+    if (e->kind != ANY_KEY_DOWN && e->kind != ANY_KEY_UP) return 0;
+    uint32_t key = ecu_key();
+    if (key && e->key == key) {
+        if (e->kind == ANY_KEY_DOWN && (g_ecu_near || g_ecu_open)) { g_ecu_open = !g_ecu_open; return 1; }
+        return g_ecu_open ? 1 : 0;
+    }
+    if (!g_ecu_open) return 0;
+    bool arrow = e->key == VK_UP || e->key == VK_DOWN || e->key == VK_LEFT || e->key == VK_RIGHT;
+    if (!arrow) return 0;
+    if (e->kind == ANY_KEY_DOWN) {
+        int steps = (GetKeyState(VK_SHIFT) & 0x8000) ? 4 : 1;
+        if (e->key == VK_UP) g_ecu_row = (g_ecu_row.load() + ecu::kRowCount - 1) % ecu::kRowCount;
+        else if (e->key == VK_DOWN) g_ecu_row = (g_ecu_row.load() + 1) % ecu::kRowCount;
+        else ecu_nudge(e->key == VK_LEFT ? -steps : steps);
+    }
+    return 1;
+}
+
 uint32_t input(const AnyInputV1* e, void*) {
     if (!e) return 0;
+    if (g_ready && e->kind != ANY_FOCUS_LOST && ecu_input(e)) return 1;
     std::lock_guard lock(g_input_mutex);
     if (e->kind == ANY_FOCUS_LOST) { g_key_down = false; return 0; }
     uint32_t key = toggle_key();
@@ -454,7 +619,83 @@ std::wstring wide(const std::string& s) {           // our strings are Latin-1 (
     return w;
 }
 
+uint32_t ecu_key() {
+    if (controls && g_ecu_action) return controls->key(g_ecu_action);
+    return ecu::kPanelKeyDefault;
+}
+// The nearest ECU that ticked in the last second, within kEcuReach of the local player (under g_mutex).
+Gauge* nearest_ecu(const double player[3], bool have_player, double* distance) {
+    double now = now_seconds(), best_d = 1e30;
+    Gauge* best = nullptr;
+    for (auto& [sensor, g] : g_gauges) {
+        if (g.kind != gauges::kEcu || now - g.last_tick > 1.0) continue;
+        double d = 0;
+        if (have_player && g.placed) {
+            double dx = g.position[0] - player[0], dy = g.position[1] - player[1], dz = g.position[2] - player[2];
+            d = std::sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        if (d < best_d) { best_d = d; best = &g; }
+    }
+    if (distance) *distance = best_d;
+    return best && (!have_player || !best->placed || best_d <= kEcuReach) ? best : nullptr;
+}
+void ecu_nudge(int steps) {
+    double player[3];
+    bool have = local_player(player);
+    std::lock_guard lock(g_mutex);
+    Gauge* g = nearest_ecu(player, have, nullptr);
+    if (!g) return;
+    int row = std::clamp(g_ecu_row.load(), 0, ecu::kRowCount - 1);
+    double before = ecu::get(g->panel, row);
+    ecu::nudge(g->panel, row, steps);
+    if (ecu::get(g->panel, row) != before) {
+        g->panel_dirty = true;
+        log(0, "ECU panel: %s %s", ecu::kRows[row].label, ecu::row_text(g->panel, row).c_str());
+    }
+}
+void ecu_draw(const AnyFrameV1* f) {
+    double player[3];
+    bool have = local_player(player);
+    ecu::Tune panel, live;
+    bool wired[ecu::kRowCount]{};
+    double out[5]{};
+    {
+        std::lock_guard lock(g_mutex);
+        Gauge* g = nearest_ecu(player, have, nullptr);
+        g_ecu_near = g != nullptr;
+        if (!g) { g_ecu_open = false; return; }
+        if (!g_ecu_open) return;
+        panel = g->panel;
+        live = ecu::effective(g->panel, g->slots);
+        for (int r = 0; r < ecu::kRowCount; ++r) wired[r] = std::isfinite(g->slots[r]) && g->slots[r] != 0.0;
+        for (int i = 0; i < 5; ++i) out[i] = g->slots[ecu::kOutRpm + i];
+    }
+    Painter p;
+    p.s = std::max(0.75f, float(f->height) / 1080.f);
+    float s = p.s, row_h = 30 * s, W = 430 * s, H = 74 * s + row_h * ecu::kRowCount + 58 * s;
+    float x = 24 * s, y = std::max(8 * s, float(f->height) * .5f - H * .5f);
+    p.rect(x, y, W, H, 0xf0161b21, 8 * s);
+    p.text(x + 16 * s, y + 10 * s, W, 20 * s, L"ECU TUNING", 12 * s, 0xffaeb7c2, ANY_GPU_BOLD);
+    char key_name[32] = "F9";
+    if (controls && g_ecu_action && controls->key_name) controls->key_name(g_ecu_action, key_name, sizeof key_name);
+    p.text(x + 16 * s, y + 32 * s, W - 32 * s, 18 * s, wide(std::string("Up/Down: row   Left/Right: change (Shift x4)   ") + key_name + ": close"), 11 * s, 0xff8c96a2);
+    int sel = std::clamp(g_ecu_row.load(), 0, ecu::kRowCount - 1);
+    float ry = y + 60 * s;
+    for (int r = 0; r < ecu::kRowCount; ++r, ry += row_h) {
+        if (r == sel) p.rect(x + 8 * s, ry, W - 16 * s, row_h - 2 * s, 0xff3a4048, 4 * s);
+        p.text(x + 20 * s, ry, 200 * s, row_h, wide(ecu::kRows[r].label), 14 * s, r == sel ? 0xffedc56c : 0xffdfe4ea, r == sel ? ANY_GPU_BOLD : 0);
+        std::string v = ecu::row_text(panel, r);
+        if (wired[r]) v = ecu::row_text(live, r) + "  (wired)";
+        p.text(x + 220 * s, ry, W - 236 * s, row_h, wide(v), 14 * s, wired[r] ? 0xff7fc6ff : 0xfff5f7fa);
+    }
+    char line[160];
+    std::snprintf(line, sizeof line, "%.0f rpm   %.1f psi   knock %.0f%%   power x%.2f   knock limit %.2f", out[0], out[1], out[2] * 100, out[3], out[4]);
+    p.text(x + 16 * s, ry + 8 * s, W - 32 * s, 20 * s, wide(line), 12 * s, out[2] > 0.001 ? 0xffe05050 : 0xffaab4bd);
+}
+
 void draw(const AnyFrameV1* f, void*) {
+    if (f && gpu && f->focused && g_ready.load() && gameplay()) ecu_draw(f);
+    else g_ecu_near = false;
     if (!f || !gpu || !f->focused || !g_ready.load() || !gameplay()) { g_near = false; return; }
     bool clear = false;
     bool hidden;
@@ -616,6 +857,7 @@ void install_hooks() {
             continue;
         }
         std::lock_guard install_lock(engine_parts::install_mutex());   // one AnyEngineParts part hooks at a time
+        if (g_stop) return;                          // shut down while it was looking
         if (!g_vehicle_transform || !g_component_transform) log(1, "transforms not found; the graph shows for the most recent Dyno, wherever it is");
         if (!write_definition_file()) { log(2, "could not write the Dyno definition file; Dyno is off"); return; }
         if (!h_engine_tick.install(engine, (void*)&hk_engine_tick)) { log(2, "engine tick hook not installed; Dyno is off"); return; }
@@ -655,11 +897,18 @@ void ready() {
         ModControlActionV1 d; d.mod_id = "anyengineparts"; d.mod_name = "AnyEngineParts"; d.action_id = "dyno_toggle";
         d.label = "Show / hide dyno (hold: clear pulls)"; d.default_key = VK_F6;
         g_action = controls->register_action(&d);
+        ModControlActionV1 e; e.mod_id = "anyengineparts"; e.mod_name = "AnyVehicleOverhaul"; e.action_id = "ecu_panel";
+        e.label = "ECU tuning panel (near an ECU)"; e.default_key = ecu::kPanelKeyDefault;
+        g_ecu_action = controls->register_action(&e);
     } else controls = nullptr;
     gpu = static_cast<const AnyGpuDrawV1*>(services->query("anyapi.gpu_draw", 1));
     if (gpu && (gpu->struct_size != sizeof(*gpu) || gpu->version != 1 || !gpu->register_renderer || !gpu->emit)) gpu = nullptr;
     if (!ui || !gpu || !gpu->register_renderer(draw, nullptr)) { gpu = nullptr; log(1, "gpu_draw or ui_state unavailable; the Dyno part works but shows no graph"); }
 }
 void start() { install_hooks(); }       // on AnyEngineParts' install thread
-void shutdown() { g_stop = true; remove_hooks(); }
+void shutdown() {
+    g_stop = true;
+    std::lock_guard install_lock(engine_parts::install_mutex());   // not while a hook install is under way
+    remove_hooks();
+}
 }  // namespace dyno

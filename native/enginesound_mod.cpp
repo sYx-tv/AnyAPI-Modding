@@ -9,7 +9,7 @@
 // stock running and power voices silenced. Rotary engines are left to AnyEngineParts.
 //
 // EXPERIMENTAL. This mod hooks game functions directly through the experimental SDK (see
-// enginesound_bindings.h). The hooks resolve only on Anymaker 0.1.27 / Steam build 26113663 and are not
+// enginesound_bindings.h). The hooks resolve only on Anymaker 0.2.0 / Steam build 26328453 and are not
 // reviewed as an AnyAPI service yet. The first in-game runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
@@ -20,6 +20,8 @@
 #include "enginesound_params.h"
 #include "enginesound_save.h"
 #include "route_cell.h"
+#include "exhaust_logic.h"
+#include "rotary_tune.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -27,6 +29,7 @@
 #include <cstdio>
 #include <cstring>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -89,7 +92,7 @@ using vol_speed_t = void (*)(uint8_t* single, const double* volume, const double
 using props_t = void (*)(uint8_t* engine, uint8_t* property_data);
 using row_ui_t = void (*)(uint8_t* row, void* frontend_ui, uint8_t* client, const int32_t* a, const int32_t* b);
 using push_s32_t = void (*)(uint8_t* peer_data, const int32_t* id, const int32_t* value);
-anymaker::cell_hook h_tick, h_vol_speed, h_props, h_row;
+anymaker::cell_hook h_tick, h_vol_speed, h_props, h_row, h_vol;
 void** g_push_cell;
 
 // ------------------------------------------------------------------ which engine (any thread)
@@ -148,6 +151,7 @@ constexpr double kLead = 0.08;                      // seconds of sound queued a
 // The voice object keeps the PCM still to play: a byte buffer whose size is at +0x78 and a read cursor in samples
 // at +0x80 (the same as the AnyEngineParts sounds read).
 constexpr int kVoiceBytes = 0x78, kVoiceCursor = 0x80;
+constexpr int32_t kEffectGasVent = 20, kEffectGasValveHiss = 55;   // e_audio_effect.fluid_gas_vent, fluid_valve_gas_hiss
 }  // namespace audio
 struct GameBuffer { void* data; int32_t size; uint32_t pad; };
 static_assert(sizeof(GameBuffer) == 16, "binary.buffer");
@@ -163,11 +167,22 @@ effect_append_t g_effect_append;
 effect_place_t g_effect_place;
 buffer_reset_t g_buffer_reset;
 world_transform_t g_world_transform;
-bool g_sound_ok = false;                            // streaming found: generated sounds play
+std::atomic<bool> g_sound_ok{false};                           // streaming found: generated sounds play
 
+// AnyVehicleOverhaul exhaust (exhaust_logic.h): the engine's exhaust plays from the ends of its pipes (our tips and
+// stock vents), sounding like what is on the way; the engine itself keeps a quieter, muffled voice for its mechanics
+// and intake. Up to kMaxOutlets voices. An engine with no outlets found plays as before, from the engine.
+constexpr int kMaxOutlets = 4;
+struct OutletVoice { void* effect = nullptr; const void* part = nullptr; double position[3]{}, velocity[3]{}; bool placed = false; };
 struct ClientEngine {
     void* effect = nullptr;                          // application.audio.effect_3d (a handle)
     synth::Synth synth;
+    synth::Synth ex_synth;                           // the exhaust's own synth (the tune its parts give it)
+    OutletVoice outlets[kMaxOutlets];
+    int outlet_count = 0;
+    exhaust::Chain chain;
+    double chain_at = -10, ecu_crackle = -1;
+    std::string chain_text;
     double start = 0, last_tick = 0, retry_at = 0;
     long long written = 0;                           // samples queued since start
     double position[3]{}, velocity[3]{};
@@ -189,11 +204,15 @@ double now_seconds() {
     LARGE_INTEGER t; QueryPerformanceCounter(&t);
     return double(t.QuadPart) / double(freq.QuadPart);
 }
+void release_effect(void*& effect) {
+    if (!effect) return;
+    g_effect_stop(&effect);
+    g_effect_reset(&effect);
+    effect = nullptr;
+}
 void release_voice(ClientEngine& e) {
-    if (!e.effect) return;
-    g_effect_stop(&e.effect);
-    g_effect_reset(&e.effect);
-    e.effect = nullptr;
+    release_effect(e.effect);
+    for (OutletVoice& o : e.outlets) release_effect(o.effect);
 }
 // Samples the voice still has to play, or -1 when its fields don't look right.
 long long voice_queued(void* effect) {
@@ -203,6 +222,208 @@ long long voice_queued(void* effect) {
     if (bytes < 0 || cursor < 0 || bytes > 64 * synth::kSampleRate) return -1;
     return std::max<long long>(0, bytes / 2 - cursor);
 }
+
+// ------------------------------------------------------------------ the exhaust's parts (client, every 2 s)
+namespace exoff {
+constexpr ptrdiff_t component_id = 8;                // client_scene.vehicle_component.m_id (s32)
+constexpr ptrdiff_t component_vehicle = 200;         // ptr<client_scene.vehicle>
+constexpr ptrdiff_t vehicle_id = 8;
+constexpr ptrdiff_t vehicle_grids = 16 + 8;          // m_grids -> vector<ref<vehicle_grid>>
+constexpr ptrdiff_t grid_components = 40 + 8;
+constexpr ptrdiff_t vehicle_gas_links = 456 + 8;     // m_gas_links (container) -> vector<ref<vehicle_gas_link>>
+constexpr ptrdiff_t link_c0 = 8 + 8 + 8, link_n0 = 8 + 24 + 8, link_c1 = 48 + 8 + 8, link_n1 = 48 + 24 + 8;   // m_p0 / m_p1 node_id
+constexpr ptrdiff_t def_class = 48, def_logic_nodes = 184;
+}  // namespace exoff
+struct LogicNodeRaw { anymaker::gc_string_view id; int32_t pos[3]; int32_t dir, type, size; };
+static_assert(sizeof(LogicNodeRaw) == 40, "logic node");
+template <class F> void each_ref(const uint8_t* vec, int max_count, F&& visit) {
+    if (!anymaker::readable(vec, sizeof(anymaker::gc_vector_raw))) return;
+    anymaker::gc_vector_raw v;
+    std::memcpy(&v, vec, sizeof v);
+    if (v.count <= 0 || v.element_size != 16 || v.count > max_count || v.capacity < v.count || !v.buffer || !anymaker::readable(v.buffer, size_t(v.capacity) * 16)) return;
+    for (int32_t i = 0; i < v.count; ++i) {
+        auto* ref = v.at<anymaker::gc_ref_raw<uint8_t>>(i);
+        if (ref && ref->ptr) visit(ref->ptr);
+    }
+}
+anymaker::gc_string_view string_at(const void* base, ptrdiff_t o) {
+    anymaker::gc_string_view s{};
+    if (base && anymaker::readable(static_cast<const uint8_t*>(base) + o, sizeof s)) std::memcpy(&s, static_cast<const uint8_t*>(base) + o, sizeof s);
+    if (!s.data || s.length <= 0 || s.length > 64 || !anymaker::readable(s.data, size_t(s.length))) s = {};
+    return s;
+}
+using ecu_crackle_t = double (*)(int32_t);
+ecu_crackle_t ecu_crackle_fn() {                     // AnyVehicleOverhaul's Turbo part, when it is in this DLL
+    static ecu_crackle_t fn = [] {
+        HMODULE self = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&string_at, &self)) return ecu_crackle_t(nullptr);
+        return reinterpret_cast<ecu_crackle_t>(GetProcAddress(self, "AVO_EcuCrackle"));
+    }();
+    return fn;
+}
+void find_exhaust(uint8_t* engine, ClientEngine& v, double now) {
+    if (now - v.chain_at < 2.0) return;
+    v.chain_at = now;
+    const uint8_t* vehicle = static_cast<const uint8_t*>(pointer_at(engine, exoff::component_vehicle));
+    if (auto fn = ecu_crackle_fn(); fn && vehicle && anymaker::readable(vehicle + exoff::vehicle_id, 4)) v.ecu_crackle = fn(rd<int32_t>(vehicle, exoff::vehicle_id));
+    std::vector<exhaust::Part> parts;
+    std::vector<exhaust::Link> links;
+    if (vehicle) {
+        each_ref(vehicle + exoff::vehicle_grids, 4096, [&](uint8_t* grid) {
+            if (anymaker::readable(grid, 112)) each_ref(grid + exoff::grid_components, 1 << 16, [&](uint8_t* c) {
+                if (!anymaker::readable(c, 224) || parts.size() > 4096) return;
+                const void* def = pointer_at(c, off::client_definition);
+                auto id = string_at(def, off::definition_id), cls = string_at(def, exoff::def_class);
+                exhaust::Part p;
+                p.id = rd<int32_t>(c, exoff::component_id);
+                p.handle = c;
+                p.role = exhaust::role_of(id.data, size_t(id.length), cls.data, size_t(cls.length), &p.sub, &p.layout);
+                p.exhaust_manifold = cls.length == 16 && std::memcmp(cls.data, "exhaust_manifold", 16) == 0;
+                parts.push_back(p);
+            });
+        });
+        each_ref(vehicle + exoff::vehicle_gas_links, 1 << 16, [&](uint8_t* l) {
+            if (anymaker::readable(l, 96) && links.size() < 8192)
+                links.push_back({rd<int32_t>(l, exoff::link_c0), rd<int32_t>(l, exoff::link_n0), rd<int32_t>(l, exoff::link_c1), rd<int32_t>(l, exoff::link_n1)});
+        });
+    }
+    int32_t me = rd<int32_t>(engine, exoff::component_id);
+    // Where the exhaust starts: the engine's own gas nodes, and every exhaust manifold on the vehicle (the stock
+    // manifolds are parts of their own, snapped onto the engine, and the pipes start from them; Nate's 2026-11-05 test
+    // had all the sound at the engine because the walk only looked at the engine's own nodes). A vehicle with several
+    // engines gives each one every manifold (the client has no manifold-to-engine link to go by).
+    struct Start { int32_t component, node; bool manifold; };
+    std::vector<Start> starts;
+    auto add_start = [&](int32_t c, int32_t n, bool manifold) {
+        for (const Start& s : starts) if (s.component == c && s.node == n) return;
+        starts.push_back({c, n, manifold});
+    };
+    std::vector<int32_t> manifolds;
+    for (size_t i = 0; i < parts.size(); ++i)
+        if (parts[i].exhaust_manifold) manifolds.push_back(parts[i].id);
+    for (const auto& l : links) {
+        if (l.c0 == me) add_start(me, l.n0, false);
+        if (l.c1 == me) add_start(me, l.n1, false);
+        for (int32_t m : manifolds) {
+            if (l.c0 == m) add_start(m, l.n0, true);
+            if (l.c1 == m) add_start(m, l.n1, true);
+        }
+    }
+    const void* def = pointer_at(engine, off::client_definition);
+    const auto* lv = def && anymaker::readable(static_cast<const uint8_t*>(def) + exoff::def_logic_nodes, sizeof(anymaker::gc_vector_raw))
+                         ? reinterpret_cast<const anymaker::gc_vector_raw*>(static_cast<const uint8_t*>(def) + exoff::def_logic_nodes) : nullptr;
+    exhaust::Chain chain;
+    std::vector<int> outlets;
+    std::string text;
+    for (const Start& st : starts) {
+        int32_t n = st.node;
+        const LogicNodeRaw* ln = !st.manifold && lv ? lv->at<LogicNodeRaw>(n) : nullptr;
+        auto nid = ln && anymaker::readable(ln, sizeof *ln) ? ln->id : anymaker::gc_string_view{};
+        if (nid.data && (nid.length <= 0 || nid.length > 64 || !anymaker::readable(nid.data, size_t(nid.length)))) nid = {};
+        int side = st.manifold ? 1 : exhaust::node_side(nid.data, size_t(nid.length));
+        exhaust::Walk w = exhaust::walk(parts, links, st.component, n);
+        bool is_exhaust = side == 1 || (side == 0 && !w.intake && !w.outlets.empty());
+        char line[200];
+        std::snprintf(line, sizeof line, "%s%s %d node %d '%.*s' %s: %d parts, %zu outlets, %d turbos%s", text.empty() ? "" : "; ", st.manifold ? "manifold" : "engine",
+                      st.component, n, int(nid.length), nid.data ? nid.data : "",
+                      is_exhaust ? "exhaust" : "air", w.parts, w.outlets.size(), w.chain.turbos, w.intake ? ", reaches the intake" : "");
+        text += line;
+        if (!is_exhaust) continue;
+        if (st.manifold)                             // a race header is the manifold the walk starts from
+            for (const exhaust::Part& p : parts)
+                if (p.id == st.component && p.role == exhaust::kInlinePart && p.sub == exhaust::kHeaderEqual) { ++chain.count[exhaust::kHeaderEqual]; break; }
+        for (int k = 0; k < exhaust::kInlineCount; ++k) chain.count[k] += w.chain.count[k];
+        for (int k = 0; k < exhaust::kLookCount; ++k) chain.tips[k] += w.chain.tips[k];
+        chain.turbos += w.chain.turbos; chain.side_pipes += w.chain.side_pipes; chain.outlets += w.chain.outlets;
+        outlets.insert(outlets.end(), w.outlets.begin(), w.outlets.end());
+    }
+    // No outlet found along the pipes (a race header is a gas tank: its ports are not linked through it on the client,
+    // and a pipe layout the walk does not know ends it too): the exhaust tips on the vehicle are where the exhaust
+    // goes, with every exhaust part on the vehicle in the chain.
+    if (outlets.empty()) {
+        exhaust::Chain all;
+        for (size_t i = 0; i < parts.size(); ++i) {
+            const exhaust::Part& p = parts[i];
+            if (p.role == exhaust::kTip) { outlets.push_back(int(i)); ++all.outlets; ++all.tips[p.sub]; if (p.layout == exhaust::kSide) ++all.side_pipes; }
+            else if (p.role == exhaust::kInlinePart) ++all.count[p.sub];
+            else if (p.role == exhaust::kTurbo) ++all.turbos;
+        }
+        if (!outlets.empty()) { chain = all; text += std::string(text.empty() ? "" : "; ") + "no outlet along the pipes: every tip on the vehicle"; }
+    }
+    v.chain = chain;
+    int count = std::min<int>(kMaxOutlets, int(outlets.size()));
+    for (int i = 0; i < kMaxOutlets; ++i) {
+        const void* part = i < count ? parts[size_t(outlets[size_t(i)])].handle : nullptr;
+        if (v.outlets[i].part != part) { release_effect(v.outlets[i].effect); v.outlets[i] = OutletVoice{}; v.outlets[i].part = part; }
+    }
+    v.outlet_count = count;
+    for (int k = 0; k < exhaust::kInlineCount; ++k)
+        if (chain.count[k]) text += std::string(", ") + std::to_string(chain.count[k]) + "x " + exhaust::kInlineNames[k];
+    for (int k = 0; k < exhaust::kLookCount; ++k)
+        if (chain.tips[k]) text += std::string(", ") + std::to_string(chain.tips[k]) + "x " + exhaust::kLookNames[k] + " tip";
+    if (text != v.chain_text) {                      // AVO dev build: what the engine's exhaust is, when it changes
+        static std::atomic<int> logs{64};
+        if (logs.fetch_sub(1) > 0)
+            log(0, "AVO exhaust engine %d: %d parts, %zu links, %d outlets (voices %d), ECU pops %.2f | %s", me, int(parts.size()), links.size(), int(outlets.size()), count,
+                v.ecu_crackle, text.empty() ? "no gas links" : text.c_str());
+        v.chain_text = text;
+    }
+}
+// The outlets are parts of the vehicle held between walks (2 s): one deleted meanwhile (Nate 2026-11-06: deleting a
+// stock gas vent with the engine running crashed the game) is freed memory. Every tick, outlets no longer among the
+// vehicle's parts are dropped and the walk runs again at once.
+void drop_gone_outlets(uint8_t* engine, ClientEngine& v) {
+    if (v.outlet_count <= 0) return;
+    bool alive[kMaxOutlets]{};
+    const uint8_t* vehicle = static_cast<const uint8_t*>(pointer_at(engine, exoff::component_vehicle));
+    if (vehicle) each_ref(vehicle + exoff::vehicle_grids, 4096, [&](uint8_t* grid) {
+        if (anymaker::readable(grid, 112)) each_ref(grid + exoff::grid_components, 1 << 16, [&](uint8_t* c) {
+            for (int i = 0; i < v.outlet_count; ++i) if (v.outlets[i].part == c) alive[i] = true;
+        });
+    });
+    bool gone = false;
+    for (int i = 0; i < v.outlet_count; ++i)
+        if (!alive[i] && v.outlets[i].part) { release_effect(v.outlets[i].effect); v.outlets[i] = OutletVoice{}; gone = true; }
+    if (gone) { v.chain_at = -10; v.chain_text.clear(); }
+}
+synth::Tune tuned(synth::Tune t, const exhaust::Chain& c, double ecu_crackle) {
+    exhaust::SoundTune s{t.pipe_hz, t.body_hz, t.rasp, t.muffler, t.crackle, t.intake, t.uneven, t.gain};
+    s = exhaust::apply(s, c, ecu_crackle);
+    t.pipe_hz = s.pipe_hz; t.body_hz = s.body_hz; t.rasp = s.rasp; t.muffler = s.muffler; t.crackle = s.crackle; t.intake = s.intake;
+    t.uneven = s.uneven; t.gain = s.gain;
+    return t;
+}
+// Places one voice (starts it when it has none); false when there is none to play into.
+bool place_voice(void*& effect, double* position, double* velocity, bool& placed, const double* p, double step, double now, double& retry_at) {
+    if (std::isfinite(p[0]) && std::isfinite(p[1]) && std::isfinite(p[2])) {
+        for (int i = 0; i < 3; ++i) {
+            double vel = placed ? (p[i] - position[i]) / step : 0.0;
+            vel = std::max(-150.0, std::min(150.0, vel));
+            velocity[i] += (vel - velocity[i]) * 0.2;
+            position[i] = p[i];
+        }
+        placed = true;
+    }
+    if (!placed) return false;
+    if (!effect) {
+        if (now < retry_at) return false;
+        int32_t group = audio::kGroupVehicle; double range = audio::kRange;
+        g_play_voice(&effect, &group, position, velocity, &range);
+        if (!effect) { retry_at = now + 1.0; return false; }
+    }
+    g_effect_place(&effect, position, velocity);
+    return true;
+}
+void append_pcm(void*& effect, const int16_t* pcm, int n) {
+    GameBuffer buffer{nullptr, 0, 0};
+    int32_t bytes = n * 2;
+    g_buffer_reset(&buffer, &bytes);
+    if (!buffer.data || buffer.size != bytes) return;
+    std::memcpy(buffer.data, pcm, size_t(bytes));
+    g_effect_append(&effect, &buffer);
+    if (buffer.data) { int32_t zero = 0; g_buffer_reset(&buffer, &zero); }
+}
+std::vector<int16_t> g_ex_pcm;
 
 void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const double* dt) {
     double now = now_seconds();
@@ -214,6 +435,8 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     in.layout = kind.layout;
     in.cylinders = cylinders(kind, extend_at(self, off::client_extend_z));
     in.tune = tune_of(decode(value, kind.layout), kind);
+    drop_gone_outlets(self, v);
+    find_exhaust(self, v, now);
     // Firing: the game's power voice is audible.
     in.running = v.game_volume_seen ? v.game_volume > 0.001 : in.rps >= synth::kIdleRps;
     if (in.running != v.was_running) {
@@ -269,10 +492,30 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     long long queued = voice_queued(v.effect);
     if (queued >= 0) played = v.written - queued;
     if (v.written < played) v.written = played;
-    long long want = played + (long long)(audio::kLead * synth::kSampleRate) - v.written;
+    double lead = std::clamp(2.5 * step, audio::kLead, 0.25);   // a long frame must not drain the queue
+    long long want = played + (long long)(lead * synth::kSampleRate) - v.written;
     if (want <= 0) return;
     int n = int(std::min<long long>(want, synth::kSampleRate / 5));
     g_pcm.resize(size_t(n));
+    if (v.outlet_count > 0) {                        // the exhaust at its outlets, the engine itself quieter and muffled
+        synth::Input ex = in;
+        ex.tune = tuned(in.tune, v.chain, v.ecu_crackle);
+        ex.tune.gain *= 1.0 / std::sqrt(double(v.outlet_count));
+        g_ex_pcm.resize(size_t(n));
+        synth::render(v.ex_synth, ex, g_ex_pcm.data(), n);
+        for (int i = 0; i < v.outlet_count; ++i) {
+            OutletVoice& o = v.outlets[i];
+            if (!o.part) continue;
+            double m[12]{};
+            g_world_transform(m, o.part);
+            double retry = 0;
+            if (place_voice(o.effect, o.position, o.velocity, o.placed, m + off::mat34_t / 8, step, now, retry)) append_pcm(o.effect, g_ex_pcm.data(), n);
+        }
+        in.tune.muffler = 1.0;
+        in.tune.crackle = 0.0;
+        in.tune.gain *= 0.4;
+        in.tune.intake = std::min(1.0, in.tune.intake * 1.3 + 0.1);
+    } else if (v.ecu_crackle >= 0) in.tune.crackle = std::max(in.tune.crackle, v.ecu_crackle);
     synth::render(v.synth, in, g_pcm.data(), n);
     GameBuffer buffer{nullptr, 0, 0};
     int32_t bytes = n * 2;
@@ -283,6 +526,39 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     if (buffer.data) { int32_t zero = 0; g_buffer_reset(&buffer, &zero); }   // the effect refused it (queue full)
     v.written += n;
 }
+
+// Rotary and stock-sound engines keep their own voices (rotary_mod.cpp, the game's recordings): they only get told
+// where the exhaust comes out, the middle of the outlets the walk finds, so their sound plays from the tips.
+std::unordered_map<const void*, ClientEngine> g_exhaust_only;
+double g_exhaust_sweep = 0;
+bool exhaust_position(uint8_t* engine, double out[3]) {
+    if (!engine || !g_world_transform) return false;
+    double now = now_seconds();
+    ClientEngine& v = g_exhaust_only[engine];
+    v.last_tick = now;
+    drop_gone_outlets(engine, v);
+    find_exhaust(engine, v, now);
+    if (now - g_exhaust_sweep > 1.0) {
+        g_exhaust_sweep = now;
+        for (auto it = g_exhaust_only.begin(); it != g_exhaust_only.end();)
+            if (now - it->second.last_tick > 1.0) it = g_exhaust_only.erase(it); else ++it;
+    }
+    double sum[3]{}; int n = 0;
+    for (int i = 0; i < v.outlet_count; ++i) {
+        if (!v.outlets[i].part) continue;
+        double m[12]{};
+        g_world_transform(m, v.outlets[i].part);
+        const double* p = m + off::mat34_t / 8;
+        if (!std::isfinite(p[0]) || !std::isfinite(p[1]) || !std::isfinite(p[2])) continue;
+        for (int k = 0; k < 3; ++k) sum[k] += p[k];
+        ++n;
+    }
+    if (!n) return false;
+    for (int k = 0; k < 3; ++k) out[k] = sum[k] / n;
+    return true;
+}
+thread_local double t_exhaust_pos[3];
+thread_local bool t_exhaust_moved;   // this stock-sound engine's voices play from its exhaust outlets
 
 void sweep_engines(double now) {
     if (now - g_last_sweep < 1.0) return;
@@ -301,7 +577,13 @@ void hk_tick(uint8_t* engine, void* client, void* vehicle, void* scene, const do
     if (!generated) {
         auto found = g_engines.find(engine);   // switched back to a game sound: hand the voice back
         if (found != g_engines.end()) { release_voice(found->second); g_engines.erase(found); }
-        return original(engine, client, vehicle, scene, dt);
+        uint8_t* prev = t_engine; bool prev_generated = t_generated, prev_moved = t_exhaust_moved;
+        t_engine = engine; t_generated = false;
+        t_exhaust_moved = !kind.rotary && exhaust_position(engine, t_exhaust_pos);   // the rotary asks for itself
+        original(engine, client, vehicle, scene, dt);
+        t_engine = prev; t_generated = prev_generated; t_exhaust_moved = prev_moved;
+        if (!g_engines.empty()) sweep_engines(now_seconds());   // the last generated engine may be gone: free its voice
+        return;
     }
     uint8_t* prev = t_engine; bool prev_generated = t_generated;
     t_engine = engine; t_generated = true;
@@ -316,7 +598,18 @@ void hk_tick(uint8_t* engine, void* client, void* vehicle, void* scene, const do
 // knock while damaged and its leak pass through. The power voice's volume is kept: it says the engine is firing.
 void hk_vol_speed(uint8_t* single, const double* volume, const double* speed, const int32_t* effect, const int32_t* group, const void* pos) {
     auto original = reinterpret_cast<vol_speed_t>(h_vol_speed.original);
+    // The hiss of gas valves and the rush of open gas vents (stock exhaust ends) are muted (Nate 2026-11-05): the
+    // exhaust is heard from the engine's sound at its tips instead.
+    if (effect && volume && (*effect == audio::kEffectGasVent || *effect == audio::kEffectGasValveHiss)) {
+        double zero = 0;
+        return original(single, &zero, speed, effect, group, pos);
+    }
     uint8_t* e = t_engine;
+    if (e && !t_generated && t_exhaust_moved && single && pos) {   // a stock-sound engine: its voices from the tips
+        ptrdiff_t o = single - e;
+        if (o == off::voice_operate || o == off::voice_power || o == off::voice_knock || o == off::voice_leak)
+            return original(single, volume, speed, effect, group, t_exhaust_pos);
+    }
     if (!e || !t_generated || !single || !volume) return original(single, volume, speed, effect, group, pos);
     ptrdiff_t o = single - e;
     if (o != off::voice_operate && o != off::voice_power && o != off::voice_knock) return original(single, volume, speed, effect, group, pos);
@@ -329,16 +622,27 @@ void hk_vol_speed(uint8_t* single, const double* volume, const double* speed, co
     original(single, &zero, speed, effect, group, pos);
 }
 
+// The gas vents' loop and the gas valves' hiss (they play through update_play_volume, not the speed one): muted.
+using vol_t = void (*)(uint8_t* single, const double* volume, const int32_t* effect, const int32_t* group, const void* pos);
+void hk_vol(uint8_t* single, const double* volume, const int32_t* effect, const int32_t* group, const void* pos) {
+    auto original = reinterpret_cast<vol_t>(h_vol.original);
+    if (effect && volume && (*effect == audio::kEffectGasVent || *effect == audio::kEffectGasValveHiss)) {
+        double zero = 0;
+        return original(single, &zero, effect, group, pos);
+    }
+    original(single, volume, effect, group, pos);
+}
+
 // Host: widen the engine's sound row so the generated sounds, Custom and packed tunes are accepted and saved, and
 // tag it with the engine (layout, size, cylinders) for the clients' panel.
 std::atomic<int> g_range_logs{6};
 void hk_props(uint8_t* engine, uint8_t* pd) {
     reinterpret_cast<props_t>(h_props.original)(engine, pd);
-    if (!engine || !pd || !anymaker::readable(pd + off::pd_elements, sizeof(anymaker::gc_vector_raw))) return;
+    if (!g_ready || !engine || !pd || !anymaker::readable(pd + off::pd_elements, sizeof(anymaker::gc_vector_raw))) return;
     EngineKind kind = kind_of(pointer_at(engine, off::server_definition));
-    if (kind.rotary) return;                         // AnyEngineParts' rotary keeps its own ports row
     int32_t ext = extend_at(engine, off::server_extend_z);
-    int n = cylinders(kind, ext);
+    // AnyEngineParts' rotary: its ports, rotor-count sounds and Custom (rotary_tune.h), played by rotary_mod.cpp
+    int n = kind.rotary ? rotary::rotors_from_extend(ext) : cylinders(kind, ext);
     auto* vec = reinterpret_cast<const anymaker::gc_vector_raw*>(pd + off::pd_elements);
     for (int32_t i = 0; i < vec->count && i < 64; ++i) {
         auto* ref = vec->at<anymaker::gc_ref_raw<uint8_t>>(i);
@@ -347,7 +651,8 @@ void hk_props(uint8_t* engine, uint8_t* pd) {
         if (rd<uint8_t*>(row, off::srow_value_ptr) != engine + off::server_engine_sound) continue;
         int32_t lo = rd<int32_t>(row, off::srow_min), hi = rd<int32_t>(row, off::srow_max), name = rd<int32_t>(row, off::srow_name);
         char engine_label[32];
-        engine_name(kind.layout, n, engine_label, sizeof engine_label);
+        if (kind.rotary) std::snprintf(engine_label, sizeof engine_label, "%d-rotor", n);
+        else engine_name(kind.layout, n, engine_label, sizeof engine_label);
         if (g_range_logs.fetch_sub(1) > 0)
             log(0, "host engine sound row: %s %s (extend z %d), label=%d range %d..%d value=%d", size_name(kind.size), engine_label, ext, name, lo, hi, rd<int32_t>(engine, off::server_engine_sound + 24));
         if (lo != kVanillaMin || hi != kVanillaMax || name != kSoundLabel) {
@@ -570,6 +875,22 @@ Layout panel_layout(int* cylinders_out = nullptr) {
     if (cylinders_out) *cylinders_out = n;
     return k.layout;
 }
+bool panel_rotary(int* rotors = nullptr) {
+    EngineKind k; int n;
+    decode_tag(g_panel.tag, k, n);
+    if (rotors) *rotors = n;
+    return k.rotary;
+}
+Choice panel_decode(int32_t value) {
+    int rotors = 2;
+    if (panel_rotary(&rotors)) return rotary_tune::decode(value, rotors);
+    return decode(value, panel_layout());
+}
+const char* panel_choice_name(int32_t value) {
+    int rotors = 2;
+    if (panel_rotary(&rotors)) return rotary_tune::choice_name(value, rotors);
+    return choice_name(value, panel_layout());
+}
 void queue_send(int32_t value) {
     g_panel.pending = value; g_panel.pending_row = g_panel.row_id; g_panel.has_pending = true; g_panel.last_commit = GetTickCount64();
 }
@@ -586,7 +907,7 @@ void hk_row(uint8_t* row, void* fui, uint8_t* client, const int32_t* a, const in
         uint64_t now = GetTickCount64();
         if (g_panel.row_id != id || now - g_panel.seen > 1000) { g_panel.dragging = -1; g_panel.has_pending = false; }
         g_panel.seen = now; g_panel.row_id = id; g_panel.tag = kServerMax - real_max;
-        if (g_panel.value != value && g_panel.dragging < 0 && now - g_panel.last_commit > 1000) g_panel.draft = decode(value, panel_layout()).params;
+        if (g_panel.value != value && g_panel.dragging < 0 && now - g_panel.last_commit > 1000) g_panel.draft = panel_decode(value).params;
         g_panel.value = value;
         if (g_panel.has_pending && g_panel.pending_row == id) { send = true; to_send = g_panel.pending; g_panel.has_pending = false; }
     }
@@ -619,6 +940,7 @@ bool find_streaming() {
     g_buffer_reset = reinterpret_cast<buffer_reset_t>(native(audio::buffer_reset_rva));
     return g_world_transform && g_play_voice && g_effect_append && g_effect_place && g_effect_stop && g_effect_reset && g_buffer_reset;
 }
+void remove_hooks();
 void install_hooks() {
     using namespace anymaker::experimental;
     for (int attempt = 0; attempt < 180 && !g_stop; ++attempt) {
@@ -640,7 +962,9 @@ void install_hooks() {
         // voices silenced.
         bool ok = h_vol_speed.install(vol, (void*)&hk_vol_speed) && h_tick.install(tick, (void*)&hk_tick) &&
                   h_props.install(props, (void*)&hk_props) && h_row.install(row, (void*)&hk_row);
-        if (!ok) { log(2, "a hook cell was already taken or not writable; EngineSound is off"); return; }
+        if (!ok) { remove_hooks(); log(2, "a hook cell was already taken or not writable; EngineSound is off"); return; }
+        if (void** quiet = hook_cell(bind::effect_update_play_volume); quiet && h_vol.install(quiet, (void*)&hk_vol)) log(0, "gas vent and valve hiss muted");
+        else log(1, "gas vent and valve sound function not found; their hiss stays");
         g_sound_ok = true;
         g_ready = true;
         log(0, "Ready after %d s: generated sounds %d..%d, Custom %d", attempt, kFirstPreset, kCustomIndex - 1, kCustomIndex);
@@ -660,7 +984,7 @@ void remove_hooks() {
     g_sound_ok = false;
     h_save_engine.remove((void*)&hk_save_engine); h_save_vehicle.remove((void*)&hk_save_vehicle);
     h_row.remove((void*)&hk_row); h_props.remove((void*)&hk_props);
-    h_tick.remove((void*)&hk_tick); h_vol_speed.remove((void*)&hk_vol_speed);
+    h_tick.remove((void*)&hk_tick); h_vol_speed.remove((void*)&hk_vol_speed); h_vol.remove((void*)&hk_vol);
 }
 
 // ------------------------------------------------------------------ panel drawing and input
@@ -688,11 +1012,13 @@ void draw(const AnyFrameV1* frame, void*) {
     Layout layout = panel_layout(&cyl);
     EngineKind kind; int unused;
     decode_tag(g_panel.tag, kind, unused);
-    Choice c = decode(g_panel.value, layout);
+    const bool rot = kind.rotary;
+    Choice c = panel_decode(g_panel.value);
     bool custom = c.mode == Mode::Custom;
+    const int slider_count = rot ? rotary_tune::kSliderCount : kSliderCount;
     float s = std::clamp(float(frame->height) / 1080.f, .7f, 1.8f);
     float w = 380 * s, head = 58 * s, item_h = 24 * s, row_h = 26 * s;
-    float h = head + kOptionCount * item_h + 10 * s + (custom ? row_h * kSliderCount + 12 * s : 40 * s);
+    float h = head + kOptionCount * item_h + 10 * s + (custom ? row_h * slider_count + 12 * s : 40 * s);
     float x = std::max(0.f, float(frame->width) - w - 24 * s), y = std::max(8 * s, float(frame->height) * .5f - h * .5f);
     g_panel.x = x; g_panel.w = w; g_panel.scale = s; g_panel.item_h = item_h; g_panel.row_h = row_h;
     g_panel.list_y = y + head;
@@ -707,11 +1033,12 @@ void draw(const AnyFrameV1* frame, void*) {
         AnyGpuCommandV1 cmd; cmd.kind = ANY_GPU_TEXT; cmd.rect[0] = tx; cmd.rect[1] = ty; cmd.rect[2] = tw; cmd.rect[3] = th; cmd.text = t;
         cmd.text_length = uint32_t(wcslen(t)); cmd.font_size = size; cmd.color = color; cmd.flags = flags | ANY_GPU_NOWRAP | ANY_GPU_VCENTER; gpu->emit(&cmd); };
     rect(ANY_GPU_ROUND_RECT, x, y, w, h, 0xf0191c20, 6 * s);
-    text(x + 14 * s, y + 8 * s, w - 28 * s, 18 * s, L"ENGINE SOUND", 11 * s, 0xffaeb7c2, ANY_GPU_BOLD);
+    text(x + 14 * s, y + 8 * s, w - 28 * s, 18 * s, rot ? L"ROTARY SOUND" : L"ENGINE SOUND", 11 * s, 0xffaeb7c2, ANY_GPU_BOLD);
     wchar_t buf[96];
     char engine_label[32];
     engine_name(layout, cyl, engine_label, sizeof engine_label);
-    if (kind.known) swprintf(buf, 96, L"%hs (%hs block): %hs", engine_label, size_name(kind.size), choice_name(g_panel.value, layout));
+    if (rot) swprintf(buf, 96, L"%d-rotor rotary: %hs", cyl, panel_choice_name(g_panel.value));
+    else if (kind.known) swprintf(buf, 96, L"%hs (%hs block): %hs", engine_label, size_name(kind.size), choice_name(g_panel.value, layout));
     else swprintf(buf, 96, L"%hs", choice_name(g_panel.value, layout));
     text(x + 14 * s, y + 26 * s, w - 28 * s, 26 * s, buf, 16 * s, 0xfff5f7fa);
     // The options: this layout's five sounds, the game's own three and Custom.
@@ -720,7 +1047,8 @@ void draw(const AnyFrameV1* frame, void*) {
         float ry = g_panel.list_y + i * item_h;
         bool on = option_selected(slot, g_panel.value);
         if (on) rect(ANY_GPU_ROUND_RECT, x + 10 * s, ry + 1 * s, w - 20 * s, item_h - 2 * s, 0xff3a4048, 4 * s);
-        const char* label = slot < 3 ? choice_name(option_value(slot), layout) : slot == kOptionCount - 1 ? "Custom" : synth::kPresets[layout][slot - 3].name;
+        const char* label = slot < 3 ? panel_choice_name(option_value(slot)) : slot == kOptionCount - 1 ? "Custom"
+                            : rot ? rotary_tune::preset_name(cyl, slot - 3) : synth::kPresets[layout][slot - 3].name;
         swprintf(buf, 96, L"%hs", label);
         text(x + 22 * s, ry, w - 44 * s, item_h, buf, 13 * s, on ? 0xffedc56c : slot < 3 ? 0xff8c96a2 : 0xffdfe4ea, on ? ANY_GPU_BOLD : 0);
     }
@@ -731,15 +1059,17 @@ void draw(const AnyFrameV1* frame, void*) {
         return;
     }
     const Params& p = g_panel.draft;
-    for (int i = 0; i < kSliderCount; ++i) {
-        float ry = g_panel.sliders_y + i * row_h;
-        swprintf(buf, 96, L"%hs", kSliders[i].label);
+    for (int r = 0; r < slider_count; ++r) {
+        const int i = rot ? rotary_tune::kSliderOrder[r] : r;
+        float ry = g_panel.sliders_y + r * row_h;
+        swprintf(buf, 96, L"%hs", rot ? rotary_tune::slider_label(i) : kSliders[i].label);
         text(x + 14 * s, ry, 145 * s, row_h, buf, 12 * s, 0xffdfe4ea);
         rect(ANY_GPU_ROUND_RECT, g_panel.track_x, ry + row_h * .6f - 2 * s, g_panel.track_w, 4 * s, 0xff3a4048, 2 * s);
         float t = float(p.v[i]) / float(max_step(i));
         rect(ANY_GPU_ROUND_RECT, g_panel.track_x, ry + row_h * .6f - 2 * s, g_panel.track_w * t, 4 * s, 0xffedc56c, 2 * s);
         rect(ANY_GPU_ELLIPSE, g_panel.track_x + g_panel.track_w * t - 6 * s, ry + row_h * .6f - 6 * s, 12 * s, 12 * s, g_panel.dragging == i ? 0xffffffff : 0xffedc56c);
-        value_text(i, p, layout, cyl, buf, 96);
+        if (rot) rotary_tune::value_text(i, p, buf, 96);
+        else value_text(i, p, layout, cyl, buf, 96);
         text(g_panel.track_x, ry - 1 * s, g_panel.track_w, 12 * s, buf, 10 * s, 0xffaeb7c2, ANY_GPU_CENTER);
     }
 }
@@ -757,7 +1087,8 @@ uint32_t input(const AnyInputV1* e, void*) {
     std::lock_guard lock(g_mutex);
     if (e->kind == ANY_FOCUS_LOST) { g_panel.dragging = -1; return 0; }
     if (!g_panel.visible) return 0;
-    const Layout layout = panel_layout();
+    const bool rot = panel_rotary();
+    const int slider_count = rot ? rotary_tune::kSliderCount : kSliderCount;
     const bool inside = e->x >= g_panel.x && e->x < g_panel.x + g_panel.w && e->y >= g_panel.list_y && e->y < g_panel.bottom;
     const bool down = e->kind == ANY_MOUSE_DOWN && e->button == 1;
     // Option list.
@@ -765,25 +1096,26 @@ uint32_t input(const AnyInputV1* e, void*) {
         int i = std::clamp(int((e->y - g_panel.list_y) / g_panel.item_h), 0, kOptionCount - 1);
         int slot = i < synth::kPresetsPerLayout ? 3 + i : i < synth::kPresetsPerLayout + 3 ? i - synth::kPresetsPerLayout : i;
         if (!option_selected(slot, g_panel.value)) {
-            int32_t v = slot == kOptionCount - 1 ? pack(decode(g_panel.value, layout).params) : option_value(slot);
-            if (slot == kOptionCount - 1) g_panel.draft = decode(g_panel.value, layout).params;
+            int32_t v = slot == kOptionCount - 1 ? pack(panel_decode(g_panel.value).params) : option_value(slot);
+            if (slot == kOptionCount - 1) g_panel.draft = panel_decode(g_panel.value).params;
             queue_send(v);
-            log(0, "panel: %s -> %s", choice_name(g_panel.value, layout), choice_name(v, layout));
+            log(0, "panel: %s -> %s", panel_choice_name(g_panel.value), panel_choice_name(v));
         }
         return 1;
     }
-    if (decode(g_panel.value, layout).mode != Mode::Custom) {
+    if (panel_decode(g_panel.value).mode != Mode::Custom) {
         bool on_button = inside && e->y >= g_panel.button_y && e->y < g_panel.button_y + g_panel.button_h;
         if (down && on_button) {
-            g_panel.draft = decode(g_panel.value, layout).params;
+            g_panel.draft = panel_decode(g_panel.value).params;
             queue_send(pack(g_panel.draft));
             return 1;
         }
         return (e->kind == ANY_MOUSE_DOWN || e->kind == ANY_MOUSE_UP || e->kind == ANY_MOUSE_WHEEL) && inside;
     }
-    bool on_sliders = inside && e->y >= g_panel.sliders_y && e->y < g_panel.sliders_y + g_panel.row_h * kSliderCount;
+    bool on_sliders = inside && e->y >= g_panel.sliders_y && e->y < g_panel.sliders_y + g_panel.row_h * slider_count;
     if (down && on_sliders) {
-        g_panel.dragging = std::clamp(int((e->y - g_panel.sliders_y) / g_panel.row_h), 0, kSliderCount - 1);
+        int r = std::clamp(int((e->y - g_panel.sliders_y) / g_panel.row_h), 0, slider_count - 1);
+        g_panel.dragging = rot ? rotary_tune::kSliderOrder[r] : r;
         set_from_mouse(g_panel.dragging, e->x);
         return 1;
     }
@@ -797,6 +1129,28 @@ uint32_t input(const AnyInputV1* e, void*) {
 }
 }  // namespace
 }  // namespace enginesound
+
+// Where an engine's exhaust comes out (the middle of its outlets) for AnyEngineParts' rotary, which plays its own
+// voice. Asked for by name (GetProcAddress) so each standalone build still links. 1 with a position, else 0.
+extern "C" __declspec(dllexport) int AVO_ExhaustAt(void* engine, double* out) {
+    if (!out || !enginesound::g_sound_ok) return 0;
+    return enginesound::exhaust_position(static_cast<uint8_t*>(engine), out) ? 1 : 0;
+}
+// What the parts on that engine's pipes do to its sound (exhaust_logic.h apply() on a neutral tune), after
+// AVO_ExhaustAt found them: out = pipe pitch scale, rasp scale, gain scale, muffler 0-0.95, pops 0-1 (-1 stock).
+// 0 with stock pipes (no parts and no ECU), else 1.
+extern "C" __declspec(dllexport) int AVO_ExhaustTune(void* engine, double* out) {
+    if (!out || !enginesound::g_sound_ok) return 0;
+    auto found = enginesound::g_exhaust_only.find(engine);
+    if (found == enginesound::g_exhaust_only.end()) return 0;
+    const enginesound::ClientEngine& v = found->second;
+    if (!v.chain.any() && v.ecu_crackle < 0) return 0;
+    const exhaust::SoundTune base{100, 300, 0.5, 0, -1, 0, 0, 1};
+    exhaust::SoundTune t = exhaust::apply(base, v.chain, v.ecu_crackle);
+    out[0] = t.pipe_hz / base.pipe_hz; out[1] = t.rasp / base.rasp; out[2] = t.gain / base.gain;
+    out[3] = v.chain.any() ? t.muffler : 0; out[4] = t.crackle;
+    return 1;
+}
 
 using namespace enginesound;
 extern "C" __declspec(dllexport) bool AnyAPI_ModInit(const AnyModHostV1* h, AnyModCallbacksV1* out) {

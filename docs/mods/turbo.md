@@ -1,18 +1,22 @@
 # Turbo (AnyEngineParts)
 
-> The turbo parts are part of [AnyEngineParts](engine-parts.md). They hook game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
+> The turbo parts are part of AnyEngineParts, inside the [AnyVehicleOverhaul](vehicle-overhaul.md) download. They hook game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
-> AnyEngineParts 0.1.0 is a prototype: it needs AnyAPI 0.37.0 or newer on that build. **Single player only** for now.
+> **Single player only** for now.
 
 Turbo adds two exhaust-driven turbochargers, **Turbo 3x3** (3x3x2) and **Turbo 6x6** (6x6x2), the faces of the
 stock Small and Large Impellers, and two belt-driven [superchargers](#superchargers), **Supercharger (Small)** and
 **Supercharger (Large)**. The Turbo 2x2, 4x4 and 5x5 are gone: the superchargers took the small ones' place and the
 5x5 grew into the 6x6 (the stock Large Impeller's size), so all four of its large pipes sit in the middle of their
-faces. A saved vehicle that had one loads without it. The front half of a turbo is the stock impeller's compressor housing, scaled to the size; the back half is the
-turbine housing, the same impeller mirrored. A new turbo starts with a steel cold side and a cast-iron hot side,
-and the paint tool colours each side on its own, like any stock part. Every opening on the housing sits exactly where
-its pipe joins: on the 6x6 the boost outlet and the turbine inlet are large pipes that span both cells, so a cast
-flange block carries them across the top and bottom corners.
+faces. A saved vehicle that had one loads without it. Each size comes in three looks that work the same: **G-Series** (steel, black
+wastegate can), **Precision** (black, red can) and **EFR** (dark cast, blue can, a heat shield over the turbine). Each
+has a big compressor mouth with the wheel showing, a turbine housing on the back, a built-in wastegate and a cast
+foot under the compressor that mounts on the bottom face. Paint colour 1 sets the compressor housing, colour 2 the
+wastegate can. Every opening sits exactly where its pipe joins.
+
+Every look also comes as a **Twin Scroll** version (id ends `_twin`): a divided turbine housing with a split flange.
+It keeps the exhaust pulses apart, so the turbine gets more out of light exhaust: it spools about 20-30% quicker, makes
+noticeably more boost low in the revs, and its best pressure ratio is 3% lower at the very top.
 
 ## Hooking one up
 
@@ -27,8 +31,70 @@ flange block carries them across the top and bottom corners.
 Exhaust expanding through the turbine (hot inlet to hot outlet) spins the shaft, and the compressor on the same
 shaft pushes air into the engine's intake with a boost that climbs with the square of the shaft's speed. Engines
 already turn intake pressure into power: ambient gives 1x, and an intake pressure of 98 kPa (the game's scale) gives
-the full 2x. A built-in wastegate holds one turbo there, at 88 kPa of boost, and sends the exhaust the shaft does
-not need round the turbine; two in a row (a [compound](#twin-and-compound-turbos)) can take it up to 3x.
+the full 2x, and past that power keeps rising with boost: there is **no boost cap** (AnyVehicleOverhaul 2.0). A
+built-in wastegate holds 88 kPa (12.8 psi) out of the box and sends the exhaust the shaft does not need round the
+turbine. Turn it up with a boost target (see [Turning up the boost](#turning-up-the-boost)); what the engine can take
+is set by its own rating.
+
+## Turning up the boost
+
+- **Boost target:** wire a psi value into a turbo's `boost_target_psi` input (0 or unwired: the wastegate spring's
+  12.8 psi). The turbo holds that boost if its exhaust can spin it fast enough.
+- **Boost Controller** (a 1-cell sensor part): sets the target for every turbo on its vehicle. Wire a psi value into
+  its `target_psi` (a microcontroller, a dial or a switch; 0 keeps the springs). `scramble` above 0.5 adds
+  `scramble_psi` (default 5) on top, for a push-to-pass button. A turbo's own `boost_target_psi` input wins over it.
+  Outputs `boost_psi` and `target_set`.
+- **Boost Gauge** reads the vehicle's highest boost (`boost_psi`, `boost_kpa`, `boost_bar`), the target
+  (`target_psi`) and the peak (`peak_psi`; `reset_peak` above 0.5 clears it). **Oil Gauge** reads the hottest
+  engine's `oil_pressure_psi`, `oil_temperature`, `oil_level` (0-1; under 0.5 the engine wears), `coolant_temperature`
+  and `engine_temperature`. The game has no oil pump, so oil pressure is worked out like a real gauge reads: it rises
+  with RPM, reads high on cold oil and low on very hot oil, and drops off with a low sump. Wire either to a display
+  or a microcontroller. All three drop as electronics loot after the 2nd bunker.
+- **Each size has a ceiling:** the 3x3's compressor tops out at a pressure ratio of about 3.3 (about 34 psi), the
+  6x6's at about 4.2 (about 47 psi). Past the spring boost the shaft needs much more exhaust energy, so big boost
+  needs a big engine at high RPM, and it lags more.
+- **Airflow decides:** engines draw air by size and RPM. Twins share the exhaust and the air. Match the total turbine
+  size to the engine: in the sim, a large V12 holds about 39 psi on four 6x6s; on one it backs up its exhaust
+  (losing more power than the boost adds), and on six each turbine gets too little exhaust. Compounds go further.
+- **Back pressure** still costs power the game's way: above 39 kPa (4 on the game's scale) of exhaust pressure before
+  the turbines.
+
+### Twin screw supercharger
+
+`supercharger_twin_screw`, tier 4 loot. A positive displacement blower: it moves a set amount of air every turn, so its
+boost is what it moves over what the engine swallows. That comes in from low RPM and stays flat to the redline. Stretch
+it to fit the engine (2 to 16 cells wide and long, 2 or 3 tall): a bigger blower makes more boost. Belt it from an
+Engine Wheel like the centrifugal ones; inside it has a 2.5:1 drive, so the small, medium and large wheels turn its
+rotors at 1.0, 1.55 and 2.67 times engine speed. Outlet: the large pipe on the bottom, to the air manifold. Intake: the
+large pipe on the back face (an air filter fits). Its bypass opens off throttle, a relief valve stops it near 29 psi,
+and a Boost Controller caps it lower. It compresses inside the rotors, so it runs cooler and takes less belt power
+than a Roots would. A Roots blower is written but on hold.
+
+### Engine ratings and knock
+
+Every engine has a rating, the boost factor (`power_multiplier`) it takes with 40 °C charge air before it knocks:
+
+| Engine | Rating |
+| --- | --- |
+| Small / medium / large block | 2.0 / 2.5 / 3.0 |
+| Inline | +0.15 (the stoutest block) |
+| V | +0 |
+| Boxer | -0.1 (long crank) |
+| Each cylinder past 6 | -0.02 (down to -0.2) |
+| Rotary | 2.3 |
+| Built engine | stock + 1.0 (about 13 psi more) |
+
+Hot charge air lowers the rating: 98 °C (one turbo, no intercooler) takes about 40% of the boost part off it, so
+intercoolers matter. Past the rating the knock control pulls timing: only 30% of the extra boost still makes power,
+and the engine takes damage, faster the further past it runs (10% over: a damage step about every 9 minutes; 30%
+over: about every 100 s; 60% over: about every 30 s). An engine that is still knocking 25% or more past its rating
+when its last damage step lands **blows**: it makes no power until you repair it. The log names the engine's rating
+on its `engine intake` line.
+
+**Built engines** are forged versions of the nine stock engines (inline, V and boxer, small, medium and large): the
+same engine in every way (power, fuel, size, ports, sound) with a rating 1.0 higher. They are their own parts
+(`built_` + the stock id, for example `built_v_engine_c`), tier 4 loot at 0.075. The mod makes them from the game's
+own engine entries when the game starts, so they follow game updates.
 
 The Turbo 6x6 uses large pipes and the 3x3 small pipes. No gas tank is needed. The compressor inlet is open to the air like a real turbo intake.
 
@@ -41,7 +107,6 @@ depending on its size, against 5 to 33 L/s through a turbine. So:
 - The engine's exhaust manifolds go only to the turbo's exhaust inlet, and the tailpipe vent goes on the turbo's
   exhaust out. A vent before the turbine lets the exhaust skip it, and the turbo never spools.
 - This counts for every air and exhaust manifold on the engine: one more manifold with its own vent does the same.
-- A wastegate is the one bypass that belongs there: it opens only as far as you tell it to.
 
 Big engines need big turbos. A turbo much smaller than its engine chokes the exhaust: the back pressure takes away
 much of what the boost adds (a 4-rotor Rotary wants a 6x6).
@@ -56,8 +121,8 @@ the two turbines share it evenly, so each gets half. On a 4-rotor, one 6x6 reach
 
 **Compound turbos** (one after the other): pipe the first turbo's boost outlet into the second turbo's intake, and the
 second turbo's boost outlet to the engine. The second turbo breathes the first one's boost and adds its own on top,
-so together they pass the 2x one turbo can give: the engine's power carries on rising with intake pressure up to 3x
-at 186 kPa (19 on the game's scale), and no further. An intercooler between the two (and one after the second) keeps
+so together they pass the 2x one turbo gives on its spring: the engine's power carries on rising with intake
+pressure (two stages on their springs make about 23 on the game's scale, 3.4x), with no cap. An intercooler between the two (and one after the second) keeps
 the air cool: the second turbo heats air that is already hot.
 
 - **Run the exhaust through both turbines in a row** for quick boost, the way real compounds are plumbed: from the
@@ -78,8 +143,8 @@ the air cool: the second turbo heats air that is already hot.
 
 A supercharger is a centrifugal compressor driven by the engine through a belt, so it has no lag: its boost follows
 the engine's speed the moment it changes. **Supercharger (Small)** is 2x2x2 with a small boost outlet; **Supercharger
-(Large)** is the same unit at twice the size, 4x4x4, with a large outlet. Both are a satin cast head unit: a ribbed
-snail-shell housing on the front and a finned gear case behind it. Paint colour 1 sets the housing, colour 2 the gear
+(Large)** is the same unit at twice the size, 4x4x4, with a large outlet. Both look like a ProCharger head unit: a polished
+snail-shell housing on the front and a black finned gear case behind it. Paint colour 1 sets the housing, colour 2 the gear
 case.
 
 | Port | Where | Connect to |
@@ -136,17 +201,16 @@ valve) slows it hard.
 Pick the size whose turbine flow is close to your engine's exhaust L/s. A matched turbo gives some boost from about
 2,500 RPM and full boost soon after you floor it, well before the redline. From there its built-in wastegate holds
 full boost (88 kPa) to the redline and sends the spare exhaust round the turbine, which keeps back pressure down; the
-`wastegate` output reads how far it is open. A Turbo Wastegate part (`open`, or `boost_limit`) still caps boost
-lower.
+`wastegate` output reads how far it is open. The ECU's boost target (or `boost_target_psi`) sets what it holds.
 
 A turbo that is too small for its engine chokes it: it spools fast, but the exhaust backs up (a 3x3 on a 4-rotor holds
 5 to 8 units, 49 to 76 kPa), and above 39 kPa of exhaust pressure the engine loses power, as it does with any
 restricted exhaust. A turbo that is too big barely spools: a 6x6 on a 2-rotor makes about 37 kPa at 2,500 RPM and
 needs about 5 s to reach full boost at 3,500.
 
-## Blow-off valve and wastegate
+## Blow-off valve
 
-Two companion parts, in the gas parts with the turbos:
+A companion part, in the gas parts with the turbos:
 
 - **Turbo Blow-Off Valve (Small)** (1 cell, small pipe, for the 3x3) and **(Large)** (2x2x2, large
   pipe, for the 6x6). Inline: pipe the turbo's boost outlet into its **plain end** (it shows as *Gas
@@ -158,36 +222,20 @@ Two companion parts, in the gas parts with the turbos:
   surge completely; stiffer springs let more and more surge through while they vent (at 50 the turbo surges
   almost as if there were no valve, with the valve's hiss on top), and **Sound effect** (see Sounds below); they reset to the defaults when the vehicle loads (the game's binary save format has no room for extra values). The large valve
   vents 2.5 times faster. Outputs `open` (0/1), `flow` (L/s) and `pressure` (kPa).
-- **Turbo Wastegate (Small)** (1 cell, small pipe) and **(Large)** (2x2x2, large pipe, flows 2.5 times as much).
-  Exhaust from the manifold goes in underneath; the side port goes to a vent or the turbo's exhaust outlet pipe. Its `open` input (0 to 1, from a data link or microcontroller) lets exhaust bypass the turbine,
-  which caps boost. Its `antilag` input (1 on, 0 off) turns on antilag for the turbo on the same exhaust pipe:
-  whenever the engine is running but its exhaust alone would let the turbo slow down (off throttle, idling), fuel
-  burnt in the exhaust holds the turbo at 80% spool, with bangs and crackles from the wastegate. Wire it to a
-  switch, or build your own logic in a microcontroller (only on a launch, only above some speed). Its `two_step`
-  input is launch control (see below). Outputs `flow` (L/s) and `pressure` (kPa).
+- **No wastegate part** (removed in the AnyVehicleOverhaul dev build): every turbo has a built-in wastegate. Set its
+  boost with the ECU's boost target. Antilag and launch control (two-step) are rows on the ECU (see
+  [AnyVehicleOverhaul](vehicle-overhaul.md)). A saved vehicle loses any old wastegate part when it loads.
 
-The valves start with a bright steel body and a red cap; paint the body and the cap separately. While you place
+The blow-off valves are HKS-style, with a flared trumpet top; they start with a black body and a red band, and both paint. While you place
 a turbo or valve, the preview shows these starting colours. The turbo's own `surge`
 output is 1 while it surges.
 
 ### Launch control (two-step)
 
-A wastegate's `two_step` input takes an engine RPM (0 is off). While it is set, the engine that turbo boosts holds at
-that RPM however far you press the throttle: the fuel cuts at the RPM and comes back 150 RPM below, so it bounces on
-the limiter like a real launch control. With `antilag` on as well, the fuel the limiter cuts goes into the exhaust,
-so antilag fires on the line however little the engine is making, and the turbo is spooled (with bangs) before you
-go. Set `two_step` back to 0 and the engine is free at once.
-
-It is meant for a microcontroller, so you decide when it is on. For example, with the gear and an antilag switch
-wired in:
-
-- `launch = gear == 0 and switch == 1`
-- the wastegate's `two_step` = `launch ? 4000 : 0`
-- its `antilag` = `switch` (or `launch` for bangs only on the line)
-
-The mod reads the engine's speed itself, so the microcontroller needs no RPM. On a compound, a wastegate on either
-turbo's exhaust works. It needs the game functions the hot boost air uses (see How it works); without them the input
-does nothing.
+Launch control lives on the ECU: set **Launch RPM** and turn **Launch** on (or wire its input to a clutch or gear
+switch). The engine holds at that RPM however far you press the throttle. The fuel cuts at the RPM and comes back
+150 RPM below, so it bounces on the limiter like a real launch control. With the ECU's **Antilag** on as well, the
+cut fuel goes into the exhaust and the turbo is spooled (with bangs) before you go.
 
 ## Upkeep: oil, air filter, heat and wear
 
@@ -209,10 +257,11 @@ wear at all. The times below are for full boost the whole time:
 - **Heat.** Exhaust heats the turbine and the shaft heats with speed (four times as much with no oil). With oil
   a turbo at full boost sits around 140 °C; dry it climbs to about 400 °C. Above 250 °C it wears faster, the
   hotter the faster.
-- **Air filter.** The **Turbo Air Filter** (small pipe, 3x3x3) and **Turbo Air Filter (Large)** (large pipe,
-  4x4x4) are cone filters, the pipe in the middle of the bottom. Pipe the neck to the turbo's intake. Clean air makes the turbo wear four times slower.
+- **Air filter.** Each comes small (small pipe, 3x3x3) and large (large pipe, 4x4x4) in three looks that work the
+  same: **Cone** (a pleated red cone, chrome lid), **Mesh Sock** (a black sock over a stack) and **Round Drum** (a
+  chrome drum with a black lid). The pipe is in the middle of the bottom. Pipe the neck to the turbo's intake. Clean air makes the turbo wear four times slower.
   A filter clogs slowly as it works, about 10 hours of full boost to go fully dirty, and a clogged filter costs up to 15% of the boost. Place a new one to replace it. A new
-  filter starts with a red element and steel caps, and both paint.
+  filter starts in its look's colours, and both colours paint.
 - **Condition.** Down to half, the turbo performs like new. Below that its boost falls (to 60% near the end).
   At 0% it **blows up**: a bang, shrapnel and a hiss of smoke, and both housings go sooty. A blown turbo makes no boost
   and its wrecked compressor chokes the engine's air: the engine still runs through it, but gets only about a third of
@@ -230,9 +279,9 @@ scales with the air's density against 30 °C air, so hot boost makes less power 
 air over 60 °C also knocks a boosted engine, which slowly damages it. Without an intercooler, full boost
 costs a damage step about every 8 to 9 minutes.
 
-An intercooler fixes that. There are two, which work the same and differ only in looks: the **Turbo Intercooler
-(Race Core)**, a black core with bright fins and an inlet stub on each tank, and the **Turbo Intercooler (Round
-Tank)**, a slim silver core between round tanks. Like the radiator, it has no pipes of its own: snap gas ports onto its faces,
+An intercooler fixes that. There are three, which work the same and differ only in looks: **Bar and Plate**
+(a black bar core, cast ribbed tanks), **Tube and Fin** (a silver tube core, black welded tanks) and **Fabricated
+Race** (bright core, fabricated aluminium tanks). Like the radiator, it has no pipes of its own: snap gas ports onto its faces,
 small or large, wherever suits the build. Run one from the turbo's boost and one to the engine's air intake. All its
 ports share one volume of air, so the boost passes straight through. It is 3 cells wide, 2 tall and 1 deep, and the
 model fills every cell of it. It has an end tank on each side, like a car's, and grows like the radiator: wider and
@@ -253,7 +302,7 @@ Turbos and blow-off valves have their own sounds in place of the impeller hum, m
   3 dump (deep). Each is voiced for the turbo venting through it: a 3x3's is short and sharp, a 6x6's long
   and deep.
 
-- **Antilag**: irregular gunshot bangs and crackles from the wastegate while antilag fires; deeper on bigger turbos.
+- **Antilag**: bangs and crackles in the exhaust while the ECU's antilag fires.
 - **Blowing up**: once, when a turbo wears out: a crack and a boom, shrapnel pinging, the wheel screeching to a stop
   and a hiss of boost and smoke. A turbo that was already blown when you load in stays quiet.
 - **Supercharger whine**: the buzz of its straight-cut step-up gears, there from idle and sliding up with the engine,
@@ -261,7 +310,7 @@ Turbos and blow-off valves have their own sounds in place of the impeller hum, m
   sings lower. Off the throttle it surges like a turbo unless a blow-off valve on its outlet pipe vents the boost, just
   as real centrifugal superchargers need a bypass valve.
 
-The wastegate is otherwise silent. Sounds follow the vehicle volume slider and are heard by every player near the part.
+Sounds follow the vehicle volume slider and are heard by every player near the part.
 With AnyHelpers installed, **Mod Settings > AnyEngineParts > Turbo volume** sets how loud the turbo sounds, blow-off
 valves and antilag are, and **Supercharger volume** the supercharger whine, each from 0 to 200 % (100 is normal).
 They apply to your game only.
@@ -283,7 +332,7 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | `boost` | Output | Boost over the air outside, kPa (full boost is about 88; a compound's second turbo reads the total) |
 | `boost_psi` | Output | The same in psi (full boost is about 12.8), for a boost gauge |
 | `exhaust_pressure` | Output | Pressure at the hot inlet, kPa |
-| `power_multiplier` | Output | The engine power multiplier this boost gives, 1 to 2 (up to 3 on a compound's second turbo), after what hot boost air costs |
+| `power_multiplier` | Output | The engine power multiplier this boost gives, 1 none, 2 at 12.8 psi, no cap, after what hot boost air costs (before the engine's knock control) |
 | `spool` | Output | The share of full boost the shaft's speed can make, 0 to 1 (its speed over full-boost speed, squared) |
 | `rpm` | Output | Shaft speed, rpm (a supercharger's impeller) |
 | `wastegate` | Output | How far the turbo's built-in wastegate is open, 0 to 1 (it opens once the shaft is fast enough for full boost) |
@@ -297,12 +346,13 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
 | `air_filter` | Output | 1 with an air filter on the intake, else 0 |
 | `boost_air_temperature` | Output | The boost air after any intercooler, °C (what the engine breathes) |
 | `drive_power` | Output | Supercharger: the power its belt takes from the engine, kW (0 on a turbo) |
-| `boost_limit` | Input | A wastegate: caps boost (as the `boost` output reads it) at this pressure in kPa (0 or unwired: no cap) |
+| `boost_target_psi` | Input | The boost (psi over the air outside) its built-in wastegate holds, up to the compressor's ceiling (0 or unwired: 12.8) |
+| `boost_target` | Output | The boost target it holds now, psi |
 
 ## Getting it
 
-- **Survival:** world loot. The Turbo 3x3 and the small supercharger, wastegate, blow-off valve and air filter drop
-  after the 2nd bunker (tech tier 3). The Turbo 6x6, the large supercharger, wastegate, blow-off valve and air filter,
+- **Survival:** world loot. The Turbo 3x3 and the small supercharger, blow-off valve and air filter drop
+  after the 2nd bunker (tech tier 3). The Turbo 6x6, the large supercharger, blow-off valve and air filter,
   and the intercoolers drop after the 3rd bunker (tech tier 4). As with the stock parts, new loot carries
   the tier the world has reached, so each tier drops until the next bunker is done. They are mechanical loot
   (industrial, construction, aircraft and bunker loot spots) and turn up about a quarter less often than the
@@ -366,8 +416,8 @@ Wire them from a data port, a data link or a microcontroller. Pressures use the 
   Dyno names the boost setup from that.
 - The 2x2, 4x4 and 5x5 turbos are no longer defined, so the game drops them from a saved vehicle as it loads.
 - The hot side's gas is not saved; it refills from the pipes after loading. Saves that contain a turbo need
-  AnyEngineParts installed to load it.
+  AnyVehicleOverhaul (or the older AnyEngineParts) installed to load it.
 
-Source: [`turbo_mod.cpp`](../../native/turbo_mod.cpp) (built into `AnyEngineParts.dll`), bindings in
+Source: [`turbo_mod.cpp`](../../native/turbo_mod.cpp) (the AnyEngineParts piece of `AnyVehicleOverhaul.dll`), bindings in
 [`turbo_bindings.h`](../../native/turbo_bindings.h), tests in
 [`tests/turbo_logic_test.cpp`](../../native/tests/turbo_logic_test.cpp).

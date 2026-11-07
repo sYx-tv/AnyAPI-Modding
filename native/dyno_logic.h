@@ -16,6 +16,7 @@
 // bins (Nate's first rotary pulls, 2026-10-15). The next pull starts once the throttle has come off. The mod gives each
 // sample the RPM the engine had when it made that power (read before the game's engine tick): read after, the
 // bounce showed up as power at 8,600 to 8,900 RPM.
+#include "gauges_logic.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -157,7 +158,7 @@ inline constexpr ChannelInfo kChannels[kChannelCount] = {
     {"power_hp", false, L"Engine power now, all engines, hp"},
     {"power_kw", false, L"Engine power now, kW"},
     {"torque_nm", false, L"Engine torque now, N·m"},
-    {"boost", false, L"Intake pressure factor (1 = none, 2 = one turbo's full boost, up to 3 with compound turbos)"},
+    {"boost", false, L"Intake pressure factor (1 = none, 2 = a turbo's stock 12.8 psi, no cap; after knock control)"},
     {"engine_temperature", false, L"Hottest engine, °C"},
     {"recording", false, L"1 while a pull is being recorded"},
     {"peak_hp", false, L"Latest pull's peak power, hp"},
@@ -237,7 +238,9 @@ inline std::string definition_json(const std::string& mesh_path = kStockMeshPath
       "liquid_pump_max_output_rps": 50.0,
       "gas_pump_wattage": 1000.0,
       "gas_pump_max_output_rps": 50.0
-    }
+    },
+)" + gauges::definition_entry(gauges::kController, kStockMeshPath) + ",\n" + gauges::definition_entry(gauges::kBoostGauge, kStockMeshPath) + ",\n" +
+        gauges::definition_entry(gauges::kOilGauge, kStockMeshPath) + ",\n" + gauges::definition_entry(gauges::kEcu, kStockMeshPath) + R"(
   ]
 }
 )";

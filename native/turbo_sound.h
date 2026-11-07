@@ -104,9 +104,16 @@ struct BlowerVoice {
     double gear_base, gear_span;       // gear whine pitch at rest and the rise to the fuel cut (Hz)
     double whistle_base, whistle_span; // impeller whistle
     double gear_gain, whistle_gain, air_gain;
+    double second = 0.45, third = 0.22;   // the whine's 2nd and 3rd harmonics (buzz)
 };
-inline BlowerVoice blower_voice(bool large) {
-    return large ? BlowerVoice{460, 5900, 1900, 8800, 0.20, 0.05, 0.12} : BlowerVoice{650, 7900, 2700, 11700, 0.18, 0.05, 0.09};
+// The voice's size byte: 2 and 4 the centrifugal ones; a twin screw and a Roots blower have their own. A twin screw
+// hums a smooth, rounded whine from its rotor lobes, softer than a geared centrifugal (Nate: not annoying); a Roots
+// growls lower with a rougher, buzzier tone, the classic muscle blower whine. Neither has an impeller whistle.
+constexpr int kVoiceTwinScrew = 5, kVoiceRoots = 6;
+inline BlowerVoice blower_voice(int size) {
+    if (size == kVoiceTwinScrew) return BlowerVoice{300, 2900, 1200, 3000, 0.11, 0.0, 0.07, 0.25, 0.06};
+    if (size == kVoiceRoots) return BlowerVoice{150, 1700, 900, 2400, 0.15, 0.0, 0.10, 0.65, 0.35};
+    return size >= 4 ? BlowerVoice{460, 5900, 1900, 8800, 0.20, 0.05, 0.12} : BlowerVoice{650, 7900, 2700, 11700, 0.18, 0.05, 0.09};
 }
 
 // Each turbo size has its own voice: the 2x2 screams high and puffs fast, the 5x5 (and the 6x6) whooshes deep and slow.
@@ -224,7 +231,7 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool 
     double target = std::isfinite(level) ? (level < 0 ? 0 : level > 1 ? 1 : level) : 0;
     const double dt = 1.0 / kSampleRate, two_pi = 6.283185307179586;
     const bool blower = s.voice == Voice::kSupercharger;
-    const BlowerVoice bv = blower_voice(s.size >= 4);
+    const BlowerVoice bv = blower_voice(s.size);
     if (blower) blown = false;
     // A supercharger's level arrives in steps (one byte, at the network's pace) and its pitch spans thousands of Hz,
     // so each step was a jump you could hear. Two gentle stages turn the steps into one smooth slide (about 0.1 s
@@ -281,7 +288,7 @@ inline void render(Synth& s, double level, bool flag, int16_t* out, int n, bool 
                 if (s.gear_phase > two_pi) s.gear_phase -= two_pi;
                 if (s.mesh_phase > two_pi) s.mesh_phase -= two_pi;
                 double g = s.gear_phase;
-                double whine = std::sin(g) + 0.45 * std::sin(2 * g + 0.4) + 0.22 * std::sin(3 * g + 1.1);
+                double whine = std::sin(g) + bv.second * std::sin(2 * g + 0.4) + bv.third * std::sin(3 * g + 1.1);
                 // As loud as it gets by the medium wheel's fuel cut; overdriven it only climbs in pitch. A faint
                 // whine from idle up, fading to silence as the pulley stops (below about 300 engine RPM on the
                 // medium wheel), so a supercharger at rest makes no sound.

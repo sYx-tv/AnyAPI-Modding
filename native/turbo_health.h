@@ -8,8 +8,11 @@
 //   AnyEngineParts scales the boost part of that factor by the intake air's density (cold air, more boost).
 // - Engine oil is a mix of oil (liquid type 2) and pollutant (type 3). Engines turn oil into pollutant as they run;
 //   the stock oil filter removes it.
+#include "built_engine_logic.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <string>
 
 namespace turbo {
 
@@ -147,6 +150,81 @@ inline double knock_damage(double intake_c, double factor, double dt) {
     if (!std::isfinite(intake_c) || !std::isfinite(factor) || !(dt > 0)) return 0;
     double heat = std::max(0.0, intake_c - kKnockC) / 50.0, boost = std::max(0.0, factor - 1.15);
     return 0.003 * heat * boost * dt;
+}
+
+
+// ------------------------------------------------------------------------------------------- engine ratings
+// No boost cap (Nate, 2026-11-04): instead every engine has a rating, the boost factor (power multiplier) it takes with
+// 40 C charge air before it knocks. Past it the knock control pulls timing (most of the extra boost turns into heat, not
+// power) and the engine takes damage, faster the further past it runs. Hot charge air lowers the rating, so an
+// intercooler lets the same engine take more boost.
+// The game's engines (rom/data/vehicle_component_definitions.json): inline engine / engine_block_b / engine_block_c,
+// V v_engine / _b / _c, boxer opposed_engine / _b / _c, each small / medium / large and stretched along z (a cylinder
+// per 2 / 3 / 5 cells on an inline, a pair on a V or boxer); AnyVehicleOverhaul's rotary_engine.
+//   - Size: bigger blocks have thicker walls and bigger head bolts: small 2.0, medium 2.5, large 3.0.
+//   - Layout: a closed-deck inline is the stoutest (+0.15), a boxer's long unsupported crank the weakest (-0.1).
+//   - Length: every cylinder past 6 flexes the crank a little more (-0.02 each, down to -0.2).
+//   - Rotary: 2.3 (no valves or pistons to hurt, but apex seals).
+//   - Built engines (built_engine_logic.h): +1.0. The ECU (a later phase) will raise these too.
+struct EngineRating { double factor = 2.0; int cylinders = 0; bool known = false; };
+inline EngineRating engine_rating(const char* raw_id, size_t raw_n, int32_t extend_z) {
+    bool is_built = false;   // a built engine (built_engine_logic.h) rates as its stock engine plus kBuiltBonus
+    std::string_view stock = built::stock_id(raw_id ? std::string_view(raw_id, raw_n) : std::string_view{}, &is_built);
+    const char* id = stock.data();
+    size_t n = stock.size();
+    auto is = [&](const char* want) { size_t w = std::char_traits<char>::length(want); return id && n == w && std::char_traits<char>::compare(id, want, n) == 0; };
+    struct Row { const char* id; int layout; int size; };   // layout 0 inline, 1 V, 2 boxer; size 0-2
+    static const Row rows[] = {{"engine", 0, 0}, {"engine_block_b", 0, 1}, {"engine_block_c", 0, 2},
+                               {"v_engine", 1, 0}, {"v_engine_b", 1, 1}, {"v_engine_c", 1, 2},
+                               {"opposed_engine", 2, 0}, {"opposed_engine_b", 2, 1}, {"opposed_engine_c", 2, 2}};
+    EngineRating r;
+    if (is("rotary_engine")) {   // 1 rotor per 2 cells; more rotors knock a little sooner, like more cylinders
+        int64_t cells = extend_z < 0 ? -int64_t(extend_z) : int64_t(extend_z);
+        if (cells > 4096) cells = 0;
+        int rotors = int(std::clamp<int64_t>(1 + cells / 2, 1, 4));
+        r.factor = 2.35 - 0.05 * (rotors - 1) + (is_built ? built::kBuiltBonus : 0.0);
+        r.cylinders = rotors;
+        r.known = true;
+        return r;
+    }
+    for (const Row& row : rows) {
+        if (!is(row.id)) continue;
+        int64_t cells = extend_z < 0 ? -int64_t(extend_z) : int64_t(extend_z);
+        if (cells > 4096) cells = 0;
+        int steps = int(cells / (row.size == 0 ? 2 : row.size == 1 ? 3 : 5));
+        r.cylinders = std::clamp(row.layout == 0 ? 1 + steps : 2 + 2 * steps, 1, 16);
+        static constexpr double base[] = {2.0, 2.5, 3.0}, layout[] = {0.15, 0.0, -0.1};
+        r.factor = base[row.size] + layout[row.layout] - std::min(0.2, 0.02 * std::max(0, r.cylinders - 6));
+        if (is_built) r.factor += built::kBuiltBonus;
+        r.known = true;
+        return r;
+    }
+    return r;
+}
+// The rating with this charge air: hot air knocks sooner (from 40 C), cold air a little later.
+inline double rated_factor_for_air(double rated, double intake_c) {
+    double t = std::isfinite(intake_c) ? intake_c : kReferenceC;
+    double share = std::clamp(1.0 - (t - 40.0) / 150.0, 0.3, 1.1);
+    return 1.0 + (std::max(1.0, rated) - 1.0) * share;
+}
+struct Knock {
+    double factor = 1;    // the boost factor the engine makes after knock control
+    double damage = 0;    // added to the engine's damage counter this tick (the game takes a damage step at 1)
+    double over = 0;      // how far past its rating, 0.1 = 10 %
+};
+// `factor` is the boost factor its intake pressure gives (after the air's density), `rated` the engine's rating.
+// Past the rating, 30 % of the extra boost still makes power; damage grows with the square of how far past it is:
+// 10 % over, a damage step about every 9 minutes; 30 % over, about every 100 s; 60 % over, about every 30 s.
+inline Knock knock_step(double factor, double rated, double intake_c, double dt) {
+    Knock k;
+    k.factor = std::isfinite(factor) ? factor : 1.0;
+    if (!(k.factor > 1.0) || !(dt > 0)) return k;
+    double limit = rated_factor_for_air(rated, intake_c);
+    k.over = std::max(0.0, k.factor / limit - 1.0);
+    if (k.over <= 0) return k;
+    k.factor = limit + (k.factor - limit) * 0.3;
+    k.damage = (0.01 * k.over + 0.08 * k.over * k.over) * dt;
+    return k;
 }
 
 }  // namespace turbo

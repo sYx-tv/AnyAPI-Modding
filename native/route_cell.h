@@ -24,8 +24,10 @@ inline void** cell(const anymaker::func_desc& d, int* roots = nullptr) {
     if (void** c = anymaker::cell_of(d)) return c;
     const anymaker::slot_route& r = d.call_route;
     if (!r.nhops || r.nhops > 8 || !r.root_sig || !*r.root_sig) return nullptr;
-    uint8_t* hits[8];
-    size_t n = anymaker::find_gcl_functions(r.root_sig, hits, 8);
+    // Room for many copies: the client seat's assign_definition root is shared by 11 callers, and the lookup gives 0
+    // when there are more than it has room for (AnyMoto stayed off in Nate's 2026-11-05 test with 8).
+    uint8_t* hits[64];
+    size_t n = anymaker::find_gcl_functions(r.root_sig, hits, 64);
     if (roots) *roots = int(n);
     void** found = nullptr;
     for (size_t i = 0; i < n; ++i) {

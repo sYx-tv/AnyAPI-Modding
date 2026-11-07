@@ -2,6 +2,7 @@
 #include "../rotary_logic.h"
 #include "../rotary_mesh.h"
 #include "../rotary_sound.h"
+#include "../rotary_tune.h"
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -58,9 +59,57 @@ bool write_wav(const std::string& path, const std::vector<int16_t>& pcm) {
 }
 }  // namespace
 
+// Rotary sound choices (rotary_tune.h): the ports stay stock, five sounds per rotor count, Custom packs.
+static double tune_rms(const rotary::Input& base, double* bright) {
+    rotary::Synth s; rotary::Input in = base; in.rps = 90; in.load = 1; in.running = true;
+    std::vector<int16_t> b(48000);
+    rotary::render(s, in, b.data(), int(b.size()));
+    double e = 0, d = 0;
+    for (size_t i = 24000; i < b.size(); ++i) { double x = b[i] / 32768.0, dx = (b[i] - b[i - 1]) / 32768.0; e += x * x; d += dx * dx; }
+    *bright = std::sqrt(d / std::max(e, 1e-12));
+    return std::sqrt(e / 24000);
+}
+static void rotary_tune_tests() {
+    namespace es = enginesound;
+    for (int r = 1; r <= 4; ++r) {
+        assert(rotary_tune::decode(0, r).mode == es::Mode::Vanilla && rotary_tune::decode(2, r).mode == es::Mode::Vanilla);
+        assert(std::strcmp(rotary_tune::choice_name(1, r), "Street port") == 0);
+        double last_bright = -1;
+        for (int k = 0; k < rotary_tune::kPresets; ++k) {
+            es::Choice c = rotary_tune::decode(es::kFirstPreset + k, r);
+            assert(c.mode == es::Mode::Preset && c.preset == k);
+            assert(std::strlen(rotary_tune::preset_name(r, k)) > 3);
+            rotary::Input in; in.rotors = r; in.custom = true; in.ch = rotary_tune::character_of(c.params); in.muffler = rotary_tune::muffler_of(c.params);
+            double bright = 0, rms = tune_rms(in, &bright);
+            assert(rms > 0.02 && rms < 1.0);
+            assert(std::fabs(bright - last_bright) > 1e-3);   // each sounds different
+            last_bright = bright;
+        }
+        es::Params p = rotary_tune::preset(r, 2);
+        int32_t packed = es::pack(p);
+        es::Choice c = rotary_tune::decode(packed, r);
+        assert(c.mode == es::Mode::Custom);
+        for (int i = 0; i < es::kSliderCount; ++i) assert(c.params.v[i] == p.v[i]);
+        assert(std::strcmp(rotary_tune::choice_name(es::kCustomIndex, r), "Custom") == 0);
+        // The host's row tag carries the rotor count to the panel.
+        es::EngineKind k{es::synth::kInline, es::kSmall, true, true}, back; int n = 0;
+        es::decode_tag(es::row_tag(k, r), back, n);
+        assert(back.rotary && back.known && n == r);
+    }
+    // A muffled Custom is quieter and darker than an open one.
+    es::Params open = rotary_tune::preset(2, 2), shut = open;
+    shut.v[es::kMuffler] = 7;
+    rotary::Input a; a.custom = true; a.ch = rotary_tune::character_of(open); a.muffler = rotary_tune::muffler_of(open);
+    rotary::Input b = a; b.muffler = rotary_tune::muffler_of(shut);
+    double ba = 0, bb = 0, ra = tune_rms(a, &ba), rb = tune_rms(b, &bb);
+    assert(rb < ra && bb < ba);
+}
+
 int main(int argc, char** argv) {
+    rotary_tune_tests();
     // Ids, rotors, power.
     assert(is_rotary_id("rotary_engine", 13) && !is_rotary_id("rotary_engine", 12) && !is_rotary_id("engine", 6));
+    assert(is_rotary_id("built_rotary_engine", 19) && !is_rotary_id("built_engine", 12));
     assert(rotors_from_extend(0) == 1 && rotors_from_extend(2) == 2 && rotors_from_extend(4) == 3 && rotors_from_extend(6) == 4);
     assert(rotors_from_extend(40) == 4 && rotors_from_extend(-2) == 2 && rotors_from_extend(1) == 1);
     assert(boosted_volume(36) == 45 && boosted_volume(144) == 180 && boosted_volume(0) == 0);

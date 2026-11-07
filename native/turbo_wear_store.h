@@ -17,7 +17,7 @@
 namespace turbo {
 
 struct WearKey {
-    char kind = 't';            // 't' turbo, 'f' air filter
+    char kind = 't';            // 't' turbo, 'f' air filter, 'E' an ECU's tune (ecu::pack, a whole number, not clamped)
     int32_t vehicle = 0, component = 0;
     bool operator<(const WearKey& o) const {
         if (kind != o.kind) return kind < o.kind;
@@ -33,7 +33,7 @@ inline std::string encode_wear(const WearMap& wear) {
     char line[96];
     for (auto& [k, v] : wear) {
         if (!std::isfinite(v)) continue;
-        std::snprintf(line, sizeof line, "%s\n  \"%c%d:%d\": %.6f", first ? "" : ",", k.kind, int(k.vehicle), int(k.component), v);
+        std::snprintf(line, sizeof line, k.kind == 'E' ? "%s\n  \"%c%d:%d\": %.0f" : "%s\n  \"%c%d:%d\": %.6f", first ? "" : ",", k.kind, int(k.vehicle), int(k.component), v);
         out += line;
         first = false;
     }
@@ -49,7 +49,7 @@ inline WearMap decode_wear(const std::string& text) {
         if (end == std::string::npos) break;
         std::string key = text.substr(i + 1, end - i - 1);
         i = end + 1;
-        if (key.size() < 4 || (key[0] != 't' && key[0] != 'f')) continue;
+        if (key.size() < 4 || (key[0] != 't' && key[0] != 'f' && key[0] != 'E')) continue;
         char* p = nullptr;
         long vehicle = std::strtol(key.c_str() + 1, &p, 10);
         if (!p || *p != ':') continue;
@@ -61,7 +61,7 @@ inline WearMap decode_wear(const std::string& text) {
         char* stop = nullptr;
         double value = std::strtod(start, &stop);
         if (stop == start || !std::isfinite(value)) continue;
-        out[WearKey{key[0], int32_t(vehicle), int32_t(component)}] = value < 0 ? 0 : value > 1 ? 1 : value;
+        out[WearKey{key[0], int32_t(vehicle), int32_t(component)}] = key[0] == 'E' ? value : value < 0 ? 0 : value > 1 ? 1 : value;
     }
     return out;
 }

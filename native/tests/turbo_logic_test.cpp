@@ -5,6 +5,7 @@
 #include "../turbo_health.h"
 #include "../turbo_wear_store.h"
 #include "../turbo_sound.h"
+#include "../turbo_pd_mesh.h"
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -149,7 +150,7 @@ int main() {
     }
     assert(!spec(3).large_pipe && spec(4).large_pipe && spec(6).large_pipe);
     // Channels.
-    for (int i = 0; i < kChannelCount; ++i) assert(channel_index(kChannels[i].name, std::strlen(kChannels[i].name)) == i && kChannels[i].input == (i == kFirstInput));
+    for (int i = 0; i < kChannelCount; ++i) assert(channel_index(kChannels[i].name, std::strlen(kChannels[i].name)) == i && kChannels[i].input == (i == kFirstInput || i == kBoostTarget));
     assert(channel_index("pressure", 8) < 0);
     // Ports: inside the part, axial ones on the front and back faces. A large pipe end (2 x 2 cells) lies wholly on the
     // part's face too: it covers exactly 4 of the part's cells, all on the face it points out of.
@@ -190,7 +191,7 @@ int main() {
     std::string json = definitions_json(built, bov_built, wg_built);
     size_t count = 0;
     for (size_t at = 0; (at = json.find("\"class\": \"gas_pump_centrifugal\"", at)) != std::string::npos; ++at) ++count;
-    assert(count == 8);                                    // two turbos, two of each valve, two superchargers
+    assert(count == 17);                                   // two turbos in three looks each (and each twin scroll), two blow-off valves, two centrifugal superchargers, the twin screw (no wastegate part, Roots on hold)
     assert(json.find("turbocharger_2") == std::string::npos && json.find("turbocharger_4") == std::string::npos && json.find("turbocharger_5") == std::string::npos &&
            json.find("Turbo 2x2") == std::string::npos && json.find("Turbo 4x4") == std::string::npos && json.find("5x5") == std::string::npos && json.find("2x2 and") == std::string::npos);
     assert(json.find("\"bounds_max\": [1, 5, 5]") != std::string::npos && json.find("6x6x2") != std::string::npos);   // the 6x6 is 2 deep
@@ -201,22 +202,21 @@ int main() {
     {   // with every mesh built the parts use theirs; the intercooler points at its first tile
         bool all[5] = {true, true, true, true, true}, two[2] = {true, true}, one = true;
         std::string full = definitions_json(all, two, two, two, &one);
-        assert(full.find("turbo_turbo_air_filter_large.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_0_0_0.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_round_0_0_0.mesh") != std::string::npos && full.find("Turbo Intercooler (Round Tank)") != std::string::npos && full.find("\"mode_x\": \"tile\"") != std::string::npos &&
+        assert(full.find("turbo_turbo_air_filter_large.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_0_0_0.mesh") != std::string::npos && full.find("turbo_turbo_intercooler_round_0_0_0.mesh") != std::string::npos && full.find("Turbo Intercooler (Tube and Fin)") != std::string::npos && full.find("turbo_turbo_intercooler_race_2_2_0.mesh") == std::string::npos && full.find("turbo_turbo_air_filter_drum_large.mesh") != std::string::npos && full.find("\"mode_x\": \"tile\"") != std::string::npos &&
                full.find("radiator_a_0_0_0.mesh") == std::string::npos);
         // the oil ports come after the four gas nodes, so saved gas links keep their meaning
-        size_t entry = full.find("\"name\": \"Turbo 3x3\"");
+        size_t entry = full.find("\"name\": \"Turbo 3x3 (G-Series)\"");
         size_t oil = full.find("oil_in", entry), gas = full.find("\"type\": \"gas\"", entry);
         size_t last_gas = gas;
         for (int k = 0; k < 3; ++k) last_gas = full.find("\"type\": \"gas\"", last_gas + 1);
         assert(oil != std::string::npos && last_gas < oil);
     }
-    assert(json.find("turbo_turbo_wastegate.mesh") != std::string::npos && json.find("turbo_turbo_wastegate_large.mesh") == std::string::npos &&
-           json.find("\"id\": \"turbo_wastegate_large\"") != std::string::npos);
+    assert(json.find("\"id\": \"turbo_wastegate") == std::string::npos);   // the wastegate part is gone (built-in wastegate + ECU)
     assert(json.find("\"id\": \"turbo_blow_off_valve_large\"") != std::string::npos && json.find("turbo_turbo_blow_off_valve_large.mesh") != std::string::npos &&
            json.find("turbo_turbo_blow_off_valve.mesh") == std::string::npos);
     assert(json.find("\"direction\": 5, \"type\": \"gas\", \"size\": 1}") != std::string::npos);   // the large valve's Air port is a large pipe
     assert(json.find("turbo_turbocharger_6.mesh") != std::string::npos && json.find("turbo_turbocharger_3.mesh") == std::string::npos && json.find("turbo_a.mesh") != std::string::npos);
-    assert(json.find("\"name\": \"Turbo 6x6\"") != std::string::npos && json.find("\"type_f64_input\", \"name\": \"boost_limit\"") != std::string::npos);
+    assert(json.find("\"name\": \"Turbo 6x6 (EFR)\"") != std::string::npos && json.find("\"type_f64_input\", \"name\": \"boost_limit\"") != std::string::npos);
     int depth = 0, square = 0; bool in_string = false;
     for (char c : json) {
         if (c == '"') in_string = !in_string;
@@ -225,7 +225,7 @@ int main() {
         assert(depth >= 0 && square >= 0);
     }
     assert(depth == 0 && square == 0 && !in_string);
-    assert(json.find("\"id\": \"turbo_blow_off_valve\"") != std::string::npos && json.find("\"type_f64_input\", \"name\": \"open\"") != std::string::npos);
+    assert(json.find("\"id\": \"turbo_blow_off_valve\"") != std::string::npos);
     assert(valve_from_id("turbo_wastegate", 15) == kWastegate && valve_from_id("turbo_blow_off_valve", 20) == kBlowOff && valve_from_id("turbo_blow_off_valve_large", 26) == kBlowOffLarge && valve_from_id("turbo", 5) == kNoValve &&
            valve_from_id("turbo_wastegate_large", 21) == kWastegateLarge && valve_from_id("turbo_intercooler", 17) == kIntercooler && valve_from_id("turbo_intercooler_round", 23) == kIntercooler && valve_from_id("turbo_air_filter_large", 22) == kAirFilterLarge);
     assert(wastegate_move(1, 3, 1, 50, 50, 1.0 / 60, true) > wastegate_move(1, 3, 1, 50, 50, 1.0 / 60) * 2);   // the large wastegate flows more
@@ -234,6 +234,21 @@ int main() {
     assert(blow_off_vent(0.3, 5, 10, 1.0 / 60) == 0);                 // 2.9 kPa excess, under a 5 kPa spring
     assert(blow_off_vent(1.0, 5, 10, 1.0 / 60) > 0.9);                // 9.8 kPa excess vents
     assert(blow_off_vent(1.0, 5, 0.2, 1.0 / 60) <= 0.2);              // never more than the inlet holds
+    // Twin scroll: on part-throttle exhaust it spools quicker; at rated flow it settles at the same boost or a hair
+    // under, and its top ratio is a little lower.
+    {
+        for (int n : {3, 6}) {
+            Spec a = spec(n), b = spec(n, true);
+            State sa, sb; Plant pa, pb;
+            double q = a.rated_flow * 0.4;
+            run(sa, a, pa, q, q * 0.8, 0.6); run(sb, b, pb, q, q * 0.8, 0.6);
+            std::printf("twin %d: spool normal %.3f twin %.3f\n", n, sa.spool, sb.spool);
+            assert(sb.spool > sa.spool * 1.15);
+            assert(b.max_ratio < a.max_ratio && b.max_ratio > a.max_ratio * 0.95 && twin_pulse_gain(b, b.rated_flow) == 1.0 && twin_pulse_gain(a, 0) == 1.0);
+        }
+        assert(size_from_id("turbocharger_3_efr_twin", 23) == 3 && turbo_twin_from_id("turbocharger_3_efr_twin", 23) && turbo_look_from_id("turbocharger_3_efr_twin", 23) == 2 &&
+               size_from_id("turbocharger_6_twin", 19) == 6 && turbo_look_from_id("turbocharger_6_twin", 19) == 0 && !turbo_twin_from_id("turbocharger_6", 14));
+    }
     // Off throttle: a puff every few ticks as the spool eases down never shows the valve open; a real dump does.
     {
         double flow = 0; bool shown = false;
@@ -289,22 +304,22 @@ int main() {
     // Boost limit (kPa, game scale) caps the boost the `boost` output reads (the docs: "caps boost at this pressure").
     { State st; st.slots[kBoostLimit] = 49; Plant pl; Spec s = spec(3); double p = run(st, s, pl, s.rated_flow, s.rated_flow * 0.5, 20);
       assert(p < 6.05 && p > 4.5 && st.slots[kBoost] < 49.5 && st.slots[kBoost] > 35); }
-    // Compounds: the engine's boost factor carries on past the game's 10 (2x) up to 19 (3x), and no further.
-    assert(near(power_multiplier(10), 2.0) && near(power_multiplier(19), 3.0) && near(power_multiplier(40), 3.0) && near(power_multiplier(5.5), 1.5));
+    // No boost cap: the engine's boost factor carries on past the game's 10 (2x), up to the 60 safety net.
+    assert(near(power_multiplier(10), 2.0) && near(power_multiplier(19), 3.0) && near(power_multiplier(40), 1.0 + 39.0 / 9.0) && near(power_multiplier(500), 1.0 + 59.0 / 9.0) && near(power_multiplier(5.5), 1.5));
     // The boost limit is over the air outside, so a second stage whose inlet is already boosted makes only the rest.
     { State st; st.speed = 1; st.slots[kBoostLimit] = 49; assert(near(head_for(st, 1.0), 5.0, 0.01) && near(head_for(st, 4.0), 2.0, 0.01) && head_for(st, 9.0) == 0); }
     // The head is a pressure ratio that goes with the square of shaft speed: 9 units from outside air at full speed,
-    // a quarter of that at half speed, more units from a boosted inlet, never past the engine's 19.
-    { State st; st.speed = 1; assert(near(head_for(st, 1.0), kMaxHead, 0.01) && head_for(st, 5.0) > 12 && near(head_for(st, 10.0), 9.0, 1e-9));
+    // a quarter of that at half speed, more units from a boosted inlet, never past the 60 safety net.
+    { State st; st.speed = 1; assert(near(head_for(st, 1.0), kMaxHead, 0.01) && head_for(st, 5.0) > 12 && head_for(st, 10.0) > 16 && near(head_for(st, 55.0), 5.0, 1e-9));
       st.speed = 0.5; assert(near(head_for(st, 1.0), kMaxHead / 4, 0.01)); st.speed = NAN; assert(head_for(st, 1.0) == 0); }
     // A second stage heats its inlet air further; intercoolers cool towards the outside air.
     { double one = boost_air_c(20, kFullBoostRatio, kCompressorEfficiency, 0, 20);
       assert(near(one, 97.6, 0.5) && boost_air_c(one, 1.5, kCompressorEfficiency, 0, 20) > one + 40 && near(boost_air_c(one, 1.5, kCompressorEfficiency, 1, 20), 20));
       assert(near(boost_air_c(20, kFullBoostRatio, kCompressorEfficiency, 0.5, 20), (one + 20) / 2) && near(boost_air_c(NAN, 1, kCompressorEfficiency, 0, 20), 20)); }
-    // Two 3x3s compounded on a big engine reach well past one turbo's 10 (three times the power needs 19); one 3x3 on
-    // its own under the same draw stays at or under 10.
+    // Two 3x3s compounded on a big engine reach well past one turbo's 10, with no cap at 19 any more (each stage holds
+    // its spring's ratio, 1.87 x 1.87); one 3x3 on its own under the same draw stays at or under 10.
     { State a, b; CompoundPlant pl; double p = run_compound(a, b, spec(3), spec(3), pl, 50, 40, 20);
-      assert(a.spool > 0.95 && b.spool > 0.5 && p > 13 && p < 19.5 && b.slots[kPowerMultiplier] > 2.3);
+      assert(a.spool > 0.95 && b.spool > 0.5 && p > 19.5 && p < 30 && b.slots[kPowerMultiplier] > 3.0);
       assert(b.spool < a.spool);                        // breathing boosted air, the second stage needs less shaft speed
       assert(b.slots[kBoost] > 100);                    // the second stage's `boost` reads the total over the air outside
       State one; Plant single; double q = run(one, spec(3), single, 25, 40, 20); assert(q <= 10.0 && one.slots[kPowerMultiplier] <= 2.0); }
@@ -327,7 +342,7 @@ int main() {
     assert(valve_channel_index("antilag", 7) == kValveAntilag && channel_index("boost_psi", 9) == kBoostPsi);
     // Two-step: the wastegate takes a launch RPM; the limiter cuts at it and gives the fuel back 150 RPM below, so the
     // engine bounces just under it; 0 is off, and it never asks for more than the game's own fuel cut.
-    assert(valve_channel_index("two_step", 8) == kValveTwoStep && json.find("\"type_f64_input\", \"name\": \"two_step\"") != std::string::npos);
+    assert(valve_channel_index("two_step", 8) == kValveTwoStep);
     { bool cut = false;
       assert(!two_step_cut(cut, 3000, 4000) && two_step_cut(cut, 4000, 4000) && two_step_cut(cut, 3900, 4000) && !two_step_cut(cut, 3840, 4000));
       assert(!two_step_cut(cut, 3990, 4000) && two_step_cut(cut, -4100, 4000));             // either way round
@@ -633,16 +648,75 @@ int main() {
         assert(small.find("\"tech_tier\": 3") != std::string::npos && small.find("\"name\": \"drive_power\"") != std::string::npos);
         for (int n : {2, 4, 5}) assert(full.find("\"id\": \"" + definition_id(n) + "\"") == std::string::npos);
         // Survival loot: the starter parts drop after the 2nd bunker (tier 3), the rest after the 3rd (tier 4).
-        for (const char* id : {"turbocharger_3", "supercharger_small", "turbo_wastegate", "turbo_blow_off_valve", "turbo_air_filter"})
+        for (const char* id : {"turbocharger_3", "supercharger_small", "turbo_blow_off_valve", "turbo_air_filter", "turbo_air_filter_sock", "turbo_air_filter_drum"})
             assert(entry(id).find("\"tech_tier\": 3,\n      \"spawn_probability\": 0.15,") != std::string::npos);
-        for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_wastegate_large", "turbo_blow_off_valve_large", "turbo_air_filter_large",
-                               "turbo_intercooler", "turbo_intercooler_round"})
+        for (const char* id : {"turbocharger_6", "supercharger_large", "turbo_blow_off_valve_large", "turbo_air_filter_large",
+                               "turbo_air_filter_sock_large", "turbo_air_filter_drum_large", "turbo_intercooler", "turbo_intercooler_round",
+                               "turbo_intercooler_race"})
             assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
-        assert(count_in(full, "\"tech_tier\": ") == 12 && count_in(full, "\"spawn_probability\": ") == 12);
+        for (const char* id : {"supercharger_twin_screw"})
+            assert(entry(id).find("\"tech_tier\": 4,\n      \"spawn_probability\": 0.075,") != std::string::npos);
+        assert(count_in(full, "\"tech_tier\": ") == 26 && count_in(full, "\"spawn_probability\": ") == 26);
         assert(definitions_json(all, two, two, two, &one).find("\"id\": \"supercharger_small\", ") == std::string::npos);
+        assert(size_from_id("turbocharger_3_precision", 24) == 3 && size_from_id("turbocharger_6_efr", 18) == 6 && size_from_id("turbocharger_3_x", 16) == 0 &&
+               turbo_look_from_id("turbocharger_6_efr", 18) == 2 && turbo_look_from_id("turbocharger_3", 14) == 0);
+        for (const char* id : {"turbocharger_3_precision", "turbocharger_3_efr"}) assert(entry(id).find("\"tech_tier\": 3,") != std::string::npos);
+        // Looks v2: every filter and intercooler look is its own part, found by its id.
+        assert(valve_from_id("turbo_air_filter_sock", 21) == kAirFilter && valve_from_id("turbo_air_filter_drum_large", 27) == kAirFilterLarge &&
+               valve_from_id("turbo_intercooler_race", 22) == kIntercooler && valve_from_id("turbo_air_filter_x", 18) == kNoValve);
+        assert(part_look_from_id("turbo_air_filter_drum_large", 27) == 2 && part_look_from_id("turbo_air_filter", 16) == 0 &&
+               part_look_from_id("turbo_intercooler_round", 23) == 1 && part_look_from_id("turbo_intercooler_race", 22) == 2);
         assert(definitions_json(all).find("meshes/components/turbo_a.mesh") != std::string::npos);   // no meshes: the stock look
         assert(blower_from_id("supercharger_small", 18) == kBlowerSmall && blower_from_id("supercharger_large", 18) == kBlowerLarge &&
                blower_from_id("supercharger", 12) == kNoBlower && valve_from_id("supercharger_small", 18) == kNoValve && size_from_id("supercharger_small", 18) == 0);
+    }
+    {   // twin screw and Roots: stretch to fit, flat boost from what the engine swallows, bypass off throttle, relief
+        assert(pd_from_id("supercharger_twin_screw", 23) == kTwinScrew && pd_from_id("supercharger_roots", 18) == kRoots && pd_from_id("supercharger_small", 18) == -1);
+        assert(pd_cells(0, 0, 0) == 8 && pd_cells(2, 1, 6) == 4 * 3 * 8 && pd_cells(99, 99, -99) == 16 * 3 * 16 && pd_cells(INT32_MIN, 0, 0) == 16 * 2 * 2);
+        bool none[5]{};
+        std::string json = definitions_json(none);
+        assert(json.find("supercharger_roots") == std::string::npos);   // on hold
+        json = pd_entry(kRoots, "x");
+        size_t at = json.find("\"id\": \"supercharger_roots\"");
+        assert(at != std::string::npos && json.find("\"ext_max\": [14, 1, 14]", at) != std::string::npos && json.find("\"mode_y\": \"stretch\"", at) != std::string::npos);
+        // A V8-sized engine (volume 200) on the medium Engine Wheel, at full throttle; the game's draw from research-engine-air.md.
+        auto run = [](PdKind k, int cells, double rpm, double throttle, double cap_psi, double* kw = nullptr, double* air_c = nullptr) {
+            State st; double cap = 30, out = cap, draw = 0, V = 200, dt = 1.0 / 60;
+            BlowerStep o;
+            for (int i = 0; i < 900; ++i) {
+                double used = std::min(out, engine_full_draw_lps(V, rpm, out / cap) * throttle * dt);
+                out -= used; draw += (used / dt - draw) * 0.2;
+                Inputs in; in.dt = dt; in.pressure[kColdIn] = 1; in.volume[kColdIn] = 1e6; in.pressure[kColdOut] = out / cap; in.volume[kColdOut] = out; in.boost_capacity = cap;
+                PdInputs pd; pd.draw_lps = draw; pd.capacity = cap; pd.engine_volume = V; pd.engine_rpm = rpm;
+                if (cap_psi > 0) pd.target_pressure = 1 + cap_psi / kPsiPerKpa / kKpaPerUnit;
+                o = pd_step(st, k, cells, in, pd, rpm / 60 * kBeltMedium);
+                out += o.compressor_move;
+            }
+            if (kw) *kw = o.drive_joules * 60 / 1000;
+            if (air_c) *air_c = boost_air_c(kAmbientC, o.pressure_ratio, o.efficiency, 0.0, kAmbientC);
+            return (out / cap - 1) * kKpaPerUnit * kPsiPerKpa;
+        };
+        double low = run(kTwinScrew, 64, 2000, 1, 0), mid = run(kTwinScrew, 64, 4500, 1, 0), high = run(kTwinScrew, 64, 7000, 1, 0);
+        assert(low > 10 && mid > 13 && high < 20 && high - low < 0.5 * high);                  // in from low RPM, near flat
+        assert(run(kTwinScrew, 96, 4500, 1, 0) > mid + 5 && run(kTwinScrew, 32, 4500, 1, 0) < 5);   // bigger blower, more boost
+        assert(run(kTwinScrew, 64, 4500, 0.2, 0) < 2);                                        // throttle shut: bypass open
+        assert(run(kTwinScrew, 512, 7000, 1, 0) < 30 && run(kRoots, 512, 7000, 1, 0) < 24);     // relief valves
+        assert(std::abs(run(kTwinScrew, 96, 4500, 1, 10) - 10) < 1.0);                         // a Boost Controller caps it
+        double kw_screw, kw_roots, c_screw, c_roots;
+        double p_screw = run(kTwinScrew, 64, 4500, 1, 12, &kw_screw, &c_screw), p_roots = run(kRoots, 64, 4500, 1, 12, &kw_roots, &c_roots);
+        assert(std::abs(p_screw - p_roots) < 1 && kw_roots > kw_screw * 1.15 && c_roots > c_screw + 10);   // a Roots: hotter, hungrier
+        // Their meshes: every look clear of its stretch planes, which match the definitions' center_stretch, and in its 2 x 2 x 2 box.
+        for (int r = 0; r < 2; ++r) {
+            for (int look = 0; look < 3; ++look) {
+                pdmesh::Mesh m = pdmesh::build(r == 1, look);
+                assert(!m.v.empty() && m.i.size() % 3 == 0 && pdmesh::clear_of_planes(m, r == 1));
+                for (auto& v : m.v) for (int k = 0; k < 3; ++k) assert(v.pos[k] > -0.047 && v.pos[k] < (k == 1 && r == 1 && look > 0 ? 0.19 : 0.127));   // a few mm proud; the scoop and air cleaner stand tall
+            }
+            pdmesh::Planes pl = pdmesh::planes(r == 1);
+            std::string c = std::string("\"center_stretch\": [") + (pl.p[0] > 0.05 ? "1.15" : "0.5") + ", " + (pl.p[1] > 0.05 ? "1.15" : "0.5") + ", " + (pl.p[2] > 0.05 ? "1.15" : "0.5") + "]";
+            assert(pd_entry(PdKind(r), "x").find(c) != std::string::npos);
+        }
+        assert(blower_voice(kVoiceTwinScrew).gear_gain < blower_voice(2).gear_gain && blower_voice(kVoiceRoots).gear_base < blower_voice(kVoiceTwinScrew).gear_base);
     }
     {   // the model: head with the square of the pulley's speed, no lag, and the belt pays for compressing the air
         assert(blower_spool(0) == 0 && near(blower_spool(kBlowerFullBoostRps), 1) && near(blower_spool(-kBlowerFullBoostRps / 2), 0.25) && blower_spool(1e9) == 1);
@@ -728,7 +802,7 @@ int main() {
             assert(mean > 0 && most < 1.6 * mean);
             double level = 0; bool surging = false, blown = false;
             decode_turbo_factor(byte / 255.0, level, surging, blown);
-            BlowerVoice bv = blower_voice(big2 != 0);
+            BlowerVoice bv = blower_voice(big2 != 0 ? 4 : 2);
             assert(std::abs(sy.gear_pitch - (bv.gear_base + bv.gear_span * level)) < 3 * bv.gear_span / 124.0);
         }
         assert(near(blower_sound_level(kBlowerSoundRps * 2), 1) && near(blower_sound_level(-kBlowerSoundRps / 2), 0.5));
@@ -751,5 +825,28 @@ int main() {
         }
         assert(paint0 && paint1 && boss);
     }
+    // No boost cap (2026-11): the wastegate holds its spring's 12.8 psi unless a boost target asks for more, up to the
+    // compressor's best ratio; the boost limit still caps it.
+    { State st; Spec s6 = spec(6), s3 = spec(3);
+      assert(s3.max_ratio < s6.max_ratio && s6.max_speed > 1.5 && near(speed_for_ratio(kFullBoostRatio), 1.0));
+      assert(near(boost_target_pressure(st, s6, 1.0), 1.0 + kMaxHead, 0.01));
+      st.slots[kBoostTarget] = 30; double want = 1.0 + 30 / kPsiPerKpa / kKpaPerUnit;
+      assert(near(boost_target_pressure(st, s6, 1.0), want, 1e-9));
+      st.slots[kBoostTarget] = 500; assert(near(boost_target_pressure(st, s6, 1.0), 1.0 + (kAmbientKpa * s6.max_ratio - kAmbientKpa) / kKpaPerUnit, 1e-9));
+      st.slots[kBoostTarget] = 0; st.controller_psi = 20; assert(boost_target_pressure(st, s6, 1.0) > 1.0 + kMaxHead);
+      st.slots[kBoostLimit] = 49; assert(near(boost_target_pressure(st, s6, 1.0), 6.0, 1e-9));
+      State a, b; a.slots[kBoostTarget] = 30; Plant pa, pb;
+      run(a, s6, pa, s6.rated_flow * 1.6, s6.rated_flow * 0.8, 20); run(b, s6, pb, s6.rated_flow * 1.6, s6.rated_flow * 0.8, 20);
+      assert(a.slots[kBoostPsi] > 20 && b.slots[kBoostPsi] < 14 && near(a.slots[kBoostTargetSet], 30, 0.01) && a.speed <= s6.max_speed); }
+    // Engine ratings and knock control.
+    { EngineRating small = engine_rating("engine", 6, 0), v12 = engine_rating("v_engine_c", 10, 25), rot = engine_rating("rotary_engine", 13, 6);
+      assert(small.known && small.cylinders == 1 && near(small.factor, 2.15) && v12.cylinders == 12 && near(v12.factor, 2.88) && near(rot.factor, 2.2) && rot.cylinders == 4);
+      assert(near(engine_rating("rotary_engine", 13, 0).factor, 2.35) && near(engine_rating("built_rotary_engine", 19, 2).factor, 3.3));
+      assert(!engine_rating("gearbox", 7, 0).known && engine_rating("opposed_engine_b", 16, 6).cylinders == 6 && engine_rating("engine", 6, INT32_MIN).cylinders == 1);
+      Knock k = knock_step(2.0, 2.5, 30, 1); assert(k.damage == 0 && k.factor == 2.0);
+      k = knock_step(2.0, 2.5, 120, 1); assert(k.over > 0 && k.factor < 2.0 && k.damage > 0);            // hot air knocks sooner
+      Knock k10 = knock_step(2.75, 2.5, 40, 1), k30 = knock_step(3.25, 2.5, 40, 1);   // 40 C: the rating as is
+      assert(1 / k10.damage > 400 && 1 / k10.damage < 700 && 1 / k30.damage > 70 && 1 / k30.damage < 130 && k30.factor > k10.factor && k30.factor < 3.25);
+      assert(knock_step(NAN, 2.5, 30, 1).damage == 0 && knock_step(3, 2.5, NAN, 1).damage > 0 && std::isfinite(knock_step(3, 2.5, NAN, 1).factor)); }
     return 0;
 }

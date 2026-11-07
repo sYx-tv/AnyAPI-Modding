@@ -1,4 +1,6 @@
-// AnyMoto: motorcycle parts for the stock Motorcycle Wheel item.
+// AnyMoto: motorcycle parts for the stock Motorcycle Wheel item. Ships as the "anymoto" part of the AnyVehicleOverhaul
+// bundle (bundles/anyvehicleoverhaul_bundle.cpp); keep kModId, the moto_* part ids and the AnyMoto data folder as they
+// are, or players lose their bikes and settings.
 //
 //   Motorcycle Fork      a wheel part placed on the front face of a bike's frame: steers from the steering links,
 //                        brakes from the brake link, 14 cm of travel; raked sliding fork legs and a mudguard.
@@ -18,8 +20,8 @@
 // crashed AnySuspension's hub in 0.1.25). The copies accept only the Motorcycle Wheel and carry its radius.
 // Wheels, seats, steering wheels and gyro sensors keep their stock behaviour: every hook passes other parts through.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (anymoto_bindings.h): Anymaker 0.1.27 /
-// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (anymoto_bindings.h): Anymaker 0.2.0 /
+// Steam build 26328453 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -503,7 +505,7 @@ double fork_steering(void* vehicle) {
     int n = 0;
     for (void* c : list) {
         if (!can_read(static_cast<uint8_t*>(c) + off::server_component_definition, 16) || at<const void*>(c, off::server_component_vehicle) != vehicle) continue;
-        if (known_kind(at<const void*>(c, off::server_component_definition)) != Kind::fork) continue;
+        if (kind_of_definition(at<const void*>(c, off::server_component_definition)) != Kind::fork) continue;
         if (!can_read(static_cast<uint8_t*>(c) + off::server_wheel_steering, 8)) continue;
         double v = at<double>(c, off::server_wheel_steering);
         if (std::isfinite(v)) { sum += std::clamp(v, -1.0, 1.0); ++n; }
@@ -520,7 +522,7 @@ bool contact_point(void* vehicle, const Mat34& vehicle_transform, Vec3* out) {
         auto& l = found->second;
         l.erase(std::remove_if(l.begin(), l.end(), [&](void* c) {
             if (!can_read(static_cast<uint8_t*>(c) + off::server_component_definition, 16)) return true;
-            Kind k = known_kind(at<const void*>(c, off::server_component_definition));
+            Kind k = kind_of_definition(at<const void*>(c, off::server_component_definition));
             return (k != Kind::fork && k != Kind::swingarm) || at<const void*>(c, off::server_component_vehicle) != vehicle;
         }), l.end());
         list = l;
@@ -532,7 +534,7 @@ bool contact_point(void* vehicle, const Mat34& vehicle_transform, Vec3* out) {
         g_server_component_transform(&local, c);
         Mat34 world = compose(vehicle_transform, local);
         if (!finite(world)) continue;
-        Kind k = known_kind(at<const void*>(c, off::server_component_definition));
+        Kind k = kind_of_definition(at<const void*>(c, off::server_component_definition));
         Vec3 tyre = apply(world, (k == Kind::fork ? fork_tuning() : swingarm_tuning()).tyre);
         sum = sum + tyre - Vec3{0, kMotorcycleTyreRadius, 0};
         ++n;
@@ -682,10 +684,12 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
     const Vec3 f = normalized(in.forward);
     const double wf = dot(in.angular_velocity, f);
     double observed = 0, predicted = lean_rate_for(in.forward, in.up, wf);
+    double probe_lean_deg = 0;                       // the lean output while the assist is off
     {
         std::lock_guard lock(g_assist_mutex);
         Assist& a = g_assists[self];
         LeanOutput probe = lean_assist(LeanInput{in.forward, in.up, {}, {}, 1, 1, 1});   // lean only
+        probe_lean_deg = probe.lean_deg;
         double lean = rad(probe.lean_deg);
         if (a.have_prev && in.dt > 0.002 && in.dt < 0.1) {
             observed = (lean - a.prev_lean) / in.dt;
@@ -775,7 +779,7 @@ void hk_gyro_tick(void* self, void* vehicle, void* scene) {
     {
         std::lock_guard lock(g_assist_mutex);
         Assist& a = g_assists[self];
-        a.slots[2] = out.lean_deg;
+        a.slots[2] = in.strength > 0 ? out.lean_deg : probe_lean_deg;   // lean reads even with the assist off
         a.slots[3] = out.target_deg;
         a.prev_set_wf = set_wf;
         if (now >= a.next_log) {

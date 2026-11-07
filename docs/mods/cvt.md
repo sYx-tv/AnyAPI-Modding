@@ -4,6 +4,9 @@
 > so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
 > 0.0.1 is published ([mods-2026.10.29](../releases/anycvt-0.0.1.md)). A tester drove the Small CVT on 2026-10-29: it shifted and drove as described and kept
 > its Properties settings over a save and reload. The medium and large and the outputs are untested.
+> Since 2026-11 it ships inside [AnyVehicleOverhaul](vehicle-overhaul.md) (mod id `anycvt` unchanged; the bundle replaces `AnyCVT.dll`).
+>
+> **No CVT needs air.** The stock medium and large gearboxes shift by air, but their CVTs shift by a mechanical link on top, like the small one.
 
 AnyCVT adds a belt CVT for each engine size. Each one is the stock gearbox of that size with the same case, the same
 engine face and the same weight, so it bolts straight onto the engine where the stock gearbox goes. There are no gears:

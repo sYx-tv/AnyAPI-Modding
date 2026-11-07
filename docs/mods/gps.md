@@ -2,7 +2,7 @@
 
 > GpsPart hooks game functions directly through the [experimental SDK](../../sdk/experimental/README.md),
 > so it only activates on Anymaker 0.2.0 / Steam build 26328453 and turns itself off on any other build.
-> GpsPart 1.0.0 requires AnyAPI 0.35.0 or newer on that build; install it from the manager. **Single player only** for now.
+> GpsPart ships inside the [AnyVehicleOverhaul](vehicle-overhaul.md) download; install that from the manager. **Single player only** for now.
 
 GpsPart adds a new part, the **GPS Sensor**. It looks like the stock Compass Sensor (same mesh, size and data
 ports) and gives the data port and microcontroller everything a GPS needs.

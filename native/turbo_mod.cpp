@@ -19,8 +19,8 @@
 // now: the definitions are added on this game's server and client scene, and every player would need the mod.
 // The hot-side gas is not saved; it refills from the pipes after loading.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (turbo_bindings.h): Anymaker 0.1.27 /
-// Steam build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (turbo_bindings.h): Anymaker 0.2.0 /
+// Steam build 26328453 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -34,8 +34,12 @@
 #include "turbo_sound.h"
 #include "turbo_upkeep_mesh.h"
 #include "turbo_supercharger_mesh.h"
+#include "turbo_pd_mesh.h"
 #include "turbo_health.h"
 #include "turbo_wear_store.h"
+#include "exhaust_logic.h"
+#include "exhaust_mesh.h"
+#include "avo_looks_mesh.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -66,6 +70,7 @@ void log(int level, const char* fmt, ...) {
 // Reference layouts (metadata, Anymaker 0.1.24; unchanged in 0.1.25).
 namespace off {
 constexpr ptrdiff_t component_id = 64;               // server_scene.vehicle_component.m_id (s32)
+constexpr ptrdiff_t component_vehicle = 320;         // server_scene.vehicle_component.m_parent_vehicle
 constexpr ptrdiff_t component_definition = 312;      // m_definition (ptr<const vehicle_component_definition>)
 constexpr ptrdiff_t component_colors = 136;          // m_colors (array<replication.master.property_s32>: buffer, count, element size)
 constexpr ptrdiff_t property_modified = 16;          // replication.master.property.m_is_modified (bool)
@@ -108,8 +113,13 @@ constexpr ptrdiff_t component_grid = 328;            // vehicle_component.m_grid
 constexpr ptrdiff_t grid_origin_dir = 48;
 constexpr ptrdiff_t component_extend = 296;          // m_extend_size's value (vec3_s32): cells added by stretching
 constexpr ptrdiff_t engine_air_manifolds = 1256;     // engine.m_air_manifolds (vector<ptr<air_manifold>>)
+constexpr ptrdiff_t engine_damage = 1448;            // engine.m_damage (s32, 0-2: the game's damage steps)
 constexpr ptrdiff_t engine_damage_factor = 1456;     // engine.m_damage_factor (f64; a damage step at 1)
+constexpr ptrdiff_t engine_volume = 1416;            // engine.m_volume (s32; set in create from its zones, as Rotary reads it)
 constexpr ptrdiff_t engine_rps = 1424;               // engine.m_rps (f64; the tick reads it before setting the new speed)
+constexpr ptrdiff_t engine_exhaust_manifolds = 1336; // engine.m_exhaust_manifolds (vector<ptr<exhaust_manifold>>)
+constexpr ptrdiff_t engine_temperature = 1432;       // engine.m_temperature (f64, C)
+constexpr ptrdiff_t engine_display = 1472;           // m_display_throttle .. m_display_torque: 9 f64 the stock tooltip shows
 constexpr ptrdiff_t manifold_content = 576;          // air_manifold.m_content_gas (vehicle_gas_content)
 constexpr ptrdiff_t manifold_air_temperature = 624;  // air_manifold.m_content_gas.m_temperature
 constexpr size_t liquid_content_size = 232, liquid_node_size = 80;
@@ -197,6 +207,8 @@ struct Turbo {
     double boost_capacity = 0;                       // litres its whole boost pipe holds (refresh_topology)
     int feeders = 1;                                 // compressors pushing into that pipe, itself included
     void* filter = nullptr;                          // the air filter on its intake this tick (a second stage: none)
+    bool sooted = false;                             // blown and painted sooty this session (saves keep the paint, but
+                                                     // a part painted one colour reads as new in set_paint)
     State state;
     double last_log = -1e9;
     int ticks = 0;
@@ -208,6 +220,9 @@ struct Turbo {
     const void* vehicle = nullptr;
     double ticked_at = -1e9;
     double drive_kw = 0;                             // supercharger: smoothed power its belt takes (log)
+    int pd = -1;                                     // a twin screw or Roots (PdKind), -1: not one
+    double pd_after = NAN;                           // its boost pipe's content after its last move (for the engine's draw)
+    double pd_draw = 0;                              // smoothed L/s the engine took from it
 };
 std::unordered_map<const void*, Turbo> g_turbos;     // keyed by server component (superchargers too); nodes keep their address
 // Air manifolds, noted by the engine tick hook: manifold component -> the engine breathing through it, and when.
@@ -225,6 +240,7 @@ struct ValvePart {
     double vented = 0;                                // litres the turbos vented through it since its last tick
     double open_until = 0;                            // seconds (now_seconds) it shows open after venting
     const void* vented_by = nullptr;                  // the turbo that vented through it since its last tick
+    uint64_t vented_tick = 0;                         // the server tick (g_vent_tick) it was last vented in
     double antilag_until = 0;                         // wastegate: seconds (now_seconds) it shows antilag firing
     double antilag_level = 0;                         // how hard (0-1), for the bangs
     int antilag_size = 3;                             // the turbo it fires for
@@ -232,11 +248,23 @@ struct ValvePart {
     double last_tick = 0;                             // seconds (now_seconds) of its last own server tick
 };
 std::unordered_map<const void*, ValvePart> g_valves;
-std::unordered_map<const void*, int32_t> g_painted_parts;   // air filters and intercoolers given their starting colours (they have
+struct PaintedPart { int32_t id; const void* vehicle; };
+std::unordered_map<const void*, PaintedPart> g_painted_parts;   // air filters and intercoolers given their starting colours (they have
                                                      // no create hook): address -> component id, as the game reuses addresses
-std::unordered_map<const void*, int> g_definition_size;   // definition pointer -> 2-5, or 0 for other parts
+std::unordered_map<const void*, int> g_definition_size;   // definition pointer -> 3 or 6 (2-5 kept for the valve and supercharger voices), or 0 for other parts
 std::recursive_mutex g_mutex;                        // tick, create, destroy and data lookups (recursive: game calls made
                                                      // under it may come back through our hooks)
+struct VehicleTarget { double psi = 0, at = -1e9; };
+std::unordered_map<const void*, VehicleTarget> g_vehicle_targets;   // Boost Controllers' asks, by vehicle (under g_mutex)
+// ECUs (ecu_logic.h): each vehicle's tune, renewed by its ECU part's tick, and what its engines did (for its outputs).
+struct VehicleEcu { ecu::Tune tune; double at = -1e9; EcuReport report; double report_at = -1e9; };
+std::unordered_map<const void*, VehicleEcu> g_vehicle_ecus;          // under g_mutex
+std::unordered_map<const void*, bool> g_rev_limiters;                // engine -> on the ECU's rev limiter (latch)
+// The ECU tune for a vehicle when an ECU ticked on it in the last second.
+const ecu::Tune* ecu_tune(const void* vehicle, double now) {
+    auto e = vehicle ? g_vehicle_ecus.find(vehicle) : g_vehicle_ecus.end();
+    return e != g_vehicle_ecus.end() && now - e->second.at < 1.0 ? &e->second.tune : nullptr;
+}
 
 double now_seconds() {
     static LARGE_INTEGER freq = [] { LARGE_INTEGER f; QueryPerformanceFrequency(&f); return f; }();
@@ -248,8 +276,22 @@ double now_seconds() {
 // kKindSupercharger(Large) a supercharger, 0 a stock impeller.
 constexpr int kKindBlowOff = 10, kKindWastegate = 11, kKindBlowOffLarge = 12, kKindWastegateLarge = 13;
 constexpr int kKindIntercooler = 14, kKindAirFilter = 16, kKindAirFilterLarge = 17;
-constexpr int kKindSupercharger = 20, kKindSuperchargerLarge = 21;
-bool is_blower(int kind) { return kind == kKindSupercharger || kind == kKindSuperchargerLarge; }
+constexpr int kKindSupercharger = 20, kKindSuperchargerLarge = 21, kKindTwinScrew = 22, kKindRoots = 23;
+constexpr int kKindExhaust = 30;                      // 30.. : exhaust::Inline (mufflers, resonators, the cat, headers)
+double t_dt();
+bool is_exhaust_inline(int kind) { return kind >= kKindExhaust && kind < kKindExhaust + exhaust::kInlineCount; }
+bool is_pd(int kind) { return kind == kKindTwinScrew || kind == kKindRoots; }   // positive displacement (turbo_logic.h)
+bool is_blower(int kind) { return kind == kKindSupercharger || kind == kKindSuperchargerLarge || is_pd(kind); }
+PdKind pd_kind(int kind) { return kind == kKindRoots ? kRoots : kTwinScrew; }
+// Sets a supercharger's kind up (once).
+void setup_blower(Turbo& t, int kind) {
+    if (t.blower) return;
+    t.blower = true;
+    t.pd = is_pd(kind) ? int(pd_kind(kind)) : -1;
+    t.large = kind == kKindSuperchargerLarge || t.pd >= 0;   // the twin screw and Roots have large pipes
+    t.spec = blower_spec(t.large); t.size = t.spec.size;
+}
+std::string booster_name(const Turbo& t);
 bool is_intercooler(int kind) { return kind == kKindIntercooler; }
 bool is_air_filter(int kind) { return kind == kKindAirFilter || kind == kKindAirFilterLarge; }
 bool is_blow_off(int kind) { return kind == kKindBlowOff || kind == kKindBlowOffLarge; }
@@ -275,6 +317,11 @@ int kind_of_definition(const void* definition) {
             Blower b = blower_from_id(id.data, size_t(id.length));
             if (b == kBlowerSmall) n = kKindSupercharger;
             else if (b == kBlowerLarge) n = kKindSuperchargerLarge;
+            int pd = pd_from_id(id.data, size_t(id.length));
+            if (pd == kTwinScrew) n = kKindTwinScrew;
+            else if (pd == kRoots) n = kKindRoots;
+            int ex = exhaust::inline_from_id(id.data, size_t(id.length));
+            if (ex >= 0) n = kKindExhaust + ex;
         }
     }
     g_definition_size[definition] = n;
@@ -469,6 +516,7 @@ void sync_wear(double now) {
     if (!same_stamp(s, g_wear_stamp)) {
         if (s.exists) {
             std::vector<uint8_t> text = read_file(g_wear_path);
+            if (text.empty()) return;                    // locked or mid-write: keep what we have, read it next poll
             g_wear = decode_wear(std::string(text.begin(), text.end()));
             log(0, "turbo wear loaded: %zu parts", g_wear.size());
         } else if (g_wear_stamp.exists) {
@@ -518,13 +566,30 @@ double* valve_setting(ValvePart& v) {
 // Starting colours, as indices into the game's colour palette (rom/textures/color_palette.txtr): the meshes mark the
 // turbo's cold and hot housings and each valve's body and cap as paint slots 0 and 1 (turbo_mesh.h).
 // Starting colours (palette indices into rom/textures/color_palette.txtr, and their colours for the preview).
-constexpr int32_t kPaletteSteel = 81, kPaletteCastIron = 79, kPaletteBrightSteel = 83, kPaletteBrightRed = 36;
+constexpr int32_t kPaletteSteel = 81, kPaletteCastIron = 79, kPaletteBrightSteel = 83, kPaletteBrightRed = 36, kPaletteBlack = 84;
 struct StartColours { int32_t slot[2]; uint8_t rgb[2][3]; };
-constexpr StartColours kTurboColours{{kPaletteSteel, kPaletteCastIron}, {{197, 199, 196}, {55, 67, 69}}};
-constexpr StartColours kValveColours{{kPaletteBrightSteel, kPaletteBrightRed}, {{236, 236, 231}, {204, 44, 36}}};
-constexpr StartColours kFilterColours{{kPaletteBrightRed, kPaletteBrightSteel}, {{204, 44, 36}, {236, 236, 231}}};   // element, caps
-constexpr StartColours kCoolerColours{{kPaletteBrightSteel, kPaletteSteel}, {{236, 236, 231}, {197, 199, 196}}};     // tanks, end caps
-constexpr StartColours kBlowerColours{{kPaletteBrightSteel, kPaletteCastIron}, {{236, 236, 231}, {55, 67, 69}}};     // housing, gear case
+constexpr int32_t kPaletteBlueAnodised = 47;
+constexpr StartColours kTurboLookColours[3]{                                                    // cold housing, wastegate can
+    {{kPaletteSteel, kPaletteBlack}, {{197, 199, 196}, {14, 14, 16}}},                        // G-series
+    {{kPaletteBlack, kPaletteBrightRed}, {{14, 14, 16}, {204, 44, 36}}},                     // Precision
+    {{kPaletteCastIron, kPaletteBlueAnodised}, {{55, 67, 69}, {0, 56, 122}}}};               // EFR
+constexpr uint8_t kRgbSteel[3]{197, 199, 196}, kRgbCast[3]{55, 67, 69}, kRgbBright[3]{236, 236, 231}, kRgbRed[3]{204, 44, 36}, kRgbBlack[3]{14, 14, 16};
+constexpr StartColours kValveColours{{kPaletteBlack, kPaletteBrightRed}, {{14, 14, 16}, {204, 44, 36}}};             // HKS: black body, red band
+constexpr StartColours kBlowerColours{{kPaletteBrightSteel, kPaletteBlack}, {{236, 236, 231}, {14, 14, 16}}};       // ProCharger: polished head, black case
+// One per look (turbo_logic.h kFilterLookIds / kCoolerIds): element and caps; tanks and end caps.
+constexpr StartColours kFilterLookColours[kFilterLooks]{
+    {{kPaletteBrightRed, kPaletteBrightSteel}, {{204, 44, 36}, {236, 236, 231}}},      // red cone, chrome lid
+    {{kPaletteBlack, kPaletteCastIron}, {{14, 14, 16}, {55, 67, 69}}},                 // black sock, dark band
+    {{kPaletteBrightSteel, kPaletteBlack}, {{236, 236, 231}, {14, 14, 16}}}};          // chrome drum, black lid
+constexpr StartColours kCoolerLookColours[kCoolerLooks]{
+    {{kPaletteSteel, kPaletteBlack}, {{197, 199, 196}, {14, 14, 16}}},
+    {{kPaletteBlack, kPaletteCastIron}, {{14, 14, 16}, {55, 67, 69}}},
+    {{kPaletteSteel, kPaletteSteel}, {{197, 199, 196}, {197, 199, 196}}}};
+int look_of_part(const void* component);
+int turbo_look_of(const void* component);
+bool turbo_twin_of(const void* component);
+inline const StartColours& filter_colours(const void* component) { return kFilterLookColours[look_of_part(component)]; }
+inline const StartColours& cooler_colours(const void* component) { return kCoolerLookColours[look_of_part(component)]; }
 
 // Sets paint slots 0 and 1, as the paint tool would (the property's modified flag sends it to the clients). With
 // only_new, only a newly placed part, whose slots all hold the same default; a part that was painted (or whose saved
@@ -556,10 +621,14 @@ void default_paint(void* self, int32_t slot0, int32_t slot1) { set_paint(self, s
 bool first_sight(const void* part) {
     const auto* id_at = static_cast<const uint8_t*>(part) + off::component_id;
     int32_t id = anymaker::readable(id_at, 4) ? at<int32_t>(part, off::component_id) : -1;
-    auto [it, added] = g_painted_parts.try_emplace(part, id);
+    // Ids count per vehicle, so a respawned design reuses them: the vehicle is kept too.
+    const auto* vehicle_at = static_cast<const uint8_t*>(part) + off::component_vehicle;
+    const void* vehicle = anymaker::readable(vehicle_at, 8) ? at<const void*>(part, off::component_vehicle) : nullptr;
+    PaintedPart now{id, vehicle};
+    auto [it, added] = g_painted_parts.try_emplace(part, now);
     if (added) return true;
-    if (it->second == id) return false;
-    it->second = id;
+    if (it->second.id == id && it->second.vehicle == vehicle) return false;
+    it->second = now;
     return true;
 }
 // A blown turbo goes sooty: both housings dark (palette 63, a burnt dark brown).
@@ -589,12 +658,11 @@ void hk_create(void* self, void* vehicle) {
     if (is_blower(kind)) {
         Turbo& t = g_turbos[self];
         if (t.blower) return;
-        t.blower = true; t.large = kind == kKindSuperchargerLarge;
-        t.spec = blower_spec(t.large); t.size = t.spec.size;
+        setup_blower(t, kind);
         default_paint(self, kBlowerColours.slot[0], kBlowerColours.slot[1]);
         static std::atomic<int> logs{8};
         if (logs.fetch_sub(1) > 0)
-            log(0, "Supercharger (%s) created (component %d): contents %.2f/%.2f L", t.large ? "large" : "small", at<int32_t>(self, off::component_id),
+            log(0, "%s created (component %d): contents %.2f/%.2f L", booster_name(t).c_str(), at<int32_t>(self, off::component_id),
                 at<double>(self, off::pump_content_0 + off::content_capacity), at<double>(self, off::pump_content_1 + off::content_capacity));
         return;
     }
@@ -602,8 +670,9 @@ void hk_create(void* self, void* vehicle) {
     if (!n) return;
     Turbo& t = g_turbos[self];
     if (t.hot) return;
-    t.size = n; t.spec = spec(n);
-    default_paint(self, kTurboColours.slot[0], kTurboColours.slot[1]);
+    t.size = n; t.spec = spec(n, turbo_twin_of(self));
+    const StartColours& tc = kTurboLookColours[turbo_look_of(self)];
+    default_paint(self, tc.slot[0], tc.slot[1]);
     t.hot = create_hot_side(self, vehicle);
     t.oil = create_oil_side(self, vehicle);
     t.oil_ports = oil_bound(t.oil);
@@ -682,29 +751,37 @@ template <class F> void for_each_on_island(void* node, F f) {
 
 // Blow-off valves on the turbo's boost pipe vent the boost the turbo can no longer hold. Returns true if any vented
 // or is still open from venting (spring_kpa: the stiffest of them).
+// Counts server ticks for the blow-off valves' once-per-tick venting: every turbo calls vent_blow_off_valves each tick,
+// and the first one of a tick moves it on. A valve's own tick (or a sleeping valve's publish) between two turbos' ticks
+// must not let the second vent the same excess again.
+uint64_t g_vent_tick = 1;
+double g_vent_tick_at = -1e9;
 bool vent_blow_off_valves(void* turbo, int size, double excess, double dt, double& spring_kpa) {
+    double now = now_seconds();
+    if (dt > 0 && now - g_vent_tick_at >= dt * 0.5) { ++g_vent_tick; g_vent_tick_at = now; }
     if (!(excess > 0) || !(dt > 0)) return false;
     bool vented = false, latched = false;
-    double now = now_seconds();
     for_each_on_island(static_cast<uint8_t*>(turbo) + off::pump_node_b, [&](void* node) {
         void* component = at<void*>(node, off::node_component);
         auto found = g_valves.find(component);
         if (found == g_valves.end() || !is_blow_off(found->second.kind)) return;
         // Inline valves join the boost pipe through both ports; the old layout only through its inlet.
         if (!g_bov_inline && node != static_cast<uint8_t*>(component) + off::pump_node_a) return;
-        if (found->second.vented_by == turbo) return; // once per tick (an inline valve shows up through both ports)
+        bool this_tick = found->second.vented_tick == g_vent_tick;
+        if (this_tick && found->second.vented_by == turbo) return; // once per tick (an inline valve shows up through both ports)
         double setting = found->second.setting ? *found->second.setting : kBlowOffDefaultKpa;
         // Once open it stays open through the lift: between puffs the boost sits under the spring, and counting
         // those ticks as surge made it chatter surge, vent, surge as the spool ran down.
         if (now < found->second.open_until) { spring_kpa = latched ? std::max(spring_kpa, setting) : setting; latched = true; }
         // Twin turbos on one boost pipe: the other already vented this tick's excess through it. It is open for this
         // one too (latched above), and venting again would take the same boost twice.
-        if (found->second.vented_by) return;
+        if (this_tick) return;
         void* in = static_cast<uint8_t*>(component) + off::pump_content_0;
         double want = blow_off_vent(excess, setting, at<double>(in, off::content_volume), dt, found->second.kind == kKindBlowOffLarge);
         if (want <= 0) return;
         remove_volume(in, want);                      // out through the cap, to the air
         found->second.vented_by = turbo;
+        found->second.vented_tick = g_vent_tick;
         found->second.vented += want;
         found->second.vent_size = size;
         found->second.open_until = now + 0.3;
@@ -766,6 +843,22 @@ const char* definition_id_of(const void* component, size_t& length) {
     if (!id.data || id.length <= 0 || id.length > 64 || !anymaker::readable(id.data, size_t(id.length))) return nullptr;
     length = size_t(id.length);
     return id.data;
+}
+bool turbo_twin_of(const void* component) {
+    size_t length = 0;
+    const char* id = definition_id_of(component, length);
+    return id && turbo_twin_from_id(id, length);
+}
+int turbo_look_of(const void* component) {
+    size_t length = 0;
+    const char* id = definition_id_of(component, length);
+    return id ? turbo_look_from_id(id, length) : 0;
+}
+int look_of_part(const void* component) {
+    size_t length = 0;
+    const char* id = definition_id_of(component, length);
+    int look = id ? part_look_from_id(id, length) : 0;
+    return look < 0 || look > 2 ? 0 : look;
 }
 bool is_intercooler_part(const void* component) {
     size_t length = 0;
@@ -884,6 +977,38 @@ void tick_valve(void* self, int kind) {
     publish_valve(self, v, litres, dt);
 }
 
+// ------------------------------------------------------------------------------------- exhaust inline parts
+// Mufflers, resonators, the cat and header collectors (exhaust_logic.h): the exhaust passes from the back port to the
+// front one at k x the pressure difference, so a restrictive part holds pressure back in the manifold (the game
+// takes power off an engine whose exhaust pressure climbs). Headers also mark their vehicle for a little power.
+struct ExhaustPart { int kind = 0; double flow = 0, logged_at = 0; };
+std::unordered_map<const void*, ExhaustPart> g_exhaust_parts;
+void tick_exhaust(void* self, void* vehicle, int k) {
+    ExhaustPart& part = g_exhaust_parts[self];
+    if (g_exhaust_parts.size() > 4096) { g_exhaust_parts.clear(); return; }
+    part.kind = k;
+    void* c0 = static_cast<uint8_t*>(self) + off::pump_content_0;
+    void* c1 = static_cast<uint8_t*>(self) + off::pump_content_1;
+    double dt = t_dt();
+    double v0 = at<double>(c0, off::content_volume), v1 = at<double>(c1, off::content_volume);
+    double cap0 = at<double>(c0, off::content_capacity), cap1 = at<double>(c1, off::content_capacity);
+    double move = exhaust::inline_move(k, v0, cap0, v1, cap1, dt);
+    if (move > 1e-9) g_content_move(c0, c1, &move);
+    else if (move < -1e-9) { double back = -move; g_content_move(c1, c0, &back); }
+    part.flow += (std::abs(move) / dt - part.flow) * std::min(1.0, dt / 0.15);
+    at<double>(self, off::pump_pressure) = 0;
+    at<double>(self, off::pump_display_power) = 0;
+    at<double>(self, off::pump_flow) = std::abs(move);
+    double now = now_seconds();
+    if (now - part.logged_at >= 2.0) {                // AVO dev build
+        part.logged_at = now;
+        double p0 = cap0 > 0 ? v0 / cap0 : NAN, p1 = cap1 > 0 ? v1 / cap1 : NAN;
+        log(0, "AVO exhaust %s id %d (vehicle %d): in %.3f (%.1f of %.1f L), out %.3f (%.1f of %.1f L), backpressure %.3f, flow %.1f L/s (k %.0f)",
+            exhaust::kInlineNames[k], at<int32_t>(self, off::component_id), vehicle ? at<int32_t>(vehicle, off::vehicle_id) : -1, p0, v0, cap0, p1, v1, cap1,
+            p0 - p1, part.flow, exhaust::flow_coefficient(k));
+    }
+}
+
 // Flow, open and the sound byte the clients play, from the litres that went through this tick.
 void publish_valve(void* self, ValvePart& v, double litres, double dt) {
     int kind = v.kind;
@@ -919,6 +1044,8 @@ void publish_sleeping_valves(double dt) {
 
 // "Turbo 3x3" or "Supercharger (large)", for the log.
 std::string booster_name(const Turbo& t) {
+    if (t.pd == kRoots) return "Supercharger (Roots)";
+    if (t.pd == kTwinScrew) return "Supercharger (twin screw)";
     if (t.blower) return t.large ? "Supercharger (large)" : "Supercharger (small)";
     return "Turbo " + std::to_string(t.size) + "x" + std::to_string(t.size);
 }
@@ -982,8 +1109,20 @@ void refresh_topology(void* self, void* vehicle, Turbo& t, double now) {
         if (!cooler || coolers == 8) return;
         for (int k = 0; k < coolers; ++k) if (seen[k] == cooler) return;   // one per intercooler, however many ports it has
         seen[coolers++] = cooler;
+        // A newly placed intercooler (or one saved empty) holds no air, and below ambient its tank starves the engine
+        // until boost fills it: in real life the engine just breathes through the cooler, so top a starved one (under
+        // half full) up to ambient. Any higher and it would be a free air source while the engine draws on it.
+        auto* tank_content = static_cast<uint8_t*>(cooler) + off::tank_content;
+        if (anymaker::readable(tank_content, off::content_capacity + 8)) {
+            double c = at<double>(tank_content, off::content_capacity), v = at<double>(tank_content, off::content_volume);
+            if (std::isfinite(c) && std::isfinite(v) && c > 0 && v < c * 0.5) {   // only a starved one: under boost it is a normal part of the pipe
+                static std::atomic<int> fills{10};
+                if (fills.fetch_sub(1) > 0) log(0, "intercooler %p held %.2f of %.2f L: topped up to ambient", cooler, v, c);
+                hold_ambient(tank_content);
+            }
+        }
         cells += cooler_cells(cooler);
-        if (first_sight(cooler)) default_paint(cooler, kCoolerColours.slot[0], kCoolerColours.slot[1]);
+        if (first_sight(cooler)) default_paint(cooler, cooler_colours(cooler).slot[0], cooler_colours(cooler).slot[1]);
     });
     t.cooler_cells = cells;
     t.coolers = coolers;
@@ -1052,11 +1191,37 @@ void tick_blower(void* self, void* vehicle, Turbo& t) {
     t.filter = filter;
     bool filtered = fed ? upstream->second.filter != nullptr : filter != nullptr;
     double* filter_condition = filter ? &wear_of('f', vehicle, filter) : nullptr;
-    if (filter && first_sight(filter)) default_paint(filter, kFilterColours.slot[0], kFilterColours.slot[1]);
+    if (filter && first_sight(filter)) default_paint(filter, filter_colours(filter).slot[0], filter_colours(filter).slot[1]);
     t.state.health = filter_head_factor(filter != nullptr, filter_condition ? *filter_condition : 1.0);
     t.state.blown = false;
     in.bov_venting = vent_blow_off_valves(self, t.size, (in.pressure[kColdOut] - in.pressure[kColdIn]) - head_for(t.state, in.pressure[kColdIn]), in.dt, in.bov_spring_kpa);
-    BlowerStep o = blower_step(t.state, t.spec, in, rps);
+    BlowerStep o;
+    if (t.pd >= 0) {
+        // The engine's draw: what left the boost pipe since its last move (another feeder on the pipe adds in too).
+        double now_out = in.volume[kColdOut];
+        if (std::isfinite(t.pd_after)) {
+            double took = std::max(0.0, t.pd_after - now_out) / in.dt;
+            t.pd_draw += (took - t.pd_draw) * std::min(1.0, in.dt / 0.12);
+        }
+        PdInputs pd;
+        pd.draw_lps = t.pd_draw;
+        pd.capacity = t.boost_capacity;
+        if (t.feeds_engine && anymaker::readable(static_cast<const uint8_t*>(t.feeds_engine) + off::engine_volume, 16)) {
+            pd.engine_volume = double(at<int32_t>(t.feeds_engine, off::engine_volume));
+            pd.engine_rpm = at<double>(t.feeds_engine, off::engine_rps) * 60.0;
+        }
+        double psi = finite_or(t.state.slots[kBoostTarget], 0.0);
+        if (!(psi > 0)) psi = finite_or(t.state.controller_psi, 0.0);
+        if (psi > 0) pd.target_pressure = 1.0 + psi / kPsiPerKpa / kKpaPerUnit;
+        int32_t ex = 0, ey = 0, ez = 0;
+        if (anymaker::readable(static_cast<uint8_t*>(self) + off::component_extend, 12)) {
+            ex = at<int32_t>(self, off::component_extend); ey = at<int32_t>(self, off::component_extend + 4); ez = at<int32_t>(self, off::component_extend + 8);
+        }
+        o = pd_step(t.state, PdKind(t.pd), pd_cells(ex, ey, ez), in, pd, rps);
+        t.pd_after = now_out + std::max(0.0, o.compressor_move);
+    } else {
+        o = blower_step(t.state, t.spec, in, rps);
+    }
     publish_sleeping_valves(in.dt);
     if (o.compressor_move > 0) g_content_move(c0, c1, &o.compressor_move);
     else if (o.compressor_move < 0) { double v = -o.compressor_move; g_content_move(c1, c0, &v); }
@@ -1103,9 +1268,10 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     std::unique_lock<std::recursive_mutex> lock(g_mutex);
     int kind = part_kind(self);
     if (is_valve(kind)) { tick_valve(self, kind); return; }
+    if (is_exhaust_inline(kind)) { tick_exhaust(self, vehicle, kind - kKindExhaust); return; }
     if (is_blower(kind)) {
         Turbo& t = g_turbos[self];                    // it has nothing to build, so one created before the hooks works too
-        if (!t.blower) { t.blower = true; t.large = kind == kKindSuperchargerLarge; t.spec = blower_spec(t.large); t.size = t.spec.size; }
+        setup_blower(t, kind);
         tick_blower(self, vehicle, t);
         return;
     }
@@ -1122,6 +1288,10 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     double now_s = now_seconds();
     t.vehicle = vehicle; t.ticked_at = now_s;
     refresh_topology(self, vehicle, t, now_s);
+    {                                                // a Boost Controller on this vehicle (gauges_logic.h, dyno_mod.cpp)
+        auto c = g_vehicle_targets.find(vehicle);
+        t.state.controller_psi = c != g_vehicle_targets.end() && now_s - c->second.at < 1.0 ? c->second.psi : 0.0;
+    }
     auto upstream = t.upstream ? g_turbos.find(t.upstream) : g_turbos.end();
     bool fed = upstream != g_turbos.end();           // a compound's second stage: it breathes another turbo's boost
     // The compressor inlet is open to the air, like a real turbo's intake: hold it at ambient every tick, both ways.
@@ -1154,11 +1324,13 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     t.filter = filter;
     bool filtered = fed ? upstream->second.filter != nullptr : filter != nullptr;
     double* filter_condition = filter ? &wear_of('f', vehicle, filter) : nullptr;
-    if (filter && first_sight(filter)) default_paint(filter, kFilterColours.slot[0], kFilterColours.slot[1]);
+    if (filter && first_sight(filter)) default_paint(filter, filter_colours(filter).slot[0], filter_colours(filter).slot[1]);
     t.state.health = condition_head_factor(condition) * filter_head_factor(filter != nullptr, filter_condition ? *filter_condition : 1.0);
     t.state.blown = turbo_blown(condition);           // worn out: no boost, a choked intake (limp mode)
+    if (t.state.blown && !t.sooted) { set_paint(self, kPaletteSoot, kPaletteSoot, false); t.sooted = true; }   // also after a reload
     ValvePart* antilag = antilag_wastegate(t);
     in.antilag = antilag != nullptr;
+    if (!in.antilag) { const ecu::Tune* tune = ecu_tune(vehicle, now_s); in.antilag = tune && tune->antilag; }   // the ECU's antilag
     // Two-step: hand the engine it boosts the launch RPM a wastegate asks for; the engine tick does the limiting, and
     // while it cuts, its fuel reaches the exhaust for antilag to light.
     if (const void* engine = boosted_engine(t)) {
@@ -1231,6 +1403,7 @@ void hk_tick(void* self, void* vehicle, void* scene) {
     if (!turbo_blown(was) && turbo_blown(condition)) {   // it just wore out: it blows (the clients hear it go, turbo_sound.h)
         t.state.blown = true;
         set_paint(self, kPaletteSoot, kPaletteSoot, false);
+        t.sooted = true;
         log(1, "Turbo %dx%d id %d BLEW UP (worn out at %.0f C, oil %.2f L/s, %s): no boost and a choked intake until it is replaced",
             t.size, t.size, at<int32_t>(self, off::component_id), t.up.temperature, t.oil_lps, filtered ? "filtered" : "no air filter");
     }
@@ -1471,10 +1644,14 @@ bool write_definition_file() {
     std::vector<uint8_t> stock = read_file(components + L"turbo_a.mesh");
     bool built[kMaxSize - kMinSize + 1]{};
     for (int n : kTurboSizes) {
-        std::string id = definition_id(n);
-        std::vector<uint8_t> mesh = build_turbo_mesh(stock, n, id.c_str());
-        std::wstring file = components + L"turbo_" + std::wstring(id.begin(), id.end()) + L".mesh";
-        built[n - kMinSize] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
+        built[n - kMinSize] = true;
+        for (int k = 0; k < 2 * kTurboLooks; ++k) {                    // avo_looks_mesh.h: G-series, Precision, EFR, each also twin scroll
+            int look = k % kTurboLooks; bool twin = k >= kTurboLooks;
+            std::string name = "turbo_" + definition_id(n, look, twin);
+            std::vector<uint8_t> mesh = pdmesh::encode(avolook::turbo(n, look, twin), name);
+            std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
+            built[n - kMinSize] = built[n - kMinSize] && !mesh.empty() && write_file(file, mesh.data(), mesh.size());
+        }
     }
     if (!built[3 - kMinSize] || !built[6 - kMinSize]) log(1, "impeller mesh not recognised or not writable (%zu bytes); some turbos use the stock impeller look", stock.size());
     bool bov_built[2]{};
@@ -1482,7 +1659,7 @@ bool write_definition_file() {
         std::string path = blow_off_mesh_path(large != 0);              // meshes/components/turbo_<id>.mesh
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_blow_off_mesh(stock, large != 0, name.c_str(), kBlowOffStyle);
+        std::vector<uint8_t> mesh = pdmesh::encode(avolook::blow_off(large != 0, 1), name);   // HKS SSQV (Nate's pick, 2026-11-04)
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         bov_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
@@ -1497,22 +1674,22 @@ bool write_definition_file() {
         wg_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
     if (!wg_built[0] || !wg_built[1]) log(1, "wastegate meshes not written; the wastegates use the gas port look");
-    bool filter_built[2]{}, cooler_built = true;
-    for (int large = 0; large < 2; ++large) {
-        std::string path = air_filter_mesh_path(large != 0);
+    bool filter_built[2]{true, true}, cooler_built = true;
+    for (int look = 0; look < kFilterLooks; ++look)            // every filter look (avo_looks_mesh.h)
+        for (int large = 0; large < 2; ++large) {
+            std::string path = air_filter_mesh_path(large != 0, look);
+            std::string name = path.substr(path.find_last_of('/') + 1);
+            name = name.substr(0, name.size() - 5);
+            std::vector<uint8_t> mesh = pdmesh::encode(avolook::air_filter(large != 0, look), name);
+            std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
+            filter_built[large] = filter_built[large] && !mesh.empty() && write_file(file, mesh.data(), mesh.size());
+        }
+    for (int k = 0; k < 9 * kCoolerLooks; ++k) {             // nine tiles each, laid out along x and y
+        int tx = k % 3, ty = k / 3 % 3, look = k / 9;
+        std::string path = intercooler_mesh_path(tx, ty, look);
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_air_filter_mesh(stock, large != 0, name.c_str());
-        std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
-        filter_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
-    }
-    for (int k = 0; k < 18; ++k) {                           // nine tiles each, laid out along x and y
-        int tx = k % 3, ty = k / 3 % 3;
-        bool round = k >= 9;
-        std::string path = intercooler_mesh_path(tx, ty, round);
-        std::string name = path.substr(path.find_last_of('/') + 1);
-        name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_intercooler_tile(stock, tx, ty, name.c_str(), round ? kIntercoolerRoundStyle : kIntercoolerStyle);
+        std::vector<uint8_t> mesh = pdmesh::encode(avolook::intercooler_tile(tx, ty, look), name);
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         cooler_built = cooler_built && !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
@@ -1523,15 +1700,56 @@ bool write_definition_file() {
         std::string path = blower_mesh_path(large != 0);
         std::string name = path.substr(path.find_last_of('/') + 1);
         name = name.substr(0, name.size() - 5);
-        std::vector<uint8_t> mesh = build_supercharger_mesh(stock, large != 0, name.c_str());
+        std::vector<uint8_t> mesh = pdmesh::encode(avolook::supercharger(large != 0, 0), name);   // ProCharger (Nate's pick, 2026-11-04)
         std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
         blower_built[large] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
     }
     if (!blower_built[0] || !blower_built[1]) log(1, "supercharger meshes not written; they use the stock impeller look");
+    bool pd_built[2]{};
+    for (int k = 0; k < 2; ++k) {
+        std::string path = pd_mesh_path(PdKind(k));
+        std::string name = path.substr(path.find_last_of('/') + 1);
+        name = name.substr(0, name.size() - 5);
+        std::vector<uint8_t> mesh = pdmesh::encode(pdmesh::build(k == kRoots, k == kRoots ? pdmesh::kRootsLook : pdmesh::kTwinScrewLook), name);
+        std::wstring file = components + std::wstring(name.begin(), name.end()) + L".mesh";
+        pd_built[k] = !mesh.empty() && write_file(file, mesh.data(), mesh.size());
+    }
+    if (!pd_built[0] || !pd_built[1]) log(1, "twin screw or Roots meshes not written; they use the stock impeller look");
+    bool exhaust_built = true;                         // exhaust tips and inline parts (exhaust_mesh.h)
+    for (int l = 0; l < exhaust::kLookCount; ++l)
+        for (int y = 0; y < exhaust::kLayoutCount; ++y) {
+            std::string id = exhaust::tip_id(l, y);
+            std::vector<uint8_t> mesh = pdmesh::encode(exmesh::tip(l, y), id);
+            std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
+            exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
+        }
+    for (int k = 0; k < exhaust::kInlineCount; ++k) {
+        std::string id = exhaust::kInlineIds[k];
+        std::vector<uint8_t> mesh = pdmesh::encode(exmesh::inline_part(k), id);
+        std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
+        exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
+    }
+    for (int n = exhaust::kHeaderMin; n <= exhaust::kHeaderMax; ++n) {   // race headers: polished stainless until Nate picks
+        std::string id = exhaust::header_id(n);
+        std::vector<uint8_t> mesh = pdmesh::encode(avolook::header(n, 0), id);
+        std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
+        exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
+    }
+    for (int k = 0; k < exhaust::kIntakeCount; ++k) {
+        std::string id = exhaust::kIntakeIds[k];
+        std::vector<uint8_t> mesh = pdmesh::encode(exmesh::intake_part(k), id);
+        std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
+        exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
+    }
+    if (!exhaust_built) log(1, "exhaust part meshes not written; the exhaust parts use stock looks");
     dir += L"\\Turbo";
     CreateDirectoryW(dir.c_str(), nullptr);
     std::wstring file = dir + L"\\turbochargers.json";
-    std::string json = definitions_json(built, bov_built, wg_built, filter_built, &cooler_built, blower_built);
+    std::string json = definitions_json(built, bov_built, wg_built, filter_built, &cooler_built, blower_built, pd_built);
+    {                                                  // the exhaust parts go in the same file, before its closing "]"
+        size_t end = json.rfind("\n  ]");
+        if (end != std::string::npos) json.insert(end, ",\n" + exhaust::entries(exhaust_built));
+    }
     bool ok = write_file(file, json.data(), json.size());
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
@@ -1695,7 +1913,7 @@ void stream_sound(void* self, int kind, const double* dt) {
         decode_blow_off_factor(factor, flag, level, unused, v.synth.size);
     } else if (is_blower(kind)) {
         v.synth.voice = Voice::kSupercharger;
-        v.synth.size = kind == kKindSuperchargerLarge ? 4 : 2;
+        v.synth.size = kind == kKindSuperchargerLarge ? 4 : kind == kKindTwinScrew ? kVoiceTwinScrew : kind == kKindRoots ? kVoiceRoots : 2;
         decode_turbo_factor(factor, level, flag, blown);
         blown = false;
     } else {
@@ -1764,6 +1982,7 @@ void hk_client_tick(void* self, void* network, void* vehicle, void* scene, const
         kind = kind_of_definition(at<const void*>(self, off::client_definition));
     }
     if (!kind) { reinterpret_cast<client_tick_t>(h_client_tick.original)(self, network, vehicle, scene, dt); return; }
+    if (is_exhaust_inline(kind)) return;            // mufflers and the rest make no impeller sound (EngineSound plays the exhaust)
     // The wastegate only makes a sound (antilag bangs) once it has fired.
     bool silent = is_wastegate(kind) && !g_voices.count(self) && !(at<double>(self, off::client_factor_speed) > 0);
     if (!silent) stream_sound(self, kind, dt);
@@ -1787,6 +2006,27 @@ using remap_t = void (*)(double* ret, const double* v, const double* a, const do
 anymaker::cell_hook h_engine_tick, h_remap;
 thread_local bool t_in_engine = false, t_fuel_cut = false;
 thread_local double t_intake_c = 0, t_intake_pressure = 0, t_boost_factor = 0;
+thread_local double t_rated = 2.0;                   // this engine's rating (engine_rating), for the remap's knock control
+thread_local Knock t_knock;                          // what knock control did to this tick's factor
+thread_local double t_header_power = 1.0;           // header collectors and intake parts (exhaust_logic.h)
+thread_local double t_ecu_power = 1.0;               // the ECU tune's power over stock (ecu::power_scale)
+// Engines knocked to death (Nate, 2026-11-04: an over-boosted engine blows): one that reaches the game's last damage step
+// while knocking makes no power until it is repaired (the repair tool lowers m_damage). Server thread, under g_mutex.
+std::unordered_map<const void*, bool> g_blown_engines;
+constexpr double kBlowOver = 0.25;                   // knocking this far past its rating when the last step lands
+int32_t engine_damage_steps(const void* engine) {
+    const auto* d = static_cast<const uint8_t*>(engine) + off::engine_damage;
+    return anymaker::readable(d, 4) ? at<int32_t>(d, 0) : 0;
+}
+
+// An engine's rating, from its definition id and its stretch.
+double engine_rated_factor(const void* engine) {
+    size_t length = 0;
+    const char* id = definition_id_of(engine, length);
+    const auto* ext = static_cast<const uint8_t*>(engine) + off::component_extend + 8;   // z
+    int32_t extend_z = anymaker::readable(ext, 4) ? at<int32_t>(ext, 0) : 0;
+    return id ? engine_rating(id, length, extend_z).factor : EngineRating{}.factor;
+}
 
 // An engine's air manifolds (its m_air_manifolds vector): their count, 0 if it cannot be read.
 int32_t air_manifolds(const void* engine, PointerRing& entries) {
@@ -1837,8 +2077,10 @@ double engine_intake_c(const void* engine, double& pressure) {
     return n ? sum / n : NAN;
 }
 
-// The engine's boost factor: remap(clamp(pressure, 1, 10), 1, 10, 1, 2). Past 10 (only compounds get there) it carries
-// on to kMaxEnginePressure, 3x; then the boost part is scaled for the air's density.
+// The engine's boost factor: remap(clamp(pressure, 1, 10), 1, 10, 1, 2). Past 10 it carries on with no cap (up to the
+// kMaxEnginePressure safety net); then the boost part is scaled for the air's density, and knock control holds the
+// engine near its rating (knock_step, turbo_health.h).
+double t_dt() { return g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0; }
 void hk_remap(double* ret, const double* v, const double* a, const double* b, const double* c, const double* d) {
     reinterpret_cast<remap_t>(h_remap.original)(ret, v, a, b, c, d);
     if (!t_in_engine || !ret || !a || !b || !c || !d || *a != 1.0 || *b != 10.0 || *c != 1.0 || *d != 2.0) return;
@@ -1847,7 +2089,114 @@ void hk_remap(double* ret, const double* v, const double* a, const double* b, co
     if (v && *v >= kStockEnginePressure && std::isfinite(t_intake_pressure) && t_intake_pressure > kStockEnginePressure)
         factor = power_multiplier(t_intake_pressure);
     t_boost_factor = factor;
-    *ret = boost_factor_for_air(factor, t_intake_c);
+    t_knock = knock_step(boost_factor_for_air(factor, t_intake_c), t_rated, t_intake_c, t_dt());
+    *ret = t_knock.factor * t_ecu_power * t_header_power;
+}
+
+// AVO dev build: one line per engine every 2 s with everything the game and the mod work out for it (Nate,
+// 2026-11-04: "a dev build that logs all the important things"). Tagged "AVO" for grepping.
+std::unordered_map<const void*, double> g_dev_logged;
+void dev_log_engine(void* self, void* vehicle, double rpm, double intake_c, double intake_p, double rated_stock, const ecu::Tune* tune, bool cut) {
+    double now = now_seconds();
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        double& last = g_dev_logged[self];
+        if (now - last < 2.0) return;
+        last = now;
+        if (g_dev_logged.size() > 256) g_dev_logged.clear();
+    }
+    auto* e = static_cast<uint8_t*>(self);
+    double d[9]{};                                   // throttle, air factor, air flow, air pressure factor, fuel factor, fuel flow, exhaust factor, exhaust flow, torque
+    if (anymaker::readable(e + off::engine_display, sizeof d)) std::memcpy(d, e + off::engine_display, sizeof d);
+    double temperature = anymaker::readable(e + off::engine_temperature, 8) ? at<double>(e, off::engine_temperature) : NAN;
+    int32_t volume = anymaker::readable(e + off::engine_volume, 4) ? at<int32_t>(e, off::engine_volume) : 0;
+    double exhaust_p = NAN;                          // the exhaust manifolds' pressure (backpressure)
+    {
+        PointerRing m;
+        read_ring(e + off::engine_exhaust_manifolds, 32, m);
+        double sum = 0; int n = 0;
+        for (int32_t i = 0; i < m.count; ++i) {
+            const uint8_t* x = static_cast<const uint8_t*>(m[i]);
+            constexpr ptrdiff_t kExhaustContent = 544;   // exhaust_manifold.m_content (the air manifold's is at 576)
+            if (!x || !anymaker::readable(x + kExhaustContent, off::content_capacity + 8)) continue;
+            double v = at<double>(x, kExhaustContent + off::content_volume), c = at<double>(x, kExhaustContent + off::content_capacity);
+            if (std::isfinite(v) && std::isfinite(c) && c > 0) { sum += v / c; ++n; }
+        }
+        if (n) exhaust_p = sum / n;
+    }
+    size_t length = 0;
+    const char* id = definition_id_of(self, length);
+    double psi = std::isfinite(intake_p) ? (intake_p - 1.0) * kKpaPerUnit * kPsiPerKpa : NAN;
+    char ecu_text[160] = "no ECU";
+    if (tune) std::snprintf(ecu_text, sizeof ecu_text, "ECU limit %.0f launch %s%.0f boost %.0f timing %+.0f fuel %+.0f pops %.2f antilag %d power x%.3f",
+                            tune->rev_limit, tune->launch ? "on " : "off ", tune->launch_rpm, tune->boost_psi, tune->timing, tune->fuel_trim, tune->pops,
+                            tune->antilag ? 1 : 0, ecu::power_scale(*tune));
+    if (t_header_power != 1.0) std::snprintf(ecu_text + std::strlen(ecu_text), sizeof ecu_text - std::strlen(ecu_text), " | parts x%.3f", t_header_power);
+    log(0, "AVO engine %.*s id %d (vehicle %d, volume %d): %.0f rpm, throttle %.2f, %s | intake %.2f (%.1f psi) %.0f C, air x%.2f %.1f L/s, "
+           "pressure x%.2f | fuel x%.2f %.4f L/s | exhaust x%.2f %.1f L/s, manifold %.2f | torque %.1f, temp %.0f C | boost factor %.2f -> %.2f, "
+           "rated %.2f (stock %.2f), knock %.0f%%, damage %d (%.2f)%s | %s",
+        int(length), id ? id : "?", at<int32_t>(self, off::component_id), vehicle ? at<int32_t>(vehicle, off::vehicle_id) : -1, volume, rpm,
+        d[0], cut ? "FUEL CUT" : "firing", intake_p, psi, intake_c, d[1], d[2], d[3], d[4], d[5], d[6], d[7], exhaust_p, d[8], temperature,
+        t_boost_factor, t_knock.factor * t_ecu_power, t_rated, rated_stock, t_knock.over * 100, engine_damage_steps(self),
+        anymaker::readable(e + off::engine_damage_factor, 8) ? at<double>(e, off::engine_damage_factor) : NAN,
+        g_blown_engines.count(self) ? " BLOWN" : "", ecu_text);
+}
+
+// The intake parts on an engine's air manifolds and the header collectors on its exhaust manifolds (exhaust_logic.h),
+// looked up every 2 s per engine. Under g_mutex.
+struct EngineParts { double at = -10; int intake[exhaust::kIntakeCount]{}; bool header_equal = false, header_unequal = false; std::string text; };
+std::unordered_map<const void*, EngineParts> g_engine_parts;
+constexpr ptrdiff_t kAirManifoldGasNode = 512, kExhaustManifoldGasNode = 480;   // m_gas_node in each
+const EngineParts& engine_parts(void* engine, void* vehicle, double now) {
+    if (g_engine_parts.size() > 256) g_engine_parts.clear();
+    EngineParts& p = g_engine_parts[engine];
+    if (now - p.at < 2.0) return p;
+    EngineParts fresh;
+    fresh.at = now;
+    std::vector<const void*> seen;
+    auto visit = [&](void* node) {
+        const void* component = at<void*>(node, off::node_component);
+        if (!component || std::find(seen.begin(), seen.end(), component) != seen.end()) return;
+        seen.push_back(component);
+        size_t length = 0;
+        const char* id = definition_id_of(component, length);
+        if (!id) return;
+        int k = exhaust::intake_from_id(id, length);
+        if (k >= 0) ++fresh.intake[k];
+        int e = exhaust::inline_from_id(id, length);
+        if (e == exhaust::kHeaderEqual) fresh.header_equal = true;
+        // a race header is a gas tank: its nodes belong to the gas ports snapped onto it
+        if (length >= 8 && std::memcmp(id, "gas_port", 8) == 0 && anymaker::readable(static_cast<const uint8_t*>(component) + off::port_mated_component, 8)) {
+            size_t ml = 0;
+            const char* mid = definition_id_of(at<void*>(component, off::port_mated_component), ml);
+            if (mid && exhaust::header_from_id(mid, ml)) fresh.header_equal = true;
+        }
+        if (e == exhaust::kHeaderUnequal) fresh.header_unequal = true;
+    };
+    PointerRing air, exhaust_ring;
+    air_manifolds(engine, air);
+    for (int32_t i = 0; i < air.count; ++i)
+        if (auto* m = static_cast<uint8_t*>(air[i]); m && anymaker::readable(m + kAirManifoldGasNode, 64)) for_each_connected(vehicle, m + kAirManifoldGasNode, visit);
+    read_ring(static_cast<const uint8_t*>(engine) + off::engine_exhaust_manifolds, 32, exhaust_ring);
+    for (int32_t i = 0; i < exhaust_ring.count; ++i) {
+        auto* m = static_cast<uint8_t*>(exhaust_ring[i]);
+        size_t ml = 0;
+        const char* mid = m ? definition_id_of(m, ml) : nullptr;
+        if (mid && exhaust::header_from_id(mid, ml)) fresh.header_equal = true;   // a race header is the manifold itself
+        if (m && anymaker::readable(m + kExhaustManifoldGasNode, 64)) for_each_connected(vehicle, m + kExhaustManifoldGasNode, visit);
+    }
+    for (int k = 0; k < exhaust::kIntakeCount; ++k)
+        if (fresh.intake[k]) fresh.text += std::string(fresh.text.empty() ? "" : ", ") + std::to_string(fresh.intake[k]) + "x " + exhaust::kIntakeNames[k];
+    if (fresh.header_equal) fresh.text += std::string(fresh.text.empty() ? "" : ", ") + "equal headers";
+    if (fresh.header_unequal) fresh.text += std::string(fresh.text.empty() ? "" : ", ") + "unequal headers";
+    if (fresh.text != p.text) {
+        static std::atomic<int> logs{40};
+        if (logs.fetch_sub(1) > 0)
+            log(0, "AVO engine id %d: %zu parts on its manifolds (%d air, %d exhaust): %s", at<int32_t>(engine, off::component_id), seen.size(), int(air.count),
+                int(exhaust_ring.count), fresh.text.empty() ? "no intake parts or headers" : fresh.text.c_str());
+    }
+    p = fresh;
+    return p;
 }
 
 void hk_engine_tick(void* self, void* vehicle, void* scene) {
@@ -1857,7 +2206,38 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     t_intake_c = intake;
     t_intake_pressure = pressure;
     t_boost_factor = 0;
+    t_knock = Knock{};
     t_fuel_cut = false;
+    t_ecu_power = 1.0;
+    t_header_power = 1.0;
+    if (self && t_in_engine) t_rated = engine_rated_factor(self);
+    double rated_stock = t_rated;
+    ecu::Tune tune;
+    bool has_ecu = false;
+    if (self && t_in_engine) {                      // the ECU: power, knock limit, rev limiter and its launch two-step
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        double now = now_seconds();
+        if (const ecu::Tune* e = ecu_tune(vehicle, now)) {
+            tune = *e; has_ecu = true;
+            t_ecu_power = ecu::power_scale(tune);
+            t_rated = ecu::rated_with(t_rated, tune);
+            auto* rps = static_cast<uint8_t*>(self) + off::engine_rps;
+            double rpm = anymaker::readable(rps, 8) ? at<double>(rps, 0) * 60.0 : NAN;
+            if (ecu::limiter_cut(g_rev_limiters[self], rpm, tune.rev_limit)) t_fuel_cut = true;
+            if (tune.launch && tune.launch_rpm > 0) {   // as a wastegate's two_step input: the block below limits it
+                Launch& l = g_launch[self];
+                l.rpm = tune.launch_rpm; l.at = now;
+            }
+        } else g_rev_limiters.erase(self);
+    }
+    if (self) {                                     // a blown engine stays dead until it is repaired
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        auto b = g_blown_engines.find(self);
+        if (b != g_blown_engines.end()) {
+            if (engine_damage_steps(self) >= 2) t_fuel_cut = t_in_engine;
+            else { g_blown_engines.erase(b); log(0, "engine repaired: it runs again"); }
+        }
+    }
     if (self && t_in_engine) {                      // two-step: cut the fuel at the launch RPM a turbo's wastegate asks for
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
         auto l = g_launch.find(self);
@@ -1865,26 +2245,58 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
             double now = now_seconds();
             auto* rps = static_cast<uint8_t*>(self) + off::engine_rps;
             double rpm = anymaker::readable(rps, 8) ? at<double>(rps, 0) * 60.0 : NAN;
-            t_fuel_cut = two_step_cut(l->second.cutting, rpm, now - l->second.at < 0.5 ? l->second.rpm : 0.0);
-            if (t_fuel_cut) l->second.cut_at = now;
+            bool cut = two_step_cut(l->second.cutting, rpm, now - l->second.at < 0.5 ? l->second.rpm : 0.0);
+            t_fuel_cut = t_fuel_cut || cut;   // a blown engine stays cut
+            if (cut) l->second.cut_at = now;
             else if (now - l->second.at > 1.0) g_launch.erase(l);   // its input went to 0 (or the wastegate is gone)
         }
     }
+    if (self && t_in_engine) {                      // header collectors on the vehicle (exhaust_logic.h)
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        const EngineParts& parts = engine_parts(self, vehicle, now_seconds());
+        auto* rps = static_cast<uint8_t*>(self) + off::engine_rps;
+        double rpm = anymaker::readable(rps, 8) ? at<double>(rps, 0) * 60.0 : 0.0;
+        t_header_power = exhaust::header_power(parts.header_equal, parts.header_unequal) * exhaust::intake_power(parts.intake, rpm);
+    }
+    bool cut_this_tick = t_fuel_cut;
     reinterpret_cast<engine_tick_t>(h_engine_tick.original)(self, vehicle, scene);
     t_in_engine = false;
     t_fuel_cut = false;
     if (self) note_manifolds(self);
+    if (self && std::isfinite(intake)) {
+        double now = now_seconds();
+        auto* rps = static_cast<uint8_t*>(self) + off::engine_rps;
+        double rpm = anymaker::readable(rps, 8) ? at<double>(rps, 0) * 60.0 : 0.0;
+        if (has_ecu) {                              // the ECU's outputs
+            std::lock_guard<std::recursive_mutex> lock(g_mutex);
+            VehicleEcu& e = g_vehicle_ecus[vehicle];
+            bool fresh = now - e.report_at > 0.25;
+            e.report.rpm = fresh ? rpm : std::max(e.report.rpm, rpm);
+            e.report.knock = fresh ? t_knock.over : std::max(e.report.knock, t_knock.over);
+            e.report.power_scale = t_ecu_power;
+            e.report.knock_limit = fresh ? t_rated : std::min(e.report.knock_limit, t_rated);
+            e.report_at = now;
+        }
+        dev_log_engine(self, vehicle, rpm, intake, pressure, rated_stock, has_ecu ? &tune : nullptr, cut_this_tick);
+    }
     if (!std::isfinite(intake) || !(t_boost_factor > 1.0)) return;
     double dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;
-    double knock = knock_damage(intake, t_boost_factor, dt);
+    (void)dt;
+    double knock = t_knock.damage;                  // knock control's damage (past the engine's rating, for its air)
     if (knock > 0 && anymaker::readable(static_cast<uint8_t*>(self) + off::engine_damage_factor, 8)) at<double>(self, off::engine_damage_factor) += knock;
     if (knock > 0) dyno::note_knock(self, knock);     // the Dyno's "Knock" row
+    if (knock > 0 && t_knock.over >= kBlowOver && engine_damage_steps(self) >= 2) {
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        if (g_blown_engines.emplace(self, true).second)
+            log(1, "engine BLEW UP: knocking %.0f%% past its rating (%.2f) at its last damage step; repair it to run again", t_knock.over * 100, t_rated);
+    }
     static std::atomic<int> logs{40};
     static std::atomic<int64_t> last_ms{-1000000};
     int64_t ms = int64_t(now_seconds() * 1000);
     if (t_boost_factor > 1.05 && ms - last_ms.load() > 10000 && logs.fetch_sub(1) > 0) {
         last_ms = ms;
-        log(0, "engine intake %.0f C: boost factor %.2f -> %.2f%s", intake, t_boost_factor, boost_factor_for_air(t_boost_factor, intake), knock > 0 ? " (knocking)" : "");
+        log(0, "engine intake %.0f C: boost factor %.2f -> %.2f (rated %.2f)%s", intake, t_boost_factor, t_knock.factor, t_rated,
+            knock > 0 ? " (knocking)" : "");
     }
 }
 
@@ -1986,9 +2398,18 @@ void hk_push_mesh_static(void* renderer, void* layers, const void* composite, co
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
         int kind = kind_of_definition(static_cast<const uint8_t*>(composite) - off::definition_mesh_static);
         if (is_valve(kind)) start = &kValveColours;
-        else if (is_air_filter(kind)) start = &kFilterColours;
-        else if (is_intercooler(kind)) start = &kCoolerColours;
-        else if (kind >= kMinSize && kind <= kMaxSize) start = &kTurboColours;
+        else if (is_air_filter(kind) || is_intercooler(kind)) {
+            const void* definition = static_cast<const uint8_t*>(composite) - off::definition_mesh_static;
+            auto& id = at<anymaker::gc_string_view>(definition, off::definition_id);
+            int look = id.data && id.length > 0 && id.length < 64 && anymaker::readable(id.data, size_t(id.length)) ? part_look_from_id(id.data, size_t(id.length)) : 0;
+            start = is_air_filter(kind) ? &kFilterLookColours[look] : &kCoolerLookColours[look];
+        }
+        else if (kind >= kMinSize && kind <= kMaxSize) {
+            const void* definition = static_cast<const uint8_t*>(composite) - off::definition_mesh_static;
+            auto& id = at<anymaker::gc_string_view>(definition, off::definition_id);
+            int look = id.data && id.length > 0 && id.length < 64 && anymaker::readable(id.data, size_t(id.length)) ? turbo_look_from_id(id.data, size_t(id.length)) : 0;
+            start = &kTurboLookColours[look];
+        }
         else if (is_blower(kind)) start = &kBlowerColours;
     }
     if (!start) { original(renderer, layers, composite, transform, a, b, c, d, colours); return; }
@@ -2047,6 +2468,7 @@ void install_hooks() {
             continue;
         }
         std::lock_guard install_lock(engine_parts::install_mutex());   // one AnyEngineParts part hooks at a time
+        if (g_stop) return;                          // shut down while it was looking
         if (!destroy_slot_matches(*destroy)) return;
         g_file_ctor = fctor; g_file_dtor = fdtor; g_file_load = fload;
         g_content_ctor = cctor; g_content_dtor = cdtor; g_node_ctor = nctor; g_node_dtor = ndtor;
@@ -2118,6 +2540,55 @@ void remove_hooks() {
 // The Dyno's view of a vehicle's boost (engine_parts_shared.h). A turbo or supercharger counts when its boost reaches
 // an engine (straight, or through further stages); if none is seen to (an air manifold the walk did not reach), every
 // one on the vehicle counts. A compound is a turbo breathing another turbo's boost.
+void set_boost_target(const void* vehicle, double psi) {
+    if (!vehicle) return;
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    double now = now_seconds();
+    if (!(psi > 0) || !std::isfinite(psi)) { g_vehicle_targets.erase(vehicle); return; }
+    g_vehicle_targets[vehicle] = {psi, now};
+    if (g_vehicle_targets.size() > 64)              // vehicles gone: their asks are stale after a second
+        for (auto it = g_vehicle_targets.begin(); it != g_vehicle_targets.end();) it = now - it->second.at > 5.0 ? g_vehicle_targets.erase(it) : std::next(it);
+}
+
+void set_ecu_tune(const void* vehicle, const ecu::Tune& tune) {
+    if (!vehicle) return;
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    double now = now_seconds();
+    VehicleEcu& e = g_vehicle_ecus[vehicle];
+    if (now - e.at > 5.0) log(0, "ECU tuning a vehicle (%.0f rpm limit, launch %.0f, boost %.0f psi, timing %+.0f, fuel %+.0f %%)", tune.rev_limit,
+                              tune.launch ? tune.launch_rpm : 0.0, tune.boost_psi, tune.timing, tune.fuel_trim);
+    e.tune = tune; e.at = now;
+    if (g_vehicle_ecus.size() > 64)
+        for (auto it = g_vehicle_ecus.begin(); it != g_vehicle_ecus.end();) it = now - it->second.at > 5.0 ? g_vehicle_ecus.erase(it) : std::next(it);
+}
+EcuReport ecu_report(const void* vehicle) {
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    auto e = vehicle ? g_vehicle_ecus.find(vehicle) : g_vehicle_ecus.end();
+    if (e == g_vehicle_ecus.end() || now_seconds() - e->second.report_at > 1.0) return {};
+    return e->second.report;
+}
+// The ECU's pops for the vehicle with this id (0-1), or -1 without an ECU. EngineSound asks for it by name
+// (GetProcAddress) so that its standalone build, without Turbo, still links: only the host's own process knows.
+extern "C" __declspec(dllexport) double AVO_EcuCrackle(int32_t vehicle_id) {
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    double now = now_seconds();
+    for (auto& [vehicle, e] : g_vehicle_ecus)
+        if (now - e.at < 1.0 && anymaker::readable(static_cast<const uint8_t*>(vehicle) + off::vehicle_id, 4) && at<int32_t>(vehicle, off::vehicle_id) == vehicle_id)
+            return e.tune.antilag ? std::max(0.8, ecu::crackle(e.tune)) : ecu::crackle(e.tune);   // antilag bangs too
+    return -1.0;
+}
+double ecu_saved(void* vehicle, const void* component) {
+    if (!vehicle || !component) return 1.0;
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    return wear_of('E', vehicle, component);
+}
+void ecu_save(void* vehicle, const void* component, double packed) {
+    if (!vehicle || !component || !std::isfinite(packed)) return;
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    double& v = wear_of('E', vehicle, component);
+    if (v != packed) { v = packed; g_wear_dirty = true; }
+}
+
 VehicleBoost vehicle_boost(const void* vehicle) {
     VehicleBoost out;
     if (!vehicle) return out;
@@ -2143,6 +2614,8 @@ VehicleBoost vehicle_boost(const void* vehicle) {
             b->compound = b->compound || compound;
         }
         if (t.blower && std::isfinite(t.state.slots[kDrivePower])) out.drive_watts += std::max(0.0, t.state.slots[kDrivePower]) * 1000.0;
+        if (std::isfinite(t.state.slots[kBoostPsi])) out.boost_psi = std::max(out.boost_psi, t.state.slots[kBoostPsi]);
+        if (!t.blower && std::isfinite(t.state.slots[kBoostTargetSet])) out.target_psi = std::max(out.target_psi, t.state.slots[kBoostTargetSet]);
     }
     out.setup = boost_setup_name(fed.turbos + fed.superchargers > 0 ? fed : all);
     return out;
@@ -2152,5 +2625,9 @@ VehicleBoost vehicle_boost(const void* vehicle) {
 void init(const AnyModHostV1& h) { host = h; }
 void ready() { register_settings(); }   // AnyAPI_ModReady, on the loader thread
 void start() { install_hooks(); }       // on AnyEngineParts' install thread
-void shutdown() { g_stop = true; remove_hooks(); }
+void shutdown() {
+    g_stop = true;
+    std::lock_guard install_lock(engine_parts::install_mutex());   // not while a hook install is under way
+    remove_hooks();
+}
 }  // namespace turbo

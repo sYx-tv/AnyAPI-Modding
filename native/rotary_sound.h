@@ -47,6 +47,7 @@ struct Character {
     double gain;
     double blat;                  // strength of the idle blat
     double blat_ratio;            // its pitch over pipe_hz
+    double whirr = 0.05;          // the eccentric shaft and gears
 };
 inline Character character(Port p) {
     switch (p) {
@@ -62,6 +63,14 @@ struct Input {
     bool running = false;  // combustion on (the game plays its engine sound)
     int rotors = 2;
     Port port = kBridgePort;
+    // The parts on its pipes (AnyVehicleOverhaul's exhaust, exhaust_logic.h apply() against a neutral tune):
+    // scales on the port's own character; all 1 / 0 / -1 is the stock pipe.
+    double pipe = 1, rasp = 1, gain = 1;
+    double muffler = 0;    // 0 open pipe .. 0.95 a big muffler: darker and quieter
+    double crackle = -1;   // overrun pops 0-1, -1 the port's own
+    // A chosen sound (rotary_tune.h: the rotor-count presets and Custom) in place of the port's character.
+    bool custom = false;
+    Character ch{};
 };
 
 struct Synth {
@@ -80,7 +89,8 @@ struct Synth {
     double dc_x = 0, dc_y = 0, soft = 0;   // DC blocker (the pulses are one-sided)
     uint32_t rng = 0x2545f491u;
     Resonator pipe, body, rasp, rasp_hi, pop_body, whirr;
-    Port tuned = kPortCount;
+    double tuned_pipe = -1, tuned_body = -1, tuned_rasp = -1;   // the resonators' tuning
+    double muffle_y = 0;   // the muffler's low-pass
     double noise() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return double(rng) / 2147483648.0 - 1.0; }
     double random01() { return 0.5 + 0.5 * noise(); }
 };
@@ -95,11 +105,21 @@ inline double rotor_bias(int rotors, int r) {
 }
 
 inline void render(Synth& s, const Input& in, int16_t* out, int count) {
-    const Character c = character(in.port);
-    if (s.tuned != in.port) {
+    Character c = in.custom ? in.ch : character(in.port);
+    const double pipe = std::isfinite(in.pipe) && in.pipe > 0.5 && in.pipe < 2 ? in.pipe : 1.0;
+    c.pipe_hz *= pipe;
+    if (std::isfinite(in.rasp) && in.rasp >= 0 && in.rasp < 4) c.rasp_gain *= in.rasp;
+    if (std::isfinite(in.gain) && in.gain > 0 && in.gain < 3) c.gain *= in.gain;
+    const bool pops_off = std::isfinite(in.crackle) && in.crackle >= 0 && in.crackle < 0.05;
+    if (std::isfinite(in.crackle) && in.crackle >= 0.05) c.crackle *= 0.4 + 1.6 * clamp01(in.crackle);
+    const double muffler = std::isfinite(in.muffler) ? (in.muffler < 0 ? 0 : in.muffler > 0.95 ? 0.95 : in.muffler) : 0;
+    // A muffler takes the top off (cutoff 9 kHz open down to about 700 Hz) and some of the level.
+    const double muffle_k = 1.0 - std::exp(-6.283185307179586 * (700.0 + 8300.0 * std::pow(1.0 - muffler, 2.0)) / kSampleRate);
+    const double muffle_gain = 1.0 - 0.45 * muffler;
+    if (s.tuned_pipe != c.pipe_hz || s.tuned_body != c.body_hz || s.tuned_rasp != c.rasp_hz) {
+        s.tuned_pipe = c.pipe_hz; s.tuned_body = c.body_hz; s.tuned_rasp = c.rasp_hz;
         s.pipe.set(c.pipe_hz, c.pipe_q); s.body.set(c.body_hz, c.body_q); s.rasp.set(c.rasp_hz, 1.1);
         s.rasp_hi.set(c.rasp_hz * 1.9, 1.4); s.pop_body.set(c.pipe_hz * 1.6, 2.0); s.whirr.set(950, 1.5);
-        s.tuned = in.port;
     }
     const int rotors = in.rotors < kMinRotors ? kMinRotors : in.rotors > kMaxRotors ? kMaxRotors : in.rotors;
     const double dt = 1.0 / kSampleRate, two_pi = 6.283185307179586;
@@ -126,7 +146,7 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
 
         // Overrun: lifting off at speed starts a burst of pops.
         s.load_peak = std::fmax(s.load, s.load_peak - 1.2 * dt);
-        if (running && s.load < 0.15 && s.load_peak > 0.5 && rpm01 > 0.28) {
+        if (running && !pops_off && s.load < 0.15 && s.load_peak > 0.5 && rpm01 > 0.28) {
             s.crackle_until = s.time + 0.9 + 0.8 * rpm01;
             s.next_pop = s.time + 0.05;
             s.load_peak = 0;
@@ -198,9 +218,10 @@ inline void render(Synth& s, const Input& in, int16_t* out, int count) {
             s.pop_body.run(0);
         }
         // The eccentric shaft and gears: a faint whirr that rises with speed.
-        v += 0.05 * clamp01(rpm01 * 1.5) * s.whirr.run(s.noise());
+        v += c.whirr * clamp01(rpm01 * 1.5) * s.whirr.run(s.noise());
         s.soft += (v - s.soft) * (1.0 - std::exp(-dt * two_pi * (1100.0 + 9000.0 * (1.0 - idle))));
         v = s.soft;
+        if (muffler > 0) { s.muffle_y += (v - s.muffle_y) * muffle_k; v = s.muffle_y * muffle_gain; }
         v *= c.gain * (1.0 + 0.12 * idle);   // the idle a touch louder; the rev untouched
         v = std::isfinite(v) ? v : 0;
         s.dc_y = v - s.dc_x + 0.9967 * s.dc_y;   // ~25 Hz high-pass: no DC from the one-sided pulses

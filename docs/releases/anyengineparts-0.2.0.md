@@ -100,4 +100,4 @@ still finds none, the log lists the parts on its boost pipe so the cause shows u
 - A parked Rotary hands its sound voice back to the game after two seconds of silence.
 - The three parts start on their own: one still looking for its game functions no longer delays the others.
 
-Guide: [AnyEngineParts](../mods/engine-parts.md).
+Guide: [AnyEngineParts](../mods/vehicle-overhaul.md).

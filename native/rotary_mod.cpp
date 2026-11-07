@@ -12,11 +12,14 @@
 // 1 street port, 2 peripheral port. Works next to EngineSound: both hook the engine's client tick and the voice
 // update, and the rotary's voices stay silent whichever mod's hook sits on top.
 //
+// Built engines (built_engine_logic.h) ride on the same definitions hook: write_built_engines makes them from the
+// game's own engine entries at start and hk_add_definitions adds them next to the Rotary.
+//
 // Getting it: tech_tier 4 loot (after the 3rd bunker) in the "mechanical" group. Single player / host for now: the
 // definition is added on this game's server and client scene, and every player would need the mod.
 //
-// EXPERIMENTAL. Hooks game functions through the experimental SDK (rotary_bindings.h): Anymaker 0.1.27 / Steam
-// build 26113663 only. First runs are diagnostic: read anymaker_modding.log.
+// EXPERIMENTAL. Hooks game functions through the experimental SDK (rotary_bindings.h): Anymaker 0.2.0 / Steam
+// build 26328453 only. First runs are diagnostic: read anymaker_modding.log.
 #define NOMINMAX
 #include <windows.h>
 #include "anyapi_services_v1.h"
@@ -26,6 +29,9 @@
 #include "rotary_mesh.h"
 #include "engine_parts_shared.h"
 #include "rotary_sound.h"
+#include "rotary_tune.h"
+#include "built_engine_logic.h"
+#include <algorithm>
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
@@ -132,6 +138,51 @@ anymaker::cell_hook h_add_definitions;
 self_fn_t g_file_ctor, g_file_dtor;
 file_load_t g_file_load;
 std::string g_json_path, g_json_forward;            // absolute, backslashes / slashes; set before g_ready, then fixed
+std::string g_built_path, g_built_forward;          // the built engines file (built_engine_logic.h); empty: none
+std::string g_built_first;                          // the first id in it (already in a container: skip)
+
+bool write_file(const std::wstring& path, const void* data, size_t size);
+bool read_file(const std::wstring& path, std::string& out) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER size{};
+    bool ok = GetFileSizeEx(h, &size) && size.QuadPart > 0 && size.QuadPart < (64ll << 20);
+    if (ok) {
+        out.assign(size_t(size.QuadPart), '\0');
+        DWORD got = 0;
+        ok = ReadFile(h, out.data(), DWORD(out.size()), &got, nullptr) && got == out.size();
+    }
+    CloseHandle(h);
+    return ok;
+}
+std::string utf8(const std::wstring& w) {
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    std::string s(size_t(n > 0 ? n - 1 : 0), '\0');
+    if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, s.data(), n, nullptr, nullptr);
+    return s;
+}
+std::string forward(std::string s) { for (char& c : s) if (c == '\\') c = '/'; return s; }
+
+// The built engines (built_engine_logic.h): made from the game's own engine entries each start, so they follow game
+// updates and the mod ships none of the game's data. Without the game's file there are no built engines.
+void write_built_engines(const std::wstring& game_dir, const std::wstring& dir, const std::string& rotary_json) {
+    std::string stock;
+    if (!read_file(game_dir + L"\\rom\\data\\vehicle_component_definitions.json", stock)) {
+        log(1, "could not read rom\\data\\vehicle_component_definitions.json; no built engines this time");
+        return;
+    }
+    int count = 0;
+    std::string json = built::definitions_file(stock, &count, rotary_json);
+    std::wstring file = dir + L"\\built_engines.json";
+    if (json.empty() || !write_file(file, json.data(), json.size())) { log(1, "no built engines this time (%d stock engines found)", count); return; }
+    std::string_view first = built::definition_objects(json).front();
+    for (const built::Member& m : built::members(first))
+        if (m.key == "id") g_built_first = std::string(built::string_value(first, m));
+    if (g_built_first.empty()) return;
+    g_built_path = utf8(file);
+    g_built_forward = forward(g_built_path);
+    log(count == 9 ? 0 : 1, "%d built engines written", count);
+}
 
 bool write_file(const std::wstring& path, const void* data, size_t size) {
     HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -170,6 +221,7 @@ bool write_definition_file() {
     std::wstring file = dir + L"\\rotary_engine.json";
     std::string json = definition_json(meshes ? mesh_path() : std::string("meshes/components/engine_block_a_0_0_0.mesh"));
     bool ok = write_file(file, json.data(), json.size());
+    write_built_engines(game_dir, dir, json);
     int n = WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, nullptr, 0, nullptr, nullptr);
     g_json_path.assign(size_t(n > 0 ? n - 1 : 0), '\0');
     if (n > 1) WideCharToMultiByte(CP_UTF8, 0, file.c_str(), -1, g_json_path.data(), n, nullptr, nullptr);
@@ -178,10 +230,10 @@ bool write_definition_file() {
     return ok && !g_json_path.empty();
 }
 
-bool already_added(void* container) {
+bool already_added(void* container, const char* id = kDefinitionId) {
     if (!g_get_definition || !g_string_ctor) return false;
     anymaker::gc_string_view s{};
-    g_string_ctor(&s, kDefinitionId);
+    g_string_ctor(&s, id);
     const void* found = nullptr;
     g_get_definition(&found, container, &s);
     return found != nullptr;
@@ -208,12 +260,18 @@ thread_local bool t_adding = false;
 void hk_add_definitions(void* container, const void* file) {
     reinterpret_cast<add_definitions_t>(h_add_definitions.original)(container, file);
     if (!t_adding) { std::lock_guard<std::recursive_mutex> lock(g_mutex); g_is_rotary.clear(); }   // definitions may move
-    if (!g_ready.load() || t_adding || !container || already_added(container)) return;
+    if (!g_ready.load() || t_adding || !container) return;
     t_adding = true;
-    bool ok = add_ours(container, g_json_path) || add_ours(container, g_json_forward);
+    static std::atomic<int> logs{6}, built_logs{6};
+    if (!already_added(container)) {
+        bool ok = add_ours(container, g_json_path) || add_ours(container, g_json_forward);
+        if (logs.fetch_sub(1) > 0) log(ok ? 0 : 2, ok ? "Rotary Engine added to the game's parts (%s)" : "could not load the Rotary definition from %s", g_json_path.c_str());
+    }
+    if (!g_built_path.empty() && !already_added(container, g_built_first.c_str())) {
+        bool ok = add_ours(container, g_built_path) || add_ours(container, g_built_forward);
+        if (built_logs.fetch_sub(1) > 0) log(ok ? 0 : 2, ok ? "built engines added to the game's parts" : "could not load the built engines from %s", g_built_path.c_str());
+    }
     t_adding = false;
-    static std::atomic<int> logs{6};
-    if (logs.fetch_sub(1) > 0) log(ok ? 0 : 2, ok ? "Rotary Engine added to the game's parts (%s)" : "could not load the Rotary definition from %s", g_json_path.c_str());
 }
 
 // ------------------------------------------------------------------------------------- sound (client, main thread)
@@ -249,7 +307,7 @@ effect_place_t g_effect_place;
 buffer_reset_t g_buffer_reset;
 world_transform_t g_world_transform;
 anymaker::cell_hook h_client_tick, h_vol_speed;
-bool g_voices_hooked = false;                        // the voice update hook is in: the game's own voice says when it runs
+std::atomic<bool> g_voices_hooked{false};                       // the voice update hook is in: the game's own voice says when it runs
 
 struct ClientEngine {
     void* effect = nullptr;                          // application.audio.effect_3d (a handle)
@@ -257,6 +315,8 @@ struct ClientEngine {
     double start = 0, last_tick = 0, retry_at = 0;
     long long written = 0;                           // samples queued since start
     bool rate_logged = false;
+    double logged_muffler = -9, logged_pipe = -9;   // the exhaust parts last logged
+    int32_t logged_value = INT32_MIN + 1;              // the sound choice last logged
     double position[3]{}, velocity[3]{};
     bool placed = false;
     double game_volume = 0;                          // the stock power voice's volume this tick (> 0 while it runs)
@@ -302,6 +362,27 @@ long long voice_queued(void* effect) {
     return std::max<long long>(0, bytes / 2 - cursor);    // the audio thread may be mid-update: never negative
 }
 
+// AnyVehicleOverhaul: the middle of the engine's exhaust outlets (enginesound_mod.cpp), when EngineSound is in this
+// DLL. Nate's 2026-11-05 test: his rotary's sound stayed at the engine with a tip on, as EngineSound skips rotaries.
+using exhaust_at_t = int (*)(void* engine, double* out);
+exhaust_at_t exhaust_at_fn() {
+    static exhaust_at_t fn = [] {
+        HMODULE self = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&exhaust_at_fn, &self)) return exhaust_at_t(nullptr);
+        return reinterpret_cast<exhaust_at_t>(GetProcAddress(self, "AVO_ExhaustAt"));
+    }();
+    return fn;
+}
+using exhaust_tune_t = int (*)(void* engine, double* out);
+exhaust_tune_t exhaust_tune_fn() {
+    static exhaust_tune_t fn = [] {
+        HMODULE self = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&exhaust_tune_fn, &self)) return exhaust_tune_t(nullptr);
+        return reinterpret_cast<exhaust_tune_t>(GetProcAddress(self, "AVO_ExhaustTune"));
+    }();
+    return fn;
+}
+
 void stream_sound(void* self, const double* dt) {
     double now = now_seconds();
     ClientEngine& v = g_engines[self];
@@ -310,7 +391,21 @@ void stream_sound(void* self, const double* dt) {
     in.rps = factor_to_rps(at<double>(self, off::client_factor_speed));
     in.load = at<double>(self, off::client_factor_power);
     in.rotors = rotors_from_extend(at<int32_t>(self, off::client_extend_z));
-    in.port = port_from_index(at<int32_t>(self, off::client_sound_index));
+    const int32_t sound_value = at<int32_t>(self, off::client_sound_index);
+    in.port = port_from_index(sound_value);
+    // A rotor-count sound or Custom (EngineSound's panel, rotary_tune.h) in place of the port's own.
+    const enginesound::Choice choice = rotary_tune::decode(sound_value, in.rotors);
+    double own_muffler = 0; bool own_pops_off = false;
+    if (choice.mode != enginesound::Mode::Vanilla) {
+        in.custom = true; in.ch = rotary_tune::character_of(choice.params);
+        own_muffler = rotary_tune::muffler_of(choice.params); own_pops_off = rotary_tune::pops_off(choice.params);
+        in.muffler = own_muffler; if (own_pops_off) in.crackle = 0;
+    }
+    if (v.logged_value != sound_value) {
+        static std::atomic<int> logs{24};
+        if (logs.fetch_sub(1) > 0) log(0, "rotary sound choice: %s (%d rotors)", rotary_tune::choice_name(sound_value, in.rotors), in.rotors);
+        v.logged_value = sound_value;
+    }
     // Firing: the game's power voice is audible. Without the voice hook, assume it fires at start speed or above.
     in.running = g_voices_hooked && v.game_volume_seen ? v.game_volume > 0.001 : in.rps >= kStartRps;
     v.game_volume_seen = false;
@@ -322,6 +417,19 @@ void stream_sound(void* self, const double* dt) {
     double matrix[12]{};
     g_world_transform(matrix, self);
     const double* p = matrix + off::mat34_t / 8;
+    double tips[3];
+    if (auto fn = exhaust_at_fn(); fn && fn(self, tips)) p = tips;   // from the exhaust tips
+    double tune[5];                                  // ... sounding like the mufflers, resonators, headers on the way
+    if (auto fn = exhaust_tune_fn(); fn && fn(self, tune)) {
+        in.pipe = tune[0]; in.rasp = tune[1]; in.gain = tune[2];
+        in.muffler = std::max(own_muffler, tune[3]);  // the louder of the chosen sound's muffler and the parts'
+        in.crackle = own_pops_off ? 0 : tune[4];
+        if (v.logged_muffler != in.muffler || v.logged_pipe != in.pipe) {
+            static std::atomic<int> logs{16};
+            if (logs.fetch_sub(1) > 0) log(0, "rotary exhaust parts: pipe x%.2f, rasp x%.2f, gain x%.2f, muffler %.2f, pops %.2f", in.pipe, in.rasp, in.gain, in.muffler, in.crackle);
+            v.logged_muffler = in.muffler; v.logged_pipe = in.pipe;
+        }
+    }
     double step = dt && std::isfinite(*dt) && *dt > 1e-4 ? *dt : 1.0 / 60.0;
     if (std::isfinite(p[0]) && std::isfinite(p[1]) && std::isfinite(p[2])) {
         for (int i = 0; i < 3; ++i) {
@@ -364,7 +472,8 @@ void stream_sound(void* self, const double* dt) {
         v.rate_logged = true;
         log(0, "rotary sound plays %.0f samples/s, %.0f ms queued", double(v.written - queued) / (now - v.start), queued * 1000.0 / kSampleRate);
     }
-    long long want = played + (long long)(audio::kLead * kSampleRate) - v.written;
+    double lead = std::clamp(2.5 * step, audio::kLead, 0.25);   // a long frame must not drain the queue
+    long long want = played + (long long)(lead * kSampleRate) - v.written;
     if (want <= 0) return;
     int n = int(std::min<long long>(want, kSampleRate / 5));
     g_pcm.resize(size_t(n));
@@ -379,22 +488,29 @@ void stream_sound(void* self, const double* dt) {
     v.written += n;
 }
 
+void sweep_engines() {                               // engines gone from the scene stop ticking: free their voices
+    double now = now_seconds();
+    if (now - g_last_sweep <= 1.0) return;
+    g_last_sweep = now;
+    for (auto it = g_engines.begin(); it != g_engines.end();)
+        if (now - it->second.last_tick > 1.0) { release_voice(it->second); it = g_engines.erase(it); }
+        else ++it;
+}
+
 void hk_client_tick(void* self, void* client, void* vehicle, void* scene, const double* dt) {
     auto original = reinterpret_cast<engine_tick_t>(h_client_tick.original);
-    if (!self || !rotary_definition(definition_at(self, off::client_definition))) return original(self, client, vehicle, scene, dt);
+    if (!self || !rotary_definition(definition_at(self, off::client_definition))) {
+        original(self, client, vehicle, scene, dt);
+        if (!g_engines.empty()) sweep_engines();     // the last rotary may be gone: free its voice too
+        return;
+    }
     uint8_t* prev = t_rotary;
     t_rotary = static_cast<uint8_t*>(self);
     g_engines[self];                                 // so the voice hook can record this tick's power volume
     original(self, client, vehicle, scene, dt);
     t_rotary = prev;
     stream_sound(self, dt);
-    double now = now_seconds();
-    if (now - g_last_sweep > 1.0) {                  // engines gone from the scene stop ticking: free their voices
-        g_last_sweep = now;
-        for (auto it = g_engines.begin(); it != g_engines.end();)
-            if (now - it->second.last_tick > 1.0) { release_voice(it->second); it = g_engines.erase(it); }
-            else ++it;
-    }
+    sweep_engines();
 }
 
 // ------------------------------------------------------------------------------------- install (background thread)
@@ -526,6 +642,7 @@ void install_hooks() {
             continue;
         }
         std::lock_guard install_lock(engine_parts::install_mutex());   // one AnyEngineParts part hooks at a time
+        if (g_stop) return;                          // shut down while it was looking
         g_file_ctor = fctor; g_file_dtor = fdtor; g_file_load = fload; g_string_ctor = sc;
         g_get_definition = reinterpret_cast<get_definition_t>(function(bind::definitions_get_by_id));
         if (!g_get_definition) log(1, "definition lookup not found; Rotary may add its part twice if another mod re-adds definitions");
@@ -552,5 +669,9 @@ void remove_hooks() {
 // AnyEngineParts (engine_parts_mod.cpp) is the DLL; it starts this part of it.
 void init(const AnyModHostV1& h) { host = h; }
 void start() { install_hooks(); }       // on AnyEngineParts' install thread
-void shutdown() { g_stop = true; remove_hooks(); }
+void shutdown() {
+    g_stop = true;
+    std::lock_guard install_lock(engine_parts::install_mutex());   // not while a hook install is under way
+    remove_hooks();
+}
 }  // namespace rotary
