@@ -8,6 +8,15 @@
 #include <windows.h>
 #include <cstdint>
 #include <cstring>
+// MSVC builds guard every Steam call with SEH. MinGW (the cloud test build) has no SEH keywords: there a fault in a
+// Steam call is not caught.
+#if defined(_MSC_VER)
+#define STEAM_MESSAGES_TRY __try
+#define STEAM_MESSAGES_EXCEPT __except (EXCEPTION_EXECUTE_HANDLER)
+#else
+#define STEAM_MESSAGES_TRY if (true)
+#define STEAM_MESSAGES_EXCEPT else
+#endif
 
 namespace steam_messages {
 // ISteamNetworkingMessages002 vtable order (Steamworks SDK steamnetworkingmessages.h).
@@ -30,7 +39,7 @@ struct Line {
     void** table() const { return messages ? *reinterpret_cast<void***>(messages) : nullptr; }
 
     static void* find_interface() {
-        __try {
+        STEAM_MESSAGES_TRY {
             HMODULE steam = GetModuleHandleW(L"steam_api64.dll");
             if (!steam) return nullptr;
             auto user = reinterpret_cast<UserFn>(GetProcAddress(steam, "SteamAPI_GetHSteamUser"));
@@ -38,7 +47,7 @@ struct Line {
             if (!user || !find) return nullptr;
             int32_t h = user();
             return h ? find(h, "SteamNetworkingMessages002") : nullptr;
-        } __except (EXCEPTION_EXECUTE_HANDLER) { return nullptr; }
+        } STEAM_MESSAGES_EXCEPT { return nullptr; }
     }
     // True once the interface is there (looked up once).
     bool ready(int32_t on_channel) {
@@ -51,23 +60,23 @@ struct Line {
         if (!ready(channel)) return false;
         int32_t state = 0;
         bool ok = false;
-        __try { Identity i = identity(id); state = reinterpret_cast<SessionInfoFn>(table()[5])(messages, &i, nullptr, nullptr); ok = true; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { faulted = true; }
+        STEAM_MESSAGES_TRY { Identity i = identity(id); state = reinterpret_cast<SessionInfoFn>(table()[5])(messages, &i, nullptr, nullptr); ok = true; }
+        STEAM_MESSAGES_EXCEPT { faulted = true; }
         return ok && state == kStateConnected;
     }
     // Reliable send; Steam's EResult (1: OK), or 0 when the line is off.
     int32_t send(uint64_t id, const void* data, uint32_t size) {
         if (!ready(channel) || !connected(id)) return 0;
         int32_t result = 0;
-        __try { Identity i = identity(id); result = reinterpret_cast<SendFn>(table()[0])(messages, &i, data, size, kSendReliable, channel); }
-        __except (EXCEPTION_EXECUTE_HANDLER) { faulted = true; result = 0; }
+        STEAM_MESSAGES_TRY { Identity i = identity(id); result = reinterpret_cast<SendFn>(table()[0])(messages, &i, data, size, kSendReliable, channel); }
+        STEAM_MESSAGES_EXCEPT { faulted = true; result = 0; }
         return result;
     }
     // One message copied out and released: 1 (size and Steam-verified sender set; size > capacity: too big, not
     // copied), 0 none waiting, -1 a fault (the line is off).
     int receive(uint8_t* out, uint32_t capacity, uint32_t& size, uint64_t& sender) {
         if (!ready(channel)) return 0;
-        __try {
+        STEAM_MESSAGES_TRY {
             void* msg = nullptr;
             if (reinterpret_cast<ReceiveFn>(table()[1])(messages, channel, &msg, 1) != 1 || !msg) return 0;
             auto base = static_cast<uint8_t*>(msg);
@@ -80,7 +89,7 @@ struct Line {
             else if (!data) size = 0;
             reinterpret_cast<ReleaseFn>(*reinterpret_cast<void**>(base + 184))(msg);
             return 1;
-        } __except (EXCEPTION_EXECUTE_HANDLER) { faulted = true; return -1; }
+        } STEAM_MESSAGES_EXCEPT { faulted = true; return -1; }
     }
 };
 }  // namespace steam_messages

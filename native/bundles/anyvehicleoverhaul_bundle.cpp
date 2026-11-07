@@ -9,6 +9,7 @@
 //   anymoto         motorcycle fork, swingarm, seat, handlebars, Lean Assist (anymoto_mod.cpp)
 //   anycvt          belt CVTs for the small, medium and large engine (anycvt_mod.cpp; shipped alone as AnyCVT.dll
 //                   until 2026-11)
+//   avowheels       race wheels, drag slicks and drag front runners (avo_wheels_mod.cpp; never shipped alone)
 //
 // COMPATIBILITY: never rename a part id below. Each id is also the mod id its source registers with, and it keys the
 // player's Mod Settings, keybinds and on/off switch (bundle-parts.tsv). Game part ids, mesh names and data folders
@@ -23,11 +24,13 @@ ANYAPI_BUNDLE_DECLARE(enginesound)
 ANYAPI_BUNDLE_DECLARE(gpspart)
 ANYAPI_BUNDLE_DECLARE(anymoto)
 ANYAPI_BUNDLE_DECLARE(anycvt)
+ANYAPI_BUNDLE_DECLARE(avowheels)
 static const AnyBundlePartV1 parts[]={
  ANYAPI_BUNDLE_PART(anyengineparts,"AnyEngineParts",L"AnyEngineParts.dll",0),
  ANYAPI_BUNDLE_PART(enginesound,"EngineSound",L"EngineSound.dll",0),
  ANYAPI_BUNDLE_PART(gpspart,"GpsPart",L"GpsPart.dll",0),
  ANYAPI_BUNDLE_PART(anymoto,"AnyMoto",L"AnyMoto.dll",0),
  ANYAPI_BUNDLE_PART(anycvt,"AnyCVT",L"AnyCVT.dll",0),
+ ANYAPI_BUNDLE_PART(avowheels,"AnyWheels",L"AnyWheels.dll",0),
 };
 ANYAPI_BUNDLE_EXPORTS("anyvehicleoverhaul","AnyVehicleOverhaul",parts)

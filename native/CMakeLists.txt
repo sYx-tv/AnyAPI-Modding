@@ -562,6 +562,9 @@ anyapi_version_resource(AnyMoto AnyMoto)
 add_executable(anymoto_logic_test tests/anymoto_logic_test.cpp)
 target_compile_options(anymoto_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME anymoto_logic COMMAND anymoto_logic_test)
+add_executable(avo_wheels_logic_test tests/avo_wheels_logic_test.cpp)
+target_compile_options(avo_wheels_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME avo_wheels_logic COMMAND avo_wheels_logic_test)
 
 # AnyBattery: the Battery Pack, a stretchable battery placed empty and charged from the electric network, through
 # the experimental SDK.
@@ -663,6 +666,9 @@ add_test(NAME rotary_logic COMMAND rotary_logic_test)
 add_executable(dyno_logic_test tests/dyno_logic_test.cpp)
 target_compile_options(dyno_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME dyno_logic COMMAND dyno_logic_test)
+add_executable(dyno_net_test tests/dyno_net_test.cpp)
+target_compile_options(dyno_net_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME dyno_net COMMAND dyno_net_test)
 add_executable(built_engine_logic_test tests/built_engine_logic_test.cpp)
 target_compile_options(built_engine_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME built_engine_logic COMMAND built_engine_logic_test)
@@ -687,7 +693,7 @@ endfunction()
 # AnyVehicleOverhaul (was the AnyEngineParts bundle, 2026-11): AnyEngineParts, EngineSound, GpsPart and AnyMoto.
 anyapi_bundle(AnyVehicleOverhaulBundle AnyVehicleOverhaul bundles/anyvehicleoverhaul_bundle.cpp
   bundles/part_anyengineparts.cpp turbo_mod.cpp rotary_mod.cpp dyno_mod.cpp bundles/part_enginesound.cpp bundles/part_gpspart.cpp
-  bundles/part_anymoto.cpp bundles/part_anycvt.cpp)
+  bundles/part_anymoto.cpp bundles/part_anycvt.cpp bundles/part_avowheels.cpp)
 anyapi_bundle(AnyHelpersBundle AnyHelpers bundles/anyhelpers_bundle.cpp bundles/part_anyhelpers.cpp
   bundles/part_anymirror.cpp bundles/part_anybalance.cpp bundles/part_mccode.cpp)
 target_link_libraries(AnyHelpersBundle PRIVATE gdiplus user32)
