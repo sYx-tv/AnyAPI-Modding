@@ -116,6 +116,7 @@ constexpr ptrdiff_t engine_air_manifolds = 1256;     // engine.m_air_manifolds (
 constexpr ptrdiff_t engine_damage = 1448;            // engine.m_damage (s32, 0-2: the game's damage steps)
 constexpr ptrdiff_t engine_damage_factor = 1456;     // engine.m_damage_factor (f64; a damage step at 1)
 constexpr ptrdiff_t engine_volume = 1416;            // engine.m_volume (s32; set in create from its zones, as Rotary reads it)
+constexpr ptrdiff_t torque_node_mass = 24;            // server_scene.vehicle_torque_node.m_mass (f64; apply_torque divides by it)
 constexpr ptrdiff_t engine_rps = 1424;               // engine.m_rps (f64; the tick reads it before setting the new speed)
 constexpr ptrdiff_t engine_exhaust_manifolds = 1336; // engine.m_exhaust_manifolds (vector<ptr<exhaust_manifold>>)
 constexpr ptrdiff_t engine_temperature = 1432;       // engine.m_temperature (f64, C)
@@ -1156,6 +1157,7 @@ void* blower_shaft(void* self) {
 // A supercharger tick, in place of the impeller's: its head follows its pulley, it pushes air from intake to outlet
 // (heated, then cooled by any intercoolers on its boost pipe), and the work that takes comes off its shaft, which
 // slows the belt and the engine driving it.
+constexpr double kMaxDragShare = 0.01;   // a blower's belt takes at most this share of its shaft's speed a tick
 void tick_blower(void* self, void* vehicle, Turbo& t) {
     void* c0 = static_cast<uint8_t*>(self) + off::pump_content_0;
     void* c1 = static_cast<uint8_t*>(self) + off::pump_content_1;
@@ -1228,6 +1230,15 @@ void tick_blower(void* self, void* vehicle, Turbo& t) {
     // The belt pays for the air: as the stock impeller does, a drag torque on its shaft (energy x newtons per joule).
     if (shaft && o.drive_joules > 0 && rps != 0) {
         double torque = -o.drive_joules * *g_newtons_per_joule * (rps > 0 ? 1.0 : -1.0);
+        // apply_torque adds torque / m_mass to the node's speed. Never take more than kMaxDragShare of its speed in one
+        // tick: a big blower tipped in near idle took more than the engine had and stopped it (Nate 2026-11-07).
+        if (anymaker::readable(static_cast<uint8_t*>(shaft) + off::torque_node_mass, 8)) {
+            double mass = at<double>(shaft, off::torque_node_mass);
+            if (std::isfinite(mass) && mass > 0) {
+                double most = kMaxDragShare * std::abs(rps) * mass;
+                if (std::abs(torque) > most) torque = torque < 0 ? -most : most;
+            }
+        }
         if (std::isfinite(torque)) g_apply_torque(shaft, &torque);
     }
     double cells = t.cooler_cells;

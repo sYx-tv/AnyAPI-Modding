@@ -797,7 +797,8 @@ constexpr double kPdMaxRatio[2] = {3.0, 2.6};   // relief valve: twin screw ~29 
 constexpr double kPdLeak[2] = {0.05, 0.09};     // volumetric efficiency lost per unit of pressure ratio over 1, at speed
 constexpr double kPdLeakSpeedRps = 40.0;        // rotor speed (rev/s) where leakage is down to kPdLeak
 constexpr double kPdBypassShare = 0.12;         // engine draw under this share of what the blower moves: throttle shut, bypass open
-constexpr double kPdFillTau = 0.15;             // seconds it takes to fill the boost pipe to its ratio
+constexpr double kPdFillTau = 0.15;
+constexpr double kPdIdleRpm = 1000.0, kPdBoostRpm = 1800.0;   // engine RPM where the bypass starts to close, and is shut             // seconds it takes to fill the boost pipe to its ratio
 inline int pd_axis_cells(int32_t extend, int max_extend) {
     int64_t e = extend < 0 ? -int64_t(extend) : int64_t(extend);
     return kPdBase + int(e > max_extend ? max_extend : e);
@@ -853,6 +854,12 @@ inline BlowerStep pd_step(State& st, PdKind k, int cells, const Inputs& in, cons
     double throttle = known ? clamp01(draw / std::max(1e-6, engine_full_draw_lps(pd.engine_volume, pd.engine_rpm, std::max(1.0, p_out)))) : 1.0;
     double open = known ? clamp01((throttle - 0.25) / 0.35) : 1.0;     // the bypass closes as the throttle opens
     open = open * open * (3 - 2 * open);
+    // Near idle the bypass stays open too, closing between kPdIdleRpm and kPdBoostRpm, so the belt load comes on as the
+    // engine pulls away instead of all at once at idle (Nate 2026-11-07: tipping in from idle stalled the engine).
+    if (known) {
+        double rise = clamp01((std::abs(pd.engine_rpm) - kPdIdleRpm) / (kPdBoostRpm - kPdIdleRpm));
+        open *= rise * rise * (3 - 2 * rise);
+    }
     double ratio = 1.0;
     bool bypass = moved <= 1e-9 || (known ? open <= 0 : draw < kPdBypassShare * moved);
     if (!bypass) {
