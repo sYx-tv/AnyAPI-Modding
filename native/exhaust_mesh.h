@@ -37,21 +37,21 @@ inline void tube(Mesh& m, double cx, double cy, const std::vector<Sec>& s, doubl
             if (!inward) { m.tri(A, B, D); m.tri(A, D, E); } else { m.tri(A, D, B); m.tri(A, E, D); }
         }
 }
-// A flat ring (r0..r1) facing +z at z (leaning like a slash cut).
-inline void annulus(Mesh& m, double cx, double cy, double z, double r0, double r1, Rgb c, double slash = 0, int n = 28) {
+// A flat ring (r0..r1) facing +z at z (leaning like a slash cut), or -z with facing -1.
+inline void annulus(Mesh& m, double cx, double cy, double z, double r0, double r1, Rgb c, double slash = 0, int n = 28, double facing = 1) {
     for (int k = 0; k < n; ++k) {
         int q = (k + 1) % n;
         double a0 = 2 * kPi * (k + 0.5) / n, a1 = 2 * kPi * (q + 0.5) / n;
         m.face({{cx + r0 * std::cos(a0), cy + r0 * std::sin(a0), z + slash * std::sin(a0)}, {cx + r1 * std::cos(a0), cy + r1 * std::sin(a0), z + slash * std::sin(a0)},
                 {cx + r1 * std::cos(a1), cy + r1 * std::sin(a1), z + slash * std::sin(a1)}, {cx + r0 * std::cos(a1), cy + r0 * std::sin(a1), z + slash * std::sin(a1)}},
-               {0, 0, 1}, c);
+               {0, 0, facing}, c);
     }
 }
 // The pipe sleeve and clamp band every part has at its inlet face (z -0.04).
 inline void inlet(Mesh& m, double z0 = -0.040, double z1 = -0.024, Rgb c = kAlum) {
     tube(m, 0, 0, {{z0, 0.030, c}, {z1, 0.030, c}});
     annulus(m, 0, 0, z1, 0.022, 0.030, c);
-    annulus(m, 0, 0, z0, 0.0, 0.030, kSoot);
+    annulus(m, 0, 0, z0, 0.0, 0.030, kSoot, 0, 28, -1);   // the back face looks back (Nate 2026-11-06: tips see-through from behind)
 }
 inline void outlet(Mesh& m, double z0, double z1, Rgb c = kAlum) {
     tube(m, 0, 0, {{z0, 0.024, c}, {z1 - 0.012, 0.024, c}, {z1 - 0.012, 0.030, c}, {z1, 0.030, c}});

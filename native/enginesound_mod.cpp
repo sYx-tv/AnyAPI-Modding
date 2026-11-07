@@ -366,6 +366,23 @@ void find_exhaust(uint8_t* engine, ClientEngine& v, double now) {
         v.chain_text = text;
     }
 }
+// The outlets are parts of the vehicle held between walks (2 s): one deleted meanwhile (Nate 2026-11-06: deleting a
+// stock gas vent with the engine running crashed the game) is freed memory. Every tick, outlets no longer among the
+// vehicle's parts are dropped and the walk runs again at once.
+void drop_gone_outlets(uint8_t* engine, ClientEngine& v) {
+    if (v.outlet_count <= 0) return;
+    bool alive[kMaxOutlets]{};
+    const uint8_t* vehicle = static_cast<const uint8_t*>(pointer_at(engine, exoff::component_vehicle));
+    if (vehicle) each_ref(vehicle + exoff::vehicle_grids, 4096, [&](uint8_t* grid) {
+        if (anymaker::readable(grid, 112)) each_ref(grid + exoff::grid_components, 1 << 16, [&](uint8_t* c) {
+            for (int i = 0; i < v.outlet_count; ++i) if (v.outlets[i].part == c) alive[i] = true;
+        });
+    });
+    bool gone = false;
+    for (int i = 0; i < v.outlet_count; ++i)
+        if (!alive[i] && v.outlets[i].part) { release_effect(v.outlets[i].effect); v.outlets[i] = OutletVoice{}; gone = true; }
+    if (gone) { v.chain_at = -10; v.chain_text.clear(); }
+}
 synth::Tune tuned(synth::Tune t, const exhaust::Chain& c, double ecu_crackle) {
     exhaust::SoundTune s{t.pipe_hz, t.body_hz, t.rasp, t.muffler, t.crackle, t.intake, t.uneven, t.gain};
     s = exhaust::apply(s, c, ecu_crackle);
@@ -415,6 +432,7 @@ void stream_sound(uint8_t* self, const EngineKind& kind, int32_t value, const do
     in.layout = kind.layout;
     in.cylinders = cylinders(kind, extend_at(self, off::client_extend_z));
     in.tune = tune_of(decode(value, kind.layout), kind);
+    drop_gone_outlets(self, v);
     find_exhaust(self, v, now);
     // Firing: the game's power voice is audible.
     in.running = v.game_volume_seen ? v.game_volume > 0.001 : in.rps >= synth::kIdleRps;
@@ -515,6 +533,7 @@ bool exhaust_position(uint8_t* engine, double out[3]) {
     double now = now_seconds();
     ClientEngine& v = g_exhaust_only[engine];
     v.last_tick = now;
+    drop_gone_outlets(engine, v);
     find_exhaust(engine, v, now);
     if (now - g_exhaust_sweep > 1.0) {
         g_exhaust_sweep = now;
