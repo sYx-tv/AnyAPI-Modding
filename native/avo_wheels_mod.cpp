@@ -182,6 +182,18 @@ void hk_add_definitions(void* container, const void* file, const void* outfit) {
 }
 
 // ------------------------------------------------------------------ tyre lists and sizes
+// A buffer the game can free. The game frees a vector's buffer with its aligned free (game.exe 0.2.0 +0x405208:
+// HeapFree(crt heap, *(p & ~7) - 8)), so the block's real start sits in the 8 bytes before it, as its aligned malloc
+// (+0x405224) lays it out. A plain HeapAlloc block there crashed the game with STATUS_HEAP_CORRUPTION when it cleared the
+// vector (Nate's crash 2026-11-07 23:40, vector clear at game.exe+0x489a). The CRT heap is the process heap.
+uint8_t* game_vector_alloc(size_t bytes) {
+    constexpr size_t kAlign = 16;
+    auto* raw = static_cast<uint8_t*>(HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, bytes + 8 + kAlign - 1));
+    if (!raw) return nullptr;
+    auto* p = reinterpret_cast<uint8_t*>((reinterpret_cast<uintptr_t>(raw) + 8 + kAlign - 1) & ~uintptr_t(kAlign - 1));
+    reinterpret_cast<void**>(p)[-1] = raw;
+    return p;
+}
 // Appends `n` elements to a gc ring vector: in place while it has room, otherwise into a larger copy. `fill` writes
 // element k into the slot it is given.
 template <class Fill> bool append(anymaker::gc_vector_raw* v, int n, Fill fill) {
@@ -189,7 +201,7 @@ template <class Fill> bool append(anymaker::gc_vector_raw* v, int n, Fill fill) 
     const uint32_t es = v->element_size;
     if (v->capacity - v->count < n) {
         const int cap = v->count + n + 4;
-        auto* buf = static_cast<uint8_t*>(HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size_t(cap) * es));
+        auto* buf = game_vector_alloc(size_t(cap) * es);   // the old buffer is left alone (the game may still be reading it)
         if (!buf) return false;
         for (int32_t i = 0; i < v->count; ++i)
             std::memcpy(buf + size_t(i) * es, v->buffer + size_t((int64_t(v->offset) + i) % v->capacity) * es, es);
