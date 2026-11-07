@@ -16,11 +16,12 @@ Nothing about the parts changed in the merge: same parts, same settings, same sa
 | GpsPart (`gpspart`) | The GPS Sensor part | [GpsPart](gps.md) |
 | AnyMoto (`anymoto`) | Motorcycle fork, swingarm, seat, handlebars and Lean Assist for the stock Motorcycle Wheel | [AnyMoto](moto.md) |
 | AnyCVT (`anycvt`) | Belt CVTs for the small, medium and large engine (R/N/D on a mechanical shifter; none of them needs air) | [AnyCVT](cvt.md) |
+| AnyWheels (`avowheels`, dev build) | Race wheels, drag slicks and drag front runners that fit the stock wheel and tyre mount parts | below |
 
 Each piece has an **Enabled** row at the top of its group in Mod Settings (AnyHelpers); switching one off applies the
 next time you start the game. Each piece also starts on its own: if one cannot find the game functions it needs, the
 others still work. Their lines in `anymaker_modding.log` keep their own tags (`turbo`, `rotary`, `dyno`,
-`enginesound`, `gpspart`, `anymoto`, `anycvt`).
+`enginesound`, `gpspart`, `anymoto`, `anycvt`, `avowheels`).
 
 ## In the 2.1 dev build (not released)
 
@@ -46,6 +47,14 @@ Everything below is in the dev build only, for testing. Its lines in the log sta
 - **Exhaust sound**: EngineSound follows the pipes from the engine to its outlets. It plays the exhaust from each tip
   or stock vent, and the parts on the way set its tone. The engine itself keeps a quieter voice. See
   `native/exhaust_logic.h`.
+
+- **Race and drag wheels** (`avo_wheel_<kind>_<style>`, part `avowheels`): new tyre items that fit the stock wheel
+  and tyre mount parts like the 20 inch car wheel. **Race Wheel** grips 1.5x a stock tyre (radius 0.33 m), **Drag
+  Slick** 2.5x (radius 0.36 m, wide), **Drag Front Runner** stock grip (skinny). Each comes in a 5-spoke, 6-spoke and
+  mesh rim. The game has no grip per tyre, so on the host a wheel wearing one ticks with a copy of its tuning whose
+  sliding grip and friction-circle limit are scaled (`native/avo_wheels_logic.h`). The grip circle is shared, so a
+  drag slick corners harder too. Loot: race and front runner tier 3 (0.1), drag slick tier 4 (0.075). The items are
+  made at start-up from your own copy of the game's 20 inch wheel entry; no game data ships with the mod.
 
 The looks of the ECU, the intake parts, the turbo muffler, the resonators, the cat and the headers are placeholders.
 
