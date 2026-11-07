@@ -251,31 +251,6 @@
       "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.31.0/AnyQuickWheel-1.1.0.zip"
     },
     {
-      "Id": "anyengineparts",
-      "Name": "AnyEngineParts",
-      "Version": "1.0.6",
-      "Revision": 8,
-      "MinimumApi": 49,
-      "Description": "Engine parts and sound in one mod: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine; EngineSound's generated engine sounds; and the GPS Sensor part. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.10.31/AnyEngineParts-1.0.6.zip",
-      "Sha256": "27204f0987c2b06f17a2648b305ace4e25cf161d5e6ab78a11b3c4e90dc88ec1",
-      "FileHashes": {
-        "AnyAPI and Modding/mods/AnyEngineParts.dll": "633e9ba795974103dcc698b29b0d51c3b29d6bae7557e7a34e10656c9dde2bd5"
-      },
-      "GameBuilds": [
-        {
-          "Version": "0.2.0",
-          "SteamBuild": 26328453,
-          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
-          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
-        }
-      ],
-      "Replaces": {
-        "enginesound": "AnyAPI and Modding/mods/EngineSound.dll",
-        "gpspart": "AnyAPI and Modding/mods/GpsPart.dll"
-      }
-    },
-    {
       "Id": "anycombat",
       "Name": "AnyCombat",
       "Version": "0.1.3",
@@ -381,27 +356,6 @@
       ]
     },
     {
-      "Id": "anymoto",
-      "Name": "AnyMoto",
-      "Version": "0.0.3",
-      "Revision": 3,
-      "MinimumApi": 49,
-      "Description": "Motorcycle parts for the stock Motorcycle Wheel: a steering fork, a swingarm, a seat, handlebars and Lean Assist, which keeps the bike upright and leans it into turns (power and lean settings in the Properties tool). Found in loot after the first bunker. Standalone mod, not part of a bundle. Anymaker 0.2.0 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.42.1/AnyMoto-0.0.3.zip",
-      "Sha256": "44a14a4e95a30e578b454c8f78cce6d771ea06087ed0de5a84a679cf9b07ef0f",
-      "FileHashes": {
-        "AnyAPI and Modding/mods/AnyMoto.dll": "b84646958063c51e4fdc5d59e05879194b10d4e10aba34d78d7bb1670ca340c2"
-      },
-      "GameBuilds": [
-        {
-          "Version": "0.2.0",
-          "SteamBuild": 26328453,
-          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
-          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
-        }
-      ]
-    },
-    {
       "Id": "anybattery",
       "Name": "AnyBattery",
       "Version": "0.0.2",
@@ -423,16 +377,16 @@
       ]
     },
     {
-      "Id": "anycvt",
-      "Name": "AnyCVT",
-      "Version": "0.0.2",
-      "Revision": 2,
+      "Id": "anyvehicleoverhaul",
+      "Name": "AnyVehicleOverhaul",
+      "Version": "2.0.0",
+      "Revision": 1,
       "MinimumApi": 49,
-      "Description": "Belt CVTs for small, medium and large engines. Each looks like the stock gearbox of its size and bolts on the same way. Shift R, N and D from a lever; in D the ratio slides to hold the engine at a target RPM, and a centrifugal clutch lets it idle while stopped. Low and high ratio, target RPM, response and engage RPM in Properties; ratio, engine_rpm, target_rpm and current_gear outputs. Found in loot from the first bunker on. Standalone mod, not part of a bundle. Anymaker 0.2.0 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/v0.42.1/AnyCVT-0.0.2.zip",
-      "Sha256": "74ff3043891c8c62ebf8f6da3cba65fbe87a6be16dffbe4d6e272a3d6034c5ec",
+      "Description": "Every vehicle part mod in one: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine (AnyEngineParts); EngineSound's generated engine sounds; the GPS Sensor part; AnyMoto's motorcycle fork, swingarm, seat, handlebars and Lean Assist; and AnyCVT's belt CVTs for the small, medium and large engine. Replaces AnyEngineParts, AnyMoto and AnyCVT; saves, settings and keybinds carry over. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.11.07/AnyVehicleOverhaul-2.0.0.zip",
+      "Sha256": "667623740dfbc45866ded3d0a98b2bccfd056b08f43b50aeae32b9857ace2604",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyCVT.dll": "8c3983fce6a694e0deede893eb9cfc1c44696ff32e4fbf4ade01bcb5d1bb30e5"
+        "AnyAPI and Modding/mods/AnyVehicleOverhaul.dll": "5fdcc9e33f3f412b957b621c442417044f96d25b10557e108128e73c11987167"
       },
       "GameBuilds": [
         {
@@ -441,7 +395,14 @@
           "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
           "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
         }
-      ]
+      ],
+      "Replaces": {
+        "anyengineparts": "AnyAPI and Modding/mods/AnyEngineParts.dll",
+        "anymoto": "AnyAPI and Modding/mods/AnyMoto.dll",
+        "anycvt": "AnyAPI and Modding/mods/AnyCVT.dll",
+        "enginesound": "AnyAPI and Modding/mods/EngineSound.dll",
+        "gpspart": "AnyAPI and Modding/mods/GpsPart.dll"
+      }
     }
   ]
 }
