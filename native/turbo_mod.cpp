@@ -224,6 +224,7 @@ struct Turbo {
     int pd = -1;                                     // a twin screw or Roots (PdKind), -1: not one
     double pd_after = NAN;                           // its boost pipe's content after its last move (for the engine's draw)
     double pd_draw = 0;                              // smoothed L/s the engine took from it
+    double pd_logged = 0;                            // when its diagnostics line was last logged (now_seconds)
 };
 std::unordered_map<const void*, Turbo> g_turbos;     // keyed by server component (superchargers too); nodes keep their address
 // Air manifolds, noted by the engine tick hook: manifold component -> the engine breathing through it, and when.
@@ -1240,6 +1241,16 @@ void tick_blower(void* self, void* vehicle, Turbo& t) {
             }
         }
         if (std::isfinite(torque)) g_apply_torque(shaft, &torque);
+        if (t.pd >= 0) {   // twin screw diagnostics, every 2 s per blower for its first minute or so
+            static std::atomic<int> pd_logs{60};
+            if (now_s - t.pd_logged > 2.0 && pd_logs.load() > 0) {
+                t.pd_logged = now_s; --pd_logs;
+                const double want = o.drive_joules * *g_newtons_per_joule;
+                log(0, "twin screw: engine %s %.0f rpm, boost %.1f psi, belt %.2f kW, bypass %.2f, drag %.3f of %.3f wanted (%s)",
+                    t.feeds_engine ? "known" : "NOT known", t.feeds_engine ? at<double>(t.feeds_engine, off::engine_rps) * 60.0 : 0.0, t.state.slots[kBoostPsi],
+                    t.state.slots[kDrivePower], t.state.slots[kBypass], std::abs(torque), want, std::abs(torque) < want - 1e-9 ? "capped" : "full");
+            }
+        }
     }
     double cells = t.cooler_cells;
     double cooling = intercooler_effectiveness(cells, t.state.intake_flow);
