@@ -42,6 +42,8 @@ Everything below is in the dev build only, for testing. Its lines in the log sta
   on; the inputs sit one per cylinder, every 2 cells). The primaries run down and back to the collector, whose outlet
   is the manifold's gas node: put a large pipe or a gas port there and route it anywhere. Fixed sizes, no stretch.
   On the engine they add about 4 % power and a smooth note.
+  Each size also comes **mirrored** (`header_1_1_m` to `header_6_1_m`) for the other bank of a V engine, so both
+  collectors point the same way.
 - **Intake parts** for naturally aspirated engines: a velocity stack, ITBs and a muscle carb. They go on the air
   manifold.
 - **Exhaust sound**: EngineSound follows the pipes from the engine to its outlets. It plays the exhaust from each tip

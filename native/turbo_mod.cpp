@@ -1751,9 +1751,10 @@ bool write_definition_file() {
         std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
         exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
     }
-    for (int n = exhaust::kHeaderMin; n <= exhaust::kHeaderMax; ++n) {   // race headers: polished stainless until Nate picks
-        std::string id = exhaust::header_id(n);
-        std::vector<uint8_t> mesh = pdmesh::encode(avolook::header(n, 0), id);
+    for (int mr = 0; mr < 2; ++mr)
+    for (int n = exhaust::kHeaderMin; n <= exhaust::kHeaderMax; ++n) {   // race headers (and mirrored ones): polished stainless
+        std::string id = exhaust::header_id(n, mr);
+        std::vector<uint8_t> mesh = pdmesh::encode(mr ? avolook::header_mirrored(n, 0) : avolook::header(n, 0), id);
         std::wstring f = components + std::wstring(id.begin(), id.end()) + L".mesh";
         exhaust_built = exhaust_built && !mesh.empty() && write_file(f, mesh.data(), mesh.size());
     }

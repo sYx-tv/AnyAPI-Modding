@@ -603,5 +603,12 @@ inline Mesh header(int n, int look) {
     bore(m, 0, yc, zc, x1, rout * 0.85, 1);
     return m;
 }
+// The mirrored header (the other bank): z flipped, so the flange faces z+ and the primaries run out to z-.
+inline Mesh header_mirrored(int n, int look) {
+    Mesh m = header(n, look);
+    for (auto& v : m.v) { v.pos[2] = -v.pos[2]; v.normal[2] = -v.normal[2]; }
+    for (size_t k = 0; k + 2 < m.i.size(); k += 3) std::swap(m.i[k + 1], m.i[k + 2]);   // a mirror turns the winding inside out
+    return m;
+}
 
 }  // namespace avolook
