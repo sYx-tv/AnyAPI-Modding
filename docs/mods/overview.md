@@ -31,8 +31,9 @@ keeps working defaults when it is absent.
 | [MCCode](mccode.md) | 0.2.0 | API 0.38.0 | A Code view in the microcontroller editor: type the program or build it from nodes and wires, with a command list and the game's debugger | None; `</> Code` in the microcontroller editor |
 | [CustomGame](custom-game.md) | 0.1.0 | API 0.40.0 | A Custom Game page on the New Game screen: day cycle, starting tier, up to 20 players, survival, enemy and world settings saved per world | Map packs from CustomMap |
 | [AnyVehicleOverhaul](vehicle-overhaul.md) | 2.0.0 | API 0.42.0 | Bundle: AnyEngineParts ([turbos and superchargers](turbo.md), [rotary engine](rotary.md), [Dyno](dyno.md)), [EngineSound](engine-sound.md), [GpsPart](gps.md) [AnyMoto](moto.md) (motorcycle fork, swingarm, seat, handlebars and Lean Assist) and [AnyCVT](cvt.md) (belt CVTs); no boost cap, engine ratings and knock, Boost Controller, Boost Gauge and Oil Gauge | AnyHelpers settings and controls |
+| [AnyLaser](laser.md) | 0.1.0 (in development, not in the catalog) | API 0.42.0; single player / host | A Laser Block (beam with hit and distance outputs, off input) and a Laser Sensor (lit, broken and distance outputs) for the data port and microcontroller | None |
 
-All mods are in the published catalog ([`catalog.json`](../../catalog.json)).
+All mods except AnyLaser (in development) are in the published catalog ([`catalog.json`](../../catalog.json)).
 All versions target Anymaker 0.2.0 / Steam build 26328453. On that build every mod needs AnyAPI 0.42.0 or newer, and the experimental-SDK mods ship
 in the AnyHelpers 1.0.2, AnyEngineParts 1.0.2 (now AnyVehicleOverhaul), AnyGraphics 1.0.3 and AnyMap 1.0.1 bundles and AnyCombat 0.1.1. Anymaker 0.1.25 keeps AnyAPI 0.39.2,
 0.1.24 keeps 0.36.0 and 0.1.23 keeps 0.34.1.
