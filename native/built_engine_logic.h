@@ -34,9 +34,11 @@ inline bool is_stock_engine(std::string_view id) {
     return false;
 }
 // The stock id a part id stands for: "built_v_engine" -> "v_engine" (built = true); any other id comes back as is.
+// A Compact engine (compact_engine_logic.h, "compact_" + the stock id) stands for its stock engine too, not built.
 inline std::string_view stock_id(std::string_view id, bool* is_built = nullptr) {
     bool b = id.size() > kPrefixLength && id.compare(0, kPrefixLength, kPrefix) == 0 && is_stock_engine(id.substr(kPrefixLength));
     if (is_built) *is_built = b;
+    if (!b && id.size() > 8 && id.compare(0, 8, "compact_") == 0 && is_stock_engine(id.substr(8))) return id.substr(8);
     return b ? id.substr(kPrefixLength) : id;
 }
 

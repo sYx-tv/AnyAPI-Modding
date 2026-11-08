@@ -44,6 +44,10 @@ Everything below is in the dev build only, for testing. Its lines in the log sta
   On the engine they add about 4 % power and a smooth note.
   Each size also comes **mirrored** (`header_1_1_m` to `header_6_1_m`) for the other bank of a V engine, so both
   collectors point the same way.
+- **Compact engines** (`compact_<stock id>`, for the nine inline, V and boxer engines): the stock engine with its oil,
+  coolant and fuel ports built into the block, so no oil, coolant or fuel manifold has to hang off it. Oil (amber)
+  sits on the bottom, coolant (blue) on the left face, fuel (red) on the right face, on the front cell row. Pipe straight
+  in. Stock manifolds still fit too. Everything else (power, size, sound, boost rating) is the stock engine's.
 - **Intake parts** for naturally aspirated engines: a velocity stack, ITBs and a muscle carb. They go on the air
   manifold.
 - **Exhaust sound**: EngineSound follows the pipes from the engine to its outlets. It plays the exhaust from each tip

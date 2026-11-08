@@ -31,6 +31,8 @@
 #include "rotary_sound.h"
 #include "rotary_tune.h"
 #include "built_engine_logic.h"
+#include "compact_engine_logic.h"
+#include "compact_engine_mesh.h"
 #include <algorithm>
 #include <atomic>
 #include <cstdarg>
@@ -40,6 +42,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace rotary {
@@ -173,6 +176,44 @@ void write_built_engines(const std::wstring& game_dir, const std::wstring& dir, 
     }
     int count = 0;
     std::string json = built::definitions_file(stock, &count, rotary_json);
+    // Compact engines (compact_engine_logic.h) ride in the same file: their mesh tiles first, then their entries.
+    int compact_count = 0, compact_meshes = 0;
+    std::unordered_set<std::string> meshed;
+    std::wstring components = game_dir + L"\\rom\\meshes\\components\\";
+    for (std::string_view o : built::definition_objects(stock)) {
+        std::string_view id;
+        for (const built::Member& m : built::members(o)) if (m.key == "id") id = built::string_value(o, m);
+        if (!built::is_stock_engine(id) || id == "rotary_engine") continue;
+        std::string base = compact::tile_base(compact::stock_mesh_path(o));
+        std::vector<compact::Port> ports = compact::ports_of(o);
+        if (base.empty() || ports.empty()) continue;
+        bool front = false, all = true;
+        for (int x = 0; x < 3; ++x) for (int y = 0; y < 3; ++y) for (int z = 0; z < 4; ++z) {
+            std::string tile = "_" + std::to_string(x) + "_" + std::to_string(y) + "_" + std::to_string(z);
+            std::string stock_tile;
+            if (!read_file(components + std::wstring(base.begin(), base.end()) + std::wstring(tile.begin(), tile.end()) + L".mesh", stock_tile)) continue;
+            std::vector<uint8_t> bytes(stock_tile.begin(), stock_tile.end());
+            if (x == 0 && y == 0 && z == 0) {
+                compactmesh::Mesh m;
+                if (!compactmesh::decode(bytes, m)) { all = false; continue; }
+                for (const compact::Port& p : ports) {
+                    compact::Face f = compact::face_of(p);
+                    compactmesh::pad(m, compactmesh::kPadStyle, f.axis, f.sign, f.u, f.w, f.a, p.kind);
+                }
+                bytes = pdmesh::encode(m, compact::mesh_base(id) + tile);
+                front = true;
+            }
+            std::string name = compact::mesh_base(id) + tile;
+            all = write_file(components + std::wstring(name.begin(), name.end()) + L".mesh", bytes.data(), bytes.size()) && all;
+        }
+        if (front && all) { meshed.insert(std::string(id)); ++compact_meshes; }
+    }
+    std::string compacts = compact::compact_entries(stock, [&](std::string_view id) { return meshed.count(std::string(id)) > 0; }, &compact_count);
+    if (!json.empty() && !compacts.empty()) {
+        size_t close = json.rfind("\n  ]");
+        if (close != std::string::npos) json.insert(close, ",\n" + compacts);
+    }
+    log(compact_count == 9 ? 0 : 1, "%d compact engines written (%d with their port-marked meshes)", compact_count, compact_meshes);
     std::wstring file = dir + L"\\built_engines.json";
     if (json.empty() || !write_file(file, json.data(), json.size())) { log(1, "no built engines this time (%d stock engines found)", count); return; }
     std::string_view first = built::definition_objects(json).front();
