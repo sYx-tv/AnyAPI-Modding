@@ -40,7 +40,6 @@
 #include "exhaust_logic.h"
 #include "exhaust_mesh.h"
 #include "avo_looks_mesh.h"
-#include "compact_engine_logic.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -2223,10 +2222,7 @@ const EngineParts& engine_parts(void* engine, void* vehicle, double now) {
     return p;
 }
 
-#include "compact_engine_runtime.h"
-
 void hk_engine_tick(void* self, void* vehicle, void* scene) {
-    if (self && vehicle) compact_tick(self, vehicle);   // a compact engine's fuel port, before it burns
     double pressure = NAN;
     double intake = self ? engine_intake_c(self, pressure) : NAN;
     t_in_engine = std::isfinite(intake);
@@ -2537,7 +2533,6 @@ void install_hooks() {
             log(1, "turbo tooltip without its %s row (game formatter not found)", !g_units_percentage ? "Condition" : "Temperature");
         install_inline_valves();
         install_oil();
-        install_compact();
         install_intake_air();
         init_wear_path();
         install_sound();
@@ -2551,7 +2546,6 @@ void install_hooks() {
 }
 void remove_hooks() {
     h_engine_tick.remove((void*)&hk_engine_tick);
-    remove_compact();
     h_remap.remove((void*)&hk_remap);
     h_client_tick.remove((void*)&hk_client_tick);
     h_push_mesh_static.remove((void*)&hk_push_mesh_static);

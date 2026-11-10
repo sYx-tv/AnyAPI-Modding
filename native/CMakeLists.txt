@@ -565,9 +565,6 @@ add_test(NAME anymoto_logic COMMAND anymoto_logic_test)
 add_executable(avo_wheels_logic_test tests/avo_wheels_logic_test.cpp)
 target_compile_options(avo_wheels_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME avo_wheels_logic COMMAND avo_wheels_logic_test)
-add_executable(compact_engine_logic_test tests/compact_engine_logic_test.cpp)
-target_compile_options(compact_engine_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
-add_test(NAME compact_engine_logic COMMAND compact_engine_logic_test)
 
 # AnyBattery: the Battery Pack, a stretchable battery placed empty and charged from the electric network, through
 # the experimental SDK.
