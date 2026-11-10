@@ -119,6 +119,13 @@ every millisecond a tile takes over 6 ms is paid back at 10 ms a tick before the
 row), so the world keeps ticking while a town loads. Every 30 s the log shows `Spread town loading: N tile pieces
 loaded (slowest S ms), W ticks given to the world in between`.
 
+## Fast bunker checks
+
+Every loose item asks `server_scene.dungeon_manager.is_pos_inside_dungeon` for its position each time it updates,
+almost always for the same spot. With **Fast bunker checks** on, the answer is remembered per 1/8 m cell for one second
+(and dropped whenever the bunker manager changes). Every 30 s the log shows `Fast bunker checks: N answered from
+memory, M asked the game (P% saved)`.
+
 ## Server load range
 
 `environment_tile_container.tick_loading` loads the world around each player at three detail levels. **Server load
@@ -207,6 +214,7 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Distant container items | On | Parked vehicles over 50 m away update the items in their containers every 8th frame, as below |
 | Host lag holds the server | Relaxed | How far the host may fall behind before the server waits for it, as below |
 | Spread town loading | On | Gives the world normal ticks between heavy tile loads, as below |
+| Fast bunker checks | On | Remembers inside-bunker answers for a second, as below |
 | Server load range | 100% | How far around each player the server loads the world, as below |
 | Fast water checks | On | Answers "inside a boat's volume?" itself for points nowhere near one, as below |
 | Distant loose items | On | Loot on the ground over 100 m from every player updates every 8th server tick, as below |
