@@ -102,6 +102,21 @@ player is updated on one tick in 8. Player positions are the ones the server str
 physics is untouched. Timers on far items (a burning flare, a light's battery) run slower while nobody is near. Every
 30 s the log shows `Distant loose items: N item updates, S skipped (P% saved), F far ones run, X with no player position`.
 
+## Host lag holds the server
+
+The game's server loop (`server_tick`) skips `server.tick` while the host's own client is more than 4 server ticks
+behind, so one hitch on the host (spawning a vehicle builds its model, a town's meshes load) stops the world for every
+player. **Host lag holds the server** raises that limit: Relaxed lets the host fall 15 ticks (0.25 s) behind, Loose 45
+(0.75 s), before the server waits; the host's view catches up afterwards. The log shows `Host hold: the server keeps
+running until the host is N ticks behind`.
+
+## Server load range
+
+`environment_tile_container.tick_loading` loads the world around each player at three detail levels. **Server load
+range** scales the range it asks for (100%, 85% or 70%), so fewer tiles, buildings, creatures and wrecks are loaded
+around each player. Other callers keep the game's range. Driving fast at a lower range can reach ground that is not
+loaded yet. The log shows each range the game asks for once: `Server load range: the game asks for tiles within N m`.
+
 ## Frame hitches
 
 **Hitch logger.** Every frame slower than the hitch threshold (50 ms by default) is written to
@@ -181,6 +196,8 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Fast furniture loot | On | Remembers which loot items do not fit in a wreck's furniture while it fills, as below |
 | Fast navmesh cleanup | On | Answers the game's check of empty navmesh cells around unloading terrain itself, as below |
 | Distant container items | On | Parked vehicles over 50 m away update the items in their containers every 8th frame, as below |
+| Host lag holds the server | Relaxed | How far the host may fall behind before the server waits for it, as below |
+| Server load range | 100% | How far around each player the server loads the world, as below |
 | Fast water checks | On | Answers "inside a boat's volume?" itself for points nowhere near one, as below |
 | Distant loose items | On | Loot on the ground over 100 m from every player updates every 8th server tick, as below |
 | Profiler (for testing) | Off | Samples where the main and server threads spend their time, as below |
