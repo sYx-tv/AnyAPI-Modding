@@ -110,6 +110,15 @@ player. **Host lag holds the server** raises that limit: Relaxed lets the host f
 (0.75 s), before the server waits; the host's view catches up afterwards. The log shows `Host hold: the server keeps
 running until the host is N ticks behind`.
 
+## Spread town loading
+
+`environment_tile_container.tick_loading` integrates one finished tile task per server tick
+(`environment_tile_task.integrate`: physics bodies, then buildings, wrecks and other objects) and retries next tick
+while it returns false. In towns these come back to back at tens of milliseconds each. With **Spread town loading** on,
+every millisecond a tile takes over 6 ms is paid back at 10 ms a tick before the next tile runs (at most 4 ticks in a
+row), so the world keeps ticking while a town loads. Every 30 s the log shows `Spread town loading: N tile pieces
+loaded (slowest S ms), W ticks given to the world in between`.
+
 ## Server load range
 
 `environment_tile_container.tick_loading` loads the world around each player at three detail levels. **Server load
@@ -197,6 +206,7 @@ With [AnyHelpers](helpers.md) installed, **Settings → AnyPerformance** has:
 | Fast navmesh cleanup | On | Answers the game's check of empty navmesh cells around unloading terrain itself, as below |
 | Distant container items | On | Parked vehicles over 50 m away update the items in their containers every 8th frame, as below |
 | Host lag holds the server | Relaxed | How far the host may fall behind before the server waits for it, as below |
+| Spread town loading | On | Gives the world normal ticks between heavy tile loads, as below |
 | Server load range | 100% | How far around each player the server loads the world, as below |
 | Fast water checks | On | Answers "inside a boat's volume?" itself for points nowhere near one, as below |
 | Distant loose items | On | Loot on the ground over 100 m from every player updates every 8th server tick, as below |

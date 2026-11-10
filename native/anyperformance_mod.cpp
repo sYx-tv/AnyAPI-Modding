@@ -44,6 +44,8 @@
 // Host lag holds the server (Relaxed by default): lets the server keep ticking through short host hitches (see
 // apply_host_hold). Server load range (100% by default): scales the server's tile load range around players.
 //
+// Spread town loading (on by default): paces heavy tile integrates with a time debt (see kTileBudgetMs).
+//
 // Autosave waits (up to a minute) while wrecks are still waiting for their loot, so it does not fill them all at once.
 //
 // Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot,
@@ -89,7 +91,7 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[14], g_settings_revision = ~0ull;
+uint64_t g_tokens[15], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
@@ -459,6 +461,20 @@ void note_load_range(double r) {
         100.0 * kLoadScales[g_load_scale.load()], r * kLoadScales[g_load_scale.load()]);
 }
 
+// Spread town loading: environment_tile_container.tick_loading integrates one finished tile task per server tick
+// (environment_tile_task.integrate: the tile's physics bodies, then its buildings, wrecks and other objects) and retries
+// on the next tick while integrate returns false. In towns each tile can take tens of milliseconds and they come one
+// after another, so the server falls below 60 ticks a second for as long as the town loads. Every millisecond a tile
+// takes over kTileBudgetMs is paid back first: integrate answers "not yet" without running, kTileRepayMs a tick, for at
+// most kTileMaxWait ticks in a row, so the world gets ticks in between.
+constexpr double kTileBudgetMs = 6, kTileRepayMs = 10, kTileDebtMax = 80;
+constexpr int kTileMaxWait = 4;
+std::atomic<bool> g_spread_tiles{true};
+double g_tile_debt;     // server thread
+int g_tile_waits;       // server thread, ticks waited in a row
+std::atomic<long long> g_tiles_run{0}, g_tiles_waited{0};
+std::atomic<double> g_tile_ms_max{0};
+
 // ------------------------------------------------------------------ spread wreck loot (server thread)
 // When a terrain tile goes into the world, server_scene.environment_tile_task.integrate loops over every vehicle, calls
 // vehicle.generate_loot (required, floor and furniture items) for each wreck on that tile that has none yet, then marks
@@ -662,6 +678,13 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
             g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
         }
     [[maybe_unused]] void* outer_task = g_tile_task;
+    if constexpr (I == kTileStep)
+        if (g_spread_tiles && a && g_tile_depth == 0 && g_tile_debt > 0 && g_tile_waits < kTileMaxWait) {
+            g_tile_debt = std::max(0.0, g_tile_debt - kTileRepayMs);
+            ++g_tile_waits; ++g_tiles_waited;
+            *static_cast<bool*>(a) = false;   // "not integrated yet": tick_loading keeps the task and asks next tick
+            return;
+        }
     if constexpr (I == kTileStep) { ++g_tile_depth; g_tile_task = b; }   // (bool) integrate: a is the result
     static thread_local int depth = 0;   // a step that calls itself (item ticks walk their children) counts once
     double start = now_ms();
@@ -669,7 +692,14 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
     original(a, b, c, d, e, f, g, h, i, j);
     --depth;
     double ms = now_ms() - start;
-    if constexpr (I == kTileStep) { --g_tile_depth; g_tile_task = outer_task; }
+    if constexpr (I == kTileStep) {
+        --g_tile_depth; g_tile_task = outer_task;
+        if (g_tile_depth == 0) {
+            g_tile_waits = 0; ++g_tiles_run;
+            g_tile_debt = std::min(kTileDebtMax, g_tile_debt + std::max(0.0, ms - kTileBudgetMs));
+            if (ms > g_tile_ms_max.load()) g_tile_ms_max = ms;
+        }
+    }
     if constexpr (I == kFurnitureStep) { if (--g_furniture_depth == 0) g_place_fails.clear(); }
     if constexpr (I == kPlaceStep)
         if (place_watched) {
@@ -814,6 +844,7 @@ void read_settings() {
     if (g_tokens[11] && settings->get(g_tokens[11], &v)) g_floor_lod = v.number != 0;
     if (g_tokens[12] && settings->get(g_tokens[12], &v) && std::isfinite(v.number)) g_host_hold = std::clamp(int(v.number), 0, 2);
     if (g_tokens[13] && settings->get(g_tokens[13], &v) && std::isfinite(v.number)) g_load_scale = std::clamp(int(v.number), 0, 2);
+    if (g_tokens[14] && settings->get(g_tokens[14], &v)) g_spread_tiles = v.number != 0;
     if (g_tokens[9] && settings->get(g_tokens[9], &v) && std::isfinite(v.number)) g_loot_budget_ms = std::clamp(v.number, 2.0, 30.0);
 }
 
@@ -970,6 +1001,11 @@ void summary(double now) {
                   none = g_floor_no_peer.exchange(0), all = run + skipped + far_run;
         log(0, "Distant loose items: %lld item updates, %lld skipped (%.0f%% saved), %lld far ones run, %lld with no player position",
             all, skipped, all ? 100.0 * double(skipped) / double(all) : 0.0, far_run, none);
+    }
+    if (g_tiles_run + g_tiles_waited) {
+        long long run = g_tiles_run.exchange(0), waited = g_tiles_waited.exchange(0);
+        log(0, "Spread town loading: %lld tile pieces loaded (slowest %.1f ms), %lld ticks given to the world in between",
+            run, g_tile_ms_max.exchange(0), waited);
     }
     if (g_water_answered + g_water_run) {
         long long answered = g_water_answered.exchange(0), run = g_water_run.exchange(0), checked = g_water_checked.exchange(0);
@@ -1420,6 +1456,12 @@ void register_settings() {
     d.description = "How far around each player the server loads the world (buildings, creatures, wrecks). Lower is much lighter "
                     "on the server in towns, but driving fast can outrun the ground being ready. Host and solo only.";
     g_tokens[13] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "spread_tiles"; d.label = "Spread town loading"; d.kind = ANY_SETTING_BOOL; d.order = 14; d.default_number = 1;
+    d.description = "When a heavy piece of the world (a town block) loads, the server gets a few normal ticks before the next "
+                    "one, instead of loading them back to back. Towns load a little later, without the long slow-down. "
+                    "Host and solo only.";
+    g_tokens[14] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace
