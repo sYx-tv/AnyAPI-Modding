@@ -41,6 +41,13 @@
 // Fix 8, distant loose items (on by default): loot on the ground far from every player updates one tick in 8 (see
 // floor_item_far).
 //
+// Host lag holds the server (Relaxed by default): lets the server keep ticking through short host hitches (see
+// apply_host_hold). Server load range (100% by default): scales the server's tile load range around players.
+//
+// Spread town loading (on by default): paces heavy tile integrates with a time debt (see kTileBudgetMs).
+//
+// Fast bunker checks (on by default): caches is_pos_inside_dungeon per 1/8 m cell for a second.
+//
 // Autosave waits (up to a minute) while wrecks are still waiting for their loot, so it does not fill them all at once.
 //
 // Settings (AnyHelpers, optional): sim smoothing, precise timer, hitch threshold, FPS overlay, spread wreck loot,
@@ -86,7 +93,7 @@ AnyModHostV1 host;
 const AnyGpuDrawV1* gpu;
 const AnyUiStateV1* ui;
 const AnyHelpersSettingsV1* settings;
-uint64_t g_tokens[12], g_settings_revision = ~0ull;
+uint64_t g_tokens[16], g_settings_revision = ~0ull;
 std::atomic<bool> g_stop{false};
 
 // Settings (defaults when AnyHelpers is absent).
@@ -207,6 +214,10 @@ constexpr StepSpec kSteps[] = {
     {&bind::srv_item_ticks, "item ticks", true},
     {&bind::srv_dungeon_check, "inside-bunker checks", true},
     {&bind::srv_buoyancy, "water volume checks", true},
+    {&bind::vehicle_group_spawn, "vehicle spawn (creation)", true},
+    {&bind::vehicle_from_data, "vehicle built from save data", true},
+    {&bind::tile_objects_integrate, "tile objects into the world", true},
+    {&bind::vehicle_create, "vehicle physics created", true},
     {&bind::srv_floor_item, "loose items", true},
     {&bind::srv_floor_stream, "loose item streaming", true},
     {&bind::srv_actors_post, "creatures and players (physics)", true},
@@ -250,11 +261,13 @@ constexpr int kTileStep = step_index(&bind::tile_task_integrate_server), kLootSt
               kSaveStep = step_index(&bind::save_game_inner), kNavDestroyStep = step_index(&bind::nav_tile_destroy),
               kFurnitureStep = step_index(&bind::loot_furniture), kPlaceStep = step_index(&bind::loot_position),
               kStoreStep = step_index(&bind::item_store), kWaterStep = step_index(&bind::srv_buoyancy),
+              kTilesInRangeStep = step_index(&bind::tiles_in_range),
+              kDungeonStep = step_index(&bind::srv_dungeon_check),
               kFloorItemStep = step_index(&bind::srv_floor_item),
               kFloorStreamStep = step_index(&bind::srv_floor_stream);
 static_assert(kTileStep >= 0 && kLootStep >= 0 && kSaveStep >= 0, "the wreck loot queue needs these steps");
 static_assert(kNavDestroyStep >= 0, "the navmesh cleanup needs its step");
-static_assert(kWaterStep >= 0, "the water checks need their step");
+static_assert(kWaterStep >= 0 && kTilesInRangeStep >= 0 && kDungeonStep >= 0, "the water checks, load range and bunker cache need their steps");
 static_assert(kFloorItemStep >= 0 && kFloorStreamStep >= 0, "distant loose items need their steps");
 static_assert(kFurnitureStep >= 0 && kPlaceStep >= 0 && kStoreStep >= 0, "the furniture placement cache needs these steps");
 constexpr bool is_tile_save(int i) {
@@ -435,6 +448,55 @@ bool floor_item_far(const uint8_t* item) {
     return any;
 }
 
+// Server load range: environment_tile_container.tick_loading asks get_tiles_in_range for the tiles around each
+// player at three detail levels (g_tile_load_radius_level_1..3; the game's debug menu has a "Server Dynamic Load
+// Range" slider for them). Inside tick_loading the mod scales that range, so fewer tiles (town buildings, creatures,
+// wrecks) are loaded around each player. Other callers (is_loaded_local and the client) keep the game's range.
+constexpr double kLoadScales[] = {1.0, 0.85, 0.7};
+std::atomic<int> g_load_scale{0};
+int g_tile_loading_depth;   // server thread, inside tick_loading
+double g_load_ranges_seen[8]; int g_load_ranges_count;   // server thread, for the log
+void note_load_range(double r) {
+    for (int i = 0; i < g_load_ranges_count; ++i) if (g_load_ranges_seen[i] == r) return;
+    if (g_load_ranges_count >= 8) return;
+    g_load_ranges_seen[g_load_ranges_count++] = r;
+    log(0, "Server load range: the game asks for tiles within %.0f m (now %.0f%%: %.0f m)", r,
+        100.0 * kLoadScales[g_load_scale.load()], r * kLoadScales[g_load_scale.load()]);
+}
+
+// Spread town loading: environment_tile_container.tick_loading integrates one finished tile task per server tick
+// (environment_tile_task.integrate: the tile's physics bodies, then its buildings, wrecks and other objects) and retries
+// on the next tick while integrate returns false. In towns each tile can take tens of milliseconds and they come one
+// after another, so the server falls below 60 ticks a second for as long as the town loads. Every millisecond a tile
+// takes over kTileBudgetMs is paid back first: integrate answers "not yet" without running, kTileRepayMs a tick, for at
+// most kTileMaxWait ticks in a row, so the world gets ticks in between.
+constexpr double kTileBudgetMs = 6, kTileRepayMs = 10, kTileDebtMax = 80;
+constexpr int kTileMaxWait = 4;
+std::atomic<bool> g_spread_tiles{true};
+double g_tile_debt;     // server thread
+int g_tile_waits;       // server thread, ticks waited in a row
+std::atomic<long long> g_tiles_run{0}, g_tiles_waited{0};
+std::atomic<double> g_tile_ms_max{0};
+
+// Bunker check cache: every loose item asks server_scene.dungeon_manager.is_pos_inside_dungeon for its position each
+// tick it runs (item_floor.tick), almost always for the same spot. The mod remembers the answer per 1/8 m cell for a
+// second (bunkers load and unload with terrain, so answers are dropped every second and whenever the manager changes).
+std::atomic<bool> g_bunker_cache_on{true};
+struct BunkerCache {
+    const void* manager = nullptr; uint32_t tick = 0;
+    std::unordered_map<uint64_t, bool> cells;   // server thread only
+} g_bunker;
+std::atomic<long long> g_bunker_hits{0}, g_bunker_misses{0};
+bool bunker_key(const double* p, uint64_t& key) {
+    int64_t q[3];
+    for (int i = 0; i < 3; ++i) {
+        if (!std::isfinite(p[i]) || std::fabs(p[i]) > 1e6) return false;
+        q[i] = int64_t(std::floor(p[i] * 8.0)) & 0x1fffff;   // 21 bits each
+    }
+    key = uint64_t(q[0]) << 42 | uint64_t(q[1]) << 21 | uint64_t(q[2]);
+    return true;
+}
+
 // ------------------------------------------------------------------ spread wreck loot (server thread)
 // When a terrain tile goes into the world, server_scene.environment_tile_task.integrate loops over every vehicle, calls
 // vehicle.generate_loot (required, floor and furniture items) for each wreck on that tile that has none yet, then marks
@@ -609,6 +671,30 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
             else if ((g_server_tick_no + uint32_t(reinterpret_cast<uintptr_t>(a) >> 6)) % kFloorEvery) { ++g_floor_skipped; return; }
             else ++g_floor_far_run;
         }
+    // () get_tiles_in_range (container, const vec3 world_position, const f64 range, vector<vec3_s32>, out_min, out_max)
+    [[maybe_unused]] double scaled_range;
+    if constexpr (I == kTilesInRangeStep)
+        if (g_tile_loading_depth > 0 && c) {
+            double r; std::memcpy(&r, c, 8);
+            if (std::isfinite(r) && r > 0) {
+                note_load_range(r);
+                if (int k = g_load_scale.load()) { scaled_range = r * kLoadScales[k]; c = &scaled_range; }
+            }
+        }
+    // (bool) is_pos_inside_dungeon (const dungeon_manager, const server_scene, const vec3 pos)
+    [[maybe_unused]] uint64_t bunker_cell = 0;
+    [[maybe_unused]] bool bunker_watched = false;
+    if constexpr (I == kDungeonStep)
+        if (g_bunker_cache_on && a && b && d) {
+            if (g_bunker.manager != b || g_server_tick_no - g_bunker.tick >= 60 || g_bunker.cells.size() > 100000) {
+                g_bunker.cells.clear(); g_bunker.manager = b; g_bunker.tick = g_server_tick_no;
+            }
+            if (bunker_key(static_cast<const double*>(d), bunker_cell)) {
+                auto it = g_bunker.cells.find(bunker_cell);
+                if (it != g_bunker.cells.end()) { *static_cast<bool*>(a) = it->second; ++g_bunker_hits; return; }
+                bunker_watched = true;
+            }
+        }
     if constexpr (I == kNavDestroyStep)   // (bool) _try_destroy_navigation_tile (container, const s32 x, const s32 y, scene)
         if (g_fast_navmesh && a && b && c && d && anymaker::readable(c, 4) && anymaker::readable(d, 4)) {
             bool used = true;
@@ -628,6 +714,13 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
             g_loot_pending.store(int(g_loot_queue.size() - g_loot_next), std::memory_order_relaxed);
         }
     [[maybe_unused]] void* outer_task = g_tile_task;
+    if constexpr (I == kTileStep)
+        if (g_spread_tiles && a && g_tile_depth == 0 && g_tile_debt > 0 && g_tile_waits < kTileMaxWait) {
+            g_tile_debt = std::max(0.0, g_tile_debt - kTileRepayMs);
+            ++g_tile_waits; ++g_tiles_waited;
+            *static_cast<bool*>(a) = false;   // "not integrated yet": tick_loading keeps the task and asks next tick
+            return;
+        }
     if constexpr (I == kTileStep) { ++g_tile_depth; g_tile_task = b; }   // (bool) integrate: a is the result
     static thread_local int depth = 0;   // a step that calls itself (item ticks walk their children) counts once
     double start = now_ms();
@@ -635,13 +728,22 @@ template <int I> void hk_step(void* a, void* b, void* c, void* d, void* e, void*
     original(a, b, c, d, e, f, g, h, i, j);
     --depth;
     double ms = now_ms() - start;
-    if constexpr (I == kTileStep) { --g_tile_depth; g_tile_task = outer_task; }
+    if constexpr (I == kTileStep) {
+        --g_tile_depth; g_tile_task = outer_task;
+        if (g_tile_depth == 0) {
+            g_tile_waits = 0; ++g_tiles_run;
+            g_tile_debt = std::min(kTileDebtMax, g_tile_debt + std::max(0.0, ms - kTileBudgetMs));
+            if (ms > g_tile_ms_max.load()) g_tile_ms_max = ms;
+        }
+    }
     if constexpr (I == kFurnitureStep) { if (--g_furniture_depth == 0) g_place_fails.clear(); }
     if constexpr (I == kPlaceStep)
         if (place_watched) {
             ++g_place_misses;
             if (!*static_cast<const bool*>(a) && g_place_fails.size() < 4096) g_place_fails.push_back(place);
         }
+    if constexpr (I == kDungeonStep)
+        if (bunker_watched) { g_bunker.cells[bunker_cell] = *static_cast<const bool*>(a); ++g_bunker_misses; }
     if (depth > 0) return;
     if constexpr (I == kLootStep) g_loot_ms_tick += ms;
     (kSteps[I].server ? g_tick.steps : g_parts.steps).add(I, ms);
@@ -660,6 +762,7 @@ std::atomic<uint8_t*> g_client_tick_code{nullptr};  // client.tick entry, found 
 int g_smoothing_applied = 0;             // main thread
 bool g_smoothing_broken;
 
+
 bool bytes_match(const uint8_t* p, const char* hex) {
     for (; *hex; ++p) {
         while (*hex == ' ') ++hex;
@@ -675,6 +778,38 @@ double* literal_at(const Literal& l) {
     auto* lit = reinterpret_cast<double*>(code + l.offset);
     return anymaker::readable(lit, 8) ? lit : nullptr;
 }
+// Host hold: server_tick (the server thread's loop) skips server.tick while the host's own client is more than 4
+// server versions behind (client scene version at client+0xfb8 against server_scene.m_version), so a host frame hitch
+// (a spawn building its model, a town's meshes) stops the world for every player. The 4 is an s32 in server_tick's
+// constant table, read by one instruction; the setting raises it. Main thread writes, server thread reads (aligned).
+struct HoldLiteral { uint32_t user, offset; const char* user_bytes; };
+constexpr HoldLiteral kHostHold{0x1a3, 0x430, "3b 05 87 02 00 00"};   // cmp eax, [rip+0x287]; setg al
+constexpr int32_t kHostHoldTicks[] = {4, 15, 45};   // game, relaxed (0.25 s), loose (0.75 s)
+std::atomic<int> g_host_hold{1};
+std::atomic<uint8_t*> g_server_loop_code{nullptr};
+int g_host_hold_applied = 0;   // main thread
+bool g_host_hold_broken;
+void apply_host_hold() {
+    int want = g_host_hold.load();
+    if (want == g_host_hold_applied || g_host_hold_broken) return;
+    uint8_t* code = g_server_loop_code.load();
+    if (!code) return;   // not found yet
+    auto* lit = reinterpret_cast<int32_t*>(code + kHostHold.offset);
+    if (!anymaker::readable(code + kHostHold.user, 8) || !bytes_match(code + kHostHold.user, kHostHold.user_bytes) ||
+        !anymaker::readable(lit, 4) || *lit != kHostHoldTicks[g_host_hold_applied]) {
+        g_host_hold_broken = true; log(1, "Host hold: server_tick does not look as expected; left unchanged"); return;
+    }
+    DWORD old;
+    if (!VirtualProtect(lit, 4, PAGE_EXECUTE_READWRITE, &old)) {
+        g_host_hold_broken = true; log(1, "Host hold: could not write the game's code; left unchanged"); return;
+    }
+    reinterpret_cast<std::atomic<int32_t>*>(lit)->store(kHostHoldTicks[want]);
+    VirtualProtect(lit, 4, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), lit, 4);
+    g_host_hold_applied = want;
+    log(0, "Host hold: the server keeps running until the host is %d ticks behind%s", kHostHoldTicks[want], want ? "" : " (game)");
+}
+
 bool write_double(double* at, double v) {
     DWORD old;
     if (!VirtualProtect(at, 8, PAGE_EXECUTE_READWRITE, &old)) return false;
@@ -745,6 +880,10 @@ void read_settings() {
     if (g_tokens[8] && settings->get(g_tokens[8], &v)) g_place_cache_on = v.number != 0;
     if (g_tokens[10] && settings->get(g_tokens[10], &v)) g_fast_water = v.number != 0;
     if (g_tokens[11] && settings->get(g_tokens[11], &v)) g_floor_lod = v.number != 0;
+    if (g_tokens[12] && settings->get(g_tokens[12], &v) && std::isfinite(v.number)) g_host_hold = std::clamp(int(v.number), 0, 2);
+    if (g_tokens[13] && settings->get(g_tokens[13], &v) && std::isfinite(v.number)) g_load_scale = std::clamp(int(v.number), 0, 2);
+    if (g_tokens[14] && settings->get(g_tokens[14], &v)) g_spread_tiles = v.number != 0;
+    if (g_tokens[15] && settings->get(g_tokens[15], &v)) g_bunker_cache_on = v.number != 0;
     if (g_tokens[9] && settings->get(g_tokens[9], &v) && std::isfinite(v.number)) g_loot_budget_ms = std::clamp(v.number, 2.0, 30.0);
 }
 
@@ -902,6 +1041,16 @@ void summary(double now) {
         log(0, "Distant loose items: %lld item updates, %lld skipped (%.0f%% saved), %lld far ones run, %lld with no player position",
             all, skipped, all ? 100.0 * double(skipped) / double(all) : 0.0, far_run, none);
     }
+    if (g_bunker_hits + g_bunker_misses) {
+        long long hits = g_bunker_hits.exchange(0), misses = g_bunker_misses.exchange(0);
+        log(0, "Fast bunker checks: %lld answered from memory, %lld asked the game (%.0f%% saved)", hits, misses,
+            100.0 * double(hits) / double(hits + misses));
+    }
+    if (g_tiles_run + g_tiles_waited) {
+        long long run = g_tiles_run.exchange(0), waited = g_tiles_waited.exchange(0);
+        log(0, "Spread town loading: %lld tile pieces loaded (slowest %.1f ms), %lld ticks given to the world in between",
+            run, g_tile_ms_max.exchange(0), waited);
+    }
     if (g_water_answered + g_water_run) {
         long long answered = g_water_answered.exchange(0), run = g_water_run.exchange(0), checked = g_water_checked.exchange(0);
         log(0, "Fast water checks: %lld answered by the mod (%lld checked against the game, all matched), %lld left to the game",
@@ -1036,6 +1185,7 @@ void hk_client_tick(void* client, const double* dt, const bool* loading, void* f
         read_settings();
         apply_timer();
         apply_smoothing();
+        apply_host_hold();
         if (g_frame_start >= 0) frame_done(start - g_frame_start, g_parts, g_parts_loading, start);
         if (g_window_start < 0) g_window_start = start;
         else if (start - g_window_start >= kSummarySeconds * 1000) summary(start);
@@ -1106,6 +1256,8 @@ void hk_server_tick(void* server) {
     if (!on_server_thread()) { call; return; } \
     double start = now_ms(); call; g_tick.field += now_ms() - start;
 void hk_server_tiles(void* container, void* scene, const void* positions, const int32_t* n) {
+    ++g_tile_loading_depth;
+    struct Leave { ~Leave() { --g_tile_loading_depth; } } leave;
     TIMED(tiles, reinterpret_cast<server_tiles_t>(h_server_tiles.original)(container, scene, positions, n));
 }
 void hk_server_loading(void* scene, void* server) { TIMED(loading, reinterpret_cast<two_t>(h_server_loading.original)(scene, server)); }
@@ -1212,6 +1364,7 @@ void install_hooks() {
         if (attempt) Sleep(1000);
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; AnyPerformance stays off"); return; }
         if (!g_client_tick_code) g_client_tick_code = static_cast<uint8_t*>(function(bind::client_tick));   // before its hook
+        if (!g_server_loop_code) g_server_loop_code = static_cast<uint8_t*>(function(bind::server_tick_loop));
         bool all = true;
         if (!g_vehicle_by_id) g_vehicle_by_id = reinterpret_cast<vehicle_by_id_t>(function(bind::vehicle_by_id));
         if (!g_vehicle_by_id) all = false;   // until found, wreck loot runs as in the game
@@ -1332,6 +1485,32 @@ void register_settings() {
     d.description = "Loot lying on the ground more than 100 m from every player updates 8 times less often. Big saving in towns. "
                     "Flares and lights left far away burn a little longer. Host and solo only.";
     g_tokens[11] = settings->register_setting(&d);
+    static const char* const kHold[] = {"Game (4 ticks)", "Relaxed (0.25 s)", "Loose (0.75 s)"};
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "host_hold"; d.label = "Host lag holds the server"; d.kind = ANY_SETTING_CHOICE; d.order = 12; d.default_number = 1;
+    d.choices = kHold; d.choice_count = 3; d.maximum = 2;
+    d.description = "The game pauses the whole server whenever the host's own game falls 4 ticks behind, so one hitch on the "
+                    "host (spawning a vehicle, a town loading) freezes everyone. Relaxed and Loose let the server keep going "
+                    "through short host hitches; the host's view catches up after. Host only.";
+    g_tokens[12] = settings->register_setting(&d);
+    static const char* const kRange[] = {"100% (game)", "85%", "70%"};
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "server_load_range"; d.label = "Server load range"; d.kind = ANY_SETTING_CHOICE; d.order = 13; d.default_number = 0;
+    d.choices = kRange; d.choice_count = 3; d.maximum = 2;
+    d.description = "How far around each player the server loads the world (buildings, creatures, wrecks). Lower is much lighter "
+                    "on the server in towns, but driving fast can outrun the ground being ready. Host and solo only.";
+    g_tokens[13] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "spread_tiles"; d.label = "Spread town loading"; d.kind = ANY_SETTING_BOOL; d.order = 14; d.default_number = 1;
+    d.description = "When a heavy piece of the world (a town block) loads, the server gets a few normal ticks before the next "
+                    "one, instead of loading them back to back. Towns load a little later, without the long slow-down. "
+                    "Host and solo only.";
+    g_tokens[14] = settings->register_setting(&d);
+    d = AnyModSettingV1{}; d.mod_id = kModId; d.mod_name = "AnyPerformance";
+    d.setting_id = "bunker_cache"; d.label = "Fast bunker checks"; d.kind = ANY_SETTING_BOOL; d.order = 15; d.default_number = 1;
+    d.description = "Remembers for a second whether a spot is inside a bunker, instead of every loose item asking again each "
+                    "tick. Host and solo only.";
+    g_tokens[15] = settings->register_setting(&d);
     read_settings();
 }
 }  // namespace
