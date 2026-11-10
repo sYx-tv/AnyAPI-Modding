@@ -10,7 +10,7 @@ were at the time. For what is current, see
 
 | Published | Release | Notes | Contents | Evidence |
 | --- | --- | --- | --- | --- |
-| 2026-11-03 | [mods-2026.11.03](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.11.03) | [AnyMoto 0.0.4](anymoto-0.0.4.md) | Crash fix: looking at or sitting on the Motorcycle Seat crashed the game on 0.2.0 | |
+| 2026-11-07 | [mods-2026.11.07](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.11.07) | [AnyVehicleOverhaul 2.0.0](anyvehicleoverhaul-2.0.0.md) | New AnyVehicleOverhaul 2.0.0: AnyEngineParts, AnyMoto, AnyCVT, EngineSound and GpsPart merged into one mod (includes the AnyMoto 0.0.4 seat crash fix), plus ECU, exhaust parts, headers and new turbos | |
 | 2026-10-31 | [mods-2026.10.31](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.31) | [AnyEngineParts 1.0.6](anyengineparts-1.0.6.md) | Crash fix: removing turbos, superchargers or rotaries, or engine sounds stopping, crashed the game on 0.2.0 (AnyEngineParts 1.0.6, EngineSound 0.4.3) | |
 | 2026-10-31 | [v0.42.1](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/v0.42.1) | [0.42.1](release-0.42.1.md) | Port to Anymaker 0.2.0 (Steam build 26328453): AnyAPI 0.42.1 and every mod rebuilt; AMD Volumetric fog green-screen fix; AnyHelpers 1.1.3 carries MCCode 0.3.2 (Parts tab clicks add part nodes) and drops AnyInventory (the game has its own item browser); AnyEngineParts 1.0.5 with EngineSound 0.4.2 (save lookup retries) | |
 | 2026-10-29 | [mods-2026.10.29](https://github.com/sYx-tv/AnyAPI-Modding/releases/tag/mods-2026.10.29) | [AnyCVT 0.0.1](anycvt-0.0.1.md) | New AnyCVT 0.0.1: Small, Medium and Large belt CVTs (stock gearbox looks, R/N/D, ratio held to a target RPM, centrifugal clutch, current_gear output) | |
