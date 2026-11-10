@@ -16,7 +16,7 @@ Nothing about the parts changed in the merge: same parts, same settings, same sa
 | GpsPart (`gpspart`) | The GPS Sensor part | [GpsPart](gps.md) |
 | AnyMoto (`anymoto`) | Motorcycle fork, swingarm, seat, handlebars and Lean Assist for the stock Motorcycle Wheel | [AnyMoto](moto.md) |
 | AnyCVT (`anycvt`) | Belt CVTs for the small, medium and large engine (R/N/D on a mechanical shifter; none of them needs air) | [AnyCVT](cvt.md) |
-| AnyWheels (`avowheels`, dev build) | Race wheels, drag slicks and drag front runners that fit the stock wheel and tyre mount parts | below |
+| AnyWheels (`avowheels`, 2.1.0) | Race wheels, drag slicks and drag front runners that fit the stock wheel and tyre mount parts | below |
 
 Each piece has an **Enabled** row at the top of its group in Mod Settings (AnyHelpers); switching one off applies the
 next time you start the game. Each piece also starts on its own: if one cannot find the game functions it needs, the
