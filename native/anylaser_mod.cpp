@@ -43,7 +43,7 @@
 namespace anylaser {
 namespace {
 constexpr const char* kModId = "anylaser";
-constexpr int kLook = 0;   // the look Nate picks (anylaser_logic.h kLooks, anylaser_mesh.h build_part)
+constexpr int kLook = 0;   // Nate picked look 1, the black tripwire with the thin red beam (2026-11-10). anylaser_logic.h kLooks, anylaser_mesh.h build_part
 
 AnyModHostV1 host;
 std::atomic<bool> g_ready{false}, g_stop{false};

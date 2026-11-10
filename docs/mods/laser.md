@@ -8,7 +8,9 @@ AnyLaser adds two parts, the **Laser Block** and the **Laser Sensor**. The Laser
 its lens. The Laser Sensor tells you when a beam is on it. Both plug into data ports, data links and
 microcontrollers, so you can build tripwires, door triggers, range finders and alarms.
 
-Both parts are one cell (0.08 m) and have data ports on every face except the lens.
+Both parts are one cell (0.08 m) and have data ports on every face except the lens. They are small black boxes
+on a grey base plate: the Laser Block has a red lens and a red status light on top, the Laser Sensor a red ring
+around a dark target. The beam is a thin red line with a soft glow and a red spot where it lands.
 
 ## Getting them
 
