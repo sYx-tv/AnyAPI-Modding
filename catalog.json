@@ -379,14 +379,14 @@
     {
       "Id": "anyvehicleoverhaul",
       "Name": "AnyVehicleOverhaul",
-      "Version": "2.0.0",
-      "Revision": 1,
+      "Version": "2.1.0",
+      "Revision": 2,
       "MinimumApi": 49,
-      "Description": "Every vehicle part mod in one: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine (AnyEngineParts); EngineSound's generated engine sounds; the GPS Sensor part; AnyMoto's motorcycle fork, swingarm, seat, handlebars and Lean Assist; and AnyCVT's belt CVTs for the small, medium and large engine. Replaces AnyEngineParts, AnyMoto and AnyCVT; saves, settings and keybinds carry over. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only.",
-      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.11.07/AnyVehicleOverhaul-2.0.0.zip",
-      "Sha256": "667623740dfbc45866ded3d0a98b2bccfd056b08f43b50aeae32b9857ace2604",
+      "Description": "Every vehicle part mod in one: turbochargers and belt-driven superchargers with blow-off valves, wastegate, antilag and launch control, oil ports, air filters, intercoolers, a Dyno sensor and a 1-4 rotor rotary engine (AnyEngineParts); EngineSound's generated engine sounds; the GPS Sensor part; AnyMoto's motorcycle fork, swingarm, seat, handlebars and Lean Assist; AnyCVT's belt CVTs for the small, medium and large engine; and race wheels, drag slicks and drag front runners with more grip. Replaces AnyEngineParts, AnyMoto and AnyCVT; saves, settings and keybinds carry over. Each piece can be switched off in Mod Settings. Anymaker 0.2.0 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.11.10/AnyVehicleOverhaul-2.1.0.zip",
+      "Sha256": "3dfedc86c972ebe23015bc47b23f26d92e3d36eb47ad128eb7d63eaf42e1f7a7",
       "FileHashes": {
-        "AnyAPI and Modding/mods/AnyVehicleOverhaul.dll": "5fdcc9e33f3f412b957b621c442417044f96d25b10557e108128e73c11987167"
+        "AnyAPI and Modding/mods/AnyVehicleOverhaul.dll": "4176af821e52902b804808f406c3ab080ce4af74895d1f4adad77de115640b03"
       },
       "GameBuilds": [
         {
@@ -403,6 +403,27 @@
         "enginesound": "AnyAPI and Modding/mods/EngineSound.dll",
         "gpspart": "AnyAPI and Modding/mods/GpsPart.dll"
       }
+    },
+    {
+      "Id": "anylaser",
+      "Name": "AnyLaser",
+      "Version": "0.1.0",
+      "Revision": 1,
+      "MinimumApi": 49,
+      "Description": "Two new parts for the data port and microcontroller: the Laser Block shoots a beam up to 100 m and outputs hit and distance (input off switches it off), and the Laser Sensor outputs lit, broken and distance when a beam lands on its lens. Players block the beam. Sensor container in Sandbox and Creative, tier 3 loot in Survival. Single player and host; every player needs the mod. Anymaker 0.2.0 only.",
+      "Url": "https://github.com/sYx-tv/AnyAPI-Modding/releases/download/mods-2026.11.10/AnyLaser-0.1.0.zip",
+      "Sha256": "23d1931648f90b92f610394b5674fd577629068636493a308bbe9cceb6566c6d",
+      "FileHashes": {
+        "AnyAPI and Modding/mods/AnyLaser.dll": "79787875cd789f0f2c50a1a2e1cf43a94b2c8b7d778b7667b1009caa62145714"
+      },
+      "GameBuilds": [
+        {
+          "Version": "0.2.0",
+          "SteamBuild": 26328453,
+          "ExeSha256": "e0a900e00e56409dc73a63e65927660af517ab2068d467f0f4bcd285e66282bb",
+          "GclSha256": "bbf8f28a93817c688d128577d9866dc719ec2471df12c56b8b8ae04659300a90"
+        }
+      ]
     }
   ]
 }
