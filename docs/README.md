@@ -14,7 +14,7 @@
 [AnyHelpers](mods/helpers.md) · [AnyInventory](mods/inventory.md) ·
 [AnyStorage](mods/storage.md) · [AnyMap](mods/map.md) ([rendering](mods/map-rendering.md)) ·
 [AnyGraphics](mods/graphics.md) · [AnyClock](mods/clock.md) ·
-[AnyQuickWheel](mods/quick-wheel.md) · [AnyBalance](mods/balance.md) · [EngineSound](mods/engine-sound.md) · [AnyMirror](mods/mirror.md) · [GpsPart](mods/gps.md) · [ThirdPerson](mods/third-person.md) · [MCCode](mods/mccode.md) · [CustomGame](mods/custom-game.md) · [AnyVehicleOverhaul](mods/vehicle-overhaul.md) ([AnyMoto](mods/moto.md), [turbos](mods/turbo.md), [rotary](mods/rotary.md), [dyno](mods/dyno.md)) ·
+[AnyQuickWheel](mods/quick-wheel.md) · [AnyBalance](mods/balance.md) · [EngineSound](mods/engine-sound.md) · [AnyMirror](mods/mirror.md) · [GpsPart](mods/gps.md) · [AnyLaser](mods/laser.md) · [ThirdPerson](mods/third-person.md) · [MCCode](mods/mccode.md) · [CustomGame](mods/custom-game.md) · [AnyVehicleOverhaul](mods/vehicle-overhaul.md) ([AnyMoto](mods/moto.md), [turbos](mods/turbo.md), [rotary](mods/rotary.md), [dyno](mods/dyno.md)) ·
 Prototypes: [AnyLights](mods/lights.md) · [AnyCombat](mods/combat.md) · [AnyBattery](mods/battery.md)
 
 ## Developer reference
