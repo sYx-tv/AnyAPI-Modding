@@ -30,6 +30,8 @@
 #include "dyno_logic.h"
 #include "dyno_mesh.h"
 #include "engine_parts_shared.h"
+#include "dyno_net.h"
+#include "steam_messages.h"
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
@@ -132,6 +134,9 @@ std::atomic<int64_t> g_dyno_tick_ms{INT64_MIN / 2};
 int64_t now_ms() { return int64_t(now_seconds() * 1000); }
 bool dyno_ticking() { return now_ms() - g_dyno_tick_ms.load(std::memory_order_relaxed) < 5000; }
 bool oil_gauge_ticking() { return now_ms() - g_gauge_tick_ms.load(std::memory_order_relaxed) < 5000; }
+// When this PC's server last ticked any altitude-class sensor: it is the host (or single player) while it does.
+std::atomic<int64_t> g_server_tick_ms{INT64_MIN / 2};
+bool hosting() { return now_ms() - g_server_tick_ms.load(std::memory_order_relaxed) < 2000; }
 
 // Which of our sensor parts this altitude sensor is: kDynoKind, a gauges::Kind, or 0 (a stock altitude sensor).
 int sensor_kind(const uint8_t* sensor) {
@@ -388,9 +393,12 @@ EngineSample vehicle_sample(const void* vehicle, double now) {
     return sum;
 }
 
+void net_host_tick();   // co-op, below
 void hk_sensor_tick(uint8_t* sensor, void* vehicle, void* scene) {
     reinterpret_cast<sensor_tick_t>(h_sensor_tick.original)(sensor, vehicle, scene);
     if (!sensor || !vehicle) return;
+    g_server_tick_ms.store(now_ms(), std::memory_order_relaxed);
+    net_host_tick();
     int kind;
     {
         std::lock_guard lock(g_mutex);
@@ -556,6 +564,163 @@ uint32_t input(const AnyInputV1* e, void*) {
 // A copy of what the panel shows, taken under the lock.
 struct View { Recorder recorder; std::string setup; double distance = -1; };
 
+// ------------------------------------------------------------------------------------- co-op (dyno_net.h)
+// The host sends each joiner the Dyno graphs and ECUs near him; a joiner keeps them in g_dynos / g_gauges under the
+// host's keys (never dereferenced: only his screens read them) and sends his ECU changes and Dyno clears back.
+steam_messages::Line g_line;                          // under g_net_mutex
+std::mutex g_net_mutex;
+struct Remote { int32_t peer_id; uint64_t steam; double position[3]; bool has_position; };
+std::vector<Remote> remote_players(AnySessionPlayersV1& buffer) {
+    std::vector<Remote> out;
+    buffer = AnySessionPlayersV1{};
+    buffer.struct_size = sizeof buffer;
+    uint32_t flags = 0;
+    if (!host.copy_players || !host.copy_players(&buffer, &flags)) return out;
+    for (uint32_t i = 0; i < buffer.count && i < ANYAPI_PLAYERS_CAPACITY; ++i) {
+        const auto& p = buffer.players[i];
+        if ((p.valid_fields & PLAYER_LOCAL) || !(p.valid_fields & PLAYER_STEAM_ID)) continue;
+        char id[33]{};
+        std::memcpy(id, p.steam_id, sizeof p.steam_id < 32 ? sizeof p.steam_id : 32);
+        uint64_t steam = dyno_net::parse_steam_id(id);
+        if (!steam) continue;
+        Remote r{p.peer_id, steam, {}, (p.valid_fields & PLAYER_POSITION) != 0};
+        if (r.has_position) std::memcpy(r.position, p.position, sizeof r.position);
+        out.push_back(r);
+    }
+    return out;
+}
+
+// Host, server thread: requests in, then each joiner's snapshot out, four times a second.
+void net_host_tick() {
+    static std::atomic<int64_t> last{0};
+    const int64_t now = now_ms();
+    int64_t was = last.load(std::memory_order_relaxed);
+    if (now - was < 250 || !last.compare_exchange_strong(was, now)) return;
+    static AnySessionPlayersV1 roster_buffer;         // server thread only (guarded by the exchange above)
+    std::vector<Remote> roster = remote_players(roster_buffer);
+    if (roster.empty()) return;
+    std::lock_guard net_lock(g_net_mutex);
+    if (!g_line.ready(dyno_net::kChannel)) return;
+    static uint8_t in[4096];
+    for (int i = 0; i < 32; ++i) {
+        uint32_t size = 0;
+        uint64_t sender = 0;
+        int got = g_line.receive(in, sizeof in, size, sender);
+        if (got < 0) { log(2, "co-op: Steam call fault; joiners' Dyno and ECU screens are off this session"); return; }
+        if (!got) break;
+        const Remote* from = nullptr;
+        for (const auto& r : roster) if (sender && r.steam == sender) from = &r;
+        dyno_net::Request req;
+        static int drops = 0;
+        if (!from || size > sizeof in || !dyno_net::decode(in, size, req)) { if (drops++ < 10) log(1, "co-op: dropped a message (%s)", from ? "bad format" : "not a player in this world"); continue; }
+        std::lock_guard lock(g_mutex);
+        const auto* key = reinterpret_cast<const uint8_t*>(uintptr_t(req.key));
+        if (req.kind == dyno_net::kSetTune) {
+            auto g = g_gauges.find(key);
+            if (g == g_gauges.end() || g->second.kind != gauges::kEcu || !g->second.placed) continue;
+            if (from->has_position && dyno_net::distance(from->position, g->second.position) > kEcuReach + dyno_net::kReachSlack) continue;
+            g->second.panel = dyno_net::clamp_tune(req.panel);
+            g->second.panel_dirty = true;
+            log(0, "ECU panel changed by a joiner (peer %d)", from->peer_id);
+        } else {
+            auto d = g_dynos.find(key);
+            if (d == g_dynos.end()) continue;
+            if (from->has_position && d->second.placed && dyno_net::distance(from->position, d->second.position) > kShowDistance + dyno_net::kReachSlack) continue;
+            d->second.recorder.clear();
+            log(0, "pulls cleared by a joiner (peer %d)", from->peer_id);
+        }
+    }
+    const double t = now_seconds();
+    for (const auto& r : roster) {
+        if (!r.has_position) continue;
+        dyno_net::Snapshot snap;
+        {
+            std::lock_guard lock(g_mutex);
+            for (const auto& [sensor, d] : g_dynos) {
+                if (t - d.last_tick > 1.0 || !d.placed || dyno_net::distance(r.position, d.position) > dyno_net::kNearJoiner) continue;
+                if (int(snap.dynos.size()) >= dyno_net::kMaxDynos) break;
+                dyno_net::DynoEntry e;
+                e.key = uint64_t(uintptr_t(sensor));
+                std::memcpy(e.position, d.position, sizeof e.position);
+                std::snprintf(e.setup, sizeof e.setup, "%s", d.setup.c_str());
+                e.recorder = d.recorder;
+                snap.dynos.push_back(e);
+            }
+            for (const auto& [sensor, g] : g_gauges) {
+                if (g.kind != gauges::kEcu || t - g.last_tick > 1.0 || !g.placed || dyno_net::distance(r.position, g.position) > dyno_net::kNearJoiner) continue;
+                if (int(snap.ecus.size()) >= dyno_net::kMaxEcus) break;
+                dyno_net::EcuEntry e;
+                e.key = uint64_t(uintptr_t(sensor));
+                std::memcpy(e.position, g.position, sizeof e.position);
+                e.panel = g.panel;
+                std::memcpy(e.slots, g.slots, sizeof e.slots);
+                snap.ecus.push_back(e);
+            }
+        }
+        if (snap.dynos.empty() && snap.ecus.empty()) continue;
+        std::vector<uint8_t> bytes = dyno_net::encode(snap);
+        int32_t sent = g_line.send(r.steam, bytes.data(), uint32_t(bytes.size()));
+        static std::atomic<int> logs{4};
+        if (logs.fetch_sub(1) > 0) log(sent == 1 ? 0 : 1, "co-op: sent peer %d %d Dyno(s) and %d ECU(s), %u bytes (Steam result %d)", r.peer_id,
+                                      int(snap.dynos.size()), int(snap.ecus.size()), unsigned(bytes.size()), sent);
+    }
+}
+
+// Joiner, render thread: the host's snapshots in. ECU rows the joiner just changed keep his value for a moment, so
+// a snapshot sent before the host had his change does not flick it back.
+uint64_t g_host_steam = 0;
+std::unordered_map<uint64_t, double> g_tune_pending;   // key -> until (now_seconds), under g_mutex
+void joiner_send(const dyno_net::Request& r) {
+    std::vector<uint8_t> bytes = dyno_net::encode(r);
+    std::lock_guard lock(g_net_mutex);
+    if (g_host_steam && g_line.ready(dyno_net::kChannel)) g_line.send(g_host_steam, bytes.data(), uint32_t(bytes.size()));
+}
+void net_joiner_tick() {
+    static AnySessionPlayersV1 roster_buffer;          // render thread only
+    static int64_t roster_at = 0;
+    const int64_t now = now_ms();
+    if (now - roster_at >= 1000) {
+        roster_at = now;
+        uint64_t host_steam = 0;
+        int32_t lowest = INT32_MAX;                    // the host joined first: the lowest peer id
+        for (const auto& r : remote_players(roster_buffer)) if (r.peer_id < lowest) { lowest = r.peer_id; host_steam = r.steam; }
+        if (host_steam != g_host_steam) { g_host_steam = host_steam; if (host_steam) log(0, "co-op: joined a host; his Dyno and ECU screens come from him"); }
+    }
+    if (!g_host_steam) return;
+    static std::vector<uint8_t> buffer(64 * 1024);
+    for (int i = 0; i < 8; ++i) {
+        uint32_t size = 0;
+        uint64_t sender = 0;
+        int got;
+        {
+            std::lock_guard lock(g_net_mutex);
+            got = g_line.receive(buffer.data(), uint32_t(buffer.size()), size, sender);
+        }
+        if (got <= 0) break;
+        dyno_net::Snapshot snap;
+        if (sender != g_host_steam || size > buffer.size() || !dyno_net::decode(buffer.data(), size, snap)) continue;
+        static bool first = true;
+        if (first) { first = false; log(0, "co-op: first screens from the host (%d Dyno(s), %d ECU(s))", int(snap.dynos.size()), int(snap.ecus.size())); }
+        const double t = now_seconds();
+        std::lock_guard lock(g_mutex);
+        for (const auto& e : snap.dynos) {
+            Dyno& d = g_dynos[reinterpret_cast<const uint8_t*>(uintptr_t(e.key))];
+            d.recorder = e.recorder; d.setup = e.setup;
+            std::memcpy(d.position, e.position, sizeof d.position);
+            d.placed = true; d.last_tick = t;
+        }
+        for (const auto& e : snap.ecus) {
+            Gauge& g = g_gauges[reinterpret_cast<const uint8_t*>(uintptr_t(e.key))];
+            g.kind = gauges::kEcu; g.panel_loaded = true; g.last_tick = t;
+            auto pending = g_tune_pending.find(e.key);
+            if (pending == g_tune_pending.end() || t > pending->second) g.panel = e.panel;
+            std::memcpy(g.slots, e.slots, sizeof g.slots);
+            std::memcpy(g.position, e.position, sizeof g.position);
+            g.placed = true;
+        }
+    }
+}
+
 bool local_player(double pos[3]) {
     if (!host.copy_players) return false;
     static AnySessionPlayersV1 players;            // render thread only
@@ -569,6 +734,7 @@ bool local_player(double pos[3]) {
     return false;
 }
 
+uint64_t g_cleared_key = 0;                           // the Dyno the last clear was for (render thread)
 // The nearest Dyno that ticked in the last second, within kShowDistance of the local player. Without a player
 // position (should not happen in a world) the most recently ticked one.
 bool pick(View& out, bool clear) {
@@ -590,7 +756,11 @@ bool pick(View& out, bool clear) {
     static std::atomic<int> logs{3};
     if (best && have_player && logs.fetch_sub(1) > 0) log(0, "nearest Dyno %.1f m from the player", best_d);
     if (!best || (have_player && best->placed && best_d > kShowDistance)) return false;
-    if (clear) { best->recorder.clear(); log(0, "pulls cleared"); }
+    if (clear) {
+        best->recorder.clear();
+        log(0, "pulls cleared");
+        for (const auto& [key, dyno] : g_dynos) if (&dyno == best) g_cleared_key = uint64_t(uintptr_t(key));
+    }
     out.recorder = best->recorder;
     out.setup = best->setup;
     out.distance = have_player ? best_d : -1;
@@ -642,16 +812,26 @@ Gauge* nearest_ecu(const double player[3], bool have_player, double* distance) {
 void ecu_nudge(int steps) {
     double player[3];
     bool have = local_player(player);
-    std::lock_guard lock(g_mutex);
-    Gauge* g = nearest_ecu(player, have, nullptr);
-    if (!g) return;
-    int row = std::clamp(g_ecu_row.load(), 0, ecu::kRowCount - 1);
-    double before = ecu::get(g->panel, row);
-    ecu::nudge(g->panel, row, steps);
-    if (ecu::get(g->panel, row) != before) {
-        g->panel_dirty = true;
-        log(0, "ECU panel: %s %s", ecu::kRows[row].label, ecu::row_text(g->panel, row).c_str());
+    dyno_net::Request to_host;
+    bool send = false;
+    {
+        std::lock_guard lock(g_mutex);
+        Gauge* g = nearest_ecu(player, have, nullptr);
+        if (!g) return;
+        int row = std::clamp(g_ecu_row.load(), 0, ecu::kRowCount - 1);
+        double before = ecu::get(g->panel, row);
+        ecu::nudge(g->panel, row, steps);
+        if (ecu::get(g->panel, row) != before) {
+            g->panel_dirty = true;
+            log(0, "ECU panel: %s %s", ecu::kRows[row].label, ecu::row_text(g->panel, row).c_str());
+            if (!hosting()) {                         // a joiner: the host's ECU takes the change
+                for (const auto& [key, gauge] : g_gauges)
+                    if (&gauge == g) { to_host.kind = dyno_net::kSetTune; to_host.key = uint64_t(uintptr_t(key)); to_host.panel = g->panel; send = true; }
+                if (send) g_tune_pending[to_host.key] = now_seconds() + 1.5;
+            }
+        }
     }
+    if (send) joiner_send(to_host);
 }
 void ecu_draw(const AnyFrameV1* f) {
     double player[3];
@@ -694,6 +874,7 @@ void ecu_draw(const AnyFrameV1* f) {
 }
 
 void draw(const AnyFrameV1* f, void*) {
+    if (g_ready.load() && !hosting()) net_joiner_tick();
     if (f && gpu && f->focused && g_ready.load() && gameplay()) ecu_draw(f);
     else g_ecu_near = false;
     if (!f || !gpu || !f->focused || !g_ready.load() || !gameplay()) { g_near = false; return; }
@@ -705,7 +886,9 @@ void draw(const AnyFrameV1* f, void*) {
         hidden = g_hidden;
     }
     static View view;                               // render thread only
+    g_cleared_key = 0;
     bool shown = pick(view, clear);
+    if (clear && g_cleared_key && !hosting()) { dyno_net::Request r; r.kind = dyno_net::kClearDyno; r.key = g_cleared_key; joiner_send(r); }
     g_near = shown;
     if (!shown || hidden) return;
 

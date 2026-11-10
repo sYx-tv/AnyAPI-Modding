@@ -170,7 +170,7 @@ struct Walk {
     bool intake = false;             // it reached a compressor or an air filter: this is the engine's air side
     int parts = 0;                   // parts passed
 };
-inline int header_from_id(const char* id, size_t n);   // below, with the race headers
+inline int header_from_id(const char* id, size_t n, bool* mirrored = nullptr);   // below, with the race headers
 inline int role_of(const char* id, size_t n, const char* cls, size_t cn, int* sub, int* layout) {
     auto is = [&](const char* want) { return std::strlen(want) == cn && std::memcmp(cls, want, cn) == 0; };
     int look = 0, lay = 0;
@@ -386,22 +386,29 @@ constexpr int kHeaderMin = 1, kHeaderMax = 6, kHeaderDrop = 3;   // y cells belo
 inline int header_len(int n) { return 2 * (n - 1) + 4; }       // x cells
 inline int header_depth(int n) { return n >= 5 ? 4 : 2; }      // z cells
 inline int header_out_z(int n) { return n >= 5 ? 1 : 0; }
-inline std::string header_id(int n) { return "header_" + std::to_string(n) + "_1"; }
-inline int header_from_id(const char* id, size_t n) {
-    if (!id || n != 10 || std::memcmp(id, "header_", 7) != 0 || std::memcmp(id + 8, "_1", 2) != 0) return 0;
+// Mirrored headers (Nate 2026-11-07: "a v8 can only take one side of headers"): the same header flipped across its
+// flange, for the other bank. The flange faces z+ and the primaries run out to z-, the collector still at the x+ end,
+// so on a V engine both banks' collectors point the same way. Ids end "_m" (never rename either).
+inline std::string header_id(int n, bool mirrored = false) { return "header_" + std::to_string(n) + "_1" + (mirrored ? "_m" : ""); }
+inline int header_from_id(const char* id, size_t n, bool* mirrored) {
+    if (!id || (n != 10 && n != 12) || std::memcmp(id, "header_", 7) != 0 || std::memcmp(id + 8, "_1", 2) != 0) return 0;
+    if (n == 12 && std::memcmp(id + 10, "_m", 2) != 0) return 0;
     int k = id[7] - '0';
-    return k >= kHeaderMin && k <= kHeaderMax ? k : 0;
+    if (k < kHeaderMin || k > kHeaderMax) return 0;
+    if (mirrored) *mirrored = n == 12;
+    return k;
 }
-inline std::string header_entry(int n, const std::string& mesh) {
+inline std::string header_entry(int n, const std::string& mesh, bool mirrored = false) {
     const int lx = header_len(n) - 1, dz = header_depth(n) - 1;
-    std::string surfaces = "{\"pos\": [0, 0, 0], \"dir\": 4, \"gender\": 1, \"type\": \"port\"}";
+    const int zlo = mirrored ? -dz : 0, zout = mirrored ? -(header_out_z(n) + 1) : header_out_z(n);
+    std::string surfaces = std::string("{\"pos\": [0, 0, 0], \"dir\": ") + (mirrored ? "5" : "4") + ", \"gender\": 1, \"type\": \"port\"}";
     auto face = [&](int x, int y, int z, int su, int sw, int dir) {
         surfaces += ", {\"pos\": [" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + "], \"size\": [" + std::to_string(su) + ", " +
             std::to_string(sw) + "], \"dir\": " + std::to_string(dir) + "}";
     };
-    face(0, -kHeaderDrop, 0, lx + 1, dz + 1, 2);   // mounting faces: the bottom and the top
-    face(0, 0, 0, lx + 1, dz + 1, 3);
-    Box b{0, -kHeaderDrop, 0, lx, 0, dz};
+    face(0, -kHeaderDrop, zlo, lx + 1, dz + 1, 2);   // mounting faces: the bottom and the top
+    face(0, 0, zlo, lx + 1, dz + 1, 3);
+    Box b{0, -kHeaderDrop, zlo, lx, 0, zlo + dz};
     std::string description = n == 1 ? std::string("Single-runner race header: an exhaust manifold for one cylinder. Snap its flange onto the engine's exhaust face; the "
                                                    "collector at the end takes a large pipe or a gas port, routed wherever you like. About 4 % more power and a smooth note.")
                                      : std::to_string(n) + "-1 equal-length race header: an exhaust manifold for " + std::to_string(n) +
@@ -409,20 +416,20 @@ inline std::string header_entry(int n, const std::string& mesh) {
                                            "down and back to the collector, which takes a large pipe or a gas port, routed wherever you like. About 4 % more power and a "
                                            "smooth note.";
     return std::string("    {\n") +
-        "      \"id\": \"" + header_id(n) + "\",\n" +
-        "      \"name\": \"Race Header " + std::to_string(n) + "-1\",\n" +
-        "      \"description\": \"" + description + "\",\n" +
+        "      \"id\": \"" + header_id(n, mirrored) + "\",\n" +
+        "      \"name\": \"Race Header " + std::to_string(n) + "-1" + (mirrored ? " (mirrored)" : "") + "\",\n" +
+        "      \"description\": \"" + description + (mirrored ? " Mirrored: for the other bank of a V engine." : "") + "\",\n" +
         "      \"class\": \"exhaust_manifold\",\n" +
         "      \"zones\": [" + box_json(b) + "],\n" +
         "      \"interaction_zones\": [],\n" +
         "      \"surfaces\": [" + surfaces + "],\n" +
-        "      \"logic_nodes\": [{\"id\": \"exhaust\", \"pos\": [" + std::to_string(lx) + ", -1, " + std::to_string(header_out_z(n)) +
+        "      \"logic_nodes\": [{\"id\": \"exhaust\", \"pos\": [" + std::to_string(lx) + ", -1, " + std::to_string(zout) +
         "], \"direction\": 1, \"type\": \"gas\", \"size\": 1}],\n" +
         "      \"mesh_static\": {\"mesh_path\": \"" + mesh + "\"},\n" +
         "      \"meshes_dynamic\": [],\n" +
         "      \"category\": \"engine\",\n" +
         "      \"tags_generated\": \"port,\",\n" +
-        "      \"inspection_geometry\": [{\"p0\": [0.0, -" + std::to_string(kHeaderDrop) + ".0, 0.0], \"p1\": [" + std::to_string(lx) + ".0, 0.0, " + std::to_string(dz) + ".0]}],\n" +
+        "      \"inspection_geometry\": [{\"p0\": [0.0, -" + std::to_string(kHeaderDrop) + ".0, " + std::to_string(zlo) + ".0], \"p1\": [" + std::to_string(lx) + ".0, 0.0, " + std::to_string(zlo + dz) + ".0]}],\n" +
         "      \"density\": 800.0,\n" +
         "      \"mateable_port_types\": 64,\n" +
         "      \"data_descriptors\": [],\n" +
@@ -439,8 +446,9 @@ inline std::string entries(bool meshes) {
     for (int k = 0; k < kInlineCount; ++k)
         if (k != kHeaderEqual && k != kHeaderUnequal)   // the old placeholder collectors: the race headers replace them
             out += ",\n" + inline_entry(k, meshes ? mesh_path_inline(k) : "meshes/components/turbo_a.mesh");
-    for (int n = kHeaderMin; n <= kHeaderMax; ++n)
-        out += ",\n" + header_entry(n, meshes ? "meshes/components/" + header_id(n) + ".mesh" : "meshes/components/radiator_a_0_0_0.mesh");
+    for (int m = 0; m < 2; ++m)
+        for (int n = kHeaderMin; n <= kHeaderMax; ++n)
+            out += ",\n" + header_entry(n, meshes ? "meshes/components/" + header_id(n, m) + ".mesh" : "meshes/components/radiator_a_0_0_0.mesh", m);
     for (int k = 0; k < kIntakeCount; ++k)
         out += ",\n" + intake_entry(k, meshes ? std::string("meshes/components/") + kIntakeIds[k] + ".mesh" : "meshes/components/gas_port_b.mesh");
     return out;

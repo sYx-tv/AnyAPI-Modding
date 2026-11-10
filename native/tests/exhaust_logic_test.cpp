@@ -56,7 +56,7 @@ int main() {
     std::string e = entries(true);
     int depth = 0, objects = 0;
     for (char c : e) { if (c == '{' || c == '[') ++depth; if (c == '}' || c == ']') --depth; assert(depth >= 0); if (c == '{' && depth == 1) ++objects; }
-    assert(depth == 0 && objects == int(kLookCount) * int(kLayoutCount) + int(kInlineCount) - 2 + int(kIntakeCount) + (kHeaderMax - kHeaderMin + 1));
+    assert(depth == 0 && objects == int(kLookCount) * int(kLayoutCount) + int(kInlineCount) - 2 + int(kIntakeCount) + 2 * (kHeaderMax - kHeaderMin + 1));
     // race headers are exhaust manifolds: inside the part (but the flange bolts' heads and port rims, 2 mm), the
     // layout matches the definition's, and every primary is the same length
     for (int n = kHeaderMin; n <= kHeaderMax; ++n) {
@@ -87,6 +87,21 @@ int main() {
         assert(header_entry(6, "x").find("\"pos\": [13, -1, 1], \"direction\": 1") != std::string::npos);
         int sub = 0, lay = 0;
         assert(role_of("header_1_1", 10, "exhaust_manifold", 16, &sub, &lay) == kInlinePart && sub == kHeaderEqual);
+        // mirrored: flange faces z+, box and outlet on the z- side
+        bool mir = false;
+        assert(header_from_id("header_4_1_m", 12, &mir) == 4 && mir && header_from_id("header_4_1_x", 12) == 0 && header_from_id("header_4_1", 10, &mir) == 4 && !mir);
+        assert(role_of("header_4_1_m", 12, "exhaust_manifold", 16, &sub, &lay) == kInlinePart && sub == kHeaderEqual);
+        std::string hm = header_entry(4, "x", true);
+        assert(hm.find("\"id\": \"header_4_1_m\"") != std::string::npos && hm.find("{\"pos\": [0, 0, 0], \"dir\": 5, \"gender\": 1, \"type\": \"port\"}") != std::string::npos);
+        assert(hm.find("\"bounds_min\": [0, -3, -1], \"bounds_max\": [9, 0, 0]") != std::string::npos);
+        assert(hm.find("{\"id\": \"exhaust\", \"pos\": [9, -1, -1], \"direction\": 1") != std::string::npos);
+        assert(header_entry(6, "x", true).find("\"pos\": [13, -1, -2], \"direction\": 1") != std::string::npos);
+        assert(e.find("\"id\": \"header_6_1_m\"") != std::string::npos);
+        for (int n = kHeaderMin; n <= kHeaderMax; ++n) {
+            pdmesh::Mesh a = avolook::header(n, 0), b = avolook::header_mirrored(n, 0);
+            assert(a.v.size() == b.v.size() && a.i.size() == b.i.size());
+            for (auto& v : b.v) assert(v.pos[2] < 0.046 && v.pos[2] > -(header_depth(n) * 0.08 - 0.038));
+        }
     }
     // the walk: engine 1 (node 0 air, node 1 exhaust) -> header 2 -> junction 3 -> turbo 4 hot side -> cat 5 -> muffler 6 -> dual tip 7
     //   and junction 3 -> stock vent 8; the air side: engine node 0 -> turbo 4 compressor (node 1)

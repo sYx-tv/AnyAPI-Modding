@@ -268,8 +268,8 @@ function(anyapi_version_resource target product)
     set(ANYAPI_VERSION_COMMA "1,0,4,0")
     set(ANYAPI_VERSION_TEXT "1.0.4")
   elseif(target STREQUAL "AnyVehicleOverhaulBundle")
-    set(ANYAPI_VERSION_COMMA "2,0,0,0")
-    set(ANYAPI_VERSION_TEXT "2.0.0")
+    set(ANYAPI_VERSION_COMMA "2,1,0,0")
+    set(ANYAPI_VERSION_TEXT "2.1.0")
   elseif(target STREQUAL "AnyClock" OR target MATCHES "Bundle$")
     set(ANYAPI_VERSION_COMMA "1,0,0,0")
     set(ANYAPI_VERSION_TEXT "1.0.0")
@@ -565,6 +565,9 @@ add_executable(anylaser_logic_test tests/anylaser_logic_test.cpp)
 target_compile_options(anylaser_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME anylaser_logic COMMAND anylaser_logic_test)
 
+add_executable(avo_wheels_logic_test tests/avo_wheels_logic_test.cpp)
+target_compile_options(avo_wheels_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME avo_wheels_logic COMMAND avo_wheels_logic_test)
 # AnyMoto: motorcycle fork, swingarm, seat, handlebars and lean assist for the Motorcycle Wheel, through the
 # experimental SDK. Ships inside the AnyVehicleOverhaul bundle; this standalone DLL is for development only.
 add_library(AnyMoto SHARED anymoto_mod.cpp)
@@ -666,6 +669,9 @@ target_compile_options(AnyPerformance PRIVATE /W3 /EHsc /utf-8)
 target_link_libraries(AnyPerformance PRIVATE winmm)
 anyapi_version_resource(AnyPerformance AnyPerformance)
 add_executable(anyperformance_logic_test tests/anyperformance_logic_test.cpp)
+add_executable(dyno_net_test tests/dyno_net_test.cpp)
+target_compile_options(dyno_net_test PRIVATE /UNDEBUG /EHsc /utf-8)
+add_test(NAME dyno_net COMMAND dyno_net_test)
 target_compile_options(anyperformance_logic_test PRIVATE /UNDEBUG /EHsc /utf-8)
 add_test(NAME anyperformance_logic COMMAND anyperformance_logic_test)
 
@@ -699,7 +705,7 @@ endfunction()
 # AnyVehicleOverhaul (was the AnyEngineParts bundle, 2026-11): AnyEngineParts, EngineSound, GpsPart and AnyMoto.
 anyapi_bundle(AnyVehicleOverhaulBundle AnyVehicleOverhaul bundles/anyvehicleoverhaul_bundle.cpp
   bundles/part_anyengineparts.cpp turbo_mod.cpp rotary_mod.cpp dyno_mod.cpp bundles/part_enginesound.cpp bundles/part_gpspart.cpp
-  bundles/part_anymoto.cpp bundles/part_anycvt.cpp)
+  bundles/part_anymoto.cpp bundles/part_anycvt.cpp bundles/part_avowheels.cpp)
 anyapi_bundle(AnyHelpersBundle AnyHelpers bundles/anyhelpers_bundle.cpp bundles/part_anyhelpers.cpp
   bundles/part_anymirror.cpp bundles/part_anybalance.cpp bundles/part_mccode.cpp)
 target_link_libraries(AnyHelpersBundle PRIVATE gdiplus user32)
