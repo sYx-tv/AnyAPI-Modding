@@ -2306,6 +2306,10 @@ void hk_engine_tick(void* self, void* vehicle, void* scene) {
     double dt = g_delta_time && std::isfinite(*g_delta_time) && *g_delta_time > 0 ? *g_delta_time : 1.0 / 60.0;
     (void)dt;
     double knock = t_knock.damage;                  // knock control's damage (past the engine's rating, for its air)
+    if (knock > 0) {                                // scaled by load: an engine idling or cruising on boost barely knocks
+        const auto* th = static_cast<const uint8_t*>(self) + off::engine_display;
+        knock *= knock_load_share(anymaker::readable(th, 8) ? at<double>(th, 0) : NAN);
+    }
     if (knock > 0 && anymaker::readable(static_cast<uint8_t*>(self) + off::engine_damage_factor, 8)) at<double>(self, off::engine_damage_factor) += knock;
     if (knock > 0) dyno::note_knock(self, knock);     // the Dyno's "Knock" row
     if (knock > 0 && t_knock.over >= kBlowOver && engine_damage_steps(self) >= 2) {

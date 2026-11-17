@@ -87,7 +87,9 @@ Every engine has a rating, the boost factor (`power_multiplier`) it takes with 4
 Hot charge air lowers the rating: 98 °C (one turbo, no intercooler) takes about 40% of the boost part off it, so
 intercoolers matter. Past the rating the knock control pulls timing: only 30% of the extra boost still makes power,
 and the engine takes damage, faster the further past it runs (10% over: a damage step about every 9 minutes; 30%
-over: about every 100 s; 60% over: about every 30 s). An engine that is still knocking 25% or more past its rating
+over: about every 100 s; 60% over: about every 30 s, all at full throttle). Knock needs load: the damage scales with
+the throttle (none at 20% or under, a tenth of it at 45%, all of it flat out), and knocking under 5% past the
+rating does no damage. An engine that is still knocking 25% or more past its rating
 when its last damage step lands **blows**: it makes no power until you repair it. The log names the engine's rating
 on its `engine intake` line.
 
