@@ -847,6 +847,8 @@ int main() {
       k = knock_step(2.0, 2.5, 120, 1); assert(k.over > 0 && k.factor < 2.0 && k.damage > 0);            // hot air knocks sooner
       Knock k10 = knock_step(2.75, 2.5, 40, 1), k30 = knock_step(3.25, 2.5, 40, 1);   // 40 C: the rating as is
       assert(1 / k10.damage > 400 && 1 / k10.damage < 700 && 1 / k30.damage > 70 && 1 / k30.damage < 130 && k30.factor > k10.factor && k30.factor < 3.25);
+      assert(knock_step(2.0, 1.92, 40, 1).over > 0 && knock_step(2.0, 1.92, 40, 1).damage == 0);         // under the margin: no damage
+      assert(knock_load_share(1.0) == 1.0 && knock_load_share(0.2) == 0.0 && knock_load_share(0.45) < 0.11 && knock_load_share(NAN) == 1.0);
       assert(knock_step(NAN, 2.5, 30, 1).damage == 0 && knock_step(3, 2.5, NAN, 1).damage > 0 && std::isfinite(knock_step(3, 2.5, NAN, 1).factor)); }
     return 0;
 }

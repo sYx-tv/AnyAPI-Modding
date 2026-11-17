@@ -215,6 +215,9 @@ struct Knock {
 // `factor` is the boost factor its intake pressure gives (after the air's density), `rated` the engine's rating.
 // Past the rating, 30 % of the extra boost still makes power; damage grows with the square of how far past it is:
 // 10 % over, a damage step about every 9 minutes; 30 % over, about every 100 s; 60 % over, about every 30 s.
+// Knocking under kKnockMargin past the rating does no damage (the stock wastegate's spring sits a hair over some
+// engines' ratings even through an intercooler: Nate's intercooled V8 would still lose a step every half hour).
+constexpr double kKnockMargin = 0.05;
 inline Knock knock_step(double factor, double rated, double intake_c, double dt) {
     Knock k;
     k.factor = std::isfinite(factor) ? factor : 1.0;
@@ -223,8 +226,16 @@ inline Knock knock_step(double factor, double rated, double intake_c, double dt)
     k.over = std::max(0.0, k.factor / limit - 1.0);
     if (k.over <= 0) return k;
     k.factor = limit + (k.factor - limit) * 0.3;
-    k.damage = (0.01 * k.over + 0.08 * k.over * k.over) * dt;
+    if (k.over >= kKnockMargin) k.damage = (0.01 * k.over + 0.08 * k.over * k.over) * dt;
     return k;
+}
+// Knock needs load: it hurts at full throttle and barely at all idling or cruising, even on boost (Nate, 2026-11-17:
+// an idling V8 with a 3x3 turbo and no intercooler held 13 psi and lost a damage step every 3 to 4 minutes).
+// Knock damage is scaled by this share of the throttle: none at 20 % or under, all of it at full throttle.
+inline double knock_load_share(double throttle) {
+    if (!std::isfinite(throttle)) return 1.0;
+    double x = std::clamp((throttle - 0.2) / 0.8, 0.0, 1.0);
+    return x * x;
 }
 
 }  // namespace turbo
