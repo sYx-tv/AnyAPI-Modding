@@ -215,7 +215,7 @@ struct Knock {
 // `factor` is the boost factor its intake pressure gives (after the air's density), `rated` the engine's rating.
 // Past the rating, 30 % of the extra boost still makes power; damage grows with the square of how far past it is:
 // 10 % over, a damage step about every 9 minutes; 30 % over, about every 100 s; 60 % over, about every 30 s.
-// Knocking under kKnockMargin past the rating does no damage (the stock wastegate's spring sits a hair over some
+// Knocking under kKnockMargin past the rating does no damage (the turbos' built-in wastegate spring sits a hair over some
 // engines' ratings even through an intercooler: Nate's intercooled V8 would still lose a step every half hour).
 constexpr double kKnockMargin = 0.05;
 inline Knock knock_step(double factor, double rated, double intake_c, double dt) {
