@@ -160,7 +160,9 @@ namespace AnyMapMaker {
     foreach(var b in leftActions.Concat(rightActions))b.Width=b is GoButton?((GoButton)b).PreferredWidth:TextRenderer.MeasureText(g,b.Text,b.Font).Width+S(28);
     x-=S(12);for(int i=rightActions.Count-1;i>=0;i--){var b=rightActions[i];x-=b.Width;b.Location=new Point(x,(titleBar.Height-b.Height)/2);x-=b==undoButton?S(4):S(8);}
     int ax=S(190);foreach(var b in leftActions){b.Location=new Point(ax,(titleBar.Height-b.Height)/2);ax+=b.Width+S(6);}
-    nameBox.SetBounds(ax+S(10),(titleBar.Height-S(32))/2,S(230),S(32));
+    // The name box shrinks on narrow or scaled-up windows so it never covers the buttons on the right.
+    int room=rightActions[0].Left-S(12)-(ax+S(10))-S(110);
+    nameBox.SetBounds(ax+S(10),(titleBar.Height-S(32))/2,Math.Max(S(90),Math.Min(S(230),room)),S(32));
    }
    titleBar.Invalidate();
   }
