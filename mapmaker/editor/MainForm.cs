@@ -4,23 +4,29 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using AnyApiManager;
 namespace AnyMapMaker {
- // The editor window, in the AnyAPI Manager's look: frameless dark window, title bar with the file actions,
- // a sidebar with the map details, tools and layers, the map in the middle and the selected tile on the right.
+ // The editor window, in the AnyAPI Manager's look: frameless dark window, title bar with the file actions and
+ // Play in game, big tool buttons down the left, the map on top with a live 3D preview under it, and a panel on the
+ // right with the tool's settings, things to place, the selected point and what the map shows.
  public sealed class MainForm : Form, IMessageFilter {
-  public const string Version="0.4.0";
+  public const string Version="0.5.0";
   static int S(float px){return Theme.S(px);}
   readonly MapView view=new MapView();
-  readonly MapView3D view3d=new MapView3D{Visible=false};
-  readonly ModernButton viewToggle=new ModernButton{Text="3D view",Kind=ButtonKind.Ghost};
+  readonly MapView3D view3d=new MapView3D();
+  readonly Panel splitter=new Panel{Cursor=Cursors.HSplit};double split=0.56;   // share of the middle for the map
+  readonly ViewTag mapTag=new ViewTag("Map (top down)",null), previewTag=new ViewTag("3D preview · how it looks in game","expand");
+  readonly GoButton playButton=new GoButton("Play in game");
   readonly Stepper falloffBox=new Stepper(0,1000,120){Step=10,Suffix=" m"};
   bool in3d;
-  readonly Panel titleBar=new Panel(), sidebar=new Panel(), statusBar=new Panel(), inspector=new Panel();
+  readonly Panel titleBar=new Panel(), sidebar=new Panel(), statusBar=new Panel();
   readonly Field nameBox=new Field("Map name"), authorBox=new Field("Your name"), descriptionBox=new Field("A short description");
-  readonly ToolGrid tools=new ToolGrid();
+  readonly ToolRail tools=new ToolRail();
+  readonly ThingGrid things=new ThingGrid();
+  readonly Label toolTitle=new Label{AutoEllipsis=true}, nodeInfo=new Label();
   readonly LayerList layers=new LayerList();
   readonly Panel options=new Panel();
   readonly Label tileTitle=new Label{AutoEllipsis=true}, status=new Label{AutoEllipsis=true};
@@ -45,17 +51,20 @@ namespace AnyMapMaker {
    AutoScaleMode=AutoScaleMode.None;FormBorderStyle=FormBorderStyle.None;Text="Anymaker Map Maker";BackColor=Theme.Line;ForeColor=Theme.Ink;Font=Theme.Font(13);DoubleBuffered=true;KeyPreview=true;
    ClientSize=new Size(S(1360),S(860));MinimumSize=new Size(S(1000),S(640));StartPosition=FormStartPosition.CenterScreen;
    try{Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);}catch{}
-   foreach(var bar in new Control[]{titleBar,sidebar,statusBar,inspector}){bar.BackColor=Theme.Side;Buffer(bar);}
-   view.Font=Theme.Font(12);view3d.Font=Theme.Font(12);
-   Controls.AddRange(new Control[]{titleBar,sidebar,statusBar,inspector,view,view3d});
-   BuildTitle();BuildSidebar();BuildInspector();BuildStatus();
+   foreach(var bar in new Control[]{titleBar,sidebar,statusBar}){bar.BackColor=Theme.Side;Buffer(bar);}
+   view.Font=Theme.Font(12);view3d.Font=Theme.Font(12);splitter.BackColor=Theme.Line;
+   view.Controls.Add(mapTag);view3d.Controls.Add(previewTag);previewTag.Clicked+=()=>Show3D(!in3d);
+   Controls.AddRange(new Control[]{titleBar,tools,sidebar,statusBar,view,splitter,view3d});
+   BuildTitle();BuildSidebar();BuildInspector();BuildStatus();BuildSplitter();
    view.TilePainted+=OnTilePainted;view.Placed+=OnPlaced;view.LineDrawn+=OnLine;view.RoadFinished+=OnRoad;view.Erased+=OnErase;
    view.StrokeEnded+=()=>{if(editor!=null&&editor.Commit())Edited(true);};
    view.StatusChanged+=t=>SetStatus(t,Theme.Dim);view.SelectionChanged+=ShowTile;
-   view3d.StatusChanged+=t=>SetStatus(t,Theme.Dim);
+   view3d.StatusChanged+=t=>SetStatus(t,Theme.Dim);view3d.NodeChanged+=ShowNode;
    view3d.NodesMoved+=()=>{unsaved=true;if(!rebuildPending){rebuildPending=true;BeginInvoke(new Action(()=>{rebuildPending=false;if(pack!=null)view3d.ShowScene(MapScene.Build(pack),editor);}));}};
    view3d.DragFinished+=()=>Edited(true);
    falloffBox.ValueChanged+=()=>view3d.Falloff=falloffBox.Value;
+   // Edits in the map show in the 3D preview straight away (strokes rebuild it when they end).
+   view.StrokeEnded+=()=>view3d.Invalidate();
    tools.Pick(Tool.Select);
    Resize+=(s,e)=>{LayoutShell();maximize.Maximized=WindowState==FormWindowState.Maximized;maximize.Invalidate();};LayoutShell();
    Shown+=(s,e)=>FindGame(false);
@@ -94,25 +103,31 @@ namespace AnyMapMaker {
   void DragWindow(MouseEventArgs e){if(e.Button!=MouseButtons.Left||Edge(PointToClient(Cursor.Position))!=0)return;if(e.Clicks==2){ToggleMaximize();return;}ReleaseCapture();SendMessage(Handle,0xA1,new IntPtr(2),IntPtr.Zero);}
   void ToggleMaximize(){WindowState=WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;}
   void LayoutShell(){
-   int b=WindowState==FormWindowState.Maximized?0:1;var r=new Rectangle(b,b,ClientSize.Width-b*2,ClientSize.Height-b*2);int title=S(44),foot=S(30),side=S(284),right=S(360);
+   int b=WindowState==FormWindowState.Maximized?0:1;var r=new Rectangle(b,b,ClientSize.Width-b*2,ClientSize.Height-b*2);int title=S(48),foot=S(30),rail=S(84),right=S(340);
    titleBar.Bounds=new Rectangle(r.X,r.Y,r.Width,title);statusBar.Bounds=new Rectangle(r.X,r.Bottom-foot,r.Width,foot);
-   sidebar.Bounds=new Rectangle(r.X,r.Y+title,side,r.Height-title-foot);inspector.Bounds=new Rectangle(r.Right-right,r.Y+title,right,r.Height-title-foot);
-   view.Bounds=new Rectangle(r.X+side,r.Y+title,r.Width-side-right,r.Height-title-foot);view3d.Bounds=view.Bounds;
-   LayoutTitle();LayoutSidebar();LayoutInspector();
+   int top=r.Y+title,h=r.Height-title-foot;
+   tools.Bounds=new Rectangle(r.X,top,rail,h);sidebar.Bounds=new Rectangle(r.Right-right,top,right,h);
+   int x=r.X+rail,w=r.Width-rail-right,bar=S(6),mapH=Math.Max(S(120),Math.Min(h-bar-S(120),(int)(h*(in3d?0.22:split))));
+   view.Bounds=new Rectangle(x,top,w,mapH);splitter.Bounds=new Rectangle(x,top+mapH,w,bar);view3d.Bounds=new Rectangle(x,top+mapH+bar,w,h-mapH-bar);
+   mapTag.Location=new Point(S(12),S(12));previewTag.Location=new Point(S(12),S(12));
+   LayoutTitle();LayoutSidebar();
   }
 
-  // ---------------------------------------------------------------- title bar: brand, file actions, window buttons
-  readonly List<ModernButton> actions=new List<ModernButton>();
+  // ---------------------------------------------------------------- title bar: brand, map name, file actions, Play
+  readonly List<ModernButton> leftActions=new List<ModernButton>();readonly List<Control> rightActions=new List<Control>();
   void BuildTitle(){
    var minimize=new WindowButton(WindowGlyph.Minimize);var close=new WindowButton(WindowGlyph.Close);
    minimize.Click+=(s,e)=>WindowState=FormWindowState.Minimized;maximize.Click+=(s,e)=>ToggleMaximize();close.Click+=(s,e)=>Close();
    titleBar.Controls.AddRange(new Control[]{minimize,maximize,close});titleBar.MouseDown+=(s,e)=>DragWindow(e);
-   Action<string,ButtonKind,Action> add=(text,kind,act)=>{var b=new ModernButton{Text=text,Kind=kind,Height=S(30)};b.Click+=(s,e)=>act();actions.Add(b);titleBar.Controls.Add(b);};
-   add("New island",ButtonKind.Ghost,NewIsland);add("Open",ButtonKind.Ghost,OpenPack);add("Save",ButtonKind.Primary,()=>Save(false));
-   actions.Add(undoButton);actions.Add(redoButton);titleBar.Controls.AddRange(new Control[]{undoButton,redoButton});
+   Func<string,ButtonKind,Action,ModernButton> add=(text,kind,act)=>{var b=new ModernButton{Text=text,Kind=kind,Height=S(32)};if(act!=null)b.Click+=(s,e)=>act();titleBar.Controls.Add(b);return b;};
+   leftActions.Add(add("New island",ButtonKind.Ghost,NewIsland));leftActions.Add(add("Open",ButtonKind.Ghost,OpenPack));
+   titleBar.Controls.Add(nameBox);
+   rightActions.Add(undoButton);rightActions.Add(redoButton);titleBar.Controls.AddRange(new Control[]{undoButton,redoButton});
    undoButton.Click+=(s,e)=>Undo();redoButton.Click+=(s,e)=>Redo();
-   actions.Add(viewToggle);titleBar.Controls.Add(viewToggle);viewToggle.Height=S(30);viewToggle.Click+=(s,e)=>Show3D(!in3d);
-   add("More",ButtonKind.Ghost,()=>{var b=actions[actions.Count-1];more.Show(b,new Point(0,b.Height+S(4)));});
+   var moreButton=add("More",ButtonKind.Ghost,null);rightActions.Add(moreButton);moreButton.Click+=(s,e)=>more.Show(moreButton,new Point(0,moreButton.Height+S(4)));
+   rightActions.Add(add("Save",ButtonKind.Primary,()=>Save(false)));
+   rightActions.Add(playButton);titleBar.Controls.Add(playButton);playButton.Height=S(32);playButton.Click+=(s,e)=>PlayInGame();
+   more.Items.Add("Map details (author, description)...",null,(s,e)=>MapDetails());
    more.Items.Add("Open the stock world",null,(s,e)=>OpenStock());
    more.Items.Add("Save as a new map...",null,(s,e)=>Save(true));
    more.Items.Add("Export a copy to another folder...",null,(s,e)=>Export());
@@ -122,7 +137,7 @@ namespace AnyMapMaker {
    more.Items.Add(new ToolStripSeparator());
    more.Items.Add("Show the maps folder",null,(s,e)=>ShowMapsFolder());
    more.Items.Add("Game folder...",null,(s,e)=>FindGame(true));
-   more.Items.Add("Fit the whole map   Ctrl+0",null,(s,e)=>view.FitAll());
+   more.Items.Add("Fit the whole map   Ctrl+0",null,(s,e)=>{view.FitAll();view3d.FitAll();});
    more.Items.Add(new ToolStripSeparator());
    more.Items.Add("Controls",null,(s,e)=>ShowHelp());
    more.Items.Add("About",null,(s,e)=>ThemedDialog.Tell(this,"About","Anymaker Map Maker "+Version+"\nPart of AnyAPI-Modding. Maps are played in game with the CustomMap mod: pick one on the Custom Game page."));
@@ -133,46 +148,70 @@ namespace AnyMapMaker {
     Theme.Caption(g,"ANY",brand,Theme.Blue,x,0,titleBar.Height);x+=(int)(TextRenderer.MeasureText(g,"ANY",brand,Size.Empty,TextFormatFlags.NoPadding).Width+brand.Size*.42f);
     Theme.Caption(g,"MAP",brand,Theme.Ink,x,0,titleBar.Height);x+=(int)(TextRenderer.MeasureText(g,"MAP",brand,Size.Empty,TextFormatFlags.NoPadding).Width+brand.Size*.42f)+S(10);
     Theme.Caption(g,"MAKER",sub,Theme.Dim,x,S(1),titleBar.Height);
-    int left=actions.Count>0?actions[actions.Count-1].Right+S(18):x;int right=titleBar.Controls[0].Left-S(12);
-    string doc=pack==null?"No map open":pack.Name+(unsaved?"  •  unsaved":"");
-    if(right>left)TextRenderer.DrawText(g,doc,file,new Rectangle(left,0,right-left,titleBar.Height),unsaved?Theme.Warn:Theme.Muted,TextFormatFlags.Right|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.EndEllipsis);
+    int left=nameBox.Right+S(12),right=rightActions[0].Left-S(12);
+    string doc=pack==null?"No map open":unsaved?"Not saved yet":"Saved";
+    if(right>left)TextRenderer.DrawText(g,doc,file,new Rectangle(left,0,right-left,titleBar.Height),unsaved?Theme.Warn:Theme.Muted,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.EndEllipsis);
     using(var line=new Pen(Theme.Line))g.DrawLine(line,0,titleBar.Height-1,titleBar.Width,titleBar.Height-1);};
   }
   void LayoutTitle(){
    int x=titleBar.Width-S(4);var buttons=new[]{(Control)titleBar.Controls[0],titleBar.Controls[1],titleBar.Controls[2]};
    for(int i=buttons.Length-1;i>=0;i--){x-=buttons[i].Width;buttons[i].Location=new Point(x,(titleBar.Height-buttons[i].Height)/2-1);}
-   int ax=S(284)+S(4);
-   using(var g=CreateGraphics())foreach(var b in actions){b.Width=TextRenderer.MeasureText(g,b.Text,b.Font).Width+S(28);b.Location=new Point(ax,(titleBar.Height-b.Height)/2);ax+=b.Width+(b==redoButton||b==viewToggle||b.Text=="Save"?S(16):S(6));}
+   using(var g=CreateGraphics()){
+    foreach(var b in leftActions.Concat(rightActions))b.Width=b is GoButton?((GoButton)b).PreferredWidth:TextRenderer.MeasureText(g,b.Text,b.Font).Width+S(28);
+    x-=S(12);for(int i=rightActions.Count-1;i>=0;i--){var b=rightActions[i];x-=b.Width;b.Location=new Point(x,(titleBar.Height-b.Height)/2);x-=b==undoButton?S(4):S(8);}
+    int ax=S(190);foreach(var b in leftActions){b.Location=new Point(ax,(titleBar.Height-b.Height)/2);ax+=b.Width+S(6);}
+    nameBox.SetBounds(ax+S(10),(titleBar.Height-S(32))/2,S(230),S(32));
+   }
    titleBar.Invalidate();
   }
 
-  // ---------------------------------------------------------------- sidebar: map details, tools, tool options, layers
-  readonly Caption mapCaption=new Caption("Map"), toolsCaption=new Caption("Tools"), optionsCaption=new Caption("Tool options"), layersCaption=new Caption("Layers");
+  // ---------------------------------------------------------------- right panel: the tool, things to place, the
+  // selected point, and what the map shows
+  readonly Caption thingsCaption=new Caption("Things to place"), nodeCaption=new Caption("Selected point"), layersCaption=new Caption("Show on the map");
   void BuildSidebar(){
-   sidebar.Controls.AddRange(new Control[]{mapCaption,nameBox,authorBox,descriptionBox,toolsCaption,tools,optionsCaption,options,layersCaption,layers});
+   toolTitle.Font=Theme.Font(19,true);toolTitle.ForeColor=Theme.Ink;toolTitle.BackColor=Theme.Side;toolTitle.Height=S(34);
+   nodeInfo.Font=Theme.Font(12.5f);nodeInfo.ForeColor=Theme.Muted;nodeInfo.BackColor=Theme.Side;
+   sidebar.Controls.AddRange(new Control[]{toolTitle,options,thingsCaption,things,nodeCaption,nodeInfo,falloffBox,layersCaption,layers});
    options.BackColor=Theme.Side;
    foreach(var box in new[]{nameBox,authorBox,descriptionBox})box.Box.TextChanged+=(s,e)=>MetadataChanged();
-   foreach(Tool t in Enum.GetValues(typeof(Tool)))tools.Add(t,ToolName(t));
+   foreach(Tool t in Enum.GetValues(typeof(Tool)))tools.Add(t,ToolName(t),ToolIcon(t));
    tools.Picked+=SetTool;
-   layers.Changed+=()=>{view.Invalidate();if(in3d)view3d.ShowScene(view3d.Scene,editor);};
+   BuildThings();
+   layers.Changed+=()=>{view.Invalidate();view3d.ShowScene(view3d.Scene,editor);};
    fenceBox.Items.AddRange(FenceStyle.All);fenceBox.SelectedIndex=0;
-   roadBox.Items.AddRange(Catalog.RoadTypes);roadBox.SelectedIndex=0;
+   roadBox.Items.AddRange(RoadChoice.All());roadBox.SelectedIndex=0;
    filterBox.Items.AddRange(Catalog.BuildingFilters);filterBox.SelectedIndex=0;
    orientBox.Items.AddRange(new object[]{"Keep turn","Turn 0","Turn 1","Turn 2"});orientBox.SelectedIndex=0;
    FillCatalogBoxes();
    radiusBox.ValueChanged+=()=>view.EraseRadius=radiusBox.Value;
-   sidebar.Paint+=(s,e)=>{var g=e.Graphics;using(var line=new Pen(Theme.Line))g.DrawLine(line,sidebar.Width-1,0,sidebar.Width-1,sidebar.Height);
+   ShowNode(null);
+   sidebar.Paint+=(s,e)=>{var g=e.Graphics;using(var line=new Pen(Theme.Line))g.DrawLine(line,0,0,0,sidebar.Height);
     if(sidebarHeight>sidebar.Height){int h=sidebar.Height,bar=Math.Max(S(24),h*h/sidebarHeight),top=(h-bar)*sideScroll/Math.Max(1,sidebarHeight-h);
      g.SmoothingMode=SmoothingMode.AntiAlias;using(var p=Theme.Rounded(new RectangleF(sidebar.Width-S(7),top+2,S(3),bar-4),S(1.5f)))using(var b=new SolidBrush(Theme.Line))g.FillPath(b,p);}};
   }
+  // One click picks the tool and its setting.
+  void BuildThings(){
+   Action<string,string,Tool,Action,Func<bool>> thing=(name,icon,tool,set,on)=>things.Add(name,icon,()=>{if(set!=null)set();tools.Pick(tool);},()=>tools.Current==tool&&(on==null||on()));
+   Func<string,Func<bool>> filter=f=>()=>(string)filterBox.SelectedItem==f;
+   thing("House","house",Tool.Building,()=>filterBox.SelectedItem="house",filter("house"));
+   thing("Farm","barn",Tool.Building,()=>filterBox.SelectedItem="farm",filter("farm"));
+   thing("Town","shop",Tool.Building,()=>filterBox.SelectedItem="town",filter("town"));
+   thing("Industry","factory",Tool.Building,()=>filterBox.SelectedItem="industrial",filter("industrial"));
+   thing("Gas station","fuel",Tool.Building,()=>filterBox.SelectedItem="gas_station",filter("gas_station"));
+   thing("Street light","pole",Tool.Prop,()=>{if(propBox.Items.Contains("lamp_post_a"))propBox.SelectedItem="lamp_post_a";},()=>(string)propBox.SelectedItem=="lamp_post_a");
+   thing("Fence","fence",Tool.Fence,null,null);
+   thing("Loot","loot",Tool.Loot,null,null);
+   thing("Zombies","enemy",Tool.Enemy,null,null);
+  }
   int sideScroll,sidebarHeight;
   void LayoutSidebar(){
-   int pad=S(16),w=sidebar.ClientSize.Width-pad*2-S(4);
-   sideScroll=Math.Max(0,Math.Min(sideScroll,sidebarHeight-sidebar.Height));int y=S(6)-sideScroll;
+   int pad=S(18),w=sidebar.ClientSize.Width-pad*2-S(4);
+   sideScroll=Math.Max(0,Math.Min(sideScroll,sidebarHeight-sidebar.Height));int y=S(14)-sideScroll;
    Action<Control,int> put=(c,gap)=>{c.SetBounds(pad,y,w,c.Height);y+=c.Height+gap;};
-   put(mapCaption,0);put(nameBox,S(8));put(authorBox,S(8));put(descriptionBox,S(12));
-   put(toolsCaption,S(2));put(tools,S(10));
-   put(optionsCaption,S(2));LayoutOptions(w);put(options,S(12));
+   put(toolTitle,S(6));LayoutOptions(w);put(options,S(18));
+   put(thingsCaption,S(4));put(things,S(18));
+   put(nodeCaption,S(2));nodeInfo.Height=TextRenderer.MeasureText(nodeInfo.Text,nodeInfo.Font,new Size(w,0),TextFormatFlags.WordBreak).Height+S(6);put(nodeInfo,S(8));
+   falloffBox.SetBounds(pad,y,S(150),S(32));y+=S(32)+S(18);
    put(layersCaption,S(2));put(layers,S(16));
    int total=y+sideScroll;if(total!=sidebarHeight){sidebarHeight=total;if(sideScroll>Math.Max(0,total-sidebar.Height)){LayoutSidebar();return;}}
    sidebar.Invalidate();
@@ -183,30 +222,38 @@ namespace AnyMapMaker {
     var h=c as Hint;if(h!=null)h.Fit(w);
     if(c is Stepper)c.SetBounds(0,y,Math.Min(w,S(150)),S(32));
     else if(c is ThemedCombo)c.SetBounds(0,y,w,S(32));
+    else if(c==tileJson)c.SetBounds(0,y,w,S(300));
     else c.SetBounds(0,y,w,c.Height);
     y+=c.Height+(c is Label&&!(c is Hint)?S(4):S(10));
    }
    options.Height=Math.Max(0,y-S(10));
   }
+  // The point under the mouse or being dragged in the 3D preview.
+  void ShowNode(MapNode n){
+   if(n==null)nodeInfo.Text="Hover over a white dot in the 3D preview. Drag it to move it; hold Shift while dragging to raise or lower it.\nSmooth radius: how far a moved road point pulls the road with it.";
+   else{
+    string what=n.IsRoad?"Road point":n.Label;double grade=0;
+    if(n.IsRoad)foreach(var e in n.Ends){Vec3 a,b;Vec3.TryRead(e.Link["pos_a"],out a);Vec3.TryRead(e.Link["pos_b"],out b);double run=Math.Sqrt((b.X-a.X)*(b.X-a.X)+(b.Z-a.Z)*(b.Z-a.Z));if(run>0.5)grade=Math.Max(grade,Math.Abs(b.Y-a.Y)/run*100);}
+    nodeInfo.Text=what+"\nHeight: "+n.Position.Y.ToString("0")+" m"+(n.IsRoad?"\nSteepness here: "+grade.ToString("0")+"% ("+(grade<=8?"easy":grade<=15?"ok for most cars":grade<=25?"steep":"too steep for most vehicles")+")":"");
+   }
+   if(sidebar.IsHandleCreated)LayoutSidebar();
+  }
 
-  // ---------------------------------------------------------------- inspector: the selected tile's raw data
-  readonly Box tileBox=new Box("Selected tile");
+  // ---------------------------------------------------------------- select tool: the clicked tile's raw data
   void BuildInspector(){
-   inspector.Padding=new Padding(S(14));inspector.Controls.Add(tileBox);
-   tileTitle.Font=Theme.Font(12.5f);tileTitle.ForeColor=Theme.Ink;tileTitle.BackColor=Theme.Panel;
+   tileTitle.Font=Theme.Font(12.5f);tileTitle.ForeColor=Theme.Ink;tileTitle.BackColor=Theme.Side;tileTitle.Height=S(40);
    DarkScrollbars(tileJson);tileJson.BackColor=Theme.Raised;tileJson.ForeColor=Theme.Ink;tileJson.Font=Theme.Mono(12);
    tileJson.TextChanged+=(s,e)=>applyJson.Enabled=view.Selected!=null&&!showingTile;
    applyJson.Height=S(34);applyJson.Click+=(s,e)=>ApplyTileJson();
-   tileBox.Controls.AddRange(new Control[]{tileTitle,tileJson,applyJson});
-   inspector.Paint+=(s,e)=>{using(var line=new Pen(Theme.Line))e.Graphics.DrawLine(line,0,0,0,inspector.Height);};
    ShowTile(null);
   }
-  void LayoutInspector(){
-   int pad=S(14);tileBox.SetBounds(pad,pad,inspector.Width-pad*2,inspector.Height-pad*2);
-   int x=S(14),w=tileBox.Width-x*2,y=Box.HeaderHeight+S(10);
-   tileTitle.SetBounds(x,y,w,S(40));y+=S(46);
-   applyJson.SetBounds(x,tileBox.Height-S(14)-applyJson.Height,w,applyJson.Height);
-   tileJson.SetBounds(x,y,w,applyJson.Top-S(12)-y);
+
+  // ---------------------------------------------------------------- the bar between the map and the 3D preview
+  void BuildSplitter(){
+   bool dragging=false;
+   splitter.MouseDown+=(s,e)=>{if(e.Button==MouseButtons.Left)dragging=true;};
+   splitter.MouseUp+=(s,e)=>dragging=false;
+   splitter.MouseMove+=(s,e)=>{if(!dragging)return;var p=PointToClient(Cursor.Position);double h=view3d.Bottom-view.Top;in3d=false;split=Math.Max(0.15,Math.Min(0.85,(p.Y-view.Top)/h));LayoutShell();};
   }
 
   // ---------------------------------------------------------------- status bar
@@ -380,9 +427,14 @@ namespace AnyMapMaker {
 
   // ---------------------------------------------------------------- tools
   static string ToolName(Tool t){
-   switch(t){case Tool.Select:return "Select";case Tool.Terrain:return "Terrain";case Tool.Height:return "Height";case Tool.Road:return "Road";
-    case Tool.Fence:return "Fence";case Tool.Prop:return "Prop";case Tool.Building:return "Building";case Tool.Loot:return "Loot";
-    case Tool.Enemy:return "Enemy";case Tool.Start:return "Start";default:return "Erase";}
+   switch(t){case Tool.Select:return "Look";case Tool.Terrain:return "Ground";case Tool.Height:return "Hills";case Tool.Road:return "Road";
+    case Tool.Fence:return "Fence";case Tool.Prop:return "Props";case Tool.Building:return "Build";case Tool.Loot:return "Loot";
+    case Tool.Enemy:return "Zombies";case Tool.Start:return "Start";default:return "Erase";}
+  }
+  static string ToolIcon(Tool t){
+   switch(t){case Tool.Select:return "pick";case Tool.Terrain:return "ground";case Tool.Height:return "hills";case Tool.Road:return "road";
+    case Tool.Fence:return "fence";case Tool.Prop:return "prop";case Tool.Building:return "house";case Tool.Loot:return "loot";
+    case Tool.Enemy:return "enemy";case Tool.Start:return "start";default:return "erase";}
   }
   void FillCatalogBoxes(){
    string piece=pieceBox.SelectedItem as string,prop=propBox.SelectedItem as string;
@@ -393,37 +445,30 @@ namespace AnyMapMaker {
   }
   static Label Label(string text){return new Label{Text=text,ForeColor=Theme.Ink,Font=Theme.Font(12.5f),BackColor=Color.Transparent,Height=S(20),AutoEllipsis=true};}
   bool rebuildPending;
-  void Show3D(bool on){
-   in3d=on;viewToggle.Text=on?"2D view":"3D view";LayoutTitle();
-   if(on&&pack!=null&&view3d.Pack!=pack)view3d.SetMap(pack,MapScene.Build(pack),editor);else if(on&&pack!=null)view3d.ShowScene(MapScene.Build(pack),editor);
-   view3d.Visible=on;view.Visible=!on;
-   if(on){tools.Current=(Tool)(-1);tools.Invalidate();options.Controls.Clear();
-    options.Controls.AddRange(new Control[]{new Hint("Drag the white dots to move road points, props and spots. Hold Shift while you drag to raise or lower them: that's how you make ramps and inclines."),
-     Label("Smooth radius"),falloffBox,new Hint("Road points within this distance move along with a smooth falloff, so a raised point makes a gentle slope. 0 moves one point."),
-     new Hint("Right-drag turns the camera, middle-drag (or Shift+right-drag) moves it, scroll zooms, double click centres. Tab switches 2D and 3D. Pick a tool to go back to 2D.")});
-    LayoutSidebar();view3d.Focus();
-   }else{tools.Pick(view.Tool);}
+  // Tab or the corner button: a big 3D preview with a small map, and back.
+  void Show3D(bool on){in3d=on;LayoutShell();(on?(Control)view3d:view).Focus();}
+  static string ToolTitle(Tool t){
+   switch(t){case Tool.Select:return "Look at a tile";case Tool.Terrain:return "Paint the ground";case Tool.Height:return "Hills and valleys";case Tool.Road:return "Draw roads";
+    case Tool.Fence:return "Build fences";case Tool.Prop:return "Place props";case Tool.Building:return "Place buildings";case Tool.Loot:return "Place loot";
+    case Tool.Enemy:return "Place zombies";case Tool.Start:return "Set the start point";default:return "Erase things";}
   }
   void SetTool(Tool t){
-   if(in3d){in3d=false;view3d.Visible=false;view.Visible=true;viewToggle.Text="3D view";LayoutTitle();tools.Current=t;tools.Invalidate();}
-   view.Tool=t;view.ClearRoad();options.Controls.Clear();
+   view.Tool=t;view.ClearRoad();options.Controls.Clear();toolTitle.Text=ToolTitle(t);
    switch(t){
-    case Tool.Select:options.Controls.Add(new Hint("Click a tile to see its raw data on the right. Edit it there and press Apply."));break;
+    case Tool.Select:options.Controls.AddRange(new Control[]{new Hint("Click a tile on the map to see its raw data here. Edit it and press Apply (for experts)."),tileTitle,tileJson,applyJson});break;
     case Tool.Terrain:
-     options.Controls.AddRange(new Control[]{Label("Terrain piece"),pieceBox,Label("Turn"),orientBox,setHeight,heightBox,
-      new Hint("Click or drag over triangles. Upper triangles get the matching _in piece. Neighbouring pieces should have matching edges.")});break;
-    case Tool.Height:options.Controls.Add(new Hint("Click or drag to raise triangles one step (32 m). Hold Ctrl to lower. Things on a tile move with it."));break;
-    case Tool.Road:options.Controls.AddRange(new Control[]{Label("Road type"),roadBox,new Hint("Click points along the road. Double click or Enter finishes, Backspace removes the last point, Esc cancels.")});break;
-    case Tool.Fence:options.Controls.AddRange(new Control[]{Label("Fence"),fenceBox,new Hint("Drag a line to build a fence along it.")});break;
-    case Tool.Prop:options.Controls.AddRange(new Control[]{Label("Prop (lamp_post_a is a street light)"),propBox,Label("Turn"),rotBox,new Hint("Click to place. Drag to aim it instead.")});break;
-    case Tool.Building:options.Controls.AddRange(new Control[]{Label("Building type"),filterBox,Label("Size (0 = any)"),sizeBox,
-     new Hint("A building spot. The game picks a building of this type for it when a world is created. Drag to aim the front.")});break;
-    case Tool.Loot:options.Controls.Add(new Hint("Click to add a loot spot. Drag to aim it."));break;
-    case Tool.Enemy:options.Controls.Add(new Hint("Click to add an enemy spawn point."));break;
-    case Tool.Start:options.Controls.Add(new Hint("Click where players start a new game, in every game mode. The crosshair shows it. Without one, the game's own start points are used."));break;
-    case Tool.Erase:options.Controls.AddRange(new Control[]{Label("Brush size"),radiusBox,eraseThings,eraseRoads,new Hint("Click or drag over things to remove them.")});break;
+     options.Controls.AddRange(new Control[]{new Hint("Click or drag over the map to paint ground. Pick \"ocean\" to remove land."),Label("Ground piece"),pieceBox,Label("Turn"),orientBox,setHeight,heightBox});break;
+    case Tool.Height:options.Controls.Add(new Hint("Click or drag on the map to raise the ground 32 m. Hold Ctrl to lower it. Roads and things on it move with it. Watch the 3D preview."));break;
+    case Tool.Road:options.Controls.AddRange(new Control[]{new Hint("Click on the map to drop road points. Double click or Enter finishes, Backspace removes the last point, Esc cancels. Then drag the white dots in the 3D preview to shape hills."),Label("Road type"),roadBox});break;
+    case Tool.Fence:options.Controls.AddRange(new Control[]{new Hint("Drag a line on the map to build a fence along it."),Label("Fence"),fenceBox});break;
+    case Tool.Prop:options.Controls.AddRange(new Control[]{new Hint("Click on the map to place. Drag to aim it."),Label("Prop (lamp_post_a is a street light)"),propBox,Label("Turn"),rotBox});break;
+    case Tool.Building:options.Controls.AddRange(new Control[]{new Hint("Click on the map to place a building spot; drag to aim its front. The game picks a building of this kind when a world is made."),Label("Kind of building"),filterBox,Label("Size (0 = any)"),sizeBox});break;
+    case Tool.Loot:options.Controls.Add(new Hint("Click on the map to add a loot spot. Drag to aim it."));break;
+    case Tool.Enemy:options.Controls.Add(new Hint("Click on the map to add a zombie spawn point."));break;
+    case Tool.Start:options.Controls.Add(new Hint("Click on the map where players start a new game (every game mode). The green ring shows it in 3D. Without one, the game's own start points are used."));break;
+    case Tool.Erase:options.Controls.AddRange(new Control[]{new Hint("Click or drag over things on the map to remove them."),Label("Brush size"),radiusBox,eraseThings,eraseRoads});break;
    }
-   LayoutSidebar();view.Invalidate();view.Focus();
+   things.Invalidate();LayoutSidebar();view.Invalidate();view.Focus();
   }
   bool Ready(){if(pack==null||editor==null){SetStatus("Open a map first: New island, Open, or More, Open the stock world.",Theme.Warn);return false;}return true;}
   void Edited(bool rebuild){
@@ -452,7 +497,7 @@ namespace AnyMapMaker {
    if(!done)SetStatus("That spot is ocean. Paint terrain there first.",Theme.Warn);
   }
   void OnLine(double x0,double z0,double x1,double z1){if(!Ready())return;editor.Begin();SetStatus(editor.AddFence((FenceStyle)fenceBox.SelectedItem,x0,z0,x1,z1)+" fence pieces placed",Theme.Dim);}
-  void OnRoad(List<Vec3> points){if(!Ready())return;editor.Begin();SetStatus(editor.AddRoad((string)roadBox.SelectedItem,points)+" road links placed",Theme.Dim);if(editor.Commit())Edited(true);}
+  void OnRoad(List<Vec3> points){if(!Ready())return;editor.Begin();SetStatus(editor.AddRoad(((RoadChoice)roadBox.SelectedItem).Id,points)+" road links placed",Theme.Dim);if(editor.Commit())Edited(true);}
   void OnErase(double x,double z){if(!Ready())return;editor.Begin();if(editor.Erase(x,z,radiusBox.Value,eraseThings.Checked,eraseRoads.Checked)>0){unsaved=true;UpdateCounts();}}
   void NewIsland(){
    if(!ConfirmDiscard())return;
@@ -480,14 +525,40 @@ namespace AnyMapMaker {
    editor.AddBuildingSpot("house",2,c.X+150,c.Z+200,0.3);editor.AddLoot(c.X-100,c.Z+250,0);editor.Commit();Edited(true);
    pack.Spawn=new Vec3(c.X,2,c.Z+120);
    tools.Pick(Tool.Road);view.Selected=new TileKey(10,10,0);ShowTile(view.Selected);
-   view.FitAll();
-   if(threeD){editor.Begin();editor.SetHeight(new TileKey(11,10,0),3);editor.SetHeight(new TileKey(10,11,0),2);editor.Commit();Edited(true);Show3D(true);view3d.LookAt(new Vec3(c.X,32,c.Z),700);view3d.Turn(0.9,0.32);}
+   editor.Begin();editor.SetHeight(new TileKey(11,10,0),3);editor.SetHeight(new TileKey(10,11,0),2);editor.Commit();Edited(true);
+   view.FitAll();view3d.LookAt(new Vec3(c.X,32,c.Z),900);view3d.Turn(0.9,0.38);
+   if(threeD)Show3D(true);
+  }
+
+  // Saves, points the Custom Game page at this map (CustomGame remembers the last page in last.cfg) and starts the
+  // game through Steam. In game: New Game, Custom Game, Start.
+  void PlayInGame(){
+   if(pack==null){SetStatus("Open a map first.",Theme.Warn);return;}
+   Save(false);if(unsaved||pack.Folder==null)return;
+   string mapName=Path.GetFileName(pack.Folder.TrimEnd('\\','/'));
+   try{
+    string dir=Path.Combine(game.Folder,"AnyAPI and Modding","mods","CustomGame");Directory.CreateDirectory(dir);
+    string cfg=Path.Combine(dir,"last.cfg");var lines=new List<string>();
+    if(File.Exists(cfg))foreach(var l in File.ReadAllLines(cfg))if(!l.StartsWith("map="))lines.Add(l);
+    if(!lines.Exists(l=>l.Contains("=")))lines.Add("mode=1");   // a file needs one setting to be read; 1 = Creative
+    lines.Add("map="+mapName);File.WriteAllLines(cfg,lines);
+   }catch(Exception e){SetStatus("Saved, but couldn't pick the map for the Custom Game page: "+e.Message,Theme.Warn);}
+   try{Process.Start("steam://rungameid/4435340");SetStatus("Starting Anymaker. Go to New Game, Custom Game: \""+mapName+"\" is already picked in the Map row. Press Start.",Theme.Ok);}
+   catch(Exception e){SetStatus("Saved. Couldn't start Steam ("+e.Message+"). Start Anymaker yourself; \""+mapName+"\" is picked on the Custom Game page.",Theme.Warn);}
+  }
+  void MapDetails(){
+   if(pack==null)return;
+   using(var d=new ThemedDialog("Map details",440,150)){
+    authorBox.SetBounds(0,0,d.Body.Width,S(32));descriptionBox.SetBounds(0,S(44),d.Body.Width,S(32));
+    d.Body.Controls.AddRange(new Control[]{authorBox,descriptionBox});d.AddButton("Done",DialogResult.OK,true);d.ShowDialog(this);
+    d.Body.Controls.Clear();
+   }
   }
 
   bool showingTile;
   void ShowTile(TileKey? key){
    var t=key==null||pack==null?null:pack.Get(key.Value);showingTile=true;
-   if(t==null){tileTitle.Text="Pick the Select tool and click a tile\nto see its raw data here.";tileTitle.ForeColor=Theme.Muted;tileJson.Text="";applyJson.Enabled=false;showingTile=false;return;}
+   if(t==null){tileTitle.Text="No tile picked yet.";tileTitle.ForeColor=Theme.Muted;tileJson.Text="";applyJson.Enabled=false;showingTile=false;return;}
    tileTitle.ForeColor=Theme.Ink;tileTitle.Text=t.Key.FileName+"\n"+t.Definition+", height "+t.Height+" ("+t.Height*32+" m)";
    tileJson.Text=Json.Write(t.Data,true).Replace("\n","\r\n");applyJson.Enabled=false;showingTile=false;
   }

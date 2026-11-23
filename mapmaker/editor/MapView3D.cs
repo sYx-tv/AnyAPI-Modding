@@ -13,6 +13,7 @@ namespace AnyMapMaker {
   public double Falloff=120;           // proportional-editing radius for road nodes, metres
   public event Action<string> StatusChanged;
   public event Action NodesMoved, DragFinished;
+  public event Action<MapNode> NodeChanged;   // hovered or dragged point (null when none)
   // Camera: orbits a target point.
   double tx,ty,tz,yaw=0.6,pitch=0.75,dist=3000;const double Fov=50*Math.PI/180;
   Vec3 eye,fwd,right,up;double focal;
@@ -157,12 +158,12 @@ namespace AnyMapMaker {
     double k=dist/focal;var flat=Norm(new Vec3(fwd.X,0,fwd.Z));
     tx-=right.X*dx*k-flat.X*dy*k/Math.Max(0.3,Math.Sin(pitch));tz-=right.Z*dx*k-flat.Z*dy*k/Math.Max(0.3,Math.Sin(pitch));Invalidate();return;
    }
-   var h=NodeAt(e.Location);if(h!=hover){hover=h;Cursor=h!=null?Cursors.Hand:Cursors.Default;Invalidate();}
+   var h=NodeAt(e.Location);if(h!=hover){hover=h;Cursor=h!=null?Cursors.Hand:Cursors.Default;if(h==null&&NodeChanged!=null)NodeChanged(null);Invalidate();}
    if(h!=null)Status(h);
    else if(StatusChanged!=null){Vec3 hit;if(HitPlane(e.Location,0,out hit)){var k=Grid.At(hit.X,hit.Z);var t=Pack==null?null:Pack.Get(k);
     StatusChanged("x "+hit.X.ToString("0")+" m, z "+hit.Z.ToString("0")+" m   "+(t==null?"sea":t.Definition+", height "+t.Height+" ("+t.Height*32+" m)")+"   Drag a node to move it, Shift+drag to raise or lower it. Right-drag turns, middle-drag moves, scroll zooms.");}}
   }
-  void Status(MapNode n){if(StatusChanged!=null)StatusChanged((n.IsRoad?"Road node ("+n.Label+")":n.Label)+"   "+n.Position.Y.ToString("0.0")+" m up"+(n.IsRoad&&n.Ends.Count>2?", where "+n.Ends.Count+" road pieces meet":""));}
+  void Status(MapNode n){if(NodeChanged!=null)NodeChanged(n);if(StatusChanged!=null)StatusChanged((n.IsRoad?"Road node ("+n.Label+")":n.Label)+"   "+n.Position.Y.ToString("0.0")+" m up"+(n.IsRoad&&n.Ends.Count>2?", where "+n.Ends.Count+" road pieces meet":""));}
   protected override void OnMouseUp(MouseEventArgs e){
    if(drag!=null&&e.Button==MouseButtons.Left){Editor.EndDrag(drag);drag=null;Capture=false;if(DragFinished!=null)DragFinished();Reload();Invalidate();}
    orbiting=panning=false;
