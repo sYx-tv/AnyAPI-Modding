@@ -60,6 +60,14 @@ inline double fuel_thrust_newtons(double tsfc_kg_per_n_hour, double fuel_flow) {
     if (!std::isfinite(fuel_flow) || !std::isfinite(tsfc_kg_per_n_hour) || tsfc_kg_per_n_hour <= 0 || fuel_flow <= 0) return 0;
     return std::min(kMaxNewtons, fuel_flow * kFuelDensity / (tsfc_kg_per_n_hour / 3600.0));
 }
+// The stock engine's rev limiter: at full speed (speed factor about 1) it cuts fuel on alternate ticks (second test,
+// 2026-11-23: fuel_flow 0.00248 / 0 / 0.00248 at 334 rps, throttle 1), which made the thrust pulse. A cut while the
+// engine is at its limit with throttle open keeps the last real fuel flow, so a jet at full power holds full thrust.
+inline double limiter_fuel(double fuel, double spool, double throttle, double& last_fuel) {
+    if (std::isfinite(fuel) && fuel > 0) { last_fuel = fuel; return fuel; }
+    if (std::isfinite(spool) && spool > 0.9 && std::isfinite(throttle) && throttle > 0.05 && last_fuel > 0) return last_fuel;
+    return 0;
+}
 // Spool lag: thrust follows the fuel-burn target with a first-order lag, slower going up than coming down.
 constexpr double kSpoolUpSeconds = 1.6, kSpoolDownSeconds = 0.8;
 inline double lag_thrust(double current, double target, double dt) {

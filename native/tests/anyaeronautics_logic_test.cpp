@@ -30,6 +30,13 @@ int main() {
     assert(10000 - down > up);
     assert(lag_thrust(5, 7, 0) == 5 && lag_thrust(NAN, 7, 10) > 0 && lag_thrust(5, 7, 100) < 7);
 
+    // Rev limiter: a cut at full speed with throttle open keeps the last flow; a real stop does not.
+    double last = 0;
+    assert(near(limiter_fuel(0.00248, 0.99, 1, last), 0.00248) && near(last, 0.00248));
+    assert(near(limiter_fuel(0, 0.99, 1, last), 0.00248));
+    assert(limiter_fuel(0, 0.99, 0, last) == 0 && limiter_fuel(0, 0.5, 1, last) == 0 && limiter_fuel(NAN, 0.3, 1, last) == 0);
+    double fresh = 0; assert(limiter_fuel(0, 0.99, 1, fresh) == 0);
+
     // Direction: from the nozzle toward the engine, unit length; refuses degenerate or absurd spans.
     Vec3 d;
     assert(push_direction({0, 0, 0}, {0, 0, 0.4}, d) && near(d.z, 1) && near(d.x, 0));

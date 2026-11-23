@@ -220,7 +220,7 @@ void hk_add_definitions(void* container, const void* file) {
 
 // ================================================================== thrust (server thread)
 // Data slots are never freed: microcontrollers keep the pointers get_data_f64 hands them.
-struct Live { double slots[kSlots]{}; double newtons = 0, last = 0, next_log = 0; int logs = 8; };
+struct Live { double slots[kSlots]{}; double newtons = 0, last = 0, next_log = 0, last_fuel = 0; int logs = 8; };
 std::mutex g_mutex;
 std::unordered_map<const void*, Live> g_live;   // keyed by server component
 
@@ -249,11 +249,14 @@ void hk_tick(uint8_t* exhaust, uint8_t* vehicle, void* scene) {
     if (size < 0 || !can_read(exhaust, off::exhaust_size) || !can_read(vehicle + off::vehicle_physics, 8)) return;
     double spool = rd<double>(exhaust, off::exhaust_thrust_factor);
     const void* upstream = rd<const void*>(exhaust, off::exhaust_upstream);
-    double fuel = upstream && can_read(upstream, off::combustion_size) ? rd<double>(upstream, off::combustion_fuel_flow) : 0;
-    double target = fuel_thrust_newtons(kSizes[size].tsfc, fuel);
+    bool has_engine = upstream && can_read(upstream, off::combustion_size);
+    double raw_fuel = has_engine ? rd<double>(upstream, off::combustion_fuel_flow) : 0;
+    double engine_throttle = has_engine ? rd<double>(upstream, off::combustion_throttle) : 0;
     void* physics = vehicle + off::vehicle_physics;
     std::lock_guard lock(g_mutex);
     Live& live = g_live[exhaust];
+    double fuel = has_engine ? limiter_fuel(raw_fuel, spool, engine_throttle, live.last_fuel) : 0;
+    double target = fuel_thrust_newtons(kSizes[size].tsfc, fuel);
     double now = now_seconds();
     live.newtons = lag_thrust(live.newtons, target, live.last > 0 ? now - live.last : 0);
     live.last = now;
