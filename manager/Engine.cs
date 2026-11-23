@@ -94,14 +94,17 @@ namespace AnyApiManager {
    }
    var roots=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
    foreach(string steam in new[]{RegistryText(@"HKEY_CURRENT_USER\Software\Valve\Steam","SteamPath"),RegistryText(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam","InstallPath"),RegistryText(@"HKEY_LOCAL_MACHINE\SOFTWARE\Valve\Steam","InstallPath")})if(!string.IsNullOrEmpty(steam))roots.Add(steam.Replace('/','\\'));
-   roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"Steam"));roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"Steam"));
+   if(!Platform.Unix){roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"Steam"));roots.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"Steam"));}
+   // Linux Steam (native, Flatpak, Snap), seen directly from Mono or through Z: from Wine/Proton.
+   if(Platform.Linux)foreach(string root in Platform.LinuxSteamRoots())roots.Add(root);
+   roots.RemoveWhere(r=>string.IsNullOrEmpty(r)||r=="Steam");
    foreach(var root in roots.ToArray())foreach(string vdf in new[]{"steamapps/libraryfolders.vdf","config/libraryfolders.vdf"}){
-    string file=Path.Combine(root,vdf);try{if(!File.Exists(file))continue;foreach(Match m in Regex.Matches(File.ReadAllText(file),"\"path\"\\s+\"([^\"]+)\""))roots.Add(m.Groups[1].Value.Replace("\\\\","\\"));}catch(IOException){}catch(UnauthorizedAccessException){}
+    string file=Path.Combine(root,vdf);try{if(!File.Exists(file))continue;foreach(Match m in Regex.Matches(File.ReadAllText(file),"\"path\"\\s+\"([^\"]+)\""))roots.Add(Platform.FromSteamPath(m.Groups[1].Value.Replace("\\\\","\\")));}catch(IOException){}catch(UnauthorizedAccessException){}
    }
    foreach(string root in roots){string path=Path.Combine(root,"steamapps","common","Anymaker");if(IsGameFolder(path)){ManagerLog.Write("Detected game folder "+path);return path;}}
    ManagerLog.Write("No Anymaker folder found in Steam libraries: "+string.Join("; ",roots));return "";
   }
-  public static bool Running(){foreach(var p in Process.GetProcessesByName("game"))using(p){return true;}return false;}
+  public static bool Running(){foreach(string name in Platform.Unix?new[]{"game","game.exe"}:new[]{"game"})foreach(var p in Process.GetProcessesByName(name))using(p){return true;}return false;}
   public static string StateFile(string game){return Rules.Target(game,"AnyAPI and Modding/.manager/installed.json");}
   public static Installed ReadInstalled(string game){string path=StateFile(game);return File.Exists(path)?Json.Read<Installed>(File.ReadAllText(path)):new Installed();}
   public static string PausedApi(string game){return Rules.Target(game,"AnyAPI and Modding/.manager/paused-dinput8.dll");}
@@ -254,6 +257,7 @@ namespace AnyApiManager {
    string path=Rules.Target(request.GamePath,"AnyAPI and Modding/.manager/access-test-"+Guid.NewGuid().ToString("N"));bool elevation=false;
    try{Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,"");File.Delete(path);}catch(UnauthorizedAccessException e){elevation=true;ManagerLog.Write("Game folder needs administrator rights ("+e.Message+"); asking Windows to elevate "+request.Action);}
    if(!elevation)return await Task.Run(()=>Apply(request));
+   if(Platform.Linux)throw new IOException("The manager can't write to the game folder ("+request.GamePath+"). On Linux, make sure your user owns the Steam library folder.");
    Directory.CreateDirectory(Data);string req=Path.Combine(Data,Guid.NewGuid().ToString("N")+".request.json");File.WriteAllText(req,Json.Write(request));
    try{var info=new ProcessStartInfo(Assembly.GetExecutingAssembly().Location,"--apply \""+req+"\""){UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden};using(var p=Process.Start(info)){await Task.Run(()=>p.WaitForExit());}
     if(!File.Exists(req+".result"))throw new IOException("The administrator step closed without finishing. No game files were changed. Details: "+ManagerLog.LogFile);return Json.Read<ApplyResult>(File.ReadAllText(req+".result"));}

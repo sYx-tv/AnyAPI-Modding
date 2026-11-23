@@ -110,7 +110,7 @@ namespace AnyApiManager {
   public Field(string placeholder,bool mono=false){
    BackColor=Theme.Raised;Height=Theme.S(32);SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);Cursor=Cursors.IBeam;
    Box.BorderStyle=BorderStyle.None;Box.BackColor=Theme.Raised;Box.ForeColor=Theme.Ink;Box.Font=mono?Theme.Mono(12.5f):Theme.Font(13);Controls.Add(Box);
-   Box.HandleCreated+=(s,e)=>{if(placeholder!="")SendMessage(Box.Handle,0x1501,new IntPtr(1),placeholder);};
+   Box.HandleCreated+=(s,e)=>{if(placeholder!=""&&!Platform.Unix)SendMessage(Box.Handle,0x1501,new IntPtr(1),placeholder);};
    Box.GotFocus+=(s,e)=>{focused=true;Invalidate();};Box.LostFocus+=(s,e)=>{focused=false;Invalidate();};Click+=(s,e)=>Box.Focus();
   }
   protected override void OnLayout(LayoutEventArgs e){int pad=Theme.S(10);Box.SetBounds(pad,(Height-Box.Height)/2,Width-pad*2,Box.Height);base.OnLayout(e);}

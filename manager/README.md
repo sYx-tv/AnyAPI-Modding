@@ -41,6 +41,21 @@ To refresh the bundle for a new API release, copy the root `catalog.json` to `pu
 
 Validation: run the EXE with `--self-test <absolute output.json>`; run `--capture <absolute preview.png>` to render its own interface for review. These tests use disposable fixture folders, never the installed game. See CATALOG_FORMAT.md and GITHUB_SETUP.md for publishing.
 
+## Linux (Steam Proton)
+
+Anymaker runs on Linux through Steam Proton. The manager runs there too:
+
+- **Natively with Mono** (recommended). Install Mono (Fedora: `sudo dnf install mono-complete`, Ubuntu/Debian: `sudo apt install mono-complete`, Arch: `sudo pacman -S mono`), then run `mono "AnyAPI Manager.exe"`. It finds Steam in `~/.local/share/Steam`, `~/.steam/steam`, Flatpak (`~/.var/app/com.valvesoftware.Steam`) and Snap, plus any extra libraries in `libraryfolders.vdf`.
+- **Through Wine or Proton**. It looks for the same Linux Steam folders through the `Z:` drive. If it still can't find the game, choose Browse and pick `Z:\home\<you>\.local\share\Steam\steamapps\common\Anymaker\game.exe`.
+
+Either way, Proton loads its own `dinput8.dll` unless Anymaker's Steam launch options say otherwise. Set this in Steam > Anymaker > Properties > General > Launch options, or AnyAPI never starts:
+
+```
+WINEDLLOVERRIDES="dinput8=n,b" %command%
+```
+
+`manager/Platform.cs` holds the Linux detection. On native Mono the borderless window is moved by hand (no `user32.dll`) and edge resizing is off; maximize still works. Windows-only checks in `--self-test` (registry .NET release, TLS default) are relaxed on Mono. In-place manager self-update is unproven on Linux.
+
 ## Look and layout
 
 Version 1.4.0 has a frameless dark window: a slim title bar (drag to move, double-click

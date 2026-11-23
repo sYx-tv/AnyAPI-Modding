@@ -25,7 +25,7 @@ namespace AnyApiManager {
    const string nt=@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion";
    var os=Environment.OSVersion.Version;int release=NetFrameworkRelease();bool admin=false;
    try{using(var id=WindowsIdentity.GetCurrent())admin=new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);}catch{}
-   return "Manager "+ManagerUpdates.DisplayVersion+" on "+WindowsName(os.Build)+" "+Reg(nt,"DisplayVersion")+" (build "+os.Build+"."+Reg(nt,"UBR")+", "+Reg(nt,"EditionID")+")"+
+   return "Manager "+ManagerUpdates.DisplayVersion+" ["+Platform.Name+"] on "+WindowsName(os.Build)+" "+Reg(nt,"DisplayVersion")+" (build "+os.Build+"."+Reg(nt,"UBR")+", "+Reg(nt,"EditionID")+")"+
     ", .NET Framework "+NetFrameworkName(release)+" (release "+release+", CLR "+Environment.Version+")"+
     ", "+(Environment.Is64BitOperatingSystem?"64-bit":"32-bit")+" Windows, "+(Environment.Is64BitProcess?"64-bit":"32-bit")+" process"+
     ", "+(admin?"elevated":"not elevated")+", culture "+System.Globalization.CultureInfo.CurrentCulture.Name+

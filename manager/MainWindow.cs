@@ -59,7 +59,7 @@ namespace AnyApiManager {
   protected override void OnFormClosed(FormClosedEventArgs e){Application.RemoveMessageFilter(this);base.OnFormClosed(e);}
   protected override void WndProc(ref Message m){
    base.WndProc(ref m);
-   if(m.Msg==0x24){// WM_GETMINMAXINFO: maximize to the monitor's work area, not over the taskbar.
+   if(m.Msg==0x24&&!Platform.Unix&&m.LParam!=IntPtr.Zero){// WM_GETMINMAXINFO: maximize to the monitor's work area, not over the taskbar.
     var screen=Screen.FromHandle(m.HWnd);var info=(MINMAXINFO)Marshal.PtrToStructure(m.LParam,typeof(MINMAXINFO));
     info.MaxPosition.X=screen.WorkingArea.Left-screen.Bounds.Left;info.MaxPosition.Y=screen.WorkingArea.Top-screen.Bounds.Top;info.MaxSize.X=screen.WorkingArea.Width;info.MaxSize.Y=screen.WorkingArea.Height;
     info.MinTrackSize.X=MinimumSize.Width;info.MinTrackSize.Y=MinimumSize.Height;Marshal.StructureToPtr(info,m.LParam,true);
@@ -71,12 +71,15 @@ namespace AnyApiManager {
   }
   // Resizing a borderless window: edge hits anywhere in the window start a native resize.
   public bool PreFilterMessage(ref Message m){
-   if(m.Msg!=0x200&&m.Msg!=0x201)return false;var c=Control.FromChildHandle(m.HWnd);if(c==null||c.FindForm()!=this)return false;
+   if(Platform.Unix||(m.Msg!=0x200&&m.Msg!=0x201))return false;var c=Control.FromChildHandle(m.HWnd);if(c==null||c.FindForm()!=this)return false;
    int hit=Edge(PointToClient(Cursor.Position));if(hit==0)return false;
    Cursor.Current=hit==10||hit==11?Cursors.SizeWE:hit==12||hit==15?Cursors.SizeNS:hit==13||hit==17?Cursors.SizeNWSE:Cursors.SizeNESW;
    if(m.Msg==0x201){ReleaseCapture();SendMessage(Handle,0xA1,new IntPtr(hit),IntPtr.Zero);return true;}return false;
   }
-  void DragWindow(MouseEventArgs e){if(e.Button!=MouseButtons.Left||Edge(PointToClient(Cursor.Position))!=0)return;if(e.Clicks==2){ToggleMaximize();return;}ReleaseCapture();SendMessage(Handle,0xA1,new IntPtr(2),IntPtr.Zero);}
+  void DragWindow(MouseEventArgs e){if(e.Button!=MouseButtons.Left||Edge(PointToClient(Cursor.Position))!=0)return;if(e.Clicks==2){ToggleMaximize();return;}if(Platform.Unix){dragFrom=Cursor.Position;dragStart=Location;dragging=WindowState==FormWindowState.Normal;return;}ReleaseCapture();SendMessage(Handle,0xA1,new IntPtr(2),IntPtr.Zero);}
+  // Native Linux (Mono) has no user32, so the title bar moves the window by hand.
+  Point dragFrom,dragStart;bool dragging;
+  void DragMove(){if(dragging&&Control.MouseButtons==MouseButtons.Left){var c=Cursor.Position;Location=new Point(dragStart.X+c.X-dragFrom.X,dragStart.Y+c.Y-dragFrom.Y);}else dragging=false;}
   void ToggleMaximize(){WindowState=WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;}
   void LayoutShell(){
    int b=WindowState==FormWindowState.Maximized?0:1;var r=new Rectangle(b,b,ClientSize.Width-b*2,ClientSize.Height-b*2);int title=S(38),foot=S(30),side=S(208);
@@ -87,7 +90,7 @@ namespace AnyApiManager {
   void BuildTitle(){
    var minimize=new WindowButton(WindowGlyph.Minimize);var close=new WindowButton(WindowGlyph.Close);
    minimize.Click+=(s,e)=>WindowState=FormWindowState.Minimized;maximize.Click+=(s,e)=>ToggleMaximize();close.Click+=(s,e)=>Close();
-   titleBar.Controls.AddRange(new Control[]{badge,minimize,maximize,close});titleBar.MouseDown+=(s,e)=>DragWindow(e);
+   titleBar.Controls.AddRange(new Control[]{badge,minimize,maximize,close});titleBar.MouseDown+=(s,e)=>DragWindow(e);titleBar.MouseMove+=(s,e)=>DragMove();titleBar.MouseUp+=(s,e)=>dragging=false;
    var brand=Theme.Font(13,true);var sub=Theme.Semibold(10.5f);
    titleBar.Paint+=(s,e)=>{var g=e.Graphics;int x=S(16);
     using(var glow=new SolidBrush(Color.FromArgb(26,Theme.Blue))){var any=TextRenderer.MeasureText(g,"ANY",brand,Size.Empty,TextFormatFlags.NoPadding);g.SmoothingMode=SmoothingMode.AntiAlias;g.FillEllipse(glow,x-S(6),titleBar.Height/2-S(9),any.Width+S(12),S(18));}
@@ -167,7 +170,7 @@ namespace AnyApiManager {
    if(previewMode)return;if(Engine.Running())throw new IOException("Anymaker is already running. Close it before switching modes.");await Scan();
    bool wasPaused=Engine.ApiPaused(preferences.GamePath);int revision=Engine.ApiRevision(preferences.GamePath,catalog);
    var r=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Catalog=catalog,Action=modded?"prepare-modded":"prepare-vanilla"});if(!r.Success)throw new IOException(r.Message);
-   Exception launchError=null;try{System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("steam://rungameid/4435340"){UseShellExecute=true});SetStatus(modded?"Launching with your enabled mods.":"Launching with AnyAPI paused. Choose Play with mods to restore it.");}catch(Exception error){launchError=error;}
+   Exception launchError=null;try{System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("steam://rungameid/4435340"){UseShellExecute=true});SetStatus(modded?"Launching with your enabled mods."+(Platform.Linux?" On Linux, Steam launch options must be "+Platform.ProtonLaunchOptions:""):"Launching with AnyAPI paused. Choose Play with mods to restore it.");}catch(Exception error){launchError=error;}
    if(launchError!=null){if(revision>0&&wasPaused!=Engine.ApiPaused(preferences.GamePath)){var restored=await Engine.Execute(new ApplyRequest{GamePath=preferences.GamePath,Catalog=catalog,Action=wasPaused?"prepare-vanilla":"prepare-modded"});if(!restored.Success)throw new IOException("Steam could not open. "+restored.Message);}throw new IOException("Steam could not open: "+launchError.Message);}
   });}
 
@@ -208,7 +211,7 @@ namespace AnyApiManager {
    var browse=Button("Browse",ButtonKind.Secondary,async()=>{using(var dialog=new OpenFileDialog{Title="Select game.exe in your Anymaker folder",Filter="Anymaker (game.exe)|game.exe|Programs (*.exe)|*.exe",CheckFileExists=true,InitialDirectory=Directory.Exists(gamePath.Text.Trim())?gamePath.Text.Trim():""})if(dialog.ShowDialog(this)==DialogResult.OK){gamePath.Text=dialog.FileName;await SaveSetup();}});
    var find=Button("Find automatically",ButtonKind.Ghost,async()=>{string found=Engine.DetectGame();if(found==""){SetStatus("Anymaker wasn't found automatically. Choose Browse and select game.exe.");return;}gamePath.Text=found;await SaveSetup();});
    var save=Button("Save folder",ButtonKind.Primary,async()=>await SaveSetup());
-   var folderHint=Label("Paste a folder or game.exe path, browse to game.exe, or let the manager search your Steam libraries.",12,false,Theme.Muted);
+   var folderHint=Label(Platform.Linux?"Linux: mods only load if Anymaker's Steam launch options are "+Platform.ProtonLaunchOptions:"Paste a folder or game.exe path, browse to game.exe, or let the manager search your Steam libraries.",12,false,Theme.Muted);if(Platform.Linux)tips.SetToolTip(folderHint,"Steam > Anymaker > Properties > General > Launch options. Proton uses its own dinput8.dll otherwise, so AnyAPI never starts.");
    folderBox.Controls.AddRange(new Control[]{gameField,browse,find,save,folderHint});
    folderBox.Resize+=(s,e)=>{int x=S(14),y=Box.HeaderHeight+S(14);save.SetBounds(folderBox.Width-S(14)-S(112),y,S(112),S(32));find.SetBounds(save.Left-S(8)-S(148),y,S(148),S(32));browse.SetBounds(find.Left-S(8)-S(88),y,S(88),S(32));gameField.SetBounds(x,y,browse.Left-S(8)-x,S(32));folderHint.SetBounds(x,y+S(42),folderBox.Width-S(28),S(20));};
 
