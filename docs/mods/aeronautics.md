@@ -34,6 +34,10 @@ meshes as `anyaero_nozzle_cone_a.mesh` and `anyaero_nozzle_fighter_a.mesh`.
   (Cone 0.10, Fighter 0.08 kg per N per hour, real turbojet values). The combustion chamber's `fuel_flow` is read as
   m³/s of petrol (750 kg/m³); the first test read 0.00176 at full throttle and 0.00032 at 17 % throttle. So
   throttle, running out of fuel, damage and power taken off by a gearbox all show in the thrust.
+- **No thrust setting:** by design (Nate, 2026-11-23) thrust depends only on the fuel and the engine. For more
+  thrust, fit more engines.
+- **Rev limiter:** at full speed the stock engine cuts fuel every other tick; while it is at its limit with throttle
+  open, the nozzle keeps the last real fuel flow so full power holds full thrust.
 - **Spool lag:** thrust follows that target with a lag (1.6 s going up, 0.8 s coming down).
 - **Where it pushes:** at the nozzle, toward the engine in front of it (the gas goes out the back), so an
   off-centre engine also turns the vehicle.
@@ -71,7 +75,6 @@ the exhaust's `get_data_f64` serves `thrust` and `spool`.
 
 ## Planned
 
-- A Properties tool row for max thrust per nozzle.
 - Afterburner and a matching jet sound.
 - An all-in-one jet block if wanted.
 
