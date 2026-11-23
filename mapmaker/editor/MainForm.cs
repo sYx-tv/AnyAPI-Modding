@@ -481,7 +481,7 @@ namespace AnyMapMaker {
    pack.Spawn=new Vec3(c.X,2,c.Z+120);
    tools.Pick(Tool.Road);view.Selected=new TileKey(10,10,0);ShowTile(view.Selected);
    view.FitAll();
-   if(threeD){editor.Begin();editor.SetHeight(new TileKey(11,10,0),3);editor.SetHeight(new TileKey(10,11,0),2);editor.Commit();Edited(true);Show3D(true);view3d.LookAt(new Vec3(c.X,32,c.Z),1500);}
+   if(threeD){editor.Begin();editor.SetHeight(new TileKey(11,10,0),3);editor.SetHeight(new TileKey(10,11,0),2);editor.Commit();Edited(true);Show3D(true);view3d.LookAt(new Vec3(c.X,32,c.Z),700);view3d.Turn(0.9,0.32);}
   }
 
   bool showingTile;

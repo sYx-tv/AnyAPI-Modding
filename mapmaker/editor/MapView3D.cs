@@ -5,10 +5,9 @@ using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using AnyApiManager;
 namespace AnyMapMaker {
- // 3D view of the map: orbit, pan and zoom around it, and drag road and point nodes. Drawn with GDI+ (painter's
- // algorithm, far to near), so it needs nothing beyond what ships with Windows. Terrain pieces are drawn as flat
- // triangles at their height step with cliff walls between steps; the game's own piece shapes (hills, river beds)
- // are not in the tile files, so slopes inside a piece don't show.
+ // 3D view of the map: orbit, pan and zoom around it, and drag road and point nodes. The world is drawn by the
+ // software renderer in Render3D.cs, so it needs nothing beyond what ships with Windows. The game's own piece shapes
+ // (hills, river beds) are not in the tile files, so the ground is smoothed between tile heights as a preview.
  public sealed class MapView3D : Control {
   public MapPack Pack; public MapScene Scene; public MapEditor Editor;
   public double Falloff=120;           // proportional-editing radius for road nodes, metres
@@ -21,10 +20,13 @@ namespace AnyMapMaker {
   MapNode hover;MapEditor.NodeDrag drag;bool vertical;Vec3 grabHit;Point grabMouse;double grabDepth;
   Point last;bool orbiting,panning;
 
-  public MapView3D(){SetStyle(ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.UserPaint|ControlStyles.ResizeRedraw|ControlStyles.Selectable,true);BackColor=Color.FromArgb(22,48,74);}
+  public MapView3D(){
+   SetStyle(ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.UserPaint|ControlStyles.ResizeRedraw|ControlStyles.Selectable,true);BackColor=Color.FromArgb(22,48,74);
+   sharpen.Tick+=(s,e)=>{sharpen.Stop();moving=false;Invalidate();};
+  }
 
-  public void SetMap(MapPack pack,MapScene scene,MapEditor editor){Pack=pack;Scene=scene;Editor=editor;Reload();FitAll();}
-  public void ShowScene(MapScene scene,MapEditor editor){Scene=scene;Editor=editor;if(drag==null)Reload();Invalidate();}
+  public void SetMap(MapPack pack,MapScene scene,MapEditor editor){Pack=pack;Scene=scene;Editor=editor;mesh=null;Reload();FitAll();}
+  public void ShowScene(MapScene scene,MapEditor editor){Scene=scene;Editor=editor;objectsStale=true;if(drag==null)Reload();Invalidate();}
   void Reload(){nodes=Editor==null?new List<MapNode>():Editor.Nodes(MapScene.Find("roads").Visible,true);hover=null;}
   public void FitAll(){
    if(Pack==null||Pack.Tiles.Count==0){tx=tz=0;ty=0;dist=3000;Invalidate();return;}
@@ -33,6 +35,7 @@ namespace AnyMapMaker {
    dist=Math.Max(400,Math.Min(120000,size*1.1));Invalidate();
   }
   public void LookAt(Vec3 p,double distance){tx=p.X;ty=p.Y;tz=p.Z;dist=distance;Invalidate();}
+  public void Turn(double yawTo,double pitchTo){yaw=yawTo;pitch=Math.Max(0.08,Math.Min(1.5,pitchTo));Invalidate();}
 
   // ---------------------------------------------------------------- camera maths
   void Camera(){
@@ -53,68 +56,34 @@ namespace AnyMapMaker {
   bool HitPlane(Point p,double y,out Vec3 hit){var d=Ray(p);hit=new Vec3();if(Math.Abs(d.Y)<1e-6)return false;double t=(y-eye.Y)/d.Y;if(t<=0)return false;hit=eye+d*t;return true;}
 
   // ---------------------------------------------------------------- drawing
-  struct Poly{public PointF[] P;public double Depth;public Color C;}
-  static Color Ground(Tile t){
-   string d=t.Definition;int h=t.Height;
-   if(d.StartsWith("shallow"))return Color.FromArgb(196,184,138);
-   if(d.Contains("river")||d.Contains("lake"))return Color.FromArgb(70,120,110);
-   if(d.Contains("cement")||d.Contains("cargo")||d.Contains("airfield")||d.Contains("trainyard"))return Color.FromArgb(132,134,136);
-   if(h<=0)return Color.FromArgb(190,178,130);
-   if(h<=3)return Color.FromArgb(92,140,74);
-   if(h<=7)return Color.FromArgb(118,128,72);
-   if(h<=11)return Color.FromArgb(124,112,96);
-   return Color.FromArgb(232,236,242);
+  // ---------------------------------------------------------------- 3D frame
+  readonly Raster raster=new Raster();WorldMesh mesh;Bitmap frame;bool objectsStale=true;
+  readonly Timer sharpen=new Timer{Interval=180};bool moving;
+  // While the camera or a node moves, frames render at half size; a moment after it stops, one sharp frame follows.
+  void Moving(){moving=true;sharpen.Stop();sharpen.Start();}
+  void EnsureMesh(){
+   if(Pack==null){mesh=null;return;}
+   if(mesh==null||mesh.Signature!=WorldMesh.SignatureOf(Pack)){mesh=new WorldMesh(Pack);objectsStale=true;}
+   if(objectsStale){mesh.SetObjects(Scene,MapScene.Find("roads").Visible,true);objectsStale=false;}
   }
-  static Color Shade(Color c,double f){return Color.FromArgb(Clamp(c.R*f),Clamp(c.G*f),Clamp(c.B*f));}
-  static Color Blend(Color a,Color b,double t){return Color.FromArgb(Clamp(a.R+(b.R-a.R)*t),Clamp(a.G+(b.G-a.G)*t),Clamp(a.B+(b.B-a.B)*t));}
-  static int Clamp(double v){return v<0?0:v>255?255:(int)v;}
-  static readonly Color Sea=Color.FromArgb(30,78,116),SkyTop=Color.FromArgb(14,22,36),SkyLow=Color.FromArgb(52,74,104);
+  public double GroundAt(double x,double z){EnsureMesh();return mesh==null?0:mesh.HeightAt(x,z);}
 
   protected override void OnPaint(PaintEventArgs e){
    var g=e.Graphics;Camera();
-   // Sky above the horizon, sea below it (sea level is y = 0).
+   if(Pack==null){g.Clear(Theme.Window);TextRenderer.DrawText(g,"Open a map to see it in 3D.",Font,ClientRectangle,Theme.Muted,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);return;}
+   EnsureMesh();
+   int scale=moving?2:1,w=Math.Max(1,Width/scale),h=Math.Max(1,Height/scale);
+   raster.Resize(w,h);raster.Camera(eye,fwd,right,up,Fov);
+   raster.FogNear=Math.Max(2500,dist*1.2);raster.FogFar=Math.Max(14000,dist*5);
    var flat=Norm(new Vec3(fwd.X,0,fwd.Z));PointF hz;double hd;float horizon=Project(new Vec3(eye.X,0,eye.Z)+flat*1e7,out hz,out hd)?hz.Y:-1;
-   if(eye.Y<0)horizon=Height+1;
-   if(horizon>0)using(var sky=new LinearGradientBrush(new Rectangle(0,0,Width,Math.Max(1,(int)horizon+1)),SkyTop,SkyLow,90f))g.FillRectangle(sky,0,0,Width,horizon);
-   using(var sea=new SolidBrush(Sea))g.FillRectangle(sea,0,Math.Max(0,horizon),Width,Height);
-   if(Pack==null){TextRenderer.DrawText(g,"Open a map to see it in 3D.",Font,ClientRectangle,Theme.Muted,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);return;}
+   raster.Clear(eye.Y<0?h+1:horizon/scale);
+   mesh.Draw(raster);
+   if(frame==null||frame.Width!=w||frame.Height!=h){if(frame!=null)frame.Dispose();frame=new Bitmap(w,h,System.Drawing.Imaging.PixelFormat.Format32bppArgb);}
+   raster.CopyTo(frame);
+   g.InterpolationMode=scale>1?InterpolationMode.Bilinear:InterpolationMode.NearestNeighbor;g.PixelOffsetMode=PixelOffsetMode.Half;
+   g.DrawImage(frame,new Rectangle(0,0,Width,Height),0,0,w,h,GraphicsUnit.Pixel);
+   g.PixelOffsetMode=PixelOffsetMode.Default;g.SmoothingMode=SmoothingMode.AntiAlias;
 
-   var polys=new List<Poly>();bool terrain=MapScene.Find("terrain").Visible;
-   if(terrain){
-    var edges=new Dictionary<string,KeyValuePair<Tile,int>>();
-    foreach(var t in Pack.Tiles.Values){
-     var c=Grid.Corners(t.Key);double y=t.Height*Grid.Step;
-     for(int i=0;i<3;i++)c[i].Y=y;
-     AddPoly(polys,c,TileColor(t));
-     // Cliff walls: between this tile and its neighbour, or down to the sea floor at the coast.
-     for(int i=0;i<3;i++){
-      Vec3 a=c[i],b=c[(i+1)%3];string k=EdgeKey(a,b);KeyValuePair<Tile,int> other;
-      if(edges.TryGetValue(k,out other)){edges.Remove(k);Wall(polys,a,b,y,other.Key.Height*Grid.Step);}
-      else edges[k]=new KeyValuePair<Tile,int>(t,i);
-     }
-    }
-    foreach(var kv in edges.Values){var t=kv.Key;var c=Grid.Corners(t.Key);double y=t.Height*Grid.Step;Wall(polys,c[kv.Value],c[(kv.Value+1)%3],y,-60);}
-   }
-   polys.Sort((a,b)=>b.Depth.CompareTo(a.Depth));
-   g.SmoothingMode=SmoothingMode.HighSpeed;
-   foreach(var p in polys)using(var b=new SolidBrush(p.C))using(var pen=new Pen(p.C)){g.FillPolygon(b,p.P);g.DrawPolygon(pen,p.P);}
-   g.SmoothingMode=SmoothingMode.AntiAlias;
-
-   if(MapScene.Find("grid").Visible&&terrain&&dist<20000)using(var pen=new Pen(Color.FromArgb(28,255,255,255)))foreach(var t in Pack.Tiles.Values){
-    var c=Grid.Corners(t.Key);var s=new PointF[3];bool ok=true;double d;for(int i=0;i<3&&ok;i++){c[i].Y=t.Height*Grid.Step+0.2;ok=Project(c[i],out s[i],out d);}
-    if(ok)g.DrawPolygon(pen,s);
-   }
-   if(Scene!=null&&MapScene.Find("roads").Visible)foreach(var r in Scene.Roads){
-    var pts=new List<PointF>();double depth=0;int n=0;
-    foreach(var p in r.Points){PointF s;double d;if(!Project(p+new Vec3(0,0.3,0),out s,out d)){if(pts.Count>1)DrawRoad(g,r,pts,depth/n);pts.Clear();depth=0;n=0;continue;}pts.Add(s);depth+=d;n++;}
-    if(pts.Count>1)DrawRoad(g,r,pts,depth/n);
-   }
-   if(Scene!=null)foreach(var m in Scene.Markers){
-    var layer=MapScene.Find(m.Layer);if(!layer.Visible||m.Layer=="junctions")continue;
-    PointF s;double d;if(!Project(m.Position,out s,out d))continue;float r=(float)Math.Max(2,Math.Min(7,2.5*focal/d));
-    PointF top;double d2;if(Project(m.Position+new Vec3(0,6,0),out top,out d2))using(var pen=new Pen(Color.FromArgb(160,layer.Color)))g.DrawLine(pen,s,top);
-    using(var b=new SolidBrush(layer.Color))g.FillEllipse(b,s.X-r,s.Y-r,r*2,r*2);
-   }
    DrawStart(g);
    // Nodes on top.
    shown.Clear();
@@ -123,58 +92,31 @@ namespace AnyMapMaker {
     PointF s;double d;if(!Project(n.Position+new Vec3(0,n.IsRoad?0.3:0,0),out s,out d)||s.X<-20||s.Y<-20||s.X>Width+20||s.Y>Height+20)continue;
     if(d>Math.Max(4000,dist*2.5))continue;
     shown.Add(new KeyValuePair<MapNode,PointF>(n,s));
-    bool hot=n==hover||(drag!=null&&n==drag.Node);float r=hot?6:n.IsRoad?3.5f:0;if(r==0)continue;
-    using(var b=new SolidBrush(hot?Theme.Blue:Color.FromArgb(235,240,248)))g.FillEllipse(b,s.X-r,s.Y-r,r*2,r*2);
-    if(hot)using(var pen=new Pen(Color.White,1.5f))g.DrawEllipse(pen,s.X-r,s.Y-r,r*2,r*2);
+    bool hot=n==hover||(drag!=null&&n==drag.Node);float r=hot?7:n.IsRoad?4.5f:0;if(r==0)continue;
+    using(var shadow=new SolidBrush(Color.FromArgb(90,0,0,0)))g.FillEllipse(shadow,s.X-r,s.Y-r+1.5f,r*2,r*2);
+    using(var b=new SolidBrush(hot?Theme.Blue:Color.FromArgb(245,248,252)))g.FillEllipse(b,s.X-r,s.Y-r,r*2,r*2);
+    if(hot)using(var pen=new Pen(Color.White,2f))g.DrawEllipse(pen,s.X-r,s.Y-r,r*2,r*2);
    }
    if(drag!=null&&drag.Node.IsRoad&&Falloff>0){
     // Show the falloff circle on the ground around the dragged node.
     var c=drag.Node.Position;var ring=new List<PointF>();double d;
-    for(int i=0;i<=48;i++){double a=i*Math.PI/24;PointF s;if(Project(new Vec3(c.X+Math.Cos(a)*Falloff,c.Y,c.Z+Math.Sin(a)*Falloff),out s,out d))ring.Add(s);}
-    if(ring.Count>2)using(var pen=new Pen(Color.FromArgb(150,Theme.Blue),1.5f){DashStyle=DashStyle.Dash})g.DrawLines(pen,ring.ToArray());
+    for(int i=0;i<=48;i++){double a=i*Math.PI/24;double x=c.X+Math.Cos(a)*Falloff,z=c.Z+Math.Sin(a)*Falloff;PointF s;if(Project(new Vec3(x,Math.Max(c.Y,mesh.HeightAt(x,z))+0.5,z),out s,out d))ring.Add(s);}
+    if(ring.Count>2)using(var pen=new Pen(Color.FromArgb(200,Theme.Blue),2f){DashStyle=DashStyle.Dash})g.DrawLines(pen,ring.ToArray());
    }
    DrawCompass(g);
-  }
-  Color TileColor(Tile t){
-   var c=Ground(t);
-   // Light from the north-west; shade the three orientations slightly so neighbouring pieces read apart.
-   c=Shade(c,0.92+(t.Orientation%3)*0.04);
-   if(t.Height<0)c=Blend(c,Sea,Math.Min(0.8,-t.Height*0.18));
-   return c;
-  }
-  static string EdgeKey(Vec3 a,Vec3 b){string ka=Math.Round(a.X)+":"+Math.Round(a.Z),kb=Math.Round(b.X)+":"+Math.Round(b.Z);return string.CompareOrdinal(ka,kb)<0?ka+"|"+kb:kb+"|"+ka;}
-  void AddPoly(List<Poly> polys,Vec3[] pts,Color c){
-   var s=new PointF[pts.Length];double sum=0;
-   for(int i=0;i<pts.Length;i++){double d;if(!Project(pts[i],out s[i],out d))return;sum+=d;}
-   double minX=double.MaxValue,maxX=double.MinValue,minY=double.MaxValue,maxY=double.MinValue;
-   foreach(var p in s){minX=Math.Min(minX,p.X);maxX=Math.Max(maxX,p.X);minY=Math.Min(minY,p.Y);maxY=Math.Max(maxY,p.Y);}
-   if(maxX<0||maxY<0||minX>Width||minY>Height)return;
-   polys.Add(new Poly{P=s,Depth=sum/pts.Length,C=c});
-  }
-  void Wall(List<Poly> polys,Vec3 a,Vec3 b,double y1,double y2){
-   if(Math.Abs(y1-y2)<0.5)return;double hi=Math.Max(y1,y2),lo=Math.Min(y1,y2);
-   var quad=new[]{new Vec3(a.X,hi,a.Z),new Vec3(b.X,hi,b.Z),new Vec3(b.X,lo,b.Z),new Vec3(a.X,lo,a.Z)};
-   // Walls facing the light are brighter.
-   var n=Norm(new Vec3(-(b.Z-a.Z),0,b.X-a.X));double lit=0.55+0.25*Math.Abs(n.X*0.6-n.Z*0.8);
-   var c=Shade(Color.FromArgb(120,108,92),lit);if(hi<=0)c=Blend(c,Sea,0.6);
-   AddPoly(polys,quad,c);
-  }
-  void DrawRoad(Graphics g,Road r,List<PointF> pts,double depth){
-   bool train=r.Type.StartsWith("train");double metres=train?3.5:r.Type=="road_c"?5:8;
-   float w=(float)Math.Max(1.2,Math.Min(60,metres*focal/Math.Max(1,depth)));
-   using(var edge=new Pen(train?Color.FromArgb(70,58,48):Color.FromArgb(40,42,46),w+2){LineJoin=LineJoin.Round,StartCap=LineCap.Round,EndCap=LineCap.Round})g.DrawLines(edge,pts.ToArray());
-   using(var top=new Pen(train?Color.FromArgb(150,128,100):Color.FromArgb(96,98,104),w){LineJoin=LineJoin.Round,StartCap=LineCap.Round,EndCap=LineCap.Round})g.DrawLines(top,pts.ToArray());
-   if(!train&&w>6)using(var line=new Pen(Color.FromArgb(200,214,200,150),Math.Max(1,w/14)){DashStyle=DashStyle.Dash})g.DrawLines(line,pts.ToArray());
   }
   void DrawStart(Graphics g){
    var list=new List<KeyValuePair<Vec3,string>>();
    if(Pack.Spawn!=null)list.Add(new KeyValuePair<Vec3,string>(Pack.Spawn.Value,"Start"));
    else{list.Add(new KeyValuePair<Vec3,string>(Grid.SpawnCreative,"Start: Creative / Sandbox"));list.Add(new KeyValuePair<Vec3,string>(Grid.SpawnSurvival,"Start: Survival"));}
    foreach(var kv in list){
-    var p=kv.Key;var t=Pack.Get(Grid.At(p.X,p.Z));double y=Pack.Spawn!=null?p.Y:t==null?0:t.Height*Grid.Step;
-    PointF s,top;double d;if(!Project(new Vec3(p.X,y,p.Z),out s,out d)||!Project(new Vec3(p.X,y+40,p.Z),out top,out d))continue;
-    var c=t==null?Theme.Bad:Color.White;
-    using(var pen=new Pen(c,2f)){g.DrawLine(pen,s,top);g.DrawEllipse(pen,s.X-6,s.Y-6,12,12);}
+    var p=kv.Key;var t=Pack.Get(Grid.At(p.X,p.Z));double y=Pack.Spawn!=null?p.Y:mesh.HeightAt(p.X,p.Z);
+    var c=t==null?Theme.Bad:Theme.Ok;
+    var ring=new List<PointF>();double d;PointF s,top;
+    for(int i=0;i<=32;i++){double a=i*Math.PI/16;if(Project(new Vec3(p.X+Math.Cos(a)*6,y+0.4,p.Z+Math.Sin(a)*6),out s,out d))ring.Add(s);}
+    if(!Project(new Vec3(p.X,y,p.Z),out s,out d)||!Project(new Vec3(p.X,y+40,p.Z),out top,out d))continue;
+    using(var beam=new Pen(Color.FromArgb(110,c),Math.Max(3f,(float)(2.4*focal/d))))g.DrawLine(beam,s,top);
+    if(ring.Count>2)using(var pen=new Pen(c,2.5f))g.DrawLines(pen,ring.ToArray());
     TextRenderer.DrawText(g,kv.Value+(t==null?" (in the sea!)":""),Font,new Point((int)top.X+6,(int)top.Y-8),c);
    }
   }
@@ -207,8 +149,9 @@ namespace AnyMapMaker {
     if(vertical)offset=new Vec3(0,(grabMouse.Y-e.Y)*grabDepth/focal,0);
     else{Vec3 hit;if(!HitPlane(e.Location,grabHit.Y,out hit))return;offset=new Vec3(hit.X-grabHit.X,0,hit.Z-grabHit.Z);}
     Editor.DragTo(drag,offset);
-    Status(drag.Node);if(NodesMoved!=null)NodesMoved();Invalidate();return;
+    Status(drag.Node);Moving();if(NodesMoved!=null)NodesMoved();Invalidate();return;
    }
+   if(orbiting||panning)Moving();
    if(orbiting){yaw+=dx*0.006;pitch=Math.Max(0.08,Math.Min(1.5,pitch+dy*0.006));Invalidate();return;}
    if(panning){
     double k=dist/focal;var flat=Norm(new Vec3(fwd.X,0,fwd.Z));
@@ -228,7 +171,7 @@ namespace AnyMapMaker {
    // Zoom toward the point under the cursor.
    double f=Math.Pow(0.85,e.Delta/120.0);Camera();Vec3 hit;
    if(HitPlane(e.Location,ty,out hit)){tx+=(hit.X-tx)*(1-f);tz+=(hit.Z-tz)*(1-f);}
-   dist=Math.Max(30,Math.Min(150000,dist*f));Invalidate();
+   dist=Math.Max(30,Math.Min(150000,dist*f));Moving();Invalidate();
   }
   protected override void OnMouseDoubleClick(MouseEventArgs e){
    if(e.Button!=MouseButtons.Left||NodeAt(e.Location)!=null)return;Camera();Vec3 hit;
