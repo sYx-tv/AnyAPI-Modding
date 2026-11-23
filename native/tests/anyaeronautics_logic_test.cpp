@@ -48,7 +48,7 @@ int main() {
       {"id": "engine_a", "name": "Engine", "class": "engine", "data_descriptors": []},
       {"id": "jet_exhaust_a", "name": "Jet Exhaust", "description": "x", "class": "jet_engine_exhaust", "mass": 12.5,
        "mesh_static": {"mesh_path": "meshes/components/jet_exhaust_a.mesh"},
-       "surfaces": [{"dir": 4, "gender": 1, "type": "jet"}],
+       "surfaces": [{"pos":[-3,-1,3],"size":[1,3]},{"pos":[-1,3,3],"size":[3,1],"dir":3},{"pos":[3,-1,3],"size":[1,3],"dir":1},{"pos":[-2,0,-2],"size":[3,1]},{"pos":[2,0,-2],"size":[3,1],"dir":1},{"pos":[0,0,3],"dir":5,"gender":1,"type":"jet_engine"}],
        "data_descriptors": [{"type": "type_f64_output", "name": "temperature"}]}
     ]})";
     std::string error, id;
@@ -66,6 +66,24 @@ int main() {
     assert(parsed.get("definitions").array.size() == 2);
     assert(parsed.get("definitions").array[0].get("mesh_static").get("mesh_path").text == "meshes/components/anyaero_nozzle_cone_a.mesh");
     assert(parsed.get("definitions").array[1].get("mesh_static").get("mesh_path").text == "meshes/components/jet_exhaust_a.mesh");
+
+    // Data ports: the left and right faces at the engine end take ports; the top, the rear faces and the jet face don't.
+    {
+        const assetjson::Value& def = parsed.get("definitions").array[0];
+        assert(def.get("mateable_port_types").number == 2);
+        const auto& f = def.get("surfaces").array;
+        assert(f.size() == 6);
+        assert(f[0].get("type").text == "port" && f[0].get("gender").number == 2 && f[2].get("type").text == "port");
+        assert(f[1].get("type").kind == 'n' && f[3].get("type").kind == 'n' && f[4].get("type").kind == 'n');
+        assert(f[5].get("type").text == "jet_engine" && f[5].get("gender").number == 1);
+        assert(f[0].get("size").array.size() == 2);
+    }
+    // New readouts.
+    assert(channel_index("thrust_percent", 14) == kThrustPercent && channel_index("thrust_to_weight", 16) == kThrustToWeight);
+    assert(near(thrust_percent(fuel_thrust_newtons(0.08, kFullFuelFlow), 0.08, 0), 100) && near(thrust_percent(fuel_thrust_newtons(0.08, kFullFuelFlow) / 2, 0.08, 0), 50));
+    assert(near(thrust_percent(fuel_thrust_newtons(0.08, 0.004), 0.08, 0.005), 80) && thrust_percent(0, 0.08, 0) == 0 && thrust_percent(1e9, 0.08, 0) == 100);
+    assert(near(thrust_to_weight(9.81 * 1000, 1000), 1) && thrust_to_weight(100, 0) == 0 && thrust_to_weight(NAN, 10) == 0);
+    assert(json.find("\"name\": \"thrust_to_weight\"") != std::string::npos);
 
     assert(definitions_json(R"({"definitions": [{"id": "a", "class": "engine"}]})", {}, &error).empty() && !error.empty());
     assert(definitions_json("not json", {}, &error).empty());

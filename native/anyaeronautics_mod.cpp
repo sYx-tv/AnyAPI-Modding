@@ -220,7 +220,7 @@ void hk_add_definitions(void* container, const void* file) {
 
 // ================================================================== thrust (server thread)
 // Data slots are never freed: microcontrollers keep the pointers get_data_f64 hands them.
-struct Live { double slots[kSlots]{}; double newtons = 0, last = 0, next_log = 0, last_fuel = 0; int logs = 8; };
+struct Live { double slots[kSlots]{}; double newtons = 0, last = 0, next_log = 0, last_fuel = 0, peak_fuel = 0; int logs = 8; };
 std::mutex g_mutex;
 std::unordered_map<const void*, Live> g_live;   // keyed by server component
 
@@ -262,7 +262,8 @@ void hk_tick(uint8_t* exhaust, uint8_t* vehicle, void* scene) {
     live.last = now;
     double newtons = live.newtons < 1.0 ? 0 : live.newtons;
     live.slots[kSpool] = std::isfinite(spool) ? std::clamp(spool, 0.0, 1.0) : 0;
-    live.slots[kThrust] = 0;
+    if (std::isfinite(raw_fuel) && raw_fuel > live.peak_fuel) live.peak_fuel = raw_fuel;
+    live.slots[kThrust] = live.slots[kThrustPercent] = live.slots[kThrustToWeight] = 0;
     if (newtons <= 0) return;
     if (g_is_added) { bool added = false; g_is_added(&added, physics); if (!added) return; }
     Mat34 v;
@@ -274,11 +275,13 @@ void hk_tick(uint8_t* exhaust, uint8_t* vehicle, void* scene) {
     double f[3] = {force.x, force.y, force.z}, p[3] = {at.x, at.y, at.z};
     g_add_force(exhaust + off::exhaust_activator, physics, f, p);
     live.slots[kThrust] = newtons / 1000.0;
+    live.slots[kThrustPercent] = thrust_percent(newtons, kSizes[size].tsfc, live.peak_fuel);
+    double mass = 0;
+    if (g_get_mass) g_get_mass(&mass, physics);
+    live.slots[kThrustToWeight] = thrust_to_weight(newtons, mass);
     if (live.logs > 0 && newtons > 2000 && now >= live.next_log) {   // about once a second, 8 times per nozzle
         --live.logs;
         live.next_log = now + 1.0;
-        double mass = 0;
-        if (g_get_mass) g_get_mass(&mass, physics);
         double rps = 0, throttle = 0, torque = 0;
         if (can_read(upstream, off::combustion_size)) {
             rps = rd<double>(upstream, off::combustion_rps); throttle = rd<double>(upstream, off::combustion_throttle);

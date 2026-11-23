@@ -36,10 +36,12 @@ inline int size_of_id(const char* id, size_t length) {
 
 // Data channels added to the stock exhaust's own (outputs only; the throttle is the combustion chamber's input).
 struct Channel { const char* name; const char* help; };
-enum Slot { kThrust, kSpool, kSlots };
+enum Slot { kThrust, kSpool, kThrustPercent, kThrustToWeight, kSlots };
 inline constexpr Channel kChannels[kSlots] = {
     {"thrust", "Thrust in kN"},
     {"spool", "Engine spool 0..1 (the combustion chamber's speed factor)"},
+    {"thrust_percent", "Thrust as a percent (0..100) of the nozzle's full-power thrust"},
+    {"thrust_to_weight", "This nozzle's thrust divided by the vehicle's weight (1 = can lift the vehicle straight up)"},
 };
 inline int channel_index(const char* name, size_t length) {
     for (int i = 0; i < kSlots; ++i) {
@@ -77,6 +79,19 @@ inline double lag_thrust(double current, double target, double dt) {
     dt = std::min(dt, 0.25);
     double tau = target > current ? kSpoolUpSeconds : kSpoolDownSeconds;
     return target + (current - target) * std::exp(-dt / tau);
+}
+
+// Full power: the fuel flow a stock jet engine burns flat out (second test, 2026-11-23: 0.00248 at 334 rps, throttle
+// 1). A nozzle that has seen more fuel (a modded or future engine) uses the most it has seen instead.
+constexpr double kFullFuelFlow = 0.00248;
+inline double thrust_percent(double newtons, double tsfc, double peak_fuel) {
+    double full = fuel_thrust_newtons(tsfc, std::max(kFullFuelFlow, std::isfinite(peak_fuel) ? peak_fuel : 0));
+    if (!(full > 0) || !std::isfinite(newtons) || newtons <= 0) return 0;
+    return std::min(100.0, 100.0 * newtons / full);
+}
+inline double thrust_to_weight(double newtons, double mass_kg) {
+    if (!std::isfinite(newtons) || !std::isfinite(mass_kg) || mass_kg <= 0 || newtons <= 0) return 0;
+    return newtons / (mass_kg * 9.81);
 }
 
 struct Vec3 { double x = 0, y = 0, z = 0; };
@@ -136,10 +151,37 @@ inline std::string object_with(std::string_view text, const assetjson::Value& v,
     return out + "}";
 }
 
+// The nozzle's faces: the stock exhaust's, with the two untyped side faces of its engine end (the left and right
+// faces at the engine face's depth, dir 0 and 1) made into data port sockets like the jet engine's own ports. The
+// jet face and every other face stay as they are.
+inline std::string port_surfaces(std::string_view text, const assetjson::Value& surfaces, int* made = nullptr) {
+    std::string out = "[";
+    int ports = 0;
+    for (size_t i = 0; i < surfaces.array.size(); ++i) {
+        const assetjson::Value& f = surfaces.array[i];
+        std::string piece = slice(text, f);
+        if (f.kind == 'o' && f.get("type").kind == 'n' && f.get("gender").kind == 'n') {
+            const assetjson::Value& pos = f.get("pos");
+            int dir = f.get("dir").kind == 'd' ? int(f.get("dir").number) : 0;
+            double z = pos.kind == 'a' && pos.array.size() == 3 ? pos.array[2].number : -1e9;
+            double front = -1e9;
+            for (const assetjson::Value& g : surfaces.array)
+                if (g.kind == 'o' && g.get("type").kind == 's' && g.get("pos").kind == 'a' && g.get("pos").array.size() == 3) front = g.get("pos").array[2].number;
+            if ((dir == 0 || dir == 1) && z == front) {
+                piece = object_with(text, f, {"gender", "type"}, {"\"gender\": 2", "\"type\": \"port\""});
+                ++ports;
+            }
+        }
+        out += (i ? ", " : "") + piece;
+    }
+    if (made) *made = ports;
+    return out + "]";
+}
+
 inline std::string description_of(const Size& s) {
     return std::string("Straight jet nozzle that pushes. Fit it behind a jet combustion chamber in place of the stock exhaust: "
                        "thrust comes from the fuel the engine burns, so the engine's throttle input sets it and it builds up as the engine spools. ") +
-           (s.tsfc < 0.09 ? "Fighter nozzle: more thrust from the same fuel. " : "") + "Outputs thrust (kN) and spool (0..1).";
+           (s.tsfc < 0.09 ? "Fighter nozzle: more thrust from the same fuel. " : "") + "Outputs thrust (kN), spool (0..1), thrust_percent and thrust_to_weight on the data ports at its sides.";
 }
 
 inline std::string mesh_path(const Size& s) { return std::string("meshes/components/") + s.mesh + ".mesh"; }
@@ -175,9 +217,14 @@ inline std::string definitions_json(std::string_view stock_text, const std::vect
     std::string out = "{\n  \"definitions\": [\n";
     for (int i = 0; i < kSizeCount; ++i) {
         const Size& s = kSizes[i];
-        std::vector<std::string> drop = {"id", "name", "description", "data_descriptors"};
+        std::vector<std::string> drop = {"id", "name", "description", "data_descriptors", "mateable_port_types"};
         std::vector<std::string> extra = {"\"id\": " + json_string(s.id), "\"name\": " + json_string(s.name),
                                           "\"description\": " + json_string(description_of(s)), "\"data_descriptors\": " + descriptors};
+        // Data ports (e_mateable_port_type data = 1, so bit 2), added to whatever the stock part takes.
+        const assetjson::Value& mate = stock->get("mateable_port_types");
+        extra.push_back("\"mateable_port_types\": " + std::to_string((mate.kind == 'd' ? int64_t(mate.number) : 0) | 2));
+        const assetjson::Value& surfaces = stock->get("surfaces");
+        if (surfaces.kind == 'a') { drop.push_back("surfaces"); extra.push_back("\"surfaces\": " + port_surfaces(stock_text, surfaces)); }
         if (size_t(i) < meshes.size() && !meshes[i].empty()) {
             drop.push_back("mesh_static");
             const assetjson::Value& mesh = stock->get("mesh_static");

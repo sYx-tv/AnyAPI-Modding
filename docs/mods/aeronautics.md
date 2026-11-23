@@ -50,6 +50,11 @@ torque dropped about 5×. Test vehicles weighed about 10 t.
 | --- | --- | --- |
 | `thrust` | Output | Thrust right now, in kN |
 | `spool` | Output | The combustion chamber's speed factor, 0..1 |
+| `thrust_percent` | Output | Thrust as a percent of this nozzle's full-power thrust (stock jet engine flat out), 0..100 |
+| `thrust_to_weight` | Output | This nozzle's thrust / the vehicle's weight (1 = enough to lift the vehicle straight up) |
+
+**Data ports:** the left and right faces at the engine end of each nozzle take a data port (like the jet engine's own
+port faces); the jet face and the other faces are unchanged. Untested in game (likely).
 | stock exhaust channels | Output | Unchanged |
 
 Stock exhausts are untouched, so helicopter and turboprop builds behave as before.
@@ -61,7 +66,7 @@ the game's parts right after the game adds its own (the route GpsPart, AnyLaser 
 exhaust's server tick runs the stock tick first, then, for our nozzles only, reads the thrust factor the
 combustion chamber wrote and applies the force through the exhaust's own impulse activator
 (`physics_util.impulse_activator.add_force` with a world position), the same call the stock exhaust makes. A hook on
-the exhaust's `get_data_f64` serves `thrust` and `spool`.
+the exhaust's `get_data_f64` serves `thrust`, `spool`, `thrust_percent` and `thrust_to_weight`.
 
 ## Status
 
