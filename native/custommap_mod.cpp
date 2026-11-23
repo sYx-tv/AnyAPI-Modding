@@ -44,7 +44,8 @@ namespace fs = std::filesystem;
 constexpr const char* kModId = "custommap";
 
 AnyModHostV1 host;
-std::atomic<bool> g_ready{false}, g_stop{false};
+std::atomic<bool> g_ready{false}, g_stop{false}, g_hooked{false};
+bool ensure_ready();   // finishes start-up on the game's thread (see calibrate_store)
 
 void log(int level, const char* fmt, ...) {
     if (!host.log) return;
@@ -180,7 +181,7 @@ bool svc_select(const char* name) {
     // the game runs gets its new start point and vegetation list; the log only names a pack when it changes.
     fs::path pack = maps_dir() / wide(n);
     if (!valid_name(n) || !loadable(pack)) { log(2, "map pack '%s' is missing or has no tiles; using the normal world", n.c_str()); svc_select(""); return false; }
-    if (!g_ready || g_abs_store < 0) { log(2, "map pack '%s' chosen, but CustomMap is not ready (see the errors above)", n.c_str()); svc_select(""); return false; }
+    if (!ensure_ready()) { log(2, "map pack '%s' chosen, but CustomMap is not ready (see the errors above)", n.c_str()); svc_select(""); return false; }
     std::string root = utf8((pack / L"tiles").wstring());
     std::replace(root.begin(), root.end(), '\\', '/');
     std::set<std::string> veg; bool all = true;
@@ -281,6 +282,7 @@ void hk_read_binary(bool* ret, const gpath* p, void* out) {
     redirect r(p); read_t(h_read_binary.original)(ret, r.use(p), out);
 }
 void hk_exists(bool* ret, const gpath* p) {
+    ensure_ready();
     redirect r(p); exists_t(h_exists.original)(ret, r.use(p));
 }
 void hk_files(const gpath* p, void* files) {
@@ -346,7 +348,9 @@ bool install_file_hooks() {
     return true;
 }
 
-// Which path store opens an absolute path? Ask the game about a file we know exists.
+// Which path store opens an absolute path? Ask the game about a file we know exists. This calls the game's own file
+// function, so it runs on a game thread (the first file check the game makes, or the map being chosen), never on the
+// start-up worker: on 0.2.0 that call from the worker never returned.
 void calibrate_store(exists_t exists) {
     std::string exe = utf8((game_dir() / L"game.exe").wstring());
     std::replace(exe.begin(), exe.end(), '\\', '/');
@@ -358,21 +362,38 @@ void calibrate_store(exists_t exists) {
     log(2, "no path store opened an absolute path; map packs cannot be loaded");
 }
 
+std::mutex g_calibrate_mutex;
+bool ensure_ready() {
+    if (g_ready) return true;
+    if (!g_hooked) return false;
+    std::lock_guard l(g_calibrate_mutex);
+    if (g_ready) return true;
+    static bool tried = false;
+    if (tried) return false;
+    tried = true;
+    calibrate_store(exists_t(h_exists.original));
+    g_ready = g_abs_store >= 0;
+    if (g_ready) log(0, "Ready: %u map pack(s) in %ls", svc_count(), maps_dir().c_str());
+    return g_ready;
+}
+
 void install_hooks() {
     using namespace anymaker::experimental;
-    for (int attempt = 0; attempt < 180 && !g_stop; ++attempt) {
+    auto started = GetTickCount64();
+    log(0, "looking for the game's file functions");
+    for (int attempt = 0; !g_stop; ++attempt) {
         if (attempt) Sleep(1000);
         if (!matching_build()) { if (attempt == 0) log(1, "game build does not match the SDK reference; CustomMap stays off"); return; }
-        bool last = attempt == 179;
-        if (!locate_file_cells(last)) { if (last) log(2, "file functions not found; CustomMap is off"); continue; }
+        auto seconds = (GetTickCount64() - started) / 1000;
+        bool last = seconds >= 120;
+        // Say what is missing after a few tries too, not only at the end, so a slow search shows in the log.
+        if (!locate_file_cells(last || attempt == 5)) { if (last) { log(2, "file functions not found after %llu s; CustomMap is off", seconds); return; } continue; }
         if (!install_file_hooks()) { log(2, "file hooks not installed; CustomMap is off"); return; }
-        calibrate_store(exists_t(h_exists.original));
+        log(0, "file hooks installed after %llu s", seconds);
         if (void** cell = anymaker::experimental::hook_cell(bind::spawn_position); !cell || !h_spawn.install(cell, (void*)&hk_spawn))
             log(1, "could not hook server_scene.get_spawn_position: maps use the game's fixed start points");
-        g_ready = g_abs_store >= 0;
-        uint32_t packs = svc_count();
-        log(g_ready ? 0 : 2, g_ready ? "Ready after %d s: %u map pack(s) in %ls" : "Not ready after %d s; see the errors above",
-            attempt, packs, maps_dir().c_str());
+        else log(0, "start point hook installed");
+        g_hooked = true;   // the path-store check finishes on the game's next file check
         return;
     }
 }
