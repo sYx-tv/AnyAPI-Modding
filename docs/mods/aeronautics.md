@@ -21,8 +21,8 @@ starts) with their own straight nozzle meshes. The stock exhaust's outlet bends 
 exhaust, so a jet built on it would look one way and push another. Fit a nozzle behind a jet combustion chamber in
 place of the stock exhaust.
 
-- **Cone Nozzle:** a grey octagonal cone tapering to a round outlet, a plain turbojet. Up to 15 kN.
-- **Fighter Nozzle:** a dark gunmetal can with a ring of twelve overlapping petals, like a fighter jet. Up to 30 kN.
+- **Cone Nozzle:** a grey octagonal cone tapering to a round outlet, a plain turbojet. About 47 kN at full throttle on the stock engine.
+- **Fighter Nozzle:** a dark gunmetal can with a ring of twelve overlapping petals, like a fighter jet. More push from the same fuel: about 59 kN.
 
 Both looks were picked by Nate from three rendered options (2026-11-23). The meshes are built at start-up from simple
 shapes, with only the file header taken from the game's own `jet_exhaust_a.mesh`, and written beside the stock part
@@ -30,16 +30,22 @@ meshes as `anyaero_nozzle_cone_a.mesh` and `anyaero_nozzle_fighter_a.mesh`.
 
 - **Throttle:** the combustion chamber's `throttle` input, as for the stock engine. Wire it to a seat axis, a
   lever or a microcontroller.
-- **Spool lag and fuel:** the stock engine's own. Thrust follows the engine's spool, so it builds as the engine
-  winds up and fades as it winds down.
-- **Thrust:** max thrust × spool². Idle gives a light push, full throttle the full rating. It pushes at the
-  nozzle, toward the engine in front of it (the gas goes out the back), so an off-centre engine also turns the
-  vehicle.
+- **Thrust from fuel burned:** thrust = fuel burned per second / the nozzle's thrust specific fuel consumption
+  (Cone 0.10, Fighter 0.08 kg per N per hour, real turbojet values). The combustion chamber's `fuel_flow` is read as
+  m³/s of petrol (750 kg/m³); the first test read 0.00176 at full throttle and 0.00032 at 17 % throttle. So
+  throttle, running out of fuel, damage and power taken off by a gearbox all show in the thrust.
+- **Spool lag:** thrust follows that target with a lag (1.6 s going up, 0.8 s coming down).
+- **Where it pushes:** at the nozzle, toward the engine in front of it (the gas goes out the back), so an
+  off-centre engine also turns the vehicle.
+
+The first test (2026-11-23) used engine speed instead. Its log showed why that was wrong: the engine sat at about
+half speed whether the throttle was at 17 % or 100 %, so thrust barely changed with throttle, while fuel flow and
+torque dropped about 5×. Test vehicles weighed about 10 t.
 
 | Channel | Direction | Value |
 | --- | --- | --- |
 | `thrust` | Output | Thrust right now, in kN |
-| `spool` | Output | Engine spool 0..1 (the combustion chamber's speed factor) |
+| `spool` | Output | The combustion chamber's speed factor, 0..1 |
 | stock exhaust channels | Output | Unchanged |
 
 Stock exhausts are untouched, so helicopter and turboprop builds behave as before.

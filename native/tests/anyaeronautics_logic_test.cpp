@@ -14,9 +14,21 @@ int main() {
     assert(size_of_id("anyaero_nozzle_cone", 10) < 0 && size_of_id("jet_engine_exhaust", 18) < 0);
     assert(channel_index("thrust", 6) == kThrust && channel_index("spool", 5) == kSpool && channel_index("throttle", 8) < 0);
 
-    // Thrust: spool squared, clamped, never negative or NaN.
-    assert(near(thrust_newtons(10000, 1), 10000) && near(thrust_newtons(10000, 0.5), 2500) && near(thrust_newtons(10000, 0), 0));
-    assert(near(thrust_newtons(10000, 2), 10000) && near(thrust_newtons(10000, -1), 0) && near(thrust_newtons(10000, NAN), 0) && near(thrust_newtons(-5, 1), 0));
+    // Thrust from fuel burn: the first test's full-throttle flow gives tens of kN; the fighter gets more from the same fuel.
+    double cone = fuel_thrust_newtons(kSizes[0].tsfc, 0.00176), fighter = fuel_thrust_newtons(kSizes[1].tsfc, 0.00176);
+    assert(cone > 40000 && cone < 55000 && fighter > cone && near(fighter / cone, 0.10 / 0.08, 1e-9));
+    assert(near(fuel_thrust_newtons(0.1, 0.00032) / cone, 0.00032 / 0.00176, 1e-9));   // proportional to fuel
+    assert(fuel_thrust_newtons(0.1, 0) == 0 && fuel_thrust_newtons(0.1, -1) == 0 && fuel_thrust_newtons(0.1, NAN) == 0 && fuel_thrust_newtons(0, 1) == 0);
+    assert(fuel_thrust_newtons(0.1, 10) == kMaxNewtons);
+    // Spool lag: rises toward the target over seconds, falls faster, never overshoots.
+    double t = 0;
+    for (int i = 0; i < 60; ++i) t = lag_thrust(t, 10000, 1.0 / 60);   // one second
+    assert(t > 4000 && t < 6000);
+    for (int i = 0; i < 600; ++i) t = lag_thrust(t, 10000, 1.0 / 60);
+    assert(t > 9950 && t <= 10000);
+    double down = lag_thrust(10000, 0, 0.5), up = lag_thrust(0, 10000, 0.5);
+    assert(10000 - down > up);
+    assert(lag_thrust(5, 7, 0) == 5 && lag_thrust(NAN, 7, 10) > 0 && lag_thrust(5, 7, 100) < 7);
 
     // Direction: from the nozzle toward the engine, unit length; refuses degenerate or absurd spans.
     Vec3 d;

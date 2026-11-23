@@ -16,12 +16,13 @@ namespace anyaeronautics {
 constexpr const char* kStockClass = "jet_engine_exhaust";
 
 // The two nozzles Nate picked (2026-11-23, options 1 and 3 of the three looks shown): straight jet nozzles with their
-// own meshes (anyaeronautics_mesh.h), built on the stock jet exhaust's class, faces and mass. Max thrust is at full
-// spool (the combustion chamber's speed factor at 1).
-struct Size { const char* id; const char* name; double max_newtons; const char* mesh; };
+// own meshes (anyaeronautics_mesh.h), built on the stock jet exhaust's class, faces and mass. Thrust comes from the
+// fuel the engine burns (fuel_thrust_newtons); a nozzle's thrust specific fuel consumption (kg of fuel per N of thrust
+// per hour) sets how much push it gets from that fuel. Real turbojets run about 0.08 to 0.1.
+struct Size { const char* id; const char* name; double tsfc; const char* mesh; };
 inline constexpr Size kSizes[] = {
-    {"anyaero_nozzle_cone", "Cone Nozzle", 15000.0, "anyaero_nozzle_cone_a"},
-    {"anyaero_nozzle_fighter", "Fighter Nozzle", 30000.0, "anyaero_nozzle_fighter_a"},
+    {"anyaero_nozzle_cone", "Cone Nozzle", 0.10, "anyaero_nozzle_cone_a"},
+    {"anyaero_nozzle_fighter", "Fighter Nozzle", 0.08, "anyaero_nozzle_fighter_a"},
 };
 constexpr int kSizeCount = int(sizeof kSizes / sizeof kSizes[0]);
 
@@ -49,12 +50,25 @@ inline int channel_index(const char* name, size_t length) {
 }
 
 // ------------------------------------------------------------------ thrust
-// Thrust grows with the square of spool (a turbojet's thrust goes roughly with shaft speed squared), so idle gives a
-// light push and full throttle the full rating. Spool lag, throttle and fuel burn are the stock engine's own.
-inline double thrust_newtons(double max_newtons, double spool) {
-    if (!std::isfinite(spool) || !std::isfinite(max_newtons) || max_newtons <= 0) return 0;
-    double s = std::clamp(spool, 0.0, 1.0);
-    return max_newtons * s * s;
+// Thrust from the fuel the engine burns, like a real jet: fuel mass per second / TSFC. The combustion chamber's
+// fuel_flow is taken as m^3/s of petrol (unproven units: the first test read 0.00176 at full throttle and 0.00032 at
+// 17%, which gives a believable 1.3 kg/s). So throttle, fuel starvation, damage and power taken by a gearbox all show
+// in the thrust. The engine's speed barely follows throttle with no load, so it is not used for thrust.
+constexpr double kFuelDensity = 750.0;       // kg/m^3, petrol
+constexpr double kMaxNewtons = 250000.0;     // safety cap
+inline double fuel_thrust_newtons(double tsfc_kg_per_n_hour, double fuel_flow) {
+    if (!std::isfinite(fuel_flow) || !std::isfinite(tsfc_kg_per_n_hour) || tsfc_kg_per_n_hour <= 0 || fuel_flow <= 0) return 0;
+    return std::min(kMaxNewtons, fuel_flow * kFuelDensity / (tsfc_kg_per_n_hour / 3600.0));
+}
+// Spool lag: thrust follows the fuel-burn target with a first-order lag, slower going up than coming down.
+constexpr double kSpoolUpSeconds = 1.6, kSpoolDownSeconds = 0.8;
+inline double lag_thrust(double current, double target, double dt) {
+    if (!std::isfinite(current) || current < 0) current = 0;
+    if (!std::isfinite(target) || target < 0) target = 0;
+    if (!std::isfinite(dt) || dt <= 0) return current;
+    dt = std::min(dt, 0.25);
+    double tau = target > current ? kSpoolUpSeconds : kSpoolDownSeconds;
+    return target + (current - target) * std::exp(-dt / tau);
 }
 
 struct Vec3 { double x = 0, y = 0, z = 0; };
@@ -115,11 +129,9 @@ inline std::string object_with(std::string_view text, const assetjson::Value& v,
 }
 
 inline std::string description_of(const Size& s) {
-    char kn[32];
-    std::snprintf(kn, sizeof kn, "%.0f kN", s.max_newtons / 1000.0);
     return std::string("Straight jet nozzle that pushes. Fit it behind a jet combustion chamber in place of the stock exhaust: "
-                       "the engine's throttle input sets the thrust, up to ") + kn +
-           " at full spool. Spool-up and fuel burn are the engine's own. Outputs thrust (kN) and spool (0..1).";
+                       "thrust comes from the fuel the engine burns, so the engine's throttle input sets it and it builds up as the engine spools. ") +
+           (s.tsfc < 0.09 ? "Fighter nozzle: more thrust from the same fuel. " : "") + "Outputs thrust (kN) and spool (0..1).";
 }
 
 inline std::string mesh_path(const Size& s) { return std::string("meshes/components/") + s.mesh + ".mesh"; }

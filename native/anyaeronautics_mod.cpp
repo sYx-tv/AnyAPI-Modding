@@ -51,6 +51,11 @@ void log(int level, const char* fmt, ...) {
     va_list ap; va_start(ap, fmt); vsnprintf(buf, sizeof buf, fmt, ap); va_end(ap);
     host.log(uint32_t(level), kModId, buf);
 }
+double now_seconds() {
+    static LARGE_INTEGER freq = [] { LARGE_INTEGER f; QueryPerformanceFrequency(&f); return f; }();
+    LARGE_INTEGER t; QueryPerformanceCounter(&t);
+    return double(t.QuadPart) / double(freq.QuadPart);
+}
 bool can_read(const void* p, size_t n) { return p && anymaker::readable(p, n); }
 template <class T> T rd(const void* p, ptrdiff_t o) { T v; std::memcpy(&v, static_cast<const uint8_t*>(p) + o, sizeof v); return v; }
 
@@ -215,7 +220,7 @@ void hk_add_definitions(void* container, const void* file) {
 
 // ================================================================== thrust (server thread)
 // Data slots are never freed: microcontrollers keep the pointers get_data_f64 hands them.
-struct Live { double slots[kSlots]{}; int logs = 6; };
+struct Live { double slots[kSlots]{}; double newtons = 0, last = 0, next_log = 0; int logs = 8; };
 std::mutex g_mutex;
 std::unordered_map<const void*, Live> g_live;   // keyed by server component
 
@@ -244,10 +249,15 @@ void hk_tick(uint8_t* exhaust, uint8_t* vehicle, void* scene) {
     if (size < 0 || !can_read(exhaust, off::exhaust_size) || !can_read(vehicle + off::vehicle_physics, 8)) return;
     double spool = rd<double>(exhaust, off::exhaust_thrust_factor);
     const void* upstream = rd<const void*>(exhaust, off::exhaust_upstream);
-    double newtons = upstream ? thrust_newtons(kSizes[size].max_newtons, spool) : 0;
+    double fuel = upstream && can_read(upstream, off::combustion_size) ? rd<double>(upstream, off::combustion_fuel_flow) : 0;
+    double target = fuel_thrust_newtons(kSizes[size].tsfc, fuel);
     void* physics = vehicle + off::vehicle_physics;
     std::lock_guard lock(g_mutex);
     Live& live = g_live[exhaust];
+    double now = now_seconds();
+    live.newtons = lag_thrust(live.newtons, target, live.last > 0 ? now - live.last : 0);
+    live.last = now;
+    double newtons = live.newtons < 1.0 ? 0 : live.newtons;
     live.slots[kSpool] = std::isfinite(spool) ? std::clamp(spool, 0.0, 1.0) : 0;
     live.slots[kThrust] = 0;
     if (newtons <= 0) return;
@@ -261,14 +271,15 @@ void hk_tick(uint8_t* exhaust, uint8_t* vehicle, void* scene) {
     double f[3] = {force.x, force.y, force.z}, p[3] = {at.x, at.y, at.z};
     g_add_force(exhaust + off::exhaust_activator, physics, f, p);
     live.slots[kThrust] = newtons / 1000.0;
-    if (live.logs > 0 && spool > 0.5) {
+    if (live.logs > 0 && newtons > 2000 && now >= live.next_log) {   // about once a second, 8 times per nozzle
         --live.logs;
+        live.next_log = now + 1.0;
         double mass = 0;
         if (g_get_mass) g_get_mass(&mass, physics);
-        double rps = 0, throttle = 0, fuel = 0, torque = 0;
+        double rps = 0, throttle = 0, torque = 0;
         if (can_read(upstream, off::combustion_size)) {
             rps = rd<double>(upstream, off::combustion_rps); throttle = rd<double>(upstream, off::combustion_throttle);
-            fuel = rd<double>(upstream, off::combustion_fuel_flow); torque = rd<double>(upstream, off::combustion_torque);
+            torque = rd<double>(upstream, off::combustion_torque);
         }
         log(0, "%s: spool %.2f, thrust %.1f kN along (%.2f, %.2f, %.2f), vehicle mass %.0f kg (%.2f g); engine rps %.1f, throttle %.2f, fuel flow %.5g, torque %.1f",
             kSizes[size].name, spool, newtons / 1000.0, dir.x, dir.y, dir.z, mass, mass > 0 ? newtons / (mass * 9.81) : 0.0, rps, throttle, fuel, torque);
