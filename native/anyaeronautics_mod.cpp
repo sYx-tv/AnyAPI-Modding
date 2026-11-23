@@ -65,6 +65,9 @@ constexpr ptrdiff_t exhaust_activator = 728;      // _m_impulse_activator (physi
 constexpr size_t exhaust_size = 784;
 // server_scene.vehicle
 constexpr ptrdiff_t vehicle_physics = 2320;       // m_physics (physics.object)
+// server_scene.vehicle_component.jet_engine_combustion (1208 bytes), logged to calibrate a fuel-burn thrust model
+constexpr ptrdiff_t combustion_rps = 1112, combustion_throttle = 1160, combustion_fuel_flow = 1176, combustion_torque = 1184;
+constexpr size_t combustion_size = 1208;
 }  // namespace off
 constexpr int32_t kStoreSystem = 1;               // file.e_store.system
 
@@ -212,7 +215,7 @@ void hk_add_definitions(void* container, const void* file) {
 
 // ================================================================== thrust (server thread)
 // Data slots are never freed: microcontrollers keep the pointers get_data_f64 hands them.
-struct Live { double slots[kSlots]{}; int logs = 3; };
+struct Live { double slots[kSlots]{}; int logs = 6; };
 std::mutex g_mutex;
 std::unordered_map<const void*, Live> g_live;   // keyed by server component
 
@@ -262,8 +265,13 @@ void hk_tick(uint8_t* exhaust, uint8_t* vehicle, void* scene) {
         --live.logs;
         double mass = 0;
         if (g_get_mass) g_get_mass(&mass, physics);
-        log(0, "%s: spool %.2f, thrust %.1f kN along (%.2f, %.2f, %.2f), vehicle mass %.0f kg (%.2f g)", kSizes[size].name, spool, newtons / 1000.0,
-            dir.x, dir.y, dir.z, mass, mass > 0 ? newtons / (mass * 9.81) : 0.0);
+        double rps = 0, throttle = 0, fuel = 0, torque = 0;
+        if (can_read(upstream, off::combustion_size)) {
+            rps = rd<double>(upstream, off::combustion_rps); throttle = rd<double>(upstream, off::combustion_throttle);
+            fuel = rd<double>(upstream, off::combustion_fuel_flow); torque = rd<double>(upstream, off::combustion_torque);
+        }
+        log(0, "%s: spool %.2f, thrust %.1f kN along (%.2f, %.2f, %.2f), vehicle mass %.0f kg (%.2f g); engine rps %.1f, throttle %.2f, fuel flow %.5g, torque %.1f",
+            kSizes[size].name, spool, newtons / 1000.0, dir.x, dir.y, dir.z, mass, mass > 0 ? newtons / (mass * 9.81) : 0.0, rps, throttle, fuel, torque);
     }
 }
 
