@@ -14,9 +14,13 @@ namespace AnyMapMaker {
    //   --render <tiles folder or map pack> <out.png> [width height]
    if(args.Length>=2&&args[0]=="--self-test")return SelfTest(args[1]);
    if(args.Length>=2&&args[0]=="--ui-shot"){
-    MainForm.Headless=true;try{SetProcessDPIAware();}catch{}AnyApiManager.Theme.InitScale();Application.EnableVisualStyles();var f=new MainForm{Size=new Size(1400,900)};f.Show();f.Demo(args.Length>=3&&args[2]=="3d");Application.DoEvents();
+    // Extra words: "3d" opens the big 3D preview, "gl" draws it on the graphics card (else software, as under Mono).
+    // The renderer used is written next to the picture as <png>.txt.
+    var words=new System.Collections.Generic.List<string>(args);MapView3D.PreferSoftware=!words.Contains("gl");
+    MainForm.Headless=true;try{SetProcessDPIAware();}catch{}AnyApiManager.Theme.InitScale();Application.EnableVisualStyles();var f=new MainForm{Size=new Size(1400,900)};f.Show();f.Demo(words.Contains("3d"));Application.DoEvents();
     for(int i=0;i<20;i++){Application.DoEvents();System.Threading.Thread.Sleep(50);}
     using(var bmp=new Bitmap(f.Width,f.Height))using(var g=Graphics.FromImage(bmp)){g.CopyFromScreen(f.Location,Point.Empty,f.Size);bmp.Save(args[1],ImageFormat.Png);}
+    System.IO.File.WriteAllText(args[1]+".txt","3D renderer: "+f.RendererInfo+"\r\n");
     return 0;
    }
    if(args.Length>=1&&args[0]=="--edit-test")return EditTest(args.Length>=2?args[1]:null);

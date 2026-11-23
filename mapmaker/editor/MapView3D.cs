@@ -67,20 +67,32 @@ namespace AnyMapMaker {
    if(mesh==null||mesh.Signature!=WorldMesh.SignatureOf(Pack)){mesh=new WorldMesh(Pack);objectsStale=true;}
    if(objectsStale){mesh.SetObjects(Scene,MapScene.Find("roads").Visible,true);objectsStale=false;}
   }
+  // GPU drawing, made on first use; any failure switches to the software renderer for the rest of the run.
+  GlRender gl;bool glOff;public string RendererInfo="software";
+  public static bool PreferSoftware;   // --ui-shot and tests under Mono
+  bool TryGl(){
+   if(glOff||PreferSoftware)return false;if(gl!=null)return true;
+   try{gl=new GlRender();RendererInfo=gl.Info;return true;}catch(Exception ex){GlFailed(ex);return false;}
+  }
+  void GlFailed(Exception ex){glOff=true;RendererInfo="software ("+ex.Message+")";if(gl!=null){gl.Dispose();gl=null;}if(StatusChanged!=null)StatusChanged("3D preview: the graphics card path isn't available ("+ex.Message+"), so it draws in software.");}
+  protected override void Dispose(bool disposing){if(disposing&&gl!=null){gl.Dispose();gl=null;}base.Dispose(disposing);}
   public double GroundAt(double x,double z){EnsureMesh();return mesh==null?0:mesh.HeightAt(x,z);}
 
   protected override void OnPaint(PaintEventArgs e){
    var g=e.Graphics;Camera();
    if(Pack==null){g.Clear(Theme.Window);TextRenderer.DrawText(g,"Open a map to see it in 3D.",Font,ClientRectangle,Theme.Muted,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);return;}
    EnsureMesh();
-   int scale=moving?2:1,w=Math.Max(1,Width/scale),h=Math.Max(1,Height/scale);
+   // The GPU draws every frame at full size; the software fallback halves the size while the camera moves.
+   bool useGl=TryGl();
+   int scale=moving&&!useGl?2:1,w=Math.Max(1,Width/scale),h=Math.Max(1,Height/scale);
    raster.Resize(w,h);raster.Camera(eye,fwd,right,up,Fov);
    raster.FogNear=Math.Max(2500,dist*1.2);raster.FogFar=Math.Max(14000,dist*5);
    var flat=Norm(new Vec3(fwd.X,0,fwd.Z));PointF hz;double hd;float horizon=Project(new Vec3(eye.X,0,eye.Z)+flat*1e7,out hz,out hd)?hz.Y:-1;
-   raster.Clear(eye.Y<0?h+1:horizon/scale);
-   mesh.Draw(raster);
+   double hy=eye.Y<0?h+1:horizon/scale;
    if(frame==null||frame.Width!=w||frame.Height!=h){if(frame!=null)frame.Dispose();frame=new Bitmap(w,h,System.Drawing.Imaging.PixelFormat.Format32bppArgb);}
-   raster.CopyTo(frame);
+   bool drawn=false;
+   if(useGl)try{gl.Render(mesh,raster,hy,frame);drawn=true;}catch(Exception ex){GlFailed(ex);}
+   if(!drawn){raster.Clear(hy);mesh.Draw(raster);raster.CopyTo(frame);}
    g.InterpolationMode=scale>1?InterpolationMode.Bilinear:InterpolationMode.NearestNeighbor;g.PixelOffsetMode=PixelOffsetMode.Half;
    g.DrawImage(frame,new Rectangle(0,0,Width,Height),0,0,w,h,GraphicsUnit.Pixel);
    g.PixelOffsetMode=PixelOffsetMode.Default;g.SmoothingMode=SmoothingMode.AntiAlias;

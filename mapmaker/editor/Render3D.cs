@@ -8,10 +8,10 @@ namespace AnyMapMaker {
  // see-through sea. Pure C#, so it needs nothing beyond what ships with Windows and renders the same under Mono.
  public sealed class Raster {
   public int W,H;public int[] Px;public float[] Z;
-  public Vec3 Eye,Fwd,Right,Up;public double Focal;
+  public Vec3 Eye,Fwd,Right,Up;public double Focal,Fov;
   public Color Fog=Color.FromArgb(182,212,234);public double FogNear=3000,FogFar=16000;
   public void Resize(int w,int h){if(w==W&&h==H&&Px!=null)return;W=Math.Max(1,w);H=Math.Max(1,h);Px=new int[W*H];Z=new float[W*H];}
-  public void Camera(Vec3 eye,Vec3 fwd,Vec3 right,Vec3 up,double fov){Eye=eye;Fwd=fwd;Right=right;Up=up;Focal=H/2.0/Math.Tan(fov/2);}
+  public void Camera(Vec3 eye,Vec3 fwd,Vec3 right,Vec3 up,double fov){Fov=fov;Eye=eye;Fwd=fwd;Right=right;Up=up;Focal=H/2.0/Math.Tan(fov/2);}
 
   // Sky: deep blue at the top to pale haze at the horizon.
   public void Clear(double horizonY){
@@ -101,16 +101,18 @@ namespace AnyMapMaker {
   public readonly List<T> Objects=new List<T>();   // roads and models, rebuilt after every edit
   List<T> target;double bias;   // depth bias for what is added next (roads)
   readonly MapPack pack;public readonly string Signature;
+  public Vec3 Centre;public int ObjectsVersion;   // for the GPU path: where vertex coordinates are measured from; bumps on every object rebuild
   static readonly Vec3 Sun=Norm(new Vec3(-0.45,0.8,0.35));
   public const int Subdiv=4;          // each 512 m tile is cut into Subdiv^2 smaller triangles
   const double SeaFloorSteps=-0.6;    // where land meets open sea, the ground slopes down to about -19 m
 
   public WorldMesh(MapPack pack){
    this.pack=pack;Signature=SignatureOf(pack);target=Tris;
+   if(pack.Tiles.Count>0){var a=Grid.Corner(pack.MinX,pack.MinZ);var b=Grid.Corner(pack.MaxX+1,pack.MaxZ+1);Centre=new Vec3((a.X+b.X)/2,0,(a.Z+b.Z)/2);}
    foreach(var t in pack.Tiles.Values)AddTile(t);
   }
   public void SetObjects(MapScene scene,bool roads,bool points){
-   Objects.Clear();target=Objects;
+   Objects.Clear();target=Objects;ObjectsVersion++;
    bias=0.0015;if(scene!=null&&roads)foreach(var r in scene.Roads)AddRoad(r);bias=0;
    if(scene!=null&&points)foreach(var m in scene.Markers){var l=MapScene.Find(m.Layer);if(l.Visible&&m.Layer!="junctions")AddModel(m);}
   }

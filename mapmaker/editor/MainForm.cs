@@ -13,7 +13,7 @@ namespace AnyMapMaker {
  // Play in game, big tool buttons down the left, the map on top with a live 3D preview under it, and a panel on the
  // right with the tool's settings, things to place, the selected point and what the map shows.
  public sealed class MainForm : Form, IMessageFilter {
-  public const string Version="0.5.0";
+  public const string Version="0.5.1";
   static int S(float px){return Theme.S(px);}
   readonly MapView view=new MapView();
   readonly MapView3D view3d=new MapView3D();
@@ -501,18 +501,23 @@ namespace AnyMapMaker {
   void OnErase(double x,double z){if(!Ready())return;editor.Begin();if(editor.Erase(x,z,radiusBox.Value,eraseThings.Checked,eraseRoads.Checked)>0){unsaved=true;UpdateCounts();}}
   void NewIsland(){
    if(!ConfirmDiscard())return;
-   int cells;
-   using(var d=new ThemedDialog("New blank island",420,96)){
+   int cells,land;
+   using(var d=new ThemedDialog("New blank island",440,180)){
     d.Body.Controls.Add(new Label{Text="Size: grid cells per side (512 m each)",ForeColor=Theme.Muted,Font=Theme.Font(12.5f),Bounds=new Rectangle(0,0,d.Body.Width,S(24))});
     var size=new Stepper(2,120,16){Suffix=" cells"};size.SetBounds(0,S(30),S(170),S(32));d.Body.Controls.Add(size);
     var note=new Label{ForeColor=Theme.Dim,Font=Theme.Font(12),Bounds=new Rectangle(S(184),S(30),d.Body.Width-S(184),S(32)),TextAlign=ContentAlignment.MiddleLeft};d.Body.Controls.Add(note);
     Action show=()=>note.Text="about "+(size.Value*0.512).ToString("0.#")+" km across";show();size.ValueChanged+=show;
+    // The game's sea is always at 0 m, so the land's height above it decides how much shore and water there is.
+    d.Body.Controls.Add(new Label{Text="Land height above the sea (the sea is always at 0 m)",ForeColor=Theme.Muted,Font=Theme.Font(12.5f),Bounds=new Rectangle(0,S(80),d.Body.Width,S(24))});
+    var height=new Stepper(1,10,MapEditor.LandHeight){Suffix=" x 32 m"};height.SetBounds(0,S(110),S(170),S(32));d.Body.Controls.Add(height);
+    var hnote=new Label{ForeColor=Theme.Dim,Font=Theme.Font(12),Bounds=new Rectangle(S(184),S(110),d.Body.Width-S(184),S(32)),TextAlign=ContentAlignment.MiddleLeft};d.Body.Controls.Add(hnote);
+    Action showH=()=>hnote.Text=(height.Value*32)+" m up"+(height.Value==1?" (like the game's flat land)":"");showH();height.ValueChanged+=showH;
     d.AddButton("Create",DialogResult.OK,true);d.AddButton("Cancel",DialogResult.Cancel,false);
-    if(d.ShowDialog(this)!=DialogResult.OK)return;cells=size.Value;
+    if(d.ShowDialog(this)!=DialogResult.OK)return;cells=size.Value;land=height.Value;
    }
    // Centre it on the game's fixed Creative / Sandbox start point, so new players land on the island.
    var spawn=Grid.At(Grid.SpawnCreative.X,Grid.SpawnCreative.Z);int cx=spawn.X,cz=spawn.Z;
-   OpenWith(()=>MapEditor.BlankIsland(catalog,cx,cz,cells,cells,MapEditor.LandHeight));
+   OpenWith(()=>MapEditor.BlankIsland(catalog,cx,cz,cells,cells,land));
   }
 
   // For --ui-shot: a small island with one of everything, Road tool selected.
@@ -555,6 +560,7 @@ namespace AnyMapMaker {
    }
   }
 
+  public string RendererInfo {get{return view3d.RendererInfo;}}
   bool showingTile;
   void ShowTile(TileKey? key){
    var t=key==null||pack==null?null:pack.Get(key.Value);showingTile=true;

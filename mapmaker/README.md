@@ -3,7 +3,7 @@
 A Windows map editor for Anymaker. It saves map packs into the game folder; the
 [CustomMap mod](../docs/mods/custom-map.md) plays them (pick the map on CustomGame's Custom Game page).
 
-**Status: 0.5.0.** It looks like the AnyAPI Manager (it compiles in the manager's `Theme.cs` and `ModernButton.cs`) and follows the Windows display scale. The window has big tool buttons down the left, the map (top down) in the middle with a live 3D preview under it, and a panel on the right with the tool's settings, one-click "Things to place", the selected point (height, steepness) and what the map shows. **Play in game** saves, picks the map on the Custom Game page (it writes `map=` into CustomGame's `last.cfg`) and starts Anymaker through Steam. Start with New island, Open (lists your maps) or More, Open the stock world, then edit with these tools:
+**Status: 0.5.1.** It looks like the AnyAPI Manager (it compiles in the manager's `Theme.cs` and `ModernButton.cs`) and follows the Windows display scale. The window has big tool buttons down the left, the map (top down) in the middle with a live 3D preview under it, and a panel on the right with the tool's settings, one-click "Things to place", the selected point (height, steepness) and what the map shows. **Play in game** saves, picks the map on the Custom Game page (it writes `map=` into CustomGame's `last.cfg`) and starts Anymaker through Steam. Start with New island, Open (lists your maps) or More, Open the stock world, then edit with these tools:
 
 | Tool | What it does |
 | --- | --- |
@@ -17,9 +17,9 @@ A Windows map editor for Anymaker. It saves map packs into the game folder; the
 | Start | Where players start a new game on this map (every game mode); CustomMap moves them there |
 | Erase | Removes things and roads under the brush |
 | Select | Shows a tile's raw data for hand edits |
-| 3D preview | Always under the map; Tab or its corner button makes it big. Orbit (right-drag), pan (middle-drag), zoom (scroll). Drag the white nodes to move road points and placed things; Shift+drag raises or lowers them. Road points within the Smooth radius follow with a falloff, so raising one makes a ramp. Drawn by a software renderer (`Render3D.cs`: depth buffer, sun, haze, see-through sea, stand-in houses, trees and props). The tile files don't hold the game's piece shapes, so the ground is smoothed between tile heights as a preview |
+| 3D preview | Always under the map; Tab or its corner button makes it big. Orbit (right-drag), pan (middle-drag), zoom (scroll). Drag the white nodes to move road points and placed things; Shift+drag raises or lowers them. Road points within the Smooth radius follow with a falloff, so raising one makes a ramp. Drawn on the graphics card through OpenGL (`GlRender.cs`: off-screen framebuffer, 4x antialiasing, geometry kept on the card), or by the software renderer in `Render3D.cs` when OpenGL isn't available (depth buffer, sun, haze, see-through sea, stand-in houses, trees and props). `--ui-shot <png> 3d gl` writes which one ran to `<png>.txt`. The tile files don't hold the game's piece shapes, so the ground is smoothed between tile heights as a preview |
 
-Sea level is height 0: new land starts at height 1 (32 m), like the stock world's flat land, and More has Raise / Lower the whole map. Roads are cut into links of at most 60 m, like the stock roads. Ctrl+Z / Ctrl+Y undo and redo. A crosshair marks where new players start: the map's own start point once you set
+Sea level is height 0 and the game's sea is always there: New island asks how high the land sits (default 1 = 32 m), like the stock world's flat land, and More has Raise / Lower the whole map. Roads are cut into links of at most 60 m, like the stock roads. Ctrl+Z / Ctrl+Y undo and redo. A crosshair marks where new players start: the map's own start point once you set
 one with the Start tool, otherwise the game's two fixed ones (Creative/Sandbox and Survival). It turns red when there
 is no land under it. A new blank island is centred on the
 Creative/Sandbox start. Terrain is made of the game's own authored pieces, so there is no free-form
