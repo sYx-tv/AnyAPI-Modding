@@ -1,9 +1,11 @@
-// AnyAeronautics: jet parts that fly. First part: the Thrust Nozzle, a jet exhaust that actually pushes.
+// AnyAeronautics: jet parts that fly. First parts: the Cone Nozzle and the Fighter Nozzle, straight jet nozzles that
+// actually push (the "Thrust Nozzle").
 //
 // The game's own jet engine (compressor, combustion chamber, exhaust) already has a throttle input, spool-up, fuel
 // burn and temperature, and its combustion chamber writes the exhaust's thrust factor (its speed factor, 0..1) every
 // tick. The stock exhaust turns that into a force so small it barely moves anything. The Thrust Nozzle is the stock
-// exhaust (same class, mesh, faces and mass, built from the game's own definition when the game starts) that pushes
+// exhaust (same class, faces and mass, built from the game's own definition when the game starts; its own straight
+// mesh from anyaeronautics_mesh.h, since the stock outlet bends up about 45 degrees) that pushes
 // the vehicle with real thrust: max thrust x spool^2, at the nozzle, toward the engine in front of it. Outputs thrust
 // (kN) and spool (0..1). Stock exhausts are untouched.
 //
@@ -25,6 +27,7 @@
 #include "anyaeronautics_bindings.h"
 #include "route_cell.h"
 #include "anyaeronautics_logic.h"
+#include "anyaeronautics_mesh.h"
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
@@ -106,11 +109,22 @@ bool write_files() {
     dir = dir.substr(0, dir.find_last_of(L"\\/"));      // ...\AnyAPI and Modding\mods
     dir = dir.substr(0, dir.find_last_of(L"\\/"));      // ...\AnyAPI and Modding
     std::wstring rom = dir.substr(0, dir.find_last_of(L"\\/")) + L"\\rom\\";
+    std::wstring components = rom + L"meshes\\components\\";
+    std::vector<uint8_t> stock_mesh = read_file(components + L"jet_exhaust_a.mesh");
+    std::vector<std::string> meshes(kSizeCount);
+    for (int i = 0; i < kSizeCount; ++i) {
+        const Size& s = kSizes[i];
+        std::vector<uint8_t> bytes = build_nozzle_mesh(stock_mesh, i == 0 ? Look::Cone : Look::Fighter, s.mesh);
+        std::wstring file = components + std::wstring(s.mesh, s.mesh + std::strlen(s.mesh)) + L".mesh";
+        if (!bytes.empty() && write_file(file, bytes.data(), bytes.size())) meshes[i] = mesh_path(s);
+        else log(1, "could not build %s.mesh (%s); the %s uses the stock exhaust look", s.mesh,
+                 stock_mesh.empty() ? "jet_exhaust_a.mesh not found" : bytes.empty() ? "jet_exhaust_a.mesh not the expected format" : "not writable", s.name);
+    }
     std::vector<uint8_t> stock_defs = read_file(rom + L"data\\vehicle_component_definitions.json");
     std::string error, stock_id;
-    std::string json = definitions_json(std::string_view(reinterpret_cast<const char*>(stock_defs.data()), stock_defs.size()), &error, &stock_id);
+    std::string json = definitions_json(std::string_view(reinterpret_cast<const char*>(stock_defs.data()), stock_defs.size()), meshes, &error, &stock_id);
     if (json.empty()) { log(2, "could not build the Thrust Nozzle definitions: %s", stock_defs.empty() ? "rom\\data\\vehicle_component_definitions.json not found" : error.c_str()); return false; }
-    log(0, "Thrust Nozzles built from the stock jet exhaust \"%s\"", stock_id.c_str());
+    log(0, "Cone and Fighter Nozzles built from the stock jet exhaust \"%s\" (meshes: %s, %s)", stock_id.c_str(), meshes[0].empty() ? "stock" : "ours", meshes[1].empty() ? "stock" : "ours");
     dir += L"\\AnyAeronautics";
     CreateDirectoryW(dir.c_str(), nullptr);
     std::wstring file = dir + L"\\anyaeronautics_parts.json";

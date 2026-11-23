@@ -15,14 +15,13 @@ namespace anyaeronautics {
 
 constexpr const char* kStockClass = "jet_engine_exhaust";
 
-// Three nozzle strengths for the first test batch, so the thrust can be judged in game without a rebuild. Each is
-// the stock jet exhaust (same mesh, faces, mass) with real thrust. Max thrust is at full spool (the combustion
-// chamber's speed factor at 1).
-struct Size { const char* id; const char* name; double max_newtons; };
+// The two nozzles Nate picked (2026-11-23, options 1 and 3 of the three looks shown): straight jet nozzles with their
+// own meshes (anyaeronautics_mesh.h), built on the stock jet exhaust's class, faces and mass. Max thrust is at full
+// spool (the combustion chamber's speed factor at 1).
+struct Size { const char* id; const char* name; double max_newtons; const char* mesh; };
 inline constexpr Size kSizes[] = {
-    {"anyaero_nozzle_s", "Thrust Nozzle (5 kN)", 5000.0},
-    {"anyaero_nozzle_m", "Thrust Nozzle (15 kN)", 15000.0},
-    {"anyaero_nozzle_l", "Thrust Nozzle (40 kN)", 40000.0},
+    {"anyaero_nozzle_cone", "Cone Nozzle", 15000.0, "anyaero_nozzle_cone_a"},
+    {"anyaero_nozzle_fighter", "Fighter Nozzle", 30000.0, "anyaero_nozzle_fighter_a"},
 };
 constexpr int kSizeCount = int(sizeof kSizes / sizeof kSizes[0]);
 
@@ -118,15 +117,17 @@ inline std::string object_with(std::string_view text, const assetjson::Value& v,
 inline std::string description_of(const Size& s) {
     char kn[32];
     std::snprintf(kn, sizeof kn, "%.0f kN", s.max_newtons / 1000.0);
-    return std::string("Jet exhaust that pushes. Fit it behind a jet combustion chamber in place of the stock exhaust: "
+    return std::string("Straight jet nozzle that pushes. Fit it behind a jet combustion chamber in place of the stock exhaust: "
                        "the engine's throttle input sets the thrust, up to ") + kn +
            " at full spool. Spool-up and fuel burn are the engine's own. Outputs thrust (kN) and spool (0..1).";
 }
 
-// Our definitions file from the stock definitions file's text: one nozzle per size, each a copy of the first stock
-// jet exhaust with a new id, name, description and the two extra data outputs. Empty, with `error` set, when the
-// stock file has no jet exhaust.
-inline std::string definitions_json(std::string_view stock_text, std::string* error = nullptr, std::string* stock_id = nullptr) {
+inline std::string mesh_path(const Size& s) { return std::string("meshes/components/") + s.mesh + ".mesh"; }
+
+// Our definitions file from the stock definitions file's text: one per nozzle, each a copy of the first stock jet
+// exhaust with a new id, name, description, mesh (meshes[i]; empty keeps the stock mesh) and the two extra data
+// outputs. Empty, with `error` set, when the stock file has no jet exhaust.
+inline std::string definitions_json(std::string_view stock_text, const std::vector<std::string>& meshes = {}, std::string* error = nullptr, std::string* stock_id = nullptr) {
     auto fail = [&](const char* why) { if (error) *error = why; return std::string(); };
     assetjson::Value root;
     try { root = assetjson::Parser(stock_text).parse(); } catch (...) { return fail("the stock definitions file is not valid JSON"); }
@@ -157,6 +158,12 @@ inline std::string definitions_json(std::string_view stock_text, std::string* er
         std::vector<std::string> drop = {"id", "name", "description", "data_descriptors"};
         std::vector<std::string> extra = {"\"id\": " + json_string(s.id), "\"name\": " + json_string(s.name),
                                           "\"description\": " + json_string(description_of(s)), "\"data_descriptors\": " + descriptors};
+        if (size_t(i) < meshes.size() && !meshes[i].empty()) {
+            drop.push_back("mesh_static");
+            const assetjson::Value& mesh = stock->get("mesh_static");
+            std::string entry = "\"mesh_path\": " + json_string(meshes[i]);
+            extra.push_back("\"mesh_static\": " + (mesh.kind == 'o' ? object_with(stock_text, mesh, {"mesh_path"}, {entry}) : "{" + entry + "}"));
+        }
         out += "    " + object_with(stock_text, *stock, drop, extra) + (i + 1 < kSizeCount ? ",\n" : "\n");
     }
     return out + "  ]\n}\n";
