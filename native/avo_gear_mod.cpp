@@ -245,7 +245,11 @@ void make_tuning() {
             at<double>(copy, off::tuning_radius) = s.radius;
             double pos[3] = {l.tyre_top.x, l.tyre_top.y, l.tyre_top.z};
             std::memcpy(copy + off::tuning_position, pos, sizeof pos);
-            std::memcpy(copy + off::tuning_steering_position, pos, sizeof pos);
+            // Steer about the leg, not the tyre's own centre: the tuning keeps the steering pivot apart from the tyre
+            // position (AnyMoto puts both on the tyre). Likely the pivot; the "drawing" log line shows whether the
+            // game's axle follows the drawn one at full lock.
+            double pivot[3] = {0, l.tyre_top.y, l.leg_z};
+            std::memcpy(copy + off::tuning_steering_position, pivot, sizeof pivot);
             std::memcpy(copy + off::tuning_rotation, g_rotation, sizeof g_rotation);
             at<double>(copy, off::tuning_suspension_length) = s.travel;
             double scale = std::abs(stock_max) > 1e-6 ? rad(s.steer_deg) / std::abs(stock_max) : 0;
@@ -357,10 +361,11 @@ void hk_wheel_render(const void* self, const Mat34* transform, void* out) {
     add_dynamic(out, definition, 2, compose(render, f.shock));
     add_dynamic(out, definition, 3, compose(render, f.tyre));
     static std::atomic<int> logs{3};
-    if (logs.fetch_sub(1) > 0) {
-        anymoto::Vec3 t = column(accessory, 3);
+    static std::atomic<int> steer_logs{4};
+    if ((logs.load() > 0 && logs.fetch_sub(1) > 0) || (std::abs(steer) > rad(10) && steer_logs.load() > 0 && steer_logs.fetch_sub(1) > 0)) {
+        anymoto::Vec3 t = column(accessory, 3), d = column(f.tyre, 3);
         log(0, "client: drawing a %s, game axle (%.3f, %.3f, %.3f), drawn axle (%.3f, %.3f, %.3f), steering %.1f deg, spin %.2f",
-            kSizes[size].name, t.x, t.y, t.z, f.axle.x, f.axle.y, f.axle.z, steer * 180 / kPi, spin);
+            kSizes[size].name, t.x, t.y, t.z, d.x, d.y, d.z, steer * 180 / kPi, spin);
     }
 }
 

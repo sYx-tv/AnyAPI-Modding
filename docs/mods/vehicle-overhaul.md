@@ -79,8 +79,10 @@ separate test DLL, `AvoGear.dll` (`native/avo_gear_mod.cpp`), and joins this bun
   and the client the way AnyMoto does it for the fork and swingarm. The spring is the stock wheel's, straight up and
   down along the part. The leg, arm, twin coilovers and wheel are drawn by the mod: the assembly turns about the leg
   when it steers, the arm follows the axle and the shocks compress.
-- **Known limits:** the game steers the tyre about its own centre, while the drawing turns it about the leg. At full
-  lock the drawn wheel can sit up to about 6 cm from where the game has it. There's no test bench save yet.
+- **Steering pivot (likely):** the tuning's steering position is set on the leg, so the game should swing the wheel
+  round the leg as the drawing does. The "drawing" log lines give the game's axle next to the drawn one, also at
+  full lock, to confirm it. If the game turns the tyre about its own centre instead, they part by up to 23 cm at
+  full lock (medium). There's no test bench save yet.
 - **Status:** the route is proven by AnyMoto. The built-in wheel, the drawing and the sizes are untested in game.
 
 ## Upgrading from AnyEngineParts, AnyMoto or AnyCVT
