@@ -60,6 +60,29 @@ Everything below is in the dev build only, for testing. Its lines in the log sta
 
 The looks of the ECU, the intake parts, the turbo muffler, the resonators, the cat and the headers are placeholders.
 
+## Trailing Link Gear (test build, not in the bundle yet)
+
+Steerable landing gear with its own wheel built in, in three sizes (Nate 2026-11-25, look 3 of three). It ships as a
+separate test DLL, `AvoGear.dll` (`native/avo_gear_mod.cpp`), and joins this bundle once it passes in game.
+
+| Part | Wheel | Travel | Steering |
+|---|---|---|---|
+| Trailing Link Gear (Small) `avo_gear_trailing_s` | 34 cm | 10 cm | 40 degrees each way |
+| Trailing Link Gear (Medium) `avo_gear_trailing_m` | 50 cm | 15 cm | 40 degrees each way |
+| Trailing Link Gear (Large) `avo_gear_trailing_l` | 72 cm | 22 cm | 35 degrees each way |
+
+- **Fitting:** bolt the back of the mount block to a vertical face. The leg drops in front of it and the wheel trails out.
+- **Links:** steering in on each side of the mount block (one turns it left, the other right), brake on top, drive in
+  through the torque face underneath. Spring and damping are the stock wheel sliders in the Properties tool.
+- **Built-in wheel:** no tyre item fits. The game's own integral-tread flag gives it full tyre grip.
+- **How:** each size is a wheel-class part with its own copy of the stock wheel's code-side tuning, set on the server
+  and the client the way AnyMoto does it for the fork and swingarm. The spring is the stock wheel's, straight up and
+  down along the part. The leg, arm, twin coilovers and wheel are drawn by the mod: the assembly turns about the leg
+  when it steers, the arm follows the axle and the shocks compress.
+- **Known limits:** the game steers the tyre about its own centre, while the drawing turns it about the leg. At full
+  lock the drawn wheel can sit up to about 6 cm from where the game has it. There's no test bench save yet.
+- **Status:** the route is proven by AnyMoto. The built-in wheel, the drawing and the sizes are untested in game.
+
 ## Upgrading from AnyEngineParts, AnyMoto or AnyCVT
 
 - **In the manager (1.5.0 or newer):** AnyVehicleOverhaul shows as an update while `AnyEngineParts.dll`,
