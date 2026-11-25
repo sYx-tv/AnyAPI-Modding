@@ -100,7 +100,9 @@ std::atomic<bool> g_stop{false};
 std::atomic<bool> g_precise_timer{true}, g_overlay{false};
 std::atomic<double> g_hitch_ms{50};
 std::atomic<int> g_smoothing{0};         // 0 game, 1 light, 2 strong
-std::atomic<bool> g_profiler{false};      // sampling profiler (anyperformance_profiler.inc)
+// Test builds for a profiling session keep the profiler on whatever the setting says. False for releases.
+constexpr bool kProfileTestBuild = true;
+std::atomic<bool> g_profiler{kProfileTestBuild};      // sampling profiler (anyperformance_profiler.inc)
 bool g_timer_on;                         // timeBeginPeriod(1) is in effect (main thread)
 
 LARGE_INTEGER g_qpc_freq;
@@ -115,6 +117,7 @@ void log(int level, const char* fmt, ...) {
 
 // ------------------------------------------------------------------ main-thread state (client hooks only)
 FrameParts g_parts;                      // the frame in progress
+std::atomic<DWORD> g_render_thread{0};   // set by the AnyAPI draw callback
 std::atomic<DWORD> g_main_thread{0};     // set by the first client.tick
 bool g_parts_loading;                    // the loading flag client.tick passed on to tick_loading this frame
 double g_frame_start = -1, g_window_start = -1;
@@ -875,6 +878,7 @@ void read_settings() {
     if (g_tokens[3] && settings->get(g_tokens[3], &v) && std::isfinite(v.number)) g_smoothing = std::clamp(int(v.number), 0, 2);
     if (g_tokens[4] && settings->get(g_tokens[4], &v)) g_spread_loot = v.number != 0;
     if (g_tokens[5] && settings->get(g_tokens[5], &v)) g_profiler = v.number != 0;
+    if (kProfileTestBuild) g_profiler = true;
     if (g_tokens[6] && settings->get(g_tokens[6], &v)) g_inventory_lod = v.number != 0;
     if (g_tokens[7] && settings->get(g_tokens[7], &v)) g_fast_navmesh = v.number != 0;
     if (g_tokens[8] && settings->get(g_tokens[8], &v)) g_place_cache_on = v.number != 0;
@@ -1314,6 +1318,7 @@ void text(const wchar_t* s, float x, float y, float size, uint32_t color) {
 }
 
 void draw(const AnyFrameV1* f, void*) {
+    g_render_thread.store(GetCurrentThreadId(), std::memory_order_relaxed);
     if (!g_overlay || !f || !f->focused || !gpu || !gameplay()) return;
     double avg, low, hitch_ms, hitch_at; char blame_text[48];
     {

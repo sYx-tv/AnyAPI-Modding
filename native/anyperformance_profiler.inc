@@ -8,7 +8,7 @@
 // native/tools/map_profile.py turns into names with the game's game.gcl; game.exe and other modules by name and offset.
 // Nothing is allocated, logged or looked up while a thread is paused.
 
-constexpr int kProfileIntervalMs = 2, kProfileReportSeconds = 120, kProfileTop = 25, kProfileDepth = 64;
+constexpr int kProfileIntervalMs = 2, kProfileReportSeconds = 120, kProfileTop = 40, kProfileDepth = 64;
 constexpr size_t kStackCopy = 128 * 1024, kStackSlack = 64 * 1024;
 
 struct ProfiledThread {
@@ -19,7 +19,7 @@ struct ProfiledThread {
     uint32_t samples = 0;
     SampleTable table;
 };
-ProfiledThread g_prof_main{"main"}, g_prof_server{"server"};
+ProfiledThread g_prof_main{"main"}, g_prof_server{"server"}, g_prof_render{"render"};
 alignas(16) uint8_t g_stack_copy[kStackCopy + kStackSlack];   // slack: unwind reads past a short copy stay in bounds
 
 using nt_query_thread_t = LONG(NTAPI*)(HANDLE, int, void*, ULONG, ULONG*);
@@ -123,20 +123,24 @@ void profiler_thread() {
     bool was_on = false;
     while (!g_stop) {
         if (!g_profiler) {
-            if (was_on) { g_prof_main.table.clear(); g_prof_main.samples = 0; g_prof_server.table.clear(); g_prof_server.samples = 0; }
+            if (was_on) for (ProfiledThread* t : {&g_prof_main, &g_prof_server, &g_prof_render}) { t->table.clear(); t->samples = 0; }
             was_on = false; Sleep(250); continue;
         }
-        if (!was_on) { was_on = true; started = now_ms(); log(0, "Profiler on: sampling the main and server threads every %d ms", kProfileIntervalMs); }
+        if (!was_on) { was_on = true; started = now_ms(); log(0, "Profiler on: sampling the main, server and render threads every %d ms", kProfileIntervalMs); }
         if (open_profiled(g_prof_main, g_main_thread.load())) sample(g_prof_main);
         if (open_profiled(g_prof_server, g_server_thread.load(std::memory_order_relaxed))) sample(g_prof_server);
+        DWORD render = g_render_thread.load(std::memory_order_relaxed);   // the AnyAPI draw callback's thread
+        if (render && render != g_main_thread.load() && open_profiled(g_prof_render, render)) sample(g_prof_render);
         double now = now_ms();
         if (now - started >= kProfileReportSeconds * 1000.0) {
             report_profile(g_prof_main, (now - started) / 1000.0);
             report_profile(g_prof_server, (now - started) / 1000.0);
+            report_profile(g_prof_render, (now - started) / 1000.0);
             started = now;
         }
         Sleep(kProfileIntervalMs);
     }
     if (g_prof_main.handle) CloseHandle(g_prof_main.handle);
     if (g_prof_server.handle) CloseHandle(g_prof_server.handle);
+    if (g_prof_render.handle) CloseHandle(g_prof_render.handle);
 }
