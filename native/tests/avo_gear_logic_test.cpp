@@ -20,7 +20,8 @@ int main() {
         }
         // The wheel clears the leg and the mount block (also at full steering lock: the assembly turns together).
         assert(l.tyre_top.z - s.radius > l.leg_z + l.leg_r);
-        assert(l.tyre_top.y + s.radius < 0.12 || l.tyre_top.z - s.radius > 0.04);
+        assert(l.tyre_top.y + s.radius < -0.04 || l.tyre_top.z - s.radius > 0.12);   // clear of the plate, fully compressed
+        assert(l.tyre_top.y + s.radius < 0.04);                                         // and of the hull above it
         assert(l.fork_x > s.width / 2 + 0.01);
         assert(l.arm > s.travel);
         // Frames: no steering keeps the leg in place; steering turns the axle about the leg.

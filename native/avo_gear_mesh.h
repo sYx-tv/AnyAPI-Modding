@@ -23,16 +23,16 @@ constexpr Rgb kRim{150, 152, 156};
 inline Mesh gear_base(const Size& s) {
     Layout l = layout(s);
     Mesh m;
-    m.box({-0.12, -0.12, -0.04}, {0.12, 0.12, 0.04}, kBody);                          // mount block
-    m.box({-0.06, l.leg_top - 0.05, 0.04}, {0.06, l.leg_top + 0.03, l.leg_z + l.leg_r + 0.02}, kBody);   // bracket to the leg
-    m.prism(1, {0, 0, l.leg_z}, l.leg_r * 1.25, l.leg_top - 0.06, l.leg_top + 0.035, kIron, 10);         // steering collar
+    m.box({-0.12, -0.04, -0.12}, {0.12, 0.04, 0.12}, kBody);                          // mount plate (top face bolts on)
+    m.box({-0.06, -0.07, -0.06}, {0.06, -0.04, 0.06}, kBody);                         // boss under the plate
+    m.prism(1, {0, 0, l.leg_z}, l.leg_r * 1.25, l.leg_top - 0.06, l.leg_top - 0.025, kIron, 10);   // steering collar
     for (int sx = -1; sx <= 1; sx += 2)
-        for (int sy = -1; sy <= 1; sy += 2) m.prism(2, {sx * 0.09, sy * 0.09, 0.04}, 0.009, 0, 0.008, kBolt, 6);
+        for (int sz = -1; sz <= 1; sz += 2) m.prism(1, {sx * 0.09, -0.04, sz * 0.09}, 0.009, -0.008, 0, kBolt, 6);
     Vec3 up{0, 1, 0};
     marker(m, {-0.12, 0, 0}, {-1, 0, 0}, up, Marker::link_in);       // steering_pos
     marker(m, {0.12, 0, 0}, {1, 0, 0}, up, Marker::link_in);         // steering_neg
-    marker(m, {0, 0.12, 0}, {0, 1, 0}, {0, 0, 1}, Marker::link_in);  // brake
-    marker(m, {0, -0.12, 0}, {0, -1, 0}, {0, 0, 1}, Marker::torque); // drive
+    marker(m, {0, 0, -0.12}, {0, 0, -1}, up, Marker::link_in);       // brake
+    marker(m, {0, 0, 0.12}, {0, 0, 1}, up, Marker::torque);          // drive
     return m;
 }
 // In the steer frame (part frame at zero steering): the leg from the collar down to the pivot block.

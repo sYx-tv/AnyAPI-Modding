@@ -12,9 +12,11 @@
 //   - Surface dirs: 0 = -x, 1 = +x, 2 = -y, 3 = +y, 4 = -z, 5 = +z. A part grows along +z from the face it is placed
 //     on; y is up. Cells are 0.08 m, cell 0 centred on the origin.
 //
-// Layout (part frame, metres): the mount block bolts to a vertical face (its back, dir 4, at z = -0.04). The leg
-// stands just in front of it and drops to the pivot; the trailing arm runs out (+z) from the pivot to the axle, and
-// two coilovers, one each side of the wheel, run from a cross bar on the leg to lugs on the arm's side plates. The links sit on the mount block's sides and top.
+// Layout (part frame, metres): a top mount (Nate 2026-11-28). The mount plate (3 x 3 cells, one cell thick, centred
+// on the origin) bolts to the underside of a hull or wing by its top face (dir 3, at y = 0.04), the way a seat
+// stands on a floor by its bottom face, so the part's y stays up. The leg drops from the plate's centre to the pivot;
+// the trailing arm runs out (+z) from the pivot to the axle, and two coilovers, one each side of the wheel, run from
+// a cross bar on the leg to lugs on the arm's side plates. The links sit on the plate's sides and back.
 #include "anymoto_logic.h"
 #include <cmath>
 #include <cstdio>
@@ -69,12 +71,12 @@ inline Layout layout(const Size& s) {
     Layout l;
     double k = s.scale;
     l.leg_r = 0.035 * k;
-    l.leg_z = 0.04 + 0.03 + l.leg_r;
-    l.leg_top = 0.06;
+    l.leg_z = 0;
+    l.leg_top = -0.04;
     l.arm = std::max(s.radius + l.leg_r + 0.06, 1.75 * s.travel);
     l.fork_x = s.width / 2 + 0.03 * std::max(k, 0.8);
     l.mid_angle = rad(6);
-    l.pivot = {0, -0.30 * k, l.leg_z};
+    l.pivot = {0, -0.06 - 0.30 * k, l.leg_z};
     l.shock_top = {0, l.pivot.y + 0.22 * k, l.leg_z + l.leg_r + 0.035 * k};
     l.shock_along = 0.55;
     l.shock_lift = 0.04 * k;
@@ -123,9 +125,9 @@ inline int cell(double metres) { return int(std::lround(metres / kCell)); }
 inline std::string description(const Size& s) {
     char b[600];
     std::snprintf(b, sizeof b,
-                  "Trailing link landing gear with its own %.0f cm wheel built in (no tyre to fit). Bolt the back of the mount block to a "
-                  "vertical face: the leg drops in front of it and the wheel trails out. Links on the mount block: steering in on each "
-                  "side (one turns it left, the other right) and the brake on top. Drive in through the torque face under the block. "
+                  "Trailing link landing gear with its own %.0f cm wheel built in (no tyre to fit). Bolt the top of the mount plate to the "
+                  "underside of a hull or wing: the leg drops from it and the wheel trails out. Links on the mount plate: steering in on each "
+                  "side (one turns it left, the other right) and the brake on the back. Drive in through the torque face on the front. "
                   "%.0f cm of travel, steers %.0f degrees each way. Spring and damping in the Properties tool.",
                   s.radius * 200, s.travel * 100, s.steer_deg);
     return b;
@@ -151,24 +153,24 @@ inline std::string definition_json(int i, const MeshPaths& m) {
     out += R"("class": "wheel", "category": "wheel", "tags_generated": "interactable,mechanical,port,torque,", "inspection_geometry": [], "mateable_port_types": 2, )"
            R"("data_descriptors": [{"type": "type_f64_output", "name": "brake_factor"}, {"type": "type_f64_output", "name": "rps"}], "tech_tier": 3, "spawn_probability": 0.1, )"
            R"("loot_group": "mechanical", "constraint_orientations": [], "force_emitter_element_rotor": {"blades": []}, )";
-    // Zones: the mount block (3 x 3 cells) and the leg column down to the pivot. The arm and wheel move, so they
+    // Zones: the mount plate (3 x 3 cells) and the leg column down to the pivot. The arm and wheel move, so they
     // are left out of the zones (as the stock wheel's tyre and AnyMoto's swingarm).
     std::snprintf(b, sizeof b,
-                  R"("zones": [{"bounds_min": [-1, -1, 0], "bounds_max": [1, 1, 0]}, {"bounds_min": [0, %d, 1], "bounds_max": [0, 0, %d]}], )"
+                  R"("zones": [{"bounds_min": [-1, 0, -1], "bounds_max": [1, 0, 1]}, {"bounds_min": [0, %d, %d], "bounds_max": [0, -1, %d]}], )"
                   R"("interaction_zones": [{"bounds_min": [%.3f, %.3f, %.3f], "bounds_max": [%.3f, %.3f, %.3f]}], )",
-                  std::min(pivot_cell, -1), std::max(leg_cell_z, 1),
+                  std::min(pivot_cell, -1), leg_cell_z, leg_cell_z,
                   -s.width / 2, rest.axle.y - s.radius, rest.axle.z - s.radius, s.width / 2, rest.axle.y + s.radius, rest.axle.z + s.radius);
     out += b;
-    // Surfaces: the mount face on the back (a port face, like the stock wheel's), the links on the block's sides
-    // and top, the torque face underneath.
-    out += R"("surfaces": [{"pos": [-1, -1, 0], "size": [3, 3], "dir": 4, "gender": 2, "type": "port"}, )"
+    // Surfaces: the mount face on top (a port face, as the seat's bottom), the links on the plate's sides and back,
+    // the torque face on the front.
+    out += R"("surfaces": [{"pos": [-1, 0, -1], "size": [3, 3], "dir": 3, "gender": 2, "type": "port"}, )"
            R"({"pos": [-1, 0, 0], "gender": 2, "type": "mechanical"}, {"pos": [1, 0, 0], "dir": 1, "gender": 2, "type": "mechanical"}, )"
-           R"({"pos": [0, 1, 0], "dir": 3, "gender": 2, "type": "mechanical"}, {"id": "torque", "pos": [0, -1, 0], "dir": 2, "type": "torque"}], )";
+           R"({"pos": [0, 0, -1], "dir": 4, "gender": 2, "type": "mechanical"}, {"id": "torque", "pos": [0, 0, 1], "dir": 5, "type": "torque"}], )";
     // The game reads a wheel's links by position in this list: steering_pos, steering_neg, brake.
     out += R"("logic_nodes": [{"id": "steering_pos", "pos": [-1, 0, 0], "direction": 0, "type": "mechanical_in"}, {"id": "steering_neg", "pos": [1, 0, 0], "direction": 1, "type": "mechanical_in"}, )"
-           R"({"id": "brake", "pos": [0, 1, 0], "direction": 3, "type": "mechanical_in"}], )";
+           R"({"id": "brake", "pos": [0, 0, -1], "direction": 4, "type": "mechanical_in"}], )";
     out += "\"mesh_static\": {\"mesh_path\": \"" + m.base[i] + "\"}, \"meshes_dynamic\": [" + meshes + "], ";
-    std::snprintf(b, sizeof b, R"("bounds_override_min": [%d, %d, -1], "bounds_override_max": [%d, 2, %d]})", -side, low, side, reach);
+    std::snprintf(b, sizeof b, R"("bounds_override_min": [%d, %d, -2], "bounds_override_max": [%d, 1, %d]})", -side, low, side, reach);
     return out + b;
 }
 inline std::string definitions_json(const MeshPaths& m) {

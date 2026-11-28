@@ -71,9 +71,11 @@ separate test DLL, `AvoGear.dll` (`native/avo_gear_mod.cpp`), and joins this bun
 | Trailing Link Gear (Medium) `avo_gear_trailing_m` | 50 cm | 15 cm | 40 degrees each way |
 | Trailing Link Gear (Large) `avo_gear_trailing_l` | 72 cm | 22 cm | 35 degrees each way |
 
-- **Fitting:** bolt the back of the mount block to a vertical face. The leg drops in front of it and the wheel trails out.
-- **Links:** steering in on each side of the mount block (one turns it left, the other right), brake on top, drive in
-  through the torque face underneath. Spring and damping are the stock wheel sliders in the Properties tool.
+- **Fitting (top mount, 0.1.1):** bolt the top of the mount plate to the underside of a hull or wing, the way a seat
+  stands on a floor by its bottom face. The leg drops from the plate and the wheel trails out. 0.1.0 mounted on a
+  vertical face instead. That the game keeps the part upright on a top face is likely (the seat does it), not tested.
+- **Links:** steering in on each side of the mount plate (one turns it left, the other right), brake on the back, drive
+  in through the torque face on the front. Spring and damping are the stock wheel sliders in the Properties tool.
 - **Built-in wheel:** no tyre item fits. The game's own integral-tread flag gives it full tyre grip.
 - **How:** each size is a wheel-class part with its own copy of the stock wheel's code-side tuning, set on the server
   and the client the way AnyMoto does it for the fork and swingarm. The spring is the stock wheel's, straight up and
